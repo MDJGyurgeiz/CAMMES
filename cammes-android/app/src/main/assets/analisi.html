@@ -1,0 +1,1596 @@
+<!doctype html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>CAMMES - Analisi</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+    canvas { -moz-user-select: none; -webkit-user-select: none; -ms-user-select: none; }
+    .section-intake { border-left: 3px solid var(--accent); padding-left: 12px; margin-top: 12px; }
+    .section-exhaust { border-left: 3px solid var(--danger); padding-left: 12px; margin-top: 16px; }
+    .param-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .param-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; min-width: 90px; }
+    .param-unit { font-size: 12px; color: var(--text-muted); }
+    .section-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
+    .result-grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; align-items: start; }
+    .result-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(42,42,74,0.5); }
+    .result-row:last-child { border-bottom: none; }
+    .result-label { font-size: 13px; color: var(--text-secondary); }
+    .result-value { font-family: var(--font-mono); font-size: 15px; font-weight: 600; }
+    .result-value.cyan { color: var(--accent); }
+    .result-value.red { color: var(--danger); }
+    .result-value.yellow { color: var(--warning); }
+    .result-value.green { color: var(--success); }
+    .result-section { margin-bottom: 16px; }
+    .result-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted); margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border-card); }
+    .import-status { font-family: var(--font-mono); font-size: 12px; color: var(--success); margin-top: 6px; display: block; min-height: 18px; }
+    .timing-canvas-wrap { display: flex; flex-direction: column; align-items: center; }
+    .timing-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 12px; color: var(--text-secondary); }
+    .timing-legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+
+    /* Kinematic analysis styles */
+    .kin-chart-wrap { margin-bottom: 24px; position: relative; }
+    .kin-chart-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px;
+                       color: var(--text-muted); margin-bottom: 8px; padding-bottom: 4px;
+                       border-bottom: 1px solid var(--border-card); display: flex; justify-content: space-between; align-items: center; }
+    .kin-results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 16px; }
+    .btn-zoom-reset { font-size: 10px; padding: 2px 8px; background: var(--bg-input); color: var(--text-muted);
+                      border: 1px solid var(--border-card); border-radius: 4px; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; }
+    .btn-zoom-reset:hover { color: var(--text-primary); border-color: var(--accent); }
+
+    /* Separator for new parameters */
+    .param-separator { border-top: 1px solid var(--border-card); margin-top: 12px; padding-top: 12px; }
+    .param-group-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 6px; }
+
+    /* A vs B comparison */
+    .ab-card { margin-top: 8px; }
+    .ab-toggle { cursor: pointer; display: flex; align-items: center; gap: 8px; user-select: none; }
+    .ab-toggle-arrow { transition: transform 0.2s; display: inline-block; }
+    .ab-toggle-arrow.open { transform: rotate(90deg); }
+    .ab-content { display: none; margin-top: 12px; }
+    .ab-content.open { display: block; }
+    .ab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .ab-set { padding: 12px; border-radius: 8px; border: 1px solid var(--border-card); }
+    .ab-set-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
+    .ab-set-a { border-color: var(--accent); }
+    .ab-set-b { border-color: var(--warning); }
+    .ab-set-a .ab-set-title { color: var(--accent); }
+    .ab-set-b .ab-set-title { color: var(--warning); }
+    .ab-delta-table { margin-top: 16px; }
+    </style>
+</head>
+<body>
+
+<script src="Chart.bundle.js"></script>
+<script src="hammer.min.js"></script>
+<script src="chartjs-plugin-zoom.min.js"></script>
+
+<div class="app-container">
+
+    <!-- Header -->
+    <div class="header">
+        <img src="images/logo.jpg" alt="CAMMES">
+        <h1>CAMMES</h1>
+        <div class="nav-links">
+            <a href="alzata.html">Alzata</a>
+            <a href="polare.html">Polare</a>
+            <a href="grafici.html">Grafici</a>
+            <a href="analisi.html" class="active">Analisi</a>
+        </div>
+    </div>
+
+    <!-- Main: Chart + Parameters -->
+    <div class="main-grid" style="grid-template-columns: 1fr 360px;">
+
+        <!-- Left: 720-degree chart -->
+        <div class="card chart-card">
+            <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+                <span>Profilo Albero Motore 720&deg;</span>
+                <button class="btn-zoom-reset" onclick="if(window.analisiLine){window.analisiLine.resetZoom();}" title="Reset zoom">&circlearrowright; Reset Zoom</button>
+            </div>
+            <canvas id="analisiChart"></canvas>
+        </div>
+
+        <!-- Right: Parameters panel -->
+        <div class="card">
+            <div class="card-title">Parametri</div>
+
+            <!-- Intake section -->
+            <div class="section-intake">
+                <div class="section-title" style="color: var(--accent);">Aspirazione (Intake)</div>
+                <input type="file" id="fileIntake" class="file-input" style="width:100%;" accept=".scr,.txt,.csv,.*">
+                <div class="param-row">
+                    <span class="param-label">Angolo lobo</span>
+                    <input type="number" id="intakeAngle" value="100" class="input" style="width:75px;" step="0.5">
+                    <span class="param-unit">&deg;</span>
+                </div>
+                <div class="param-row">
+                    <span class="param-label">Gioco valvola</span>
+                    <input type="number" id="intakeClearance" value="0.50" class="input" style="width:75px;" step="0.01">
+                    <span class="param-unit">mm</span>
+                </div>
+                <div class="param-row">
+                    <button class="btn btn-accent" onclick="importIntake();" style="width:100%;">Importa Aspirazione</button>
+                </div>
+                <span class="import-status" id="intakeStatus"></span>
+            </div>
+
+            <!-- Exhaust section -->
+            <div class="section-exhaust">
+                <div class="section-title" style="color: var(--danger);">Scarico (Exhaust)</div>
+                <input type="file" id="fileExhaust" class="file-input" style="width:100%;" accept=".scr,.txt,.csv,.*">
+                <div class="param-row">
+                    <span class="param-label">Angolo lobo</span>
+                    <input type="number" id="exhaustAngle" value="100" class="input" style="width:75px;" step="0.5">
+                    <span class="param-unit">&deg;</span>
+                </div>
+                <div class="param-row">
+                    <span class="param-label">Gioco valvola</span>
+                    <input type="number" id="exhaustClearance" value="0.50" class="input" style="width:75px;" step="0.01">
+                    <span class="param-unit">mm</span>
+                </div>
+                <div class="param-row">
+                    <button class="btn btn-danger" onclick="importExhaust();" style="width:100%;">Importa Scarico</button>
+                </div>
+                <span class="import-status" id="exhaustStatus"></span>
+            </div>
+
+            <!-- Advance -->
+            <div class="param-row" style="margin-top:16px;">
+                <span class="param-label">Anticipo</span>
+                <input type="number" id="advance" value="0" class="input" style="width:75px;" step="0.5">
+                <span class="param-unit">&deg;</span>
+            </div>
+
+            <!-- NEW: Analysis parameters -->
+            <div class="param-separator">
+                <div class="param-group-title">Parametri analisi avanzata</div>
+                <div class="param-row">
+                    <span class="param-label">Rif. durata</span>
+                    <input type="number" id="durationRef" value="1.0" class="input" style="width:75px;" step="0.1" min="0">
+                    <span class="param-unit">mm</span>
+                </div>
+                <div class="param-row">
+                    <span class="param-label">RPM</span>
+                    <input type="number" id="rpmInput" value="6000" class="input" style="width:75px;" step="100" min="0">
+                    <span class="param-unit">giri/min</span>
+                </div>
+                <div class="param-row">
+                    <span class="param-label">Bilanciere asp.</span>
+                    <input type="number" id="rockerIntake" value="1.00" class="input" style="width:75px;" step="0.01" min="0.1">
+                    <span class="param-unit">rapporto</span>
+                </div>
+                <div class="param-row">
+                    <span class="param-label">Bilanciere scar.</span>
+                    <input type="number" id="rockerExhaust" value="1.00" class="input" style="width:75px;" step="0.01" min="0.1">
+                    <span class="param-unit">rapporto</span>
+                </div>
+                <div class="param-row">
+                    <span class="param-label">Smooth derivate</span>
+                    <select id="smoothWindow" class="input" style="width:75px;">
+                        <option value="0">Off</option>
+                        <option value="5" selected>5 pt</option>
+                        <option value="7">7 pt</option>
+                        <option value="9">9 pt</option>
+                        <option value="11">11 pt</option>
+                    </select>
+                    <span class="param-unit">S-G</span>
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="flex gap-8" style="margin-top:16px;">
+                <button class="btn btn-success" onclick="analyze();" style="flex:1;">&#9654; Analizza</button>
+                <button class="btn btn-secondary" onclick="resetAll();">&#8634; Reset</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Results card (hidden until analysis) -->
+    <div class="card" id="resultsCard" style="display:none;">
+        <div class="card-title">Risultati Analisi</div>
+
+        <div class="result-grid">
+
+            <!-- Left: Timing diagram (doughnut) -->
+            <div class="timing-canvas-wrap">
+                <canvas id="timingChart" width="320" height="320"></canvas>
+                <div class="timing-legend">
+                    <span><span class="timing-legend-dot" style="background:#00d4ff;"></span>Aspirazione</span>
+                    <span><span class="timing-legend-dot" style="background:#ff5252;"></span>Scarico</span>
+                </div>
+            </div>
+
+            <!-- Right: Results table -->
+            <div>
+                <!-- Durata -->
+                <div class="result-section">
+                    <div class="result-section-title">Durata</div>
+                    <div class="result-row">
+                        <span class="result-label">Durata aspirazione</span>
+                        <span class="result-value cyan" id="resDurIn">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Durata scarico</span>
+                        <span class="result-value red" id="resDurEx">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label" id="resDurRefLabel">Durata asp. @ 1.0 mm</span>
+                        <span class="result-value cyan" id="resDurRefIn">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label" id="resDurRefLabelEx">Durata scar. @ 1.0 mm</span>
+                        <span class="result-value red" id="resDurRefEx">-</span>
+                    </div>
+                </div>
+
+                <!-- Angoli -->
+                <div class="result-section">
+                    <div class="result-section-title">Angoli</div>
+                    <div class="result-row">
+                        <span class="result-label">Separazione lobi (LSA)</span>
+                        <span class="result-value yellow" id="resLSA">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Centro aspirazione ATDC</span>
+                        <span class="result-value cyan" id="resIntCenter">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Centro scarico BTDC</span>
+                        <span class="result-value red" id="resExCenter">-</span>
+                    </div>
+                </div>
+
+                <!-- Tempi -->
+                <div class="result-section">
+                    <div class="result-section-title">Tempi di apertura / chiusura</div>
+                    <div class="result-row">
+                        <span class="result-label">Apertura asp. BTC (prima PMS)</span>
+                        <span class="result-value cyan" id="resIntOpen">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Chiusura asp. ABC (dopo PMI)</span>
+                        <span class="result-value cyan" id="resIntClose">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Apertura scar. BBC (prima PMI)</span>
+                        <span class="result-value red" id="resExOpen">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Chiusura scar. ATC (dopo PMS)</span>
+                        <span class="result-value red" id="resExClose">-</span>
+                    </div>
+                </div>
+
+                <!-- Incrocio e PMS -->
+                <div class="result-section">
+                    <div class="result-section-title">Incrocio e alzata al PMS</div>
+                    <div class="result-row">
+                        <span class="result-label">Angolo di incrocio (overlap)</span>
+                        <span class="result-value green" id="resOverlap">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Alzata aspirazione al PMS</span>
+                        <span class="result-value cyan" id="resLiftInTDC">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Alzata scarico al PMS</span>
+                        <span class="result-value red" id="resLiftExTDC">-</span>
+                    </div>
+                </div>
+
+                <!-- Area-Tempo e Asimmetria (NEW) -->
+                <div class="result-section">
+                    <div class="result-section-title">Area-Tempo e Asimmetria</div>
+                    <div class="result-row">
+                        <span class="result-label">Area-Tempo aspirazione</span>
+                        <span class="result-value cyan" id="resAreaIn">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Area-Tempo scarico</span>
+                        <span class="result-value red" id="resAreaEx">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">&Delta; Area asp/scar</span>
+                        <span class="result-value yellow" id="resAreaDelta">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Asimmetria lobo asp.</span>
+                        <span class="result-value cyan" id="resAsymIn">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Asimmetria lobo scar.</span>
+                        <span class="result-value red" id="resAsymEx">-</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Kinematic Analysis card (hidden until analysis) -->
+    <div class="card" id="kinematicsCard" style="display:none;">
+        <div class="card-title">Analisi Cinematica</div>
+
+        <!-- Velocity chart -->
+        <div class="kin-chart-wrap">
+            <div class="kin-chart-title">
+                <span id="velChartTitle">Velocit&agrave; (mm/&deg;)</span>
+                <button class="btn-zoom-reset" onclick="if(velocityChart)velocityChart.resetZoom();">&circlearrowright; Reset Zoom</button>
+            </div>
+            <canvas id="velocityCanvas"></canvas>
+        </div>
+
+        <!-- Acceleration chart -->
+        <div class="kin-chart-wrap">
+            <div class="kin-chart-title">
+                <span id="accChartTitle">Accelerazione (mm/&deg;&sup2;)</span>
+                <button class="btn-zoom-reset" onclick="if(accelerationChart)accelerationChart.resetZoom();">&circlearrowright; Reset Zoom</button>
+            </div>
+            <canvas id="accelerationCanvas"></canvas>
+        </div>
+
+        <!-- Jerk chart -->
+        <div class="kin-chart-wrap">
+            <div class="kin-chart-title">
+                <span id="jerkChartTitle">Jerk (mm/&deg;&sup3;)</span>
+                <button class="btn-zoom-reset" onclick="if(jerkChart)jerkChart.resetZoom();">&circlearrowright; Reset Zoom</button>
+            </div>
+            <canvas id="jerkCanvas"></canvas>
+        </div>
+
+        <!-- Kinematic results grid -->
+        <div class="kin-results-grid">
+            <div>
+                <div class="result-section-title" style="color:var(--accent);">Cinematica Aspirazione</div>
+                <div class="result-row">
+                    <span class="result-label">Vel. max apertura</span>
+                    <span class="result-value cyan" id="resVelOpenIn">-</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Vel. chiusura (seating)</span>
+                    <span class="result-value cyan" id="resVelCloseIn">-</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Acc. max (+)</span>
+                    <span class="result-value cyan" id="resAccPosIn">-</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Acc. max (-)</span>
+                    <span class="result-value cyan" id="resAccNegIn">-</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Jerk max</span>
+                    <span class="result-value cyan" id="resJerkIn">-</span>
+                </div>
+            </div>
+            <div>
+                <div class="result-section-title" style="color:var(--danger);">Cinematica Scarico</div>
+                <div class="result-row">
+                    <span class="result-label">Vel. max apertura</span>
+                    <span class="result-value red" id="resVelOpenEx">-</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Vel. chiusura (seating)</span>
+                    <span class="result-value red" id="resVelCloseEx">-</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Acc. max (+)</span>
+                    <span class="result-value red" id="resAccPosEx">-</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Acc. max (-)</span>
+                    <span class="result-value red" id="resAccNegEx">-</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Jerk max</span>
+                    <span class="result-value red" id="resJerkEx">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- A vs B Comparison card -->
+    <div class="card ab-card">
+        <div class="ab-toggle" onclick="toggleAB()">
+            <span class="ab-toggle-arrow" id="abArrow">&#9654;</span>
+            <span class="card-title" style="margin:0;cursor:pointer;">Confronto A vs B</span>
+        </div>
+        <div class="ab-content" id="abContent">
+            <div class="ab-grid">
+                <!-- Set A -->
+                <div class="ab-set ab-set-a">
+                    <div class="ab-set-title">Set A</div>
+                    <div class="param-row">
+                        <span class="param-label" style="min-width:60px;">Asp.</span>
+                        <input type="file" id="fileA_int" class="file-input" style="width:100%;" accept=".scr,.txt,.csv,.*">
+                    </div>
+                    <div class="param-row">
+                        <span class="param-label" style="min-width:60px;">Scar.</span>
+                        <input type="file" id="fileA_exh" class="file-input" style="width:100%;" accept=".scr,.txt,.csv,.*">
+                    </div>
+                    <div class="param-row">
+                        <span class="param-label" style="min-width:60px;">Ang. lobo</span>
+                        <input type="number" id="abA_angle" value="100" class="input" style="width:65px;" step="0.5">
+                        <span class="param-unit">&deg;</span>
+                    </div>
+                    <div class="param-row">
+                        <span class="param-label" style="min-width:60px;">Gioco</span>
+                        <input type="number" id="abA_clear" value="0.50" class="input" style="width:65px;" step="0.01">
+                        <span class="param-unit">mm</span>
+                    </div>
+                </div>
+                <!-- Set B -->
+                <div class="ab-set ab-set-b">
+                    <div class="ab-set-title">Set B</div>
+                    <div class="param-row">
+                        <span class="param-label" style="min-width:60px;">Asp.</span>
+                        <input type="file" id="fileB_int" class="file-input" style="width:100%;" accept=".scr,.txt,.csv,.*">
+                    </div>
+                    <div class="param-row">
+                        <span class="param-label" style="min-width:60px;">Scar.</span>
+                        <input type="file" id="fileB_exh" class="file-input" style="width:100%;" accept=".scr,.txt,.csv,.*">
+                    </div>
+                    <div class="param-row">
+                        <span class="param-label" style="min-width:60px;">Ang. lobo</span>
+                        <input type="number" id="abB_angle" value="100" class="input" style="width:65px;" step="0.5">
+                        <span class="param-unit">&deg;</span>
+                    </div>
+                    <div class="param-row">
+                        <span class="param-label" style="min-width:60px;">Gioco</span>
+                        <input type="number" id="abB_clear" value="0.50" class="input" style="width:65px;" step="0.01">
+                        <span class="param-unit">mm</span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-8" style="margin-top:12px;">
+                <button class="btn btn-success" onclick="runABComparison();" style="flex:1;">&#9654; Confronta A vs B</button>
+                <button class="btn btn-secondary" onclick="resetAB();">&#8634; Reset</button>
+            </div>
+
+            <!-- AB Results (hidden until comparison) -->
+            <div id="abResultsWrap" style="display:none; margin-top:16px;">
+                <div class="kin-chart-wrap">
+                    <div class="kin-chart-title">
+                        <span>Overlay A vs B</span>
+                        <button class="btn-zoom-reset" onclick="if(abChart)abChart.resetZoom();">&circlearrowright; Reset Zoom</button>
+                    </div>
+                    <canvas id="abCanvas"></canvas>
+                </div>
+                <div class="ab-delta-table">
+                    <div class="result-section-title">Delta A vs B</div>
+                    <div class="result-row">
+                        <span class="result-label">Max alzata asp. A / B</span>
+                        <span class="result-value yellow" id="abMaxIn">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Max alzata scar. A / B</span>
+                        <span class="result-value yellow" id="abMaxEx">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">&Delta; Area asp.</span>
+                        <span class="result-value yellow" id="abAreaIn">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">&Delta; Area scar.</span>
+                        <span class="result-value yellow" id="abAreaEx">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">&Delta; Durata asp.</span>
+                        <span class="result-value yellow" id="abDurIn">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">&Delta; Durata scar.</span>
+                        <span class="result-value yellow" id="abDurEx">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ============================================
+     JavaScript - Analisi Camme
+     ============================================ -->
+
+<script>
+// ========== STATE ==========
+var crankIntake = [];    // 720 values (index 1-720)
+var crankExhaust = [];   // 720 values (index 1-720)
+var intakeLoaded = false;
+var exhaustLoaded = false;
+var intakeMaxLift = 0, intakeMaxPos = 0;
+var exhaustMaxLift = 0, exhaustMaxPos = 0;
+var intakeMaxIdx = 0;    // raw index 1-720 of peak
+var exhaustMaxIdx = 0;
+var timingChartInstance = null;
+
+// Kinematic state
+var velIntake = [], velExhaust = [];
+var accIntake = [], accExhaust = [];
+var jerkIntake = [], jerkExhaust = [];
+var velocityChart = null;
+var accelerationChart = null;
+var jerkChart = null;
+
+// A vs B state
+var abChart = null;
+
+// Initialize arrays to zero
+function initArrays() {
+    crankIntake = new Array(722);
+    crankExhaust = new Array(722);
+    for (var i = 0; i <= 721; i++) {
+        crankIntake[i] = 0;
+        crankExhaust[i] = 0;
+    }
+}
+initArrays();
+
+// ========== HELPER: Map cam degrees to crankshaft degrees ==========
+
+function mapCamToCrank(camLift, angle, clearance, type) {
+    var crank = new Array(722);
+    for (var j = 0; j <= 721; j++) crank[j] = 0;
+
+    var s = 1;
+    if (Math.floor(angle / 2) === angle / 2) s = 0;
+
+    for (var d = 1; d <= 360; d++) {
+        var p;
+        if (type === 'intake') {
+            p = d * 2 - angle;
+            if (p < 0) { p = 720 - Math.abs(p); }
+            else if (p === 0) { p = 720; }
+            else if (p > 0 && p < 3) { p = 720 + p; if (p > 720) p = p - 720; }
+        } else {
+            p = d * 2 + angle;
+            if (p > 720) p = p - 720;
+        }
+        if (p < 1) p = p + 720;
+        if (p > 720) p = p - 720;
+
+        var lift = camLift[d] - clearance;
+        if (lift < 0) lift = 0;
+        if (p >= 1 && p <= 720) crank[p] = lift;
+    }
+
+    // Linear interpolation for intermediate degrees
+    for (var z = 5 - s; z <= 720; z += 2) {
+        var prev = z - 1, next = z + 1;
+        if (prev < 1) prev = 720;
+        if (next > 720) next = 1;
+        var interp = (crank[prev] + crank[next]) / 2;
+        if (interp < 0) interp = 0;
+        crank[z] = interp;
+    }
+    if (s === 0) {
+        crank[1] = (crank[720] + crank[2]) / 2;
+    }
+
+    return crank;
+}
+
+// Parse .scr file text to 360-element cam lift array
+function parseCamFile(text) {
+    var risp = text.split('\r\n');
+    var camLift = new Array(361);
+    for (var i = 1; i <= 360; i++) {
+        if (risp[i]) {
+            var parts = risp[i].split(',');
+            camLift[i] = Number(parts[1]);
+        } else {
+            camLift[i] = 0;
+        }
+    }
+    return camLift;
+}
+
+// Read file as text (returns Promise)
+function readFileAsText(file) {
+    return new Promise(function(resolve, reject) {
+        var fr = new FileReader();
+        fr.onload = function() { resolve(fr.result); };
+        fr.onerror = function() { reject(fr.error); };
+        fr.readAsText(file);
+    });
+}
+
+// Find max lift and its index in a crank array
+function findMax(crankArr) {
+    var maxLift = 0, maxIdx = 0, maxPos = 0;
+    for (var m = 1; m <= 720; m++) {
+        if (crankArr[m] > maxLift) {
+            maxLift = crankArr[m];
+            maxIdx = m;
+            maxPos = m - 360;
+        }
+    }
+    return { lift: maxLift, idx: maxIdx, pos: maxPos };
+}
+
+// ========== FILE IMPORT ==========
+
+function importIntake() {
+    var input = document.getElementById('fileIntake');
+    if (!input.files || !input.files[0]) { alert('Selezionare un file'); return; }
+
+    var nom = input.files[0].name.split('.');
+    var nomes = nom[0].split('_');
+    var tfile = nomes[nomes.length - 1];
+    if (tfile != "alz") { alert('Tipologia file non valida - richiesto file _alz'); return; }
+
+    var file = input.files[0];
+    var fr = new FileReader();
+    fr.onload = function() {
+        var camLift = parseCamFile(fr.result);
+        var angle = Number(document.getElementById('intakeAngle').value);
+        var clearance = Number(document.getElementById('intakeClearance').value);
+
+        crankIntake = mapCamToCrank(camLift, angle, clearance, 'intake');
+
+        var mx = findMax(crankIntake);
+        intakeMaxLift = mx.lift;
+        intakeMaxPos = mx.pos;
+        intakeMaxIdx = mx.idx;
+
+        intakeLoaded = true;
+        document.getElementById('intakeStatus').textContent =
+            nom[0] + ' | Max: ' + intakeMaxLift.toFixed(2) + 'mm @ ' + intakeMaxPos + '\u00B0';
+        updateChart();
+    };
+    fr.readAsText(file);
+}
+
+function importExhaust() {
+    var input = document.getElementById('fileExhaust');
+    if (!input.files || !input.files[0]) { alert('Selezionare un file'); return; }
+
+    var nom = input.files[0].name.split('.');
+    var nomes = nom[0].split('_');
+    var tfile = nomes[nomes.length - 1];
+    if (tfile != "alz") { alert('Tipologia file non valida - richiesto file _alz'); return; }
+
+    var file = input.files[0];
+    var fr = new FileReader();
+    fr.onload = function() {
+        var camLift = parseCamFile(fr.result);
+        var angle = Number(document.getElementById('exhaustAngle').value);
+        var clearance = Number(document.getElementById('exhaustClearance').value);
+
+        crankExhaust = mapCamToCrank(camLift, angle, clearance, 'exhaust');
+
+        var mx = findMax(crankExhaust);
+        exhaustMaxLift = mx.lift;
+        exhaustMaxPos = mx.pos;
+        exhaustMaxIdx = mx.idx;
+
+        exhaustLoaded = true;
+        document.getElementById('exhaustStatus').textContent =
+            nom[0] + ' | Max: ' + exhaustMaxLift.toFixed(2) + 'mm @ ' + exhaustMaxPos + '\u00B0';
+        updateChart();
+    };
+    fr.readAsText(file);
+}
+
+// ========== KINEMATIC COMPUTATIONS ==========
+
+// Apply rocker arm ratio to a lift array
+function applyRockerRatio(crankArr, ratio) {
+    var out = new Array(722);
+    for (var i = 0; i <= 721; i++) {
+        out[i] = crankArr[i] * ratio;
+    }
+    return out;
+}
+
+// Duration at reference height (count degrees where lift > refHeight)
+function computeDurationAtRef(crankArr, refHeight) {
+    var count = 0;
+    for (var i = 1; i <= 720; i++) {
+        if (crankArr[i] > refHeight) count++;
+    }
+    return count;
+}
+
+// Time-Area: trapezoidal integration of lift curve (mm-deg)
+function computeTimeArea(crankArr) {
+    var area = 0;
+    for (var i = 1; i < 720; i++) {
+        if (crankArr[i] > 0 || crankArr[i + 1] > 0) {
+            area += (crankArr[i] + crankArr[i + 1]) / 2;
+        }
+    }
+    return area;
+}
+
+// Lobe asymmetry: compare opening area vs closing area around peak
+function computeLobeAsymmetry(crankArr, peakIdx) {
+    // Find lobe start and end (where lift > 0)
+    var start = -1, end = -1;
+
+    // Search backwards from peak for start
+    for (var i = peakIdx; i >= 1; i--) {
+        if (crankArr[i] <= 0) { start = i + 1; break; }
+        if (i === 1) {
+            // Check wrap-around
+            for (var w = 720; w > peakIdx; w--) {
+                if (crankArr[w] <= 0) { start = w + 1; break; }
+            }
+        }
+    }
+    if (start === -1) start = 1;
+
+    // Search forwards from peak for end
+    for (var j = peakIdx; j <= 720; j++) {
+        if (crankArr[j] <= 0) { end = j - 1; break; }
+        if (j === 720) {
+            for (var w2 = 1; w2 < peakIdx; w2++) {
+                if (crankArr[w2] <= 0) { end = w2 - 1; break; }
+            }
+        }
+    }
+    if (end === -1) end = 720;
+
+    // Calculate opening area (start to peak) and closing area (peak to end)
+    var openArea = 0, closeArea = 0;
+
+    // Opening flank
+    if (start <= peakIdx) {
+        for (var k = start; k < peakIdx; k++) {
+            openArea += (crankArr[k] + crankArr[k + 1]) / 2;
+        }
+    }
+
+    // Closing flank
+    if (peakIdx <= end) {
+        for (var l = peakIdx; l < end; l++) {
+            closeArea += (crankArr[l] + crankArr[l + 1]) / 2;
+        }
+    }
+
+    var total = openArea + closeArea;
+    if (total === 0) return 0;
+
+    // Positive = opening > closing (asymmetric towards opening)
+    return ((openArea - closeArea) / total) * 100;
+}
+
+// Compute derivatives (velocity, acceleration, jerk) using finite differences
+function computeDerivatives(crankArr) {
+    var vel = new Array(722);
+    var acc = new Array(722);
+    var jerk = new Array(722);
+
+    for (var i = 0; i <= 721; i++) { vel[i] = 0; acc[i] = 0; jerk[i] = 0; }
+
+    // Central differences with wrapping
+    for (var i = 1; i <= 720; i++) {
+        var im2 = i - 2; if (im2 < 1) im2 += 720;
+        var im1 = i - 1; if (im1 < 1) im1 += 720;
+        var ip1 = i + 1; if (ip1 > 720) ip1 -= 720;
+        var ip2 = i + 2; if (ip2 > 720) ip2 -= 720;
+
+        // Velocity (1st derivative): central difference
+        vel[i] = (crankArr[ip1] - crankArr[im1]) / 2;
+
+        // Acceleration (2nd derivative)
+        acc[i] = crankArr[ip1] - 2 * crankArr[i] + crankArr[im1];
+
+        // Jerk (3rd derivative)
+        jerk[i] = (crankArr[ip2] - 2 * crankArr[ip1] + 2 * crankArr[im1] - crankArr[im2]) / 2;
+    }
+
+    return { vel: vel, acc: acc, jerk: jerk };
+}
+
+// Extract kinematic result values (peak velocities, accelerations, jerk)
+function extractKinematicResults(vel, acc, jerk, peakIdx, rpm) {
+    var omega = rpm > 0 ? rpm * 6 : 0; // deg/s
+    var omegaSq = omega * omega;
+    var omegaCu = omegaSq * omega;
+
+    // Find lobe boundaries (where velocity crosses zero near peak)
+    // Opening phase: before peak (velocity positive)
+    // Closing phase: after peak (velocity negative)
+
+    var velMaxOpen = 0;  // max positive velocity (opening)
+    var velMaxClose = 0; // min velocity (most negative = seating)
+    var accMaxPos = 0;   // max positive acceleration
+    var accMaxNeg = 0;   // max negative acceleration
+    var jerkMax = 0;     // max absolute jerk
+
+    for (var i = 1; i <= 720; i++) {
+        if (vel[i] > velMaxOpen) velMaxOpen = vel[i];
+        if (vel[i] < velMaxClose) velMaxClose = vel[i];
+        if (acc[i] > accMaxPos) accMaxPos = acc[i];
+        if (acc[i] < accMaxNeg) accMaxNeg = acc[i];
+        if (Math.abs(jerk[i]) > Math.abs(jerkMax)) jerkMax = jerk[i];
+    }
+
+    // Convert to time domain if RPM provided
+    var unitVel = 'mm/\u00B0';
+    var unitAcc = 'mm/\u00B0\u00B2';
+    var unitJerk = 'mm/\u00B0\u00B3';
+
+    var vOpen = velMaxOpen;
+    var vClose = velMaxClose;
+    var aPos = accMaxPos;
+    var aNeg = accMaxNeg;
+    var jMax = jerkMax;
+
+    if (omega > 0) {
+        vOpen = velMaxOpen * omega;
+        vClose = velMaxClose * omega;
+        aPos = accMaxPos * omegaSq;
+        aNeg = accMaxNeg * omegaSq;
+        jMax = jerkMax * omegaCu;
+        unitVel = 'mm/s';
+        unitAcc = 'mm/s\u00B2';
+        unitJerk = 'mm/s\u00B3';
+    }
+
+    return {
+        velOpen: vOpen, velClose: vClose,
+        accPos: aPos, accNeg: aNeg,
+        jerkMax: jMax,
+        unitVel: unitVel, unitAcc: unitAcc, unitJerk: unitJerk
+    };
+}
+
+// ========== SMART NUMBER FORMATTING ==========
+
+function formatKinValue(v) {
+    var a = Math.abs(v);
+    if (a === 0) return '0';
+    if (a < 0.001) return v.toExponential(2);
+    if (a < 1) return v.toFixed(4);
+    if (a < 100) return v.toFixed(2);
+    if (a < 10000) return v.toFixed(1);
+    if (a < 1e6) return Math.round(v).toLocaleString('it-IT');
+    // For millions+, use engineering notation
+    if (a < 1e9) return (v / 1e6).toFixed(1) + ' \u00D710\u2076';
+    if (a < 1e12) return (v / 1e9).toFixed(1) + ' \u00D710\u2079';
+    return (v / 1e12).toFixed(1) + ' \u00D710\xB9\xB2';
+}
+
+function formatAxisValue(v) {
+    var a = Math.abs(v);
+    if (a === 0) return '0';
+    if (a < 1000) return v.toFixed(0);
+    if (a < 1e6) return (v / 1e3).toFixed(0) + 'k';
+    if (a < 1e9) return (v / 1e6).toFixed(1) + 'M';
+    if (a < 1e12) return (v / 1e9).toFixed(1) + 'G';
+    return (v / 1e12).toFixed(1) + 'T';
+}
+
+// ========== SAVITZKY-GOLAY SMOOTHING ==========
+
+// Savitzky-Golay quadratic smoothing coefficients
+var sgCoeffs = {
+    3:  { c: [1, 1, 1], d: 3 },
+    5:  { c: [-3, 12, 17, 12, -3], d: 35 },
+    7:  { c: [-2, 3, 6, 7, 6, 3, -2], d: 21 },
+    9:  { c: [-21, 14, 39, 54, 59, 54, 39, 14, -21], d: 231 },
+    11: { c: [-36, 9, 44, 69, 84, 89, 84, 69, 44, 9, -36], d: 429 }
+};
+
+function smoothArray(arr, windowSize) {
+    if (!windowSize || windowSize < 3 || !sgCoeffs[windowSize]) return arr;
+
+    var sg = sgCoeffs[windowSize];
+    var half = Math.floor(windowSize / 2);
+    var out = new Array(arr.length);
+    for (var i = 0; i < arr.length; i++) out[i] = arr[i];
+
+    for (var i = 1; i <= 720; i++) {
+        var sum = 0;
+        for (var j = -half; j <= half; j++) {
+            var idx = i + j;
+            if (idx < 1) idx += 720;
+            if (idx > 720) idx -= 720;
+            sum += arr[idx] * sg.c[j + half];
+        }
+        out[i] = sum / sg.d;
+        if (out[i] < 0) out[i] = 0; // lift can't be negative
+    }
+    return out;
+}
+
+// ========== ANALYSIS ==========
+
+function analyze() {
+    if (!intakeLoaded || !exhaustLoaded) {
+        alert('Importare entrambi i file aspirazione e scarico prima di analizzare.');
+        return;
+    }
+
+    var intakeClear = Number(document.getElementById('intakeClearance').value);
+    var exhaustClear = Number(document.getElementById('exhaustClearance').value);
+    var intakeAng = Number(document.getElementById('intakeAngle').value);
+    var exhaustAng = Number(document.getElementById('exhaustAngle').value);
+    var adv = Number(document.getElementById('advance').value);
+    var refHeight = Number(document.getElementById('durationRef').value);
+    var rpm = Number(document.getElementById('rpmInput').value);
+    var rockerIn = Number(document.getElementById('rockerIntake').value) || 1.0;
+    var rockerEx = Number(document.getElementById('rockerExhaust').value) || 1.0;
+
+    // Apply rocker arm ratio for analysis
+    var anlIn = (rockerIn !== 1.0) ? applyRockerRatio(crankIntake, rockerIn) : crankIntake;
+    var anlEx = (rockerEx !== 1.0) ? applyRockerRatio(crankExhaust, rockerEx) : crankExhaust;
+
+    // Find max with rocker applied
+    var mxIn = findMax(anlIn);
+    var mxEx = findMax(anlEx);
+
+    // Duration: count degrees where lift > 0
+    var durIntake = 0, durExhaust = 0;
+    for (var i = 1; i <= 720; i++) {
+        if (anlIn[i] > 0) durIntake++;
+        if (anlEx[i] > 0) durExhaust++;
+    }
+
+    // Duration at reference height
+    var durRefIn = computeDurationAtRef(anlIn, refHeight);
+    var durRefEx = computeDurationAtRef(anlEx, refHeight);
+
+    // Time-Area
+    var areaIn = computeTimeArea(anlIn);
+    var areaEx = computeTimeArea(anlEx);
+    var areaDelta = areaIn > 0 ? ((areaIn - areaEx) / areaIn * 100) : 0;
+
+    // Lobe asymmetry
+    var asymIn = computeLobeAsymmetry(anlIn, mxIn.idx);
+    var asymEx = computeLobeAsymmetry(anlEx, mxEx.idx);
+
+    // Lift at TDC (crankshaft degree 361 = overlap TDC)
+    var liftInTDC = anlIn[361] || 0;
+    var liftExTDC = anlEx[361] || 0;
+
+    // Lobe Separation Angle
+    var LSA = (intakeAng + exhaustAng) / 2;
+
+    // Timing calculations
+    var intakeOpenBTC  = -(LSA - adv - durIntake / 2);
+    var intakeCloseABC = LSA - adv + durIntake / 2 - 180;
+    var exOpenBBC      = LSA + adv + durExhaust / 2 - 180;
+    var exCloseATC     = -(LSA + adv - durExhaust / 2);
+
+    // Centers
+    var intakeCenter = LSA - adv;
+    var exhaustCenter = LSA + adv;
+
+    // Overlap
+    var overlap = intakeOpenBTC + exCloseATC;
+
+    // ====== KINEMATIC ANALYSIS ======
+    var smoothW = Number(document.getElementById('smoothWindow').value) || 0;
+    var sIn = smoothW > 0 ? smoothArray(anlIn, smoothW) : anlIn;
+    var sEx = smoothW > 0 ? smoothArray(anlEx, smoothW) : anlEx;
+    var kinIn = computeDerivatives(sIn);
+    var kinEx = computeDerivatives(sEx);
+
+    velIntake = kinIn.vel; accIntake = kinIn.acc; jerkIntake = kinIn.jerk;
+    velExhaust = kinEx.vel; accExhaust = kinEx.acc; jerkExhaust = kinEx.jerk;
+
+    var resIn = extractKinematicResults(velIntake, accIntake, jerkIntake, mxIn.idx, rpm);
+    var resEx = extractKinematicResults(velExhaust, accExhaust, jerkExhaust, mxEx.idx, rpm);
+
+    // ====== DISPLAY RESULTS ======
+    document.getElementById('resultsCard').style.display = 'block';
+
+    document.getElementById('resDurIn').textContent = durIntake + '\u00B0';
+    document.getElementById('resDurEx').textContent = durExhaust + '\u00B0';
+
+    // Duration at reference
+    document.getElementById('resDurRefLabel').textContent = 'Durata asp. @ ' + refHeight.toFixed(1) + ' mm';
+    document.getElementById('resDurRefLabelEx').textContent = 'Durata scar. @ ' + refHeight.toFixed(1) + ' mm';
+    document.getElementById('resDurRefIn').textContent = durRefIn + '\u00B0';
+    document.getElementById('resDurRefEx').textContent = durRefEx + '\u00B0';
+
+    document.getElementById('resLSA').textContent = LSA.toFixed(1) + '\u00B0';
+    document.getElementById('resIntCenter').textContent = intakeCenter.toFixed(1) + '\u00B0';
+    document.getElementById('resExCenter').textContent = exhaustCenter.toFixed(1) + '\u00B0';
+    document.getElementById('resIntOpen').textContent = intakeOpenBTC.toFixed(1) + '\u00B0';
+    document.getElementById('resIntClose').textContent = intakeCloseABC.toFixed(1) + '\u00B0';
+    document.getElementById('resExOpen').textContent = exOpenBBC.toFixed(1) + '\u00B0';
+    document.getElementById('resExClose').textContent = exCloseATC.toFixed(1) + '\u00B0';
+    document.getElementById('resOverlap').textContent = overlap.toFixed(1) + '\u00B0';
+    document.getElementById('resLiftInTDC').textContent = liftInTDC.toFixed(3) + ' mm';
+    document.getElementById('resLiftExTDC').textContent = liftExTDC.toFixed(3) + ' mm';
+
+    // Area-Tempo and Asymmetry
+    document.getElementById('resAreaIn').textContent = areaIn.toFixed(1) + ' mm\u00B7\u00B0';
+    document.getElementById('resAreaEx').textContent = areaEx.toFixed(1) + ' mm\u00B7\u00B0';
+    document.getElementById('resAreaDelta').textContent = areaDelta.toFixed(1) + ' %';
+    document.getElementById('resAsymIn').textContent = asymIn.toFixed(1) + ' %';
+    document.getElementById('resAsymEx').textContent = asymEx.toFixed(1) + ' %';
+
+    // ====== KINEMATIC RESULTS ======
+    document.getElementById('kinematicsCard').style.display = 'block';
+
+    document.getElementById('resVelOpenIn').textContent = formatKinValue(resIn.velOpen) + ' ' + resIn.unitVel;
+    document.getElementById('resVelCloseIn').textContent = formatKinValue(resIn.velClose) + ' ' + resIn.unitVel;
+    document.getElementById('resAccPosIn').textContent = formatKinValue(resIn.accPos) + ' ' + resIn.unitAcc;
+    document.getElementById('resAccNegIn').textContent = formatKinValue(resIn.accNeg) + ' ' + resIn.unitAcc;
+    document.getElementById('resJerkIn').textContent = formatKinValue(resIn.jerkMax) + ' ' + resIn.unitJerk;
+
+    document.getElementById('resVelOpenEx').textContent = formatKinValue(resEx.velOpen) + ' ' + resEx.unitVel;
+    document.getElementById('resVelCloseEx').textContent = formatKinValue(resEx.velClose) + ' ' + resEx.unitVel;
+    document.getElementById('resAccPosEx').textContent = formatKinValue(resEx.accPos) + ' ' + resEx.unitAcc;
+    document.getElementById('resAccNegEx').textContent = formatKinValue(resEx.accNeg) + ' ' + resEx.unitAcc;
+    document.getElementById('resJerkEx').textContent = formatKinValue(resEx.jerkMax) + ' ' + resEx.unitJerk;
+
+    // Chart titles with units
+    var omega = rpm > 0 ? rpm * 6 : 0;
+    document.getElementById('velChartTitle').textContent = 'Velocit\u00E0 (' + (omega > 0 ? 'mm/s' : 'mm/\u00B0') + ')';
+    document.getElementById('accChartTitle').textContent = 'Accelerazione (' + (omega > 0 ? 'mm/s\u00B2' : 'mm/\u00B0\u00B2') + ')';
+    document.getElementById('jerkChartTitle').textContent = 'Jerk (' + (omega > 0 ? 'mm/s\u00B3' : 'mm/\u00B0\u00B3') + ')';
+
+    // Create kinematic charts
+    createVelocityChart(omega);
+    createAccelerationChart(omega);
+    createJerkChart(omega);
+
+    // Update timing diagram
+    updateTimingDiagram(durIntake, durExhaust, intakeAng, exhaustAng, adv, LSA);
+
+    // Update main chart with rocker-applied data
+    updateChartWithData(anlIn, anlEx);
+}
+
+// ========== KINEMATIC CHARTS ==========
+
+var zoomPanOptions = {
+    pan: { enabled: false },
+    zoom: { enabled: true, drag: true, mode: 'x',
+            threshold: 10,
+            backgroundColor: 'rgba(0,212,255,0.1)',
+            borderColor: 'rgba(0,212,255,0.4)' }
+};
+
+function kinChartOptions(yLabel) {
+    return {
+        responsive: true,
+        animation: { duration: 0 },
+        legend: { labels: { fontColor: '#8888aa', fontSize: 11 } },
+        scales: {
+            xAxes: [{
+                display: true,
+                scaleLabel: { display: true, labelString: 'Gradi albero motore (\u00B0)', fontColor: '#8888aa' },
+                gridLines: { color: '#2a2a4a' },
+                ticks: { fontColor: '#8888aa', maxTicksLimit: 13 }
+            }],
+            yAxes: [{
+                type: 'linear',
+                scaleLabel: { display: true, labelString: yLabel, fontColor: '#8888aa' },
+                gridLines: { color: '#2a2a4a', zeroLineColor: '#ffd740', zeroLineWidth: 1 },
+                ticks: { fontColor: '#8888aa', callback: function(val) { return formatAxisValue(val); } }
+            }]
+        },
+        plugins: { zoom: zoomPanOptions }
+    };
+}
+
+function createVelocityChart(omega) {
+    if (velocityChart) velocityChart.destroy();
+
+    var labels = [], dataIn = [], dataEx = [];
+    var factor = omega > 0 ? omega : 1;
+
+    for (var i = 1; i <= 720; i++) {
+        labels.push(i);
+        dataIn.push(velIntake[i] * factor);
+        dataEx.push(velExhaust[i] * factor);
+    }
+
+    var ctx = document.getElementById('velocityCanvas').getContext('2d');
+    velocityChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Aspirazione',
+                data: dataIn,
+                borderColor: '#00d4ff',
+                backgroundColor: 'transparent',
+                pointRadius: 0,
+                borderWidth: 1.5,
+                fill: false
+            }, {
+                label: 'Scarico',
+                data: dataEx,
+                borderColor: '#ff5252',
+                backgroundColor: 'transparent',
+                pointRadius: 0,
+                borderWidth: 1.5,
+                fill: false
+            }]
+        },
+        options: kinChartOptions(omega > 0 ? 'mm/s' : 'mm/\u00B0')
+    });
+}
+
+function createAccelerationChart(omega) {
+    if (accelerationChart) accelerationChart.destroy();
+
+    var labels = [], dataIn = [], dataEx = [];
+    var negIn = [], negEx = [];
+    var factor = omega > 0 ? omega * omega : 1;
+
+    for (var i = 1; i <= 720; i++) {
+        labels.push(i);
+        var ai = accIntake[i] * factor;
+        var ae = accExhaust[i] * factor;
+        dataIn.push(ai);
+        dataEx.push(ae);
+        negIn.push(ai < 0 ? ai : null);
+        negEx.push(ae < 0 ? ae : null);
+    }
+
+    var ctx = document.getElementById('accelerationCanvas').getContext('2d');
+    accelerationChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+            // Negative zones (filled, behind the lines)
+            {
+                label: 'Zona neg. asp.',
+                data: negIn,
+                borderColor: 'transparent',
+                backgroundColor: 'rgba(0, 212, 255, 0.12)',
+                pointRadius: 0,
+                borderWidth: 0,
+                fill: 'origin',
+                spanGaps: false
+            },
+            {
+                label: 'Zona neg. scar.',
+                data: negEx,
+                borderColor: 'transparent',
+                backgroundColor: 'rgba(255, 82, 82, 0.12)',
+                pointRadius: 0,
+                borderWidth: 0,
+                fill: 'origin',
+                spanGaps: false
+            },
+            // Lines (on top)
+            {
+                label: 'Aspirazione',
+                data: dataIn,
+                borderColor: '#00d4ff',
+                backgroundColor: 'transparent',
+                pointRadius: 0,
+                borderWidth: 1.5,
+                fill: false
+            },
+            {
+                label: 'Scarico',
+                data: dataEx,
+                borderColor: '#ff5252',
+                backgroundColor: 'transparent',
+                pointRadius: 0,
+                borderWidth: 1.5,
+                fill: false
+            }]
+        },
+        options: kinChartOptions(omega > 0 ? 'mm/s\u00B2' : 'mm/\u00B0\u00B2')
+    });
+}
+
+function createJerkChart(omega) {
+    if (jerkChart) jerkChart.destroy();
+
+    var labels = [], dataIn = [], dataEx = [];
+    var factor = omega > 0 ? omega * omega * omega : 1;
+
+    for (var i = 1; i <= 720; i++) {
+        labels.push(i);
+        dataIn.push(jerkIntake[i] * factor);
+        dataEx.push(jerkExhaust[i] * factor);
+    }
+
+    var ctx = document.getElementById('jerkCanvas').getContext('2d');
+    jerkChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Aspirazione',
+                data: dataIn,
+                borderColor: '#00d4ff',
+                backgroundColor: 'transparent',
+                pointRadius: 0,
+                borderWidth: 1.5,
+                fill: false
+            }, {
+                label: 'Scarico',
+                data: dataEx,
+                borderColor: '#ff5252',
+                backgroundColor: 'transparent',
+                pointRadius: 0,
+                borderWidth: 1.5,
+                fill: false
+            }]
+        },
+        options: kinChartOptions(omega > 0 ? 'mm/s\u00B3' : 'mm/\u00B0\u00B3')
+    });
+}
+
+// ========== TIMING DIAGRAM (Doughnut) ==========
+
+function updateTimingDiagram(durIn, durEx, intAng, exAng, adv, LSA) {
+    var intCenter = LSA - adv;
+    var exCenter = LSA + adv;
+
+    var intakeOpen = durIn;
+    var intakeClosed = 720 - durIn;
+    var exhaustOpen = durEx;
+    var exhaustClosed = 720 - durEx;
+
+    if (timingChartInstance) {
+        timingChartInstance.destroy();
+    }
+
+    var ctx = document.getElementById('timingChart').getContext('2d');
+    timingChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: [
+                'Asp. aperta (' + intakeOpen + '\u00B0)',
+                'Asp. chiusa (' + intakeClosed + '\u00B0)',
+                'Scar. aperto (' + exhaustOpen + '\u00B0)',
+                'Scar. chiuso (' + exhaustClosed + '\u00B0)'
+            ],
+            datasets: [
+                {
+                    label: 'Aspirazione',
+                    data: [intakeOpen, intakeClosed],
+                    backgroundColor: [
+                        'rgba(0, 212, 255, 0.8)',
+                        'rgba(0, 212, 255, 0.1)'
+                    ],
+                    borderColor: ['#00d4ff', '#2a2a4a'],
+                    borderWidth: 1
+                },
+                {
+                    label: 'Scarico',
+                    data: [exhaustOpen, exhaustClosed],
+                    backgroundColor: [
+                        'rgba(255, 82, 82, 0.8)',
+                        'rgba(255, 82, 82, 0.1)'
+                    ],
+                    borderColor: ['#ff5252', '#2a2a4a'],
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: false,
+            cutoutPercentage: 30,
+            rotation: -Math.PI / 2,
+            legend: {
+                display: true,
+                position: 'bottom',
+                labels: {
+                    fontColor: '#8888aa',
+                    fontSize: 11,
+                    padding: 8,
+                    generateLabels: function(chart) {
+                        return [
+                            { text: 'Asp. aperta: ' + intakeOpen + '\u00B0', fillStyle: 'rgba(0,212,255,0.8)', strokeStyle: '#00d4ff', lineWidth: 1 },
+                            { text: 'Scar. aperto: ' + exhaustOpen + '\u00B0', fillStyle: 'rgba(255,82,82,0.8)', strokeStyle: '#ff5252', lineWidth: 1 },
+                            { text: 'Overlap: ' + (intakeOpen + exhaustOpen - 720 > 0 ? (intakeOpen + exhaustOpen - 720) : 0) + '\u00B0', fillStyle: 'rgba(255,215,64,0.8)', strokeStyle: '#ffd740', lineWidth: 1 }
+                        ];
+                    }
+                }
+            },
+            tooltips: {
+                callbacks: {
+                    label: function(item, data) {
+                        var ds = data.datasets[item.datasetIndex];
+                        var label = item.datasetIndex === 0 ? 'Aspirazione' : 'Scarico';
+                        var state = item.index === 0 ? 'Aperta' : 'Chiusa';
+                        return label + ' ' + state + ': ' + ds.data[item.index] + '\u00B0';
+                    }
+                }
+            }
+        }
+    });
+}
+
+// ========== CHART UPDATE ==========
+
+function updateChart() {
+    chartData.labels = [];
+    chartData.datasets[0].data = [];
+    chartData.datasets[1].data = [];
+
+    for (var i = 1; i <= 720; i++) {
+        chartData.labels.push(i);
+        chartData.datasets[0].data.push(intakeLoaded ? crankIntake[i] : null);
+        chartData.datasets[1].data.push(exhaustLoaded ? crankExhaust[i] : null);
+    }
+    window.analisiLine.update();
+}
+
+// Update chart with specific arrays (e.g. after rocker ratio applied)
+function updateChartWithData(intArr, exhArr) {
+    chartData.labels = [];
+    chartData.datasets[0].data = [];
+    chartData.datasets[1].data = [];
+
+    for (var i = 1; i <= 720; i++) {
+        chartData.labels.push(i);
+        chartData.datasets[0].data.push(intakeLoaded ? intArr[i] : null);
+        chartData.datasets[1].data.push(exhaustLoaded ? exhArr[i] : null);
+    }
+    window.analisiLine.update();
+}
+
+// ========== A vs B COMPARISON ==========
+
+function toggleAB() {
+    var content = document.getElementById('abContent');
+    var arrow = document.getElementById('abArrow');
+    content.classList.toggle('open');
+    arrow.classList.toggle('open');
+}
+
+function runABComparison() {
+    var fileAInt = document.getElementById('fileA_int').files[0];
+    var fileAExh = document.getElementById('fileA_exh').files[0];
+    var fileBInt = document.getElementById('fileB_int').files[0];
+    var fileBExh = document.getElementById('fileB_exh').files[0];
+
+    if (!fileAInt || !fileAExh || !fileBInt || !fileBExh) {
+        alert('Caricare tutti e 4 i file per il confronto A vs B.');
+        return;
+    }
+
+    var angleA = Number(document.getElementById('abA_angle').value);
+    var clearA = Number(document.getElementById('abA_clear').value);
+    var angleB = Number(document.getElementById('abB_angle').value);
+    var clearB = Number(document.getElementById('abB_clear').value);
+
+    Promise.all([
+        readFileAsText(fileAInt),
+        readFileAsText(fileAExh),
+        readFileAsText(fileBInt),
+        readFileAsText(fileBExh)
+    ]).then(function(results) {
+        var camA_int = parseCamFile(results[0]);
+        var camA_exh = parseCamFile(results[1]);
+        var camB_int = parseCamFile(results[2]);
+        var camB_exh = parseCamFile(results[3]);
+
+        var crankA_int = mapCamToCrank(camA_int, angleA, clearA, 'intake');
+        var crankA_exh = mapCamToCrank(camA_exh, angleA, clearA, 'exhaust');
+        var crankB_int = mapCamToCrank(camB_int, angleB, clearB, 'intake');
+        var crankB_exh = mapCamToCrank(camB_exh, angleB, clearB, 'exhaust');
+
+        // Find maxes
+        var maxA_int = findMax(crankA_int);
+        var maxA_exh = findMax(crankA_exh);
+        var maxB_int = findMax(crankB_int);
+        var maxB_exh = findMax(crankB_exh);
+
+        // Areas
+        var areaA_int = computeTimeArea(crankA_int);
+        var areaA_exh = computeTimeArea(crankA_exh);
+        var areaB_int = computeTimeArea(crankB_int);
+        var areaB_exh = computeTimeArea(crankB_exh);
+
+        // Durations
+        var durA_int = computeDurationAtRef(crankA_int, 0.001);
+        var durA_exh = computeDurationAtRef(crankA_exh, 0.001);
+        var durB_int = computeDurationAtRef(crankB_int, 0.001);
+        var durB_exh = computeDurationAtRef(crankB_exh, 0.001);
+
+        // Display results
+        document.getElementById('abResultsWrap').style.display = 'block';
+
+        document.getElementById('abMaxIn').textContent =
+            maxA_int.lift.toFixed(2) + ' / ' + maxB_int.lift.toFixed(2) + ' mm  (\u0394 ' + (maxB_int.lift - maxA_int.lift).toFixed(2) + ')';
+        document.getElementById('abMaxEx').textContent =
+            maxA_exh.lift.toFixed(2) + ' / ' + maxB_exh.lift.toFixed(2) + ' mm  (\u0394 ' + (maxB_exh.lift - maxA_exh.lift).toFixed(2) + ')';
+
+        var dAreaIn = areaA_int > 0 ? ((areaB_int - areaA_int) / areaA_int * 100) : 0;
+        var dAreaEx = areaA_exh > 0 ? ((areaB_exh - areaA_exh) / areaA_exh * 100) : 0;
+        document.getElementById('abAreaIn').textContent = dAreaIn.toFixed(1) + ' %';
+        document.getElementById('abAreaEx').textContent = dAreaEx.toFixed(1) + ' %';
+        document.getElementById('abDurIn').textContent = (durB_int - durA_int) + '\u00B0';
+        document.getElementById('abDurEx').textContent = (durB_exh - durA_exh) + '\u00B0';
+
+        // Create overlay chart
+        createABChart(crankA_int, crankA_exh, crankB_int, crankB_exh);
+    });
+}
+
+function createABChart(aInt, aExh, bInt, bExh) {
+    if (abChart) abChart.destroy();
+
+    var labels = [];
+    var dA_int = [], dA_exh = [], dB_int = [], dB_exh = [];
+    for (var i = 1; i <= 720; i++) {
+        labels.push(i);
+        dA_int.push(aInt[i]);
+        dA_exh.push(aExh[i]);
+        dB_int.push(bInt[i]);
+        dB_exh.push(bExh[i]);
+    }
+
+    var ctx = document.getElementById('abCanvas').getContext('2d');
+    abChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+            { label: 'A - Asp.', data: dA_int, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.05)', pointRadius: 0, borderWidth: 2, fill: true },
+            { label: 'A - Scar.', data: dA_exh, borderColor: '#ff5252', backgroundColor: 'rgba(255,82,82,0.05)', pointRadius: 0, borderWidth: 2, fill: true },
+            { label: 'B - Asp.', data: dB_int, borderColor: '#4caf50', backgroundColor: 'transparent', pointRadius: 0, borderWidth: 2, borderDash: [6, 3], fill: false },
+            { label: 'B - Scar.', data: dB_exh, borderColor: '#ffd740', backgroundColor: 'transparent', pointRadius: 0, borderWidth: 2, borderDash: [6, 3], fill: false }
+            ]
+        },
+        options: {
+            responsive: true,
+            animation: { duration: 0 },
+            legend: { labels: { fontColor: '#8888aa', fontSize: 11 } },
+            scales: {
+                xAxes: [{
+                    scaleLabel: { display: true, labelString: 'Gradi albero motore (\u00B0)', fontColor: '#8888aa' },
+                    gridLines: { color: '#2a2a4a' },
+                    ticks: { fontColor: '#8888aa', maxTicksLimit: 13 }
+                }],
+                yAxes: [{
+                    scaleLabel: { display: true, labelString: 'Alzata (mm)', fontColor: '#8888aa' },
+                    gridLines: { color: '#2a2a4a' },
+                    ticks: { fontColor: '#8888aa', beginAtZero: true }
+                }]
+            },
+            plugins: { zoom: zoomPanOptions }
+        }
+    });
+}
+
+function resetAB() {
+    if (abChart) { abChart.destroy(); abChart = null; }
+    document.getElementById('abResultsWrap').style.display = 'none';
+    document.getElementById('fileA_int').value = '';
+    document.getElementById('fileA_exh').value = '';
+    document.getElementById('fileB_int').value = '';
+    document.getElementById('fileB_exh').value = '';
+    document.getElementById('abA_angle').value = '100';
+    document.getElementById('abA_clear').value = '0.50';
+    document.getElementById('abB_angle').value = '100';
+    document.getElementById('abB_clear').value = '0.50';
+}
+
+// ========== RESET ==========
+
+function resetAll() {
+    intakeLoaded = false;
+    exhaustLoaded = false;
+    intakeMaxLift = 0;
+    intakeMaxPos = 0;
+    exhaustMaxLift = 0;
+    exhaustMaxPos = 0;
+    intakeMaxIdx = 0;
+    exhaustMaxIdx = 0;
+    initArrays();
+
+    velIntake = []; velExhaust = [];
+    accIntake = []; accExhaust = [];
+    jerkIntake = []; jerkExhaust = [];
+
+    document.getElementById('intakeStatus').textContent = '';
+    document.getElementById('exhaustStatus').textContent = '';
+    document.getElementById('resultsCard').style.display = 'none';
+    document.getElementById('kinematicsCard').style.display = 'none';
+    document.getElementById('fileIntake').value = '';
+    document.getElementById('fileExhaust').value = '';
+    document.getElementById('intakeAngle').value = '100';
+    document.getElementById('exhaustAngle').value = '100';
+    document.getElementById('intakeClearance').value = '0.50';
+    document.getElementById('exhaustClearance').value = '0.50';
+    document.getElementById('advance').value = '0';
+    document.getElementById('durationRef').value = '1.0';
+    document.getElementById('rpmInput').value = '6000';
+    document.getElementById('rockerIntake').value = '1.00';
+    document.getElementById('rockerExhaust').value = '1.00';
+    document.getElementById('smoothWindow').value = '5';
+
+    if (timingChartInstance) { timingChartInstance.destroy(); timingChartInstance = null; }
+    if (velocityChart) { velocityChart.destroy(); velocityChart = null; }
+    if (accelerationChart) { accelerationChart.destroy(); accelerationChart = null; }
+    if (jerkChart) { jerkChart.destroy(); jerkChart = null; }
+
+    updateChart();
+}
+
+// ========== CHART SETUP ==========
+
+var chartData = {
+    labels: [],
+    datasets: [{
+        label: 'Aspirazione',
+        borderColor: '#00d4ff',
+        backgroundColor: 'rgba(0, 212, 255, 0.08)',
+        fill: true,
+        pointHoverRadius: 5,
+        pointRadius: 0,
+        data: [],
+        yAxisID: 'y-axis-1',
+        borderWidth: 2
+    }, {
+        label: 'Scarico',
+        borderColor: '#ff5252',
+        backgroundColor: 'rgba(255, 82, 82, 0.08)',
+        fill: true,
+        pointHoverRadius: 5,
+        pointRadius: 0,
+        data: [],
+        yAxisID: 'y-axis-1',
+        borderWidth: 2
+    }]
+};
+
+window.onload = function() {
+    var ctx = document.getElementById('analisiChart').getContext('2d');
+    window.analisiLine = Chart.Line(ctx, {
+        data: chartData,
+        options: {
+            responsive: true,
+            hoverMode: 'index',
+            stacked: false,
+            title: { display: false },
+            legend: {
+                labels: { fontColor: '#8888aa' }
+            },
+            scales: {
+                xAxes: [{
+                    display: true,
+                    scaleLabel: {
+                        display: true,
+                        labelString: 'Gradi albero motore (\u00B0)',
+                        fontColor: '#8888aa'
+                    },
+                    gridLines: { color: "#2a2a4a" },
+                    ticks: {
+                        fontColor: '#8888aa',
+                        maxTicksLimit: 13,
+                        callback: function(val) { return val; }
+                    }
+                }],
+                yAxes: [{
+                    type: 'linear',
+                    scaleLabel: {
+                        display: true,
+                        labelString: 'Alzata (mm)',
+                        fontColor: '#8888aa'
+                    },
+                    position: 'left',
+                    id: 'y-axis-1',
+                    gridLines: {
+                        drawOnChartArea: true,
+                        color: "#2a2a4a"
+                    },
+                    ticks: {
+                        fontColor: '#8888aa',
+                        beginAtZero: true
+                    }
+                }]
+            },
+            plugins: {
+                zoom: zoomPanOptions
+            }
+        }
+    });
+};
+</script>
+
+</body>
+</html>

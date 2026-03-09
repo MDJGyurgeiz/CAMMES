@@ -1,0 +1,196 @@
+# CAMMES - Log Lavorazioni Progetto
+
+## Panoramica Sistema
+Sistema di misura profili alberi a camme per motori.
+- **Arduino Uno** (`micrometro_SPI/`) - Lettura micrometro digitale via interrupt, invio SPI
+- **Arduino Mega** (`master/`) - Controllo motore stepper (32 step/grado), coordinamento misure
+- **Server** (`cammes/cammes_server.js`) - Server unificato HTTP + WebSocket + Seriale
+- **Frontend** (`cammes/`) - UI browser con gauge, grafici Chart.js, controlli rotazione
+
+---
+
+## Sessione 1 - 2026-03-03
+
+### Analisi iniziale
+- Analizzato intero codebase: struttura progetto, dipendenze, architettura
+- Identificato stack: HTML5/JS frontend, exe server nativo, WebSocket porta 8080
+- Mappate 3 pagine UI: alzata.html, polare.html, grafici.html
+
+### Configurazione dev server
+- Creato `.claude/launch.json` con 2 configurazioni:
+  - `cammes-server` (exe, porta 8080)
+  - `frontend` (node serve.js, porta 3000)
+- Creato `cammes/serve.js` - server HTTP statico Node.js per servire i file HTML
+
+### Redesign UI - Dark Theme Moderno
+- **Creato `cammes/style.css`** - Design system completo:
+  - Variabili CSS custom (colori, spacing, tipografia)
+  - Sfondo: #0f0f1a, Card: #1a1a2e, Accento: #00d4ff (cyan)
+  - Layout CSS Grid/Flexbox (sostituisce position:absolute)
+  - Pulsanti HTML stilizzati (sostituiscono immagini PNG)
+  - Toggle switch, input, card con border-radius e shadow
+  - Tabella dati, file input, utility classes
+
+- **Riscritto `cammes/alzata.html`**:
+  - Header con navigazione tra pagine
+  - Card gauge (280px, colori dark theme, lancetta cyan)
+  - Card grafico lineare (grid lines #2a2a4a, label #8888aa)
+  - Card controlli (START verde, PAUSA rosso, RESET grigio)
+  - Card rotazione manuale (-, gradi, +, Ruota, Zero virtuale, toggle senso)
+  - Aggiunto gaugemicrom.draw() per rendering iniziale
+  - Logica JS completamente preservata
+
+- **Riscritto `cammes/polare.html`**:
+  - Stessa struttura di alzata.html
+  - Polar chart con scale trasparenti e gridlines dark
+  - Campo "diametro albero a riposo" nella card gauge
+  - Logica polare (raggio + conversione cos/sin) preservata
+
+- **Riscritto `cammes/grafici.html`**:
+  - Grid layout: chart lineare (sinistra) + tabella dati (destra)
+  - Tabella con color-dot per i 4 grafici (rosso, blu, verde, grigio)
+  - 4 polar chart in griglia 4 colonne
+  - File input per alzata (_alz) e polare (_pol)
+  - Scale polari: backdropColor transparent, gridLines #2a2a4a
+  - grafico4 cambiato da nero a grigio chiaro (visibile su dark)
+
+### Integrazione file Arduino
+- Copiati `master/master.ino` e `micrometro_SPI/micrometro_SPI.ino` nel progetto
+
+### Analisi completa del sistema
+- Documentato flusso dati end-to-end:
+  Sensore -> Arduino Uno (SPI #XX.XX#) -> Arduino Mega (Serial misura + *se) -> Server (WebSocket) -> Browser
+- Identificato protocollo comandi: p (1 grado), $+XXX/$-XXX (multi-grado)
+- Motore: 32 micropassi/grado, 900ms attesa lettura sensore
+
+### Problemi identificati (da implementare)
+1. CRITICO: Comando 'q' (antiorario) non gestito in master.ino
+2. CRITICO: Nessuna validazione misura SPI (dati corrotti passano)
+3. CRITICO: Buffer SPI senza reset su overflow
+4. MEDIO: Server exe non modificabile - proposto sostituzione Node.js
+5. MEDIO: Nessun indicatore connessione WebSocket nel frontend
+6. MEDIO: Manca export CSV diretto dal browser
+7. BASSO: Barra progresso scansione 360 gradi
+8. BASSO: Timing motore fisso 900ms ottimizzabile
+
+---
+
+## Sessione 2 - 2026-03-03
+
+### Analisi file Excel `camme-analisi_rev8.5.xlsm`
+- Estratto codice VBA completo (4 CommandButton + formule foglio)
+- Analisi meccanica/matematica completa:
+  - Conversione camma 360 gradi -> albero motore 720 gradi: CORRETTA
+  - Sottrazione gioco valvola con clamp a 0: CORRETTA
+  - Interpolazione lineare per risoluzione intermedia: CORRETTA
+  - Calcolo durata (gradi sopra soglia gioco): STANDARD
+  - Formula LSA = (angolo_intake + angolo_exhaust) / 2: CORRETTA
+  - Formule timing (BTC, ABC, BBC, ATC): STANDARD SETTORE
+  - Overlap = intake_open_BTC + exhaust_close_ATC: CORRETTO
+
+### Nuova pagina `cammes/analisi.html`
+- **Creata pagina completa** di analisi camme nel browser (sostituisce l'Excel)
+- Grafico overlay 720 gradi: aspirazione (cyan) + scarico (rosso) sovrapposti
+- Pannello parametri:
+  - Sezione aspirazione (bordo cyan): file input, angolo lobo, gioco valvola
+  - Sezione scarico (bordo rosso): file input, angolo lobo, gioco valvola
+  - Parametro anticipo (advance)
+- Tabella risultati con sezioni colorate:
+  - Durate aspirazione/scarico
+  - Angoli: LSA, centri aspirazione/scarico
+  - Tempi apertura/chiusura (BTC, ABC, BBC, ATC)
+  - Incrocio (overlap) e alzata al PMS
+- Diagramma circolare di fasatura (doughnut Chart.js)
+- Algoritmo cam-to-crank testato con file reale (305_asp_alz.scr):
+  - Max: 8.04mm (8.54 - 0.50 gioco), Durata: 225 gradi
+
+### Navigazione aggiornata
+- Aggiunto link "Analisi" alla navigazione di alzata.html, polare.html, grafici.html
+- Ora 4 pagine collegate: Alzata | Polare | Grafici | Analisi
+
+### Fix permessi Claude
+- Aggiunti permessi `Edit` e `Write` a `.claude/settings.local.json`
+- Le modifiche ai file non richiedono piu conferma manuale
+
+### Piano Fase 2 - Server unificato (prossima sessione)
+- Creare `cammes_server.js` (Node.js) che unifica:
+  - Server HTTP statico (porta 3000)
+  - WebSocket bridge seriale (porta 8080)
+  - Salvataggio file
+- Compilare con `pkg` in singolo `.exe` (~50MB)
+- Eliminare dipendenza da Node.js installato sul PC
+
+---
+
+## Sessione 3 - 2026-03-03
+
+### Server Unificato `cammes_server.js`
+- **Creato `cammes/cammes_server.js`** - Server Node.js unico che sostituisce `cammes_server.exe` + `serve.js`:
+  1. **HTTP statico** (porta 3000) - Serve tutti i file frontend dalla cartella `cammes/`
+  2. **WebSocket** (porta 8080) - Bridge bidirezionale browser ↔ Arduino
+  3. **Comunicazione seriale** - Auto-detect porta COM, 9600 baud, compatibile Arduino Uno/Mega
+  4. **Salvataggio file** - Intercetta messaggi `*filename*_pline`, salva in `prove/` come `.scr`
+  5. **Apertura automatica browser** - Lancia Chrome su `http://localhost:3000` all'avvio
+- Supporta argomenti CLI: `--port`, `--ws-port`, `--com COMx`, `--no-browser`
+- Compatibile con serialport legacy (v7-v8) e moderno (v10+)
+- Modalita' demo quando Arduino non collegato (server HTTP+WS funziona comunque)
+- Log con timestamp per debug: `[HH:MM:SS] [TAG] messaggio`
+
+### Package.json e dipendenze
+- **Creato `cammes/package.json`**:
+  - Dipendenze: `ws` (WebSocket), `serialport` (comunicazione Arduino)
+  - Script: `start`, `start:no-browser`, `build` (compilazione pkg)
+  - Configurazione `pkg` con assets (HTML, CSS, JS, immagini) per compilazione in .exe
+- Installate dipendenze npm nella cartella `cammes/`
+
+### Aggiornamento launch.json
+- Sostituita configurazione a 2 server con configurazione singola:
+  - Prima: `cammes-server` (exe:8080) + `frontend` (node:3000) — 2 processi
+  - Ora: `cammes` (node cammes_server.js) — 1 solo processo che gestisce tutto
+
+### Aggiornamento Node.js
+- Node.js aggiornato da v10.15.1 a v24.14.0 via winget
+- Reinstallate dipendenze: `ws` v8.19.0 + `serialport` v12.0.0 (moderno, con prebuilds)
+
+### Compilazione `cammes.exe` standalone
+- Compilato con `pkg` (v5.8.1) → `cammes.exe` 39MB (compresso GZip)
+- Target: `node18-win-x64` (Node.js 18 runtime embeddato)
+- Assets embeddati nel binario: tutte le pagine HTML, CSS, JS, immagini
+- Moduli nativi (serialport) NON embeddabili → vanno in `node_modules/` accanto all'exe
+- Fix `process.pkg` detection: il server cerca `node_modules` nella cartella reale dell'exe
+- Fix `PROVE_DIR`: i file salvati vanno nella cartella reale, non nel snapshot virtuale
+
+### Cartella distribuzione `CAMMES_DIST/`
+Creata cartella pronta per la distribuzione:
+```
+CAMMES_DIST/
+  cammes.exe          (39MB - server + frontend tutto incluso)
+  node_modules/       (serialport native bindings per comunicazione Arduino)
+```
+- L'utente lancia solo `cammes.exe` → si apre Chrome su http://localhost:3000
+- Non serve installare Node.js sul PC di destinazione
+- Il `node_modules` e' necessario solo per la comunicazione seriale Arduino
+
+### Test completati
+- ✅ Server HTTP serve tutte e 4 le pagine dall'exe standalone
+- ✅ WebSocket avviato correttamente
+- ✅ Serialport v12 caricato da `node_modules/` accanto all'exe
+- ✅ Auto-detect porte COM (nessun Arduino = modalita' demo)
+- ✅ Nessun errore nella console browser
+- ✅ Navigazione tra pagine funzionante
+- ✅ Test con curl: tutti endpoint restituiscono HTTP 200
+
+---
+
+## TODO - Prossime implementazioni
+- [ ] Fix comando 'q' in master.ino
+- [ ] Validazione misura SPI in master.ino
+- [ ] Reset buffer SPI overflow in master.ino
+- [x] ~~Analisi file Excel camme-analisi~~ (completata sessione 2)
+- [x] ~~Pagina analisi.html~~ (completata sessione 2)
+- [x] ~~Server Node.js unificato (cammes_server.js)~~ (completata sessione 3)
+- [x] ~~Compilazione cammes.exe con pkg~~ (completata sessione 3)
+- [ ] Indicatore connessione WebSocket nell'UI
+- [ ] Export CSV dal browser
+- [ ] Barra progresso scansione
+- [ ] Ottimizzazione timing motore

@@ -1,0 +1,249 @@
+
+<head>
+	<title>Line Chart</title>
+	<script src="Chart.bundle.js"></script>
+	<script src="samples/utils.js"></script>
+        <script src="jquery.min.js"></script>
+
+	
+</head>
+
+
+<body bgcolor="#808080">
+
+<div style="width:75%;">
+<canvas id="canvas" style=" background: #101010;"></canvas>
+	</div>
+
+
+
+
+
+
+<div style='position:absolute; top:500px;left:110px'> 
+
+
+
+
+
+
+
+
+<script>
+function read(){
+
+a=document.getElementById('myRange').value;
+
+newlabel = a;
+
+
+b=100*Math.floor(Math.random() * 10);
+c=100*Math.floor(Math.random() * 10) ;
+
+
+config.data.labels.push(newlabel);
+
+  config.data.datasets.forEach((dataset) => {
+
+
+if(dataset.label=='potenza'){
+       dataset.data.push(b);
+}
+
+if(dataset.label=='coppia'){
+     dataset.data.push(c);
+}
+
+
+
+   });
+
+
+
+
+window.myLine.update();
+
+}
+</script>
+
+
+	<script>
+
+var chartColors = {
+  red: 'rgb(255,0, 0)',
+  orange: 'rgb(255, 159, 64)',
+  yellow: 'rgb(255, 205, 86)',
+  green: 'rgb(75, 192, 192)',
+  blue: 'rgb(54, 162, 235)',
+  purple: 'rgb(153, 102, 255)',
+  grey: 'rgb(231,233,237)'
+};
+
+
+
+
+
+		
+		        var config = {
+			type: 'line',
+			data: {
+				labels: ['0' ],
+				datasets: [{
+					label: 'potenza',
+					backgroundColor: window.chartColors.red,
+					borderColor: window.chartColors.red,
+
+					data: [
+						0
+					],
+					fill: false,
+				
+					
+				
+			},
+                                    {
+					label: 'coppia',
+					fill: false,
+					backgroundColor: window.chartColors.blue,
+					borderColor: window.chartColors.blue,
+					data: [
+						0
+						
+					],
+				}]
+			},
+			options: {
+				responsive: true,
+                               
+				title: {
+					display: false,
+					text: 'test'
+				},
+				tooltips: {
+					mode: 'index',
+					intersect: false,
+				},
+				hover: {
+					mode: 'nearest',
+					intersect: true
+				},
+				scales: {
+					xAxes: [{
+						display: true,
+						scaleLabel: {
+							display: true,
+							labelString: 'rpm'
+
+
+
+						},
+
+                                          gridLines: {
+                                        
+                                         color: "#909090"
+                                          }
+
+
+					}],
+					yAxes: [{
+						display: true,
+						scaleLabel: {
+							display: true,
+							labelString: 'coppia-potenza'
+						},
+
+                                         gridLines: {
+                                        
+                                         color: "#909090"
+                                          }
+
+
+
+					}]
+				}
+			}
+		};
+
+		window.onload = function() {
+
+			var ctx = document.getElementById('canvas').getContext('2d');
+			window.myLine = new Chart(ctx, config);
+		};
+
+		
+
+				
+	</script>
+
+
+<script>
+function reset(){
+
+
+window.myLine.destroy();
+
+var ctx = document.getElementById('canvas').getContext('2d');
+window.myLine = new Chart(ctx, rst);
+
+
+
+
+
+
+
+
+}
+</script>
+
+<div style='position:relative; top:200px;left:0px'> 
+<input type="submit" value="START" style="font-size:50px;border:0;color:#00ca00;background: #000000;" onclick="start();">
+<div style='position:relative; top:-60px;left:200px'> 
+<input type="submit" value="VALORE"style="font-size:50px;border:0;color:#ca0000;background: #000000;"  onclick="update();">
+
+<script>
+var t=-1;
+function start(){
+t=t+1;
+if(t<13000){
+document.time.time.value=' rpm   '+t;
+setTimeout("start()",50);
+}
+}
+</script>
+<script>
+function update(){
+
+b=100*Math.floor(Math.random() * 10);
+c=100*Math.floor(Math.random() * 10) ;
+
+newlabel = t;
+config.data.labels.push(newlabel);
+
+  config.data.datasets.forEach((dataset) => {
+
+
+if(dataset.label=='potenza'){
+       dataset.data.push(b);
+}
+
+if(dataset.label=='coppia'){
+     dataset.data.push(c);
+}
+
+
+
+   });
+
+
+
+
+window.myLine.update();
+
+}
+</script>
+
+<div style='position:relative; top:-60px;left:240px'> 
+<form name= "time"><input type="text" name="time" style="font-size:50px;border:0;color:#caca00;background: #000000;" size="7"></form>
+
+
+

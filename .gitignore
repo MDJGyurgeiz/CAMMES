@@ -1,0 +1,19 @@
+# Dipendenze Node.js (si ricreano con: npm install)
+node_modules/
+
+# Build Android (si ricrea con: gradlew.bat assembleDebug)
+cammes-android/app/build/
+cammes-android/.gradle/
+cammes-android/gen_icon.js
+
+# File spazzatura Windows
+nul
+Thumbs.db
+Desktop.ini
+
+# File temporanei
+*.log
+.DS_Store
+
+# Installer incluso nel progetto (troppo pesante, si scarica)
+node-v10.15.1-x64.msi

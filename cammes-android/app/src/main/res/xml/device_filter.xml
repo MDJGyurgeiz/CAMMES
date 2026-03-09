@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Arduino Uno (ATmega16U2) -->
+    <usb-device vendor-id="9025" product-id="67" />
+    <!-- Arduino Uno (CH340) -->
+    <usb-device vendor-id="6790" product-id="29987" />
+    <!-- Arduino Uno (FTDI FT232R) -->
+    <usb-device vendor-id="1027" product-id="24577" />
+    <!-- Arduino Uno (CP2102) -->
+    <usb-device vendor-id="4292" product-id="60000" />
+</resources>

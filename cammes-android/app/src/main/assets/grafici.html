@@ -1,0 +1,550 @@
+<!doctype html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>CAMMES - Grafici</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+    canvas {
+        -moz-user-select: none;
+        -webkit-user-select: none;
+        -ms-user-select: none;
+    }
+    </style>
+</head>
+<body>
+
+<script src="Chart.bundle.js"></script>
+<script src="utils.js"></script>
+
+<div class="app-container">
+
+    <!-- Header -->
+    <div class="header">
+        <img src="images/logo.jpg" alt="CAMMES">
+        <h1>CAMMES</h1>
+        <div class="nav-links">
+            <a href="alzata.html">Alzata</a>
+            <a href="polare.html">Polare</a>
+            <a href="grafici.html" class="active">Grafici</a>
+            <a href="analisi.html">Analisi</a>
+        </div>
+    </div>
+
+    <!-- Line chart + Data table -->
+    <div class="main-grid" style="grid-template-columns: 1fr 380px;">
+
+        <!-- Left: Line chart -->
+        <div class="card chart-card">
+            <div class="card-title">Grafico Alzata</div>
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <!-- Right: Data table + File inputs -->
+        <div class="card">
+            <div class="card-title">Dati misurazione</div>
+
+            <div class="flex items-center gap-8 mt-8">
+                <label style="font-size:13px;color:var(--text-muted);">File alzata:</label>
+                <input type="file" id="fileinput1" class="file-input" onchange="loadFile();">
+            </div>
+
+            <table class="data-table mt-16">
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Gradi</th>
+                        <th>Massimo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="color-dot" style="background:#ff0000;"></span><span id="lb1">grafico1</span></td>
+                        <td><span id="g1g">0</span></td>
+                        <td><span id="g1v">0</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="color-dot" style="background:#0000c8;"></span><span id="lb2">grafico2</span></td>
+                        <td><span id="g2g">0</span></td>
+                        <td><span id="g2v">0</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="color-dot" style="background:#009600;"></span><span id="lb3">grafico3</span></td>
+                        <td><span id="g3g">0</span></td>
+                        <td><span id="g3v">0</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="color-dot" style="background:#ffffff;"></span><span id="lb4">grafico4</span></td>
+                        <td><span id="g4g">0</span></td>
+                        <td><span id="g4v">0</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="flex items-center gap-8 mt-16">
+                <label style="font-size:13px;color:var(--text-muted);">File polare:</label>
+                <input type="file" id="fileinput2" class="file-input" onchange="loadFile2();">
+            </div>
+
+            <div class="mt-16">
+                <button class="btn btn-secondary" onclick="document.location.reload(true)">&#8634; Reset</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Polar charts section title -->
+    <div class="card" style="padding:12px 20px;">
+        <div class="card-title" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">Grafici Polari</div>
+    </div>
+
+    <!-- Polar charts grid -->
+    <div class="polar-grid">
+        <div class="card">
+            <canvas id="birdsChart" width="450" height="300"></canvas>
+        </div>
+        <div class="card">
+            <canvas id="birdsChart2" width="450" height="300"></canvas>
+        </div>
+        <div class="card">
+            <canvas id="birdsChart3" width="450" height="300"></canvas>
+        </div>
+        <div class="card">
+            <canvas id="birdsChart4" width="450" height="300"></canvas>
+        </div>
+    </div>
+
+</div>
+
+<!-- ============================================
+     JavaScript - Logica invariata
+     ============================================ -->
+
+<script>
+var valori = new Array();
+var chartColors = {
+    red: 'rgb(255,0, 0)',
+    orange: 'rgb(255, 159, 64)',
+    yellow: 'rgb(255, 205, 86)',
+    green: 'rgb(0, 150, 0)',
+    blue: 'rgb(0, 0, 200)',
+    purple: 'rgb(153, 102, 255)',
+    grey: 'rgb(231,233,237)',
+    black: 'rgb(200,200,200)'
+};
+
+var lineChartData = {
+    labels: [],
+    datasets: [{
+        label: 'grafico1',
+        borderColor: window.chartColors.red,
+        backgroundColor: window.chartColors.red,
+        fill: false,
+        pointHoverRadius: 5,
+        pointRadius: 1,
+        data: [],
+        yAxisID: 'y-axis-1',
+    }, {
+        label: 'grafico2',
+        borderColor: window.chartColors.blue,
+        backgroundColor: window.chartColors.blue,
+        fill: false,
+        pointHoverRadius: 5,
+        pointRadius: 1,
+        data: [],
+        yAxisID: 'y-axis-1',
+    }, {
+        label: 'grafico3',
+        borderColor: window.chartColors.green,
+        backgroundColor: window.chartColors.green,
+        fill: false,
+        pointHoverRadius: 5,
+        pointRadius: 1,
+        data: [],
+        yAxisID: 'y-axis-1',
+    }, {
+        label: 'grafico4',
+        borderColor: window.chartColors.black,
+        backgroundColor: window.chartColors.black,
+        fill: false,
+        pointHoverRadius: 5,
+        pointRadius: 1,
+        data: [],
+        yAxisID: 'y-axis-1',
+    }]
+};
+
+window.onload = function() {
+    var ctx = document.getElementById('canvas').getContext('2d');
+    window.myLine = Chart.Line(ctx, {
+        data: lineChartData,
+        options: {
+            responsive: true,
+            hoverMode: 'index',
+            stacked: false,
+            title: { display: false, text: '' },
+            legend: { labels: { fontColor: '#8888aa' } },
+            scales: {
+                display: true,
+                xAxes: [{
+                    display: false,
+                    scaleLabel: { display: true, labelString: 'gradi', fontColor: '#8888aa' },
+                    gridLines: { color: "#2a2a4a" },
+                }],
+                yAxes: [{
+                    type: 'linear',
+                    scaleLabel: { display: true, labelString: 'valore', fontColor: '#8888aa' },
+                    position: 'left',
+                    id: 'y-axis-1',
+                    gridLines: { drawOnChartArea: true, color: "#2a2a4a" },
+                    ticks: { fontColor: '#8888aa' }
+                }],
+            }
+        }
+    });
+};
+</script>
+
+<script type="text/javascript">
+var index = 0;
+var vmax = 0;
+var gmax = 0;
+function loadFile() {
+    vmax = 0;
+    gmax = 0;
+    var input, file, fr;
+    input = document.getElementById('fileinput1');
+
+    if (!input) {
+        bodyAppend("p", "non riesco a trovare questo file");
+    } else if (!input.files) {
+        bodyAppend("p", "il browser non supporta la proprieta' file");
+    } else {
+        nom = input.files[0].name.split('.');
+        lmd = input.files[0].lastModifiedDate.toString();
+        nomes = nom[0].split('_');
+        tfile = nomes[nomes.length - 1];
+        if (tfile != "alz") { alert('tipologia file non valida'); }
+
+        if (tfile == "alz") {
+            index = index + 1;
+            file = input.files[0];
+            fr = new FileReader();
+            fr.onload = receivedText;
+            fr.readAsText(file);
+        }
+
+        function receivedText() {
+            showResult(fr, "Text");
+            fr = new FileReader();
+            fr.onload = receivedBinary;
+            fr.readAsBinaryString(file);
+        }
+    }
+
+    function showResult(fr, label) {
+        var markup, result, n, aByte, byteStr;
+        var risultato = "";
+        result = fr.result;
+        for (n = 0; n < result.length; ++n) {
+            aByte = result.charCodeAt(n);
+            risultato = risultato + String.fromCharCode(aByte);
+        }
+
+        risp = risultato.split('\r\n');
+
+        for (i = 1; i <= 361; i++) {
+            risp2 = risp[i].split(',');
+            valori[i] = risp2[1];
+            if (Number(risp2[1]) > vmax) {
+                vmax1 = risp2[1];
+                vmax = Number(risp2[1]);
+                gmax = i;
+            }
+        }
+
+        vmax2 = vmax1.split('.');
+        vmax = vmax2[0] + "." + vmax2[1].substring(0, 2);
+
+        if (index == 1) {
+            document.getElementById('g1g').innerHTML = gmax;
+            document.getElementById('g1v').innerHTML = vmax;
+            document.getElementById('lb1').innerHTML = nom[0];
+        }
+        if (index == 2) {
+            document.getElementById('g2g').innerHTML = gmax;
+            document.getElementById('g2v').innerHTML = vmax;
+            document.getElementById('lb2').innerHTML = nom[0];
+        }
+        if (index == 3) {
+            document.getElementById('g3g').innerHTML = gmax;
+            document.getElementById('g3v').innerHTML = vmax;
+            document.getElementById('lb3').innerHTML = nom[0];
+        }
+        if (index == 4) {
+            document.getElementById('g4g').innerHTML = gmax;
+            document.getElementById('g4v').innerHTML = vmax;
+            document.getElementById('lb4').innerHTML = nom[0];
+        }
+        update();
+    }
+}
+</script>
+
+<script>
+function update() {
+    mylabel = "grafico" + index;
+    for (k = 1; k <= 361; k++) {
+        if (index == 1) {
+            lineChartData.labels.push(k);
+        }
+        lineChartData.datasets.forEach((dataset) => {
+            if (dataset.label == mylabel) {
+                dataset.data.push(valori[k]);
+            }
+        });
+    }
+    window.myLine.update();
+}
+</script>
+
+<script src="Chart.min.js"></script>
+
+<!-- Polar Chart 1 -->
+<script>
+var birdsCanvas = document.getElementById("birdsChart");
+Chart.defaults.global.defaultFontFamily = "Lato";
+Chart.defaults.global.defaultFontSize = 18;
+Chart.defaults.global.defaultFontColor = "#8888aa";
+
+var birdsData = {
+    datasets: [{
+        label: 'g2',
+        data: [],
+        backgroundColor: [],
+        borderColor: "rgba(250, 0, 0, 0.2)",
+    }]
+};
+var chartOptions = {
+    startAngle: 0,
+    legend: { position: 'left', display: false },
+    animation: { animateRotate: false },
+    scale: {
+        ticks: { fontColor: '#8888aa', backdropColor: 'transparent' },
+        gridLines: { color: '#2a2a4a' },
+        angleLines: { color: '#2a2a4a' }
+    }
+};
+var polarAreaChart = new Chart(birdsCanvas, {
+    type: 'polarArea',
+    data: birdsData,
+    options: chartOptions
+});
+</script>
+
+<!-- Polar Chart 2 -->
+<script>
+var birdsCanvas2 = document.getElementById("birdsChart2");
+var birdsData2 = {
+    datasets: [{
+        label: 'g2',
+        data: [],
+        backgroundColor: [],
+        borderColor: "rgba(0, 0, 250, 0.2)",
+    }]
+};
+var chartOptions2 = {
+    startAngle: 0,
+    legend: { position: 'left', display: false },
+    animation: { animateRotate: false },
+    scale: {
+        ticks: { fontColor: '#8888aa', backdropColor: 'transparent' },
+        gridLines: { color: '#2a2a4a' },
+        angleLines: { color: '#2a2a4a' }
+    }
+};
+var polarAreaChart2 = new Chart(birdsCanvas2, {
+    type: 'polarArea',
+    data: birdsData2,
+    options: chartOptions2
+});
+</script>
+
+<!-- Polar Chart 3 -->
+<script>
+var birdsCanvas3 = document.getElementById("birdsChart3");
+var birdsData3 = {
+    datasets: [{
+        label: 'g2',
+        data: [],
+        backgroundColor: [],
+        borderColor: "rgba(0, 250, 0, 0.2)",
+    }]
+};
+var chartOptions3 = {
+    startAngle: 0,
+    legend: { position: 'left', display: false },
+    animation: { animateRotate: false },
+    scale: {
+        ticks: { fontColor: '#8888aa', backdropColor: 'transparent' },
+        gridLines: { color: '#2a2a4a' },
+        angleLines: { color: '#2a2a4a' }
+    }
+};
+var polarAreaChart3 = new Chart(birdsCanvas3, {
+    type: 'polarArea',
+    data: birdsData3,
+    options: chartOptions3
+});
+</script>
+
+<!-- Polar Chart 4 -->
+<script>
+var birdsCanvas4 = document.getElementById("birdsChart4");
+var birdsData4 = {
+    datasets: [{
+        label: 'g2',
+        data: [],
+        backgroundColor: [],
+        borderColor: "rgba(200, 200, 200, 0.2)",
+    }]
+};
+var chartOptions4 = {
+    startAngle: 0,
+    legend: { position: 'left', display: false },
+    animation: { animateRotate: false },
+    scale: {
+        ticks: { fontColor: '#8888aa', backdropColor: 'transparent' },
+        gridLines: { color: '#2a2a4a' },
+        angleLines: { color: '#2a2a4a' }
+    }
+};
+var polarAreaChart4 = new Chart(birdsCanvas4, {
+    type: 'polarArea',
+    data: birdsData4,
+    options: chartOptions4
+});
+</script>
+
+<script type="text/javascript">
+var index2 = 0;
+var valori2 = new Array();
+var valori5 = new Array();
+var valori6;
+var locmax = 0;
+var locg = 0;
+function loadFile2() {
+    var input, file, fr;
+    input = document.getElementById('fileinput2');
+
+    if (!input) {
+        bodyAppend("p", "non riesco a trovare questo file");
+    } else if (!input.files) {
+        bodyAppend("p", "il browser non supporta la proprieta' file");
+    } else {
+        nom = input.files[0].name.split('.');
+        lmd = input.files[0].lastModifiedDate.toString();
+        nom = input.files[0].name.split('.');
+        lmd = input.files[0].lastModifiedDate.toString();
+        nomes = nom[0].split('_');
+        tfile = nomes[nomes.length - 1];
+        if (tfile != "pol") { alert('tipologia file non valida'); }
+
+        if (tfile == "pol") {
+            index2 = index2 + 1;
+            file = input.files[0];
+            fr = new FileReader();
+            fr.onload = receivedText;
+            fr.readAsText(file);
+        }
+
+        function receivedText() {
+            showResult2(fr, "Text");
+            fr = new FileReader();
+            fr.onload = receivedBinary;
+            fr.readAsBinaryString(file);
+        }
+    }
+
+    function showResult2(fr, label) {
+        var markup, result, n, aByte, byteStr;
+        var risultato = "";
+        result = fr.result;
+        for (n = 0; n < result.length; ++n) {
+            aByte = result.charCodeAt(n);
+            risultato = risultato + String.fromCharCode(aByte);
+        }
+
+        risp = risultato.split('\r\n');
+
+        for (i = 1; i <= 360; i++) {
+            risp2 = risp[i].split(',');
+            valori2[i] = Math.sqrt(risp2[0] * risp2[0] + risp2[1] * risp2[1]);
+
+            if (valori2[i] > locmax) {
+                locmax = valori2[i];
+                locg = i;
+            }
+
+            valori3 = valori2[i].toString();
+            if (valori3.length > 3) {
+                valori4 = valori3.split('.');
+                valori6 = valori4[1].substring(0, 2);
+                valori5[i] = valori4[0] + "." + valori6;
+                if (valori6 > 97) {
+                    ap = Number(valori4[0]) + 1;
+                    valori5[i] = ap + ".00";
+                }
+            }
+        }
+
+        locg = 0;
+        locmax = 0;
+        update2();
+    }
+}
+</script>
+
+<script>
+function update2() {
+    if (index2 == 1) {
+        for (x = 1; x <= 360; x++) {
+            birdsData.labels.push(x);
+            birdsData.datasets.forEach((dataset) => {
+                dataset.data.push(valori5[x]);
+            });
+        }
+        window.polarAreaChart.update();
+    }
+    if (index2 == 2) {
+        for (x = 1; x <= 360; x++) {
+            birdsData2.labels.push(x);
+            birdsData2.datasets.forEach((dataset) => {
+                dataset.data.push(valori5[x]);
+            });
+        }
+        window.polarAreaChart2.update();
+    }
+    if (index2 == 3) {
+        for (x = 1; x <= 360; x++) {
+            birdsData3.labels.push(x);
+            birdsData3.datasets.forEach((dataset) => {
+                dataset.data.push(valori5[x]);
+            });
+        }
+        window.polarAreaChart3.update();
+    }
+    if (index2 == 4) {
+        for (x = 1; x <= 360; x++) {
+            birdsData4.labels.push(x);
+            birdsData4.datasets.forEach((dataset) => {
+                dataset.data.push(valori5[x]);
+            });
+        }
+        window.polarAreaChart4.update();
+    }
+}
+</script>
+
+</body>
+</html>

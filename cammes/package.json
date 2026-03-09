@@ -1,0 +1,39 @@
+{
+  "name": "cammes",
+  "version": "1.0.0",
+  "description": "CAMMES - Sistema di misura profili alberi a camme",
+  "main": "cammes_server.js",
+  "bin": "cammes_server.js",
+  "scripts": {
+    "start": "node cammes_server.js",
+    "start:no-browser": "node cammes_server.js --no-browser",
+    "build": "pkg . --targets node18-win-x64 --output cammes.exe --compress GZip"
+  },
+  "dependencies": {
+    "ws": "^8.16.0",
+    "serialport": "^12.0.0"
+  },
+  "pkg": {
+    "assets": [
+      "alzata.html",
+      "polare.html",
+      "grafici.html",
+      "analisi.html",
+      "style.css",
+      "serve.js",
+      "gauge.min.js",
+      "Chart.min.js",
+      "Chart.bundle.js",
+      "responsivevoice.js",
+      "samples/**/*",
+      "images/**/*",
+      "charts/jquery.min.js",
+      "prove/**/*"
+    ],
+    "targets": [
+      "node18-win-x64"
+    ]
+  },
+  "author": "CAMMES",
+  "license": "UNLICENSED"
+}

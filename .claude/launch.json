@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "cammes",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["./cammes/cammes_server.js", "--no-browser"],
+      "port": 3000
+    }
+  ]
+}

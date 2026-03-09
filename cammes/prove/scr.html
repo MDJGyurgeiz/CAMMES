@@ -1,0 +1,19 @@
+<body>
+<div id="follow-me">
+CIAO
+</div>
+
+<script language="JavaScript">
+function moveIt(evt){
+evt=evt||window.event;
+var x=evt.clientX+20+document.body.scrollLeft,
+y=evt.clientY+20+document.body.scrollTop,
+el=document.getElementById("follow-me");
+el.style.top=y+"px";
+el.style.left=x+"px";
+el=null;
+}
+window.onload=function(){
+window.onmousemove=moveIt();
+}
+</script>

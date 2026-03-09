@@ -1,0 +1,262 @@
+<html>
+
+<head>
+	<title>Line Chart</title>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.1/Chart.bundle.js"></script>
+	<script src="samples/utils.js"></script>
+
+	<style>
+	canvas{
+		-moz-user-select: none;
+		-webkit-user-select: none;
+		-ms-user-select: none;
+	}
+	</style>
+</head>
+
+<body>
+	<div style="width:75%;">
+		<canvas id="canvas" style=" background: #101010;"></canvas>
+	</div>
+
+
+
+<script>
+var temperatura=new Array();
+var temp1=0;
+var temp2=0;
+var temp3=0;
+var temp4=0;
+var temp5=0;
+var x=0;
+ var msg="";
+var newlabel=0;
+    var exampleSocket = new WebSocket("ws:192.168.1.233:8080");
+
+
+
+    exampleSocket.onopen = function (event) {
+
+ //alert('connesso');
+
+ //ctx = document.getElementById('canvas').getContext('2d');
+//window.myLine = new Chart(ctx, config);
+ 
+     
+
+    };
+    exampleSocket.onmessage = function (event) {
+
+x=x+1;
+
+msg=event.data;
+dati=msg.split('|');
+
+temp1=dati[0].split('.');
+temp2=temp1[0]+'.'+temp1[1].substring(0,1);
+temp=Number(dati[0]);
+pres=Number(dati[1]);
+pres=pres/10;
+
+temperatura[x]=temp;
+data=temp;
+
+nlabel=1000*x;
+
+newlabel = nlabel.toString();
+
+config.data.labels.push(newlabel);
+
+  config.data.datasets.forEach((dataset) => {
+
+
+if(dataset.label=='potenza'){
+       dataset.data.push(data);
+}
+
+if(dataset.label=='coppia'){
+      // dataset.data.push(pres);
+}
+
+
+
+   });
+
+
+
+
+window.myLine.update();
+
+
+
+   //config.data.datasets.forEach((dataset) => {
+
+
+       dataset.data.push(data);
+  //  });
+    
+//window.myLine.update();
+
+pre1=dati[1].split('.');
+
+
+
+
+
+
+pre2=pre1[0]+'.'+pre1[1].substring(0,1);
+
+hr=dati[2];
+hr1=hr.split('.');
+hr2=hr1[0]+'.'+hr1[1].substring(0,1);
+ 
+
+
+pre=Number(pre2);
+hr=Number(hr);
+
+
+
+//document.test.test.value='  '+temp2;
+//document.pr.pr.value='  '+pre2;
+//document.hr.hr.value='  '+hr2;
+
+    }
+
+
+</script>
+
+
+
+
+
+
+
+
+
+
+	
+	<script>
+
+var chartColors = {
+  red: 'rgb(255,0, 0)',
+  orange: 'rgb(255, 159, 64)',
+  yellow: 'rgb(255, 205, 86)',
+  green: 'rgb(75, 192, 192)',
+  blue: 'rgb(54, 162, 235)',
+  purple: 'rgb(153, 102, 255)',
+  grey: 'rgb(231,233,237)'
+};
+
+
+
+
+
+		
+		        var config = {
+			type: 'line',
+			data: {
+				labels: ['0' ],
+				datasets: [{
+					label: 'potenza',
+					backgroundColor: window.chartColors.red,
+					borderColor: window.chartColors.red,
+
+					data: [
+						0
+					],
+					fill: false,
+				
+					
+				
+			},
+                                    {
+					label: 'coppia',
+					fill: false,
+					backgroundColor: window.chartColors.blue,
+					borderColor: window.chartColors.blue,
+					data: [
+						0
+						
+					],
+				}]
+			},
+			options: {
+				responsive: true,
+                               
+				title: {
+					display: false,
+					text: 'test'
+				},
+				tooltips: {
+					mode: 'index',
+					intersect: false,
+				},
+				hover: {
+					mode: 'nearest',
+					intersect: true
+				},
+				scales: {
+					xAxes: [{
+						display: true,
+						scaleLabel: {
+							display: true,
+							labelString: 'rpm'
+
+
+
+						},
+
+                                          gridLines: {
+                                        
+                                         color: "#909090"
+                                          }
+
+
+					}],
+					yAxes: [{
+						display: true,
+						scaleLabel: {
+							display: true,
+							labelString: 'coppia-potenza'
+						},
+
+                                         gridLines: {
+                                        
+                                         color: "#909090"
+                                          }
+
+
+
+					}]
+				}
+			}
+		};
+
+		window.onload = function() {
+
+			var ctx = document.getElementById('canvas').getContext('2d');
+			window.myLine = new Chart(ctx, config);
+		};
+
+		
+
+		
+
+		
+		
+		
+	</script>
+
+
+<script>
+function addData(chart, label, data) {
+    chart.data.labels.push(label);
+    chart.data.datasets.forEach((dataset) => {
+        dataset.data.push(data);
+    });
+    chart.update();
+}
+</body>
+
+</html>
