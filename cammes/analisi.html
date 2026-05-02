@@ -64,6 +64,7 @@
 <script src="Chart.bundle.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@0.7.7/dist/chartjs-plugin-zoom.min.js"></script>
+<script src="jspdf.umd.min.js"></script>
 
 <div class="app-container">
 
@@ -100,6 +101,16 @@
                 <div class="section-title" style="color: var(--accent);">Aspirazione (Intake)</div>
                 <input type="file" id="fileIntake" class="file-input" style="width:100%;" accept=".scr,.txt,.csv,.*">
                 <div class="param-row">
+                    <span class="param-label">Tipologia</span>
+                    <select id="intakeType" class="input" style="width:160px;" onchange="onTypologyChange('intake');">
+                        <option value="bucket_mech" selected>Bicchiere meccanico</option>
+                        <option value="bucket_hyd">Bicchiere idraulico</option>
+                        <option value="rocker_pushrod">Aste + bilancere</option>
+                        <option value="finger">Finger follower (a dito)</option>
+                        <option value="roller">Bilancere a rullo</option>
+                    </select>
+                </div>
+                <div class="param-row">
                     <span class="param-label">Angolo lobo</span>
                     <input type="number" id="intakeAngle" value="100" class="input" style="width:75px;" step="0.5">
                     <span class="param-unit">&deg;</span>
@@ -119,6 +130,16 @@
             <div class="section-exhaust">
                 <div class="section-title" style="color: var(--danger);">Scarico (Exhaust)</div>
                 <input type="file" id="fileExhaust" class="file-input" style="width:100%;" accept=".scr,.txt,.csv,.*">
+                <div class="param-row">
+                    <span class="param-label">Tipologia</span>
+                    <select id="exhaustType" class="input" style="width:160px;" onchange="onTypologyChange('exhaust');">
+                        <option value="bucket_mech" selected>Bicchiere meccanico</option>
+                        <option value="bucket_hyd">Bicchiere idraulico</option>
+                        <option value="rocker_pushrod">Aste + bilancere</option>
+                        <option value="finger">Finger follower (a dito)</option>
+                        <option value="roller">Bilancere a rullo</option>
+                    </select>
+                </div>
                 <div class="param-row">
                     <span class="param-label">Angolo lobo</span>
                     <input type="number" id="exhaustAngle" value="100" class="input" style="width:75px;" step="0.5">
@@ -178,10 +199,42 @@
                 </div>
             </div>
 
+            <!-- NEW: Spring force parameters -->
+            <div class="param-separator">
+                <div class="param-group-title">Parametri molla &amp; treno valvole</div>
+                <div class="param-row">
+                    <span class="param-label">Rigidezza k</span>
+                    <input type="number" id="springK" value="30" class="input" style="width:75px;" step="1" min="0">
+                    <span class="param-unit">N/mm</span>
+                </div>
+                <div class="param-row">
+                    <span class="param-label">Precarico F&#8320;</span>
+                    <input type="number" id="springPreload" value="200" class="input" style="width:75px;" step="10" min="0">
+                    <span class="param-unit">N (valv. chiusa)</span>
+                </div>
+                <div class="param-row">
+                    <span class="param-label">Massa eq. asp.</span>
+                    <input type="number" id="massEqIntake" value="100" class="input" style="width:75px;" step="5" min="1">
+                    <span class="param-unit">g</span>
+                </div>
+                <div class="param-row">
+                    <span class="param-label">Massa eq. scar.</span>
+                    <input type="number" id="massEqExhaust" value="100" class="input" style="width:75px;" step="5" min="1">
+                    <span class="param-unit">g</span>
+                </div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4;">
+                    Massa eq. = valvola + scodellino + cotters + 1/3 molla, riportata alla valvola.
+                </div>
+            </div>
+
             <!-- Action buttons -->
             <div class="flex gap-8" style="margin-top:16px;">
                 <button class="btn btn-success" onclick="analyze();" style="flex:1;">&#9654; Analizza</button>
                 <button class="btn btn-secondary" onclick="resetAll();">&#8634; Reset</button>
+            </div>
+            <div class="flex gap-8" style="margin-top:8px;">
+                <button class="btn btn-secondary" id="btnExportCSV" onclick="exportCSV();" style="flex:1;" disabled>&#8595; CSV</button>
+                <button class="btn btn-secondary" id="btnExportPDF" onclick="exportPDF();" style="flex:1;" disabled>&#8595; PDF</button>
             </div>
         </div>
 
@@ -304,6 +357,43 @@
                         <span class="result-value red" id="resAsymEx">-</span>
                     </div>
                 </div>
+
+                <!-- Forze molla &amp; Cam Float (NEW) -->
+                <div class="result-section">
+                    <div class="result-section-title">Forze molla e RPM critico</div>
+                    <div class="result-row">
+                        <span class="result-label">F. inerzia max asp. @ RPM</span>
+                        <span class="result-value cyan" id="resFInertiaIn">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">F. inerzia max scar. @ RPM</span>
+                        <span class="result-value red" id="resFInertiaEx">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">F. molla a piena alzata asp.</span>
+                        <span class="result-value cyan" id="resFSpringIn">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">F. molla a piena alzata scar.</span>
+                        <span class="result-value red" id="resFSpringEx">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Margine min asp. (F&#8321; - F&#7522;)</span>
+                        <span class="result-value yellow" id="resMarginIn">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Margine min scar. (F&#8321; - F&#7522;)</span>
+                        <span class="result-value yellow" id="resMarginEx">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">RPM critico aspirazione</span>
+                        <span class="result-value green" id="resRpmCritIn">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">RPM critico scarico</span>
+                        <span class="result-value green" id="resRpmCritEx">-</span>
+                    </div>
+                </div>
             </div>
 
         </div>
@@ -338,6 +428,19 @@
                 <button class="btn-zoom-reset" onclick="if(jerkChart)jerkChart.resetZoom();">&circlearrowright; Reset Zoom</button>
             </div>
             <canvas id="jerkCanvas"></canvas>
+        </div>
+
+        <!-- Force chart (NEW): F_spring vs F_inertia -->
+        <div class="kin-chart-wrap">
+            <div class="kin-chart-title">
+                <span id="forceChartTitle">Forze treno valvole (N) — F. molla vs F. inerzia @ RPM</span>
+                <button class="btn-zoom-reset" onclick="if(forceChart)forceChart.resetZoom();">&circlearrowright; Reset Zoom</button>
+            </div>
+            <canvas id="forceCanvas"></canvas>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.4;">
+                Quando F. inerzia (linea continua) supera F. molla (tratteggiata) la valvola perde il contatto con la camma (cam float / valve toss).
+                L'incrocio individua il regime critico.
+            </div>
         </div>
 
         <!-- Kinematic results grid -->
@@ -517,6 +620,33 @@ var jerkChart = null;
 
 // A vs B state
 var abChart = null;
+
+// Force chart state
+var forceChart = null;
+
+// Last analysis snapshot — for CSV/PDF export
+var lastAnalysis = null;
+
+// Typology defaults (rocker ratio, default clearance, lock clearance to 0?)
+var TYPOLOGY = {
+    bucket_mech:    { label: 'Bicchiere meccanico', rocker: 1.00, clearance: 0.30, lockClearance: false },
+    bucket_hyd:     { label: 'Bicchiere idraulico', rocker: 1.00, clearance: 0.00, lockClearance: true  },
+    rocker_pushrod: { label: 'Aste + bilancere',    rocker: 1.60, clearance: 0.30, lockClearance: false },
+    finger:         { label: 'Finger follower',     rocker: 1.50, clearance: 0.20, lockClearance: false },
+    roller:         { label: 'Bilancere a rullo',   rocker: 1.50, clearance: 0.15, lockClearance: false }
+};
+
+function onTypologyChange(side) {
+    var typeSel  = document.getElementById(side + 'Type');
+    var rockerEl = document.getElementById('rocker' + (side === 'intake' ? 'Intake' : 'Exhaust'));
+    var clearEl  = document.getElementById(side + 'Clearance');
+    var t = TYPOLOGY[typeSel.value];
+    if (!t) return;
+    rockerEl.value = t.rocker.toFixed(2);
+    clearEl.value  = t.clearance.toFixed(2);
+    clearEl.disabled = !!t.lockClearance;
+    if (t.lockClearance) clearEl.value = '0.00';
+}
 
 // Initialize arrays to zero
 function initArrays() {
@@ -840,6 +970,85 @@ function extractKinematicResults(vel, acc, jerk, peakIdx, rpm) {
     };
 }
 
+// ========== SPRING FORCE & CAM FLOAT ==========
+//
+// Definizioni:
+//   - liftValve(theta)   = alzata valvola in mm (gia' moltiplicata per rocker, gioco sottratto)
+//   - accValveDeg(theta) = acc. valvola in mm/grado^2 (derivata seconda di liftValve)
+//   - omega = rpm * 6 deg/s  ->  acc tempo = accValveDeg * omega^2 [mm/s^2]
+//   - F_inerzia(theta) = m_eq[kg] * |acc_tempo|[m/s^2]   solo dove acc<0 (decelerazione = la valvola tende a "scappare")
+//   - F_molla(theta)   = preload[N] + k[N/mm] * liftValve(theta)[mm]
+//
+// RPM critico: regime al quale F_inerzia eguaglia F_molla nel punto piu' sfavorevole.
+//   Poiche' F_inerzia ~ omega^2 ~ rpm^2, per ogni grado theta:
+//        rpm_crit(theta)^2 = rpm_test^2 * F_molla(theta) / F_inerzia_test(theta)
+//   Il rpm_crit del lobo e' il MINIMO su tutti i theta dove acc<0.
+//
+function computeForces(liftValve, accValveDeg, mEqGrams, rpm, springK, springPreload) {
+    var omega = rpm * 6;            // deg/s
+    var omegaSq = omega * omega;
+    var mEq = mEqGrams / 1000;      // kg
+    var k = springK;                // N/mm
+    var F0 = springPreload;         // N
+    var fSpring = new Array(722);
+    var fInertia = new Array(722);
+    var margin = new Array(722);
+    var fInertiaMax = 0;            // peak |F_inerzia| (N)
+    var fSpringAtPeak = 0;          // F_molla nel punto di F_inerzia max
+    var marginMin = Infinity;       // min(F_spring - F_inertia)
+    var marginMinIdx = 0;
+    var rpmCritSq = Infinity;       // min over theta of (rpm^2 * F_spring / F_inertia)
+    var rpmCritIdx = 0;
+    var fSpringFullLift = F0;
+
+    for (var i = 1; i <= 720; i++) {
+        var lv = liftValve[i] || 0;
+        if (lv > 0 && (F0 + k * lv) > fSpringFullLift) fSpringFullLift = F0 + k * lv;
+
+        // F_molla: solo a valvola sollevata (lift>0). Quando chiusa la valvola appoggia sulla sede,
+        // la molla esercita comunque il preload ma non interagisce con la camma.
+        var fSp = F0 + k * Math.max(0, lv);
+        fSpring[i] = fSp;
+
+        // accelerazione valvola in m/s^2 (deg^-2 -> s^-2 via omegaSq, mm -> m via 1e-3)
+        var accValveSI = accValveDeg[i] * omegaSq * 1e-3; // m/s^2
+        // F_inerzia significativa solo in decelerazione (acc<0): la molla lavora qui.
+        var fIn = (accValveSI < 0) ? (mEq * (-accValveSI)) : 0;
+        fInertia[i] = fIn;
+
+        if (fIn > fInertiaMax) {
+            fInertiaMax = fIn;
+            fSpringAtPeak = fSp;
+        }
+
+        var m = fSp - fIn;
+        margin[i] = m;
+        if (m < marginMin) { marginMin = m; marginMinIdx = i; }
+
+        // rpm critico per questo grado
+        if (fIn > 0) {
+            // rpm_crit^2 = rpm^2 * fSp / fIn
+            var sq = (rpm * rpm) * (fSp / fIn);
+            if (sq < rpmCritSq) { rpmCritSq = sq; rpmCritIdx = i; }
+        }
+    }
+
+    var rpmCrit = isFinite(rpmCritSq) ? Math.sqrt(rpmCritSq) : Infinity;
+
+    return {
+        fSpring: fSpring,
+        fInertia: fInertia,
+        margin: margin,
+        fInertiaMax: fInertiaMax,
+        fSpringAtPeak: fSpringAtPeak,
+        fSpringFullLift: fSpringFullLift,
+        marginMin: marginMin,
+        marginMinIdx: marginMinIdx,
+        rpmCrit: rpmCrit,
+        rpmCritIdx: rpmCritIdx
+    };
+}
+
 // ========== SMART NUMBER FORMATTING ==========
 
 function formatKinValue(v) {
@@ -978,6 +1187,15 @@ function analyze() {
     var resIn = extractKinematicResults(velIntake, accIntake, jerkIntake, mxIn.idx, rpm);
     var resEx = extractKinematicResults(velExhaust, accExhaust, jerkExhaust, mxEx.idx, rpm);
 
+    // ====== SPRING FORCES & CAM FLOAT ======
+    var springK   = Number(document.getElementById('springK').value) || 0;
+    var springF0  = Number(document.getElementById('springPreload').value) || 0;
+    var mEqIn     = Number(document.getElementById('massEqIntake').value) || 0;
+    var mEqEx     = Number(document.getElementById('massEqExhaust').value) || 0;
+
+    var forcesIn = computeForces(anlIn, accIntake, mEqIn, rpm, springK, springF0);
+    var forcesEx = computeForces(anlEx, accExhaust, mEqEx, rpm, springK, springF0);
+
     // ====== DISPLAY RESULTS ======
     document.getElementById('resultsCard').style.display = 'block';
 
@@ -1008,6 +1226,25 @@ function analyze() {
     document.getElementById('resAsymIn').textContent = asymIn.toFixed(1) + ' %';
     document.getElementById('resAsymEx').textContent = asymEx.toFixed(1) + ' %';
 
+    // ====== FORCE RESULTS ======
+    function fmtN(v) { return formatKinValue(v) + ' N'; }
+    function fmtRpm(v) { return isFinite(v) ? Math.round(v).toLocaleString('it-IT') + ' rpm' : '∞'; }
+    function rpmClass(crit) { return crit > rpm * 1.5 ? 'green' : (crit > rpm * 1.05 ? 'yellow' : 'red'); }
+    function setRpmCell(id, crit) {
+        var el = document.getElementById(id);
+        el.textContent = fmtRpm(crit);
+        el.className = 'result-value ' + rpmClass(crit);
+    }
+
+    document.getElementById('resFInertiaIn').textContent = fmtN(forcesIn.fInertiaMax) + ' @ ' + rpm + ' rpm';
+    document.getElementById('resFInertiaEx').textContent = fmtN(forcesEx.fInertiaMax) + ' @ ' + rpm + ' rpm';
+    document.getElementById('resFSpringIn').textContent = fmtN(forcesIn.fSpringFullLift);
+    document.getElementById('resFSpringEx').textContent = fmtN(forcesEx.fSpringFullLift);
+    document.getElementById('resMarginIn').textContent = fmtN(forcesIn.marginMin) + ' @ ' + (forcesIn.marginMinIdx - 360) + '°';
+    document.getElementById('resMarginEx').textContent = fmtN(forcesEx.marginMin) + ' @ ' + (forcesEx.marginMinIdx - 360) + '°';
+    setRpmCell('resRpmCritIn', forcesIn.rpmCrit);
+    setRpmCell('resRpmCritEx', forcesEx.rpmCrit);
+
     // ====== KINEMATIC RESULTS ======
     document.getElementById('kinematicsCard').style.display = 'block';
 
@@ -1033,12 +1270,58 @@ function analyze() {
     createVelocityChart(omega);
     createAccelerationChart(omega);
     createJerkChart(omega);
+    createForceChart(forcesIn, forcesEx, rpm);
 
     // Update timing diagram
     updateTimingDiagram(durIntake, durExhaust, intakeAng, exhaustAng, adv, LSA);
 
     // Update main chart with rocker-applied data
     updateChartWithData(anlIn, anlEx);
+
+    // Save snapshot for CSV/PDF export
+    lastAnalysis = {
+        timestamp: new Date().toISOString(),
+        inputs: {
+            intakeType: document.getElementById('intakeType').value,
+            exhaustType: document.getElementById('exhaustType').value,
+            intakeAngle: intakeAng, exhaustAngle: exhaustAng,
+            intakeClearance: intakeClear, exhaustClearance: exhaustClear,
+            advance: adv, rpm: rpm,
+            rockerIntake: rockerIn, rockerExhaust: rockerEx,
+            durationRef: refHeight, smoothWindow: smoothW,
+            springK: springK, springPreload: springF0,
+            massEqIntake: mEqIn, massEqExhaust: mEqEx,
+            intakeFile: document.getElementById('intakeStatus').textContent,
+            exhaustFile: document.getElementById('exhaustStatus').textContent
+        },
+        results: {
+            durIntake: durIntake, durExhaust: durExhaust,
+            durRefIn: durRefIn, durRefEx: durRefEx,
+            LSA: LSA, intakeCenter: intakeCenter, exhaustCenter: exhaustCenter,
+            intakeOpenBTC: intakeOpenBTC, intakeCloseABC: intakeCloseABC,
+            exOpenBBC: exOpenBBC, exCloseATC: exCloseATC,
+            overlap: overlap, liftInTDC: liftInTDC, liftExTDC: liftExTDC,
+            maxLiftIn: mxIn.lift, maxLiftEx: mxEx.lift,
+            maxPosIn: mxIn.pos, maxPosEx: mxEx.pos,
+            areaIn: areaIn, areaEx: areaEx, areaDelta: areaDelta,
+            asymIn: asymIn, asymEx: asymEx,
+            fInertiaMaxIn: forcesIn.fInertiaMax, fInertiaMaxEx: forcesEx.fInertiaMax,
+            fSpringFullIn: forcesIn.fSpringFullLift, fSpringFullEx: forcesEx.fSpringFullLift,
+            marginMinIn: forcesIn.marginMin, marginMinEx: forcesEx.marginMin,
+            rpmCritIn: forcesIn.rpmCrit, rpmCritEx: forcesEx.rpmCrit,
+            kinIntake: resIn, kinExhaust: resEx
+        },
+        arrays: {
+            anlIn: anlIn, anlEx: anlEx,
+            velIn: velIntake, velEx: velExhaust,
+            accIn: accIntake, accEx: accExhaust,
+            jerkIn: jerkIntake, jerkEx: jerkExhaust,
+            fSpringIn: forcesIn.fSpring, fSpringEx: forcesEx.fSpring,
+            fInertiaIn: forcesIn.fInertia, fInertiaEx: forcesEx.fInertia
+        }
+    };
+    document.getElementById('btnExportCSV').disabled = false;
+    document.getElementById('btnExportPDF').disabled = false;
 }
 
 // ========== KINEMATIC CHARTS ==========
@@ -1217,6 +1500,41 @@ function createJerkChart(omega) {
             }]
         },
         options: kinChartOptions(omega > 0 ? 'mm/s\u00B3' : 'mm/\u00B0\u00B3')
+    });
+}
+
+// ========== FORCE CHART ==========
+
+function createForceChart(forcesIn, forcesEx, rpm) {
+    if (forceChart) forceChart.destroy();
+
+    var labels = [];
+    var sIn = [], sEx = [], iIn = [], iEx = [];
+    for (var i = 1; i <= 720; i++) {
+        labels.push(i);
+        sIn.push(forcesIn.fSpring[i]);
+        sEx.push(forcesEx.fSpring[i]);
+        // F_inertia: mostro solo dove > 0 (decelerazione), null altrove per "saltare" la linea
+        iIn.push(forcesIn.fInertia[i] > 0 ? forcesIn.fInertia[i] : null);
+        iEx.push(forcesEx.fInertia[i] > 0 ? forcesEx.fInertia[i] : null);
+    }
+
+    document.getElementById('forceChartTitle').textContent =
+        'Forze treno valvole (N) — F. molla vs F. inerzia @ ' + rpm + ' rpm';
+
+    var ctx = document.getElementById('forceCanvas').getContext('2d');
+    forceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: 'F. molla asp.',  data: sIn, borderColor: '#00d4ff', borderDash: [6,3], borderWidth: 1.5, pointRadius: 0, fill: false },
+                { label: 'F. inerzia asp.', data: iIn, borderColor: '#00d4ff', borderWidth: 2,    pointRadius: 0, fill: false, spanGaps: false },
+                { label: 'F. molla scar.', data: sEx, borderColor: '#ff5252', borderDash: [6,3], borderWidth: 1.5, pointRadius: 0, fill: false },
+                { label: 'F. inerzia scar.', data: iEx, borderColor: '#ff5252', borderWidth: 2,   pointRadius: 0, fill: false, spanGaps: false }
+            ]
+        },
+        options: kinChartOptions('Forza (N)')
     });
 }
 
@@ -1469,6 +1787,225 @@ function resetAB() {
     document.getElementById('abB_clear').value = '0.50';
 }
 
+// ========== EXPORT CSV ==========
+
+function csvEscape(v) {
+    if (v == null) return '';
+    var s = String(v);
+    if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0) {
+        s = '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+}
+
+function downloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 100);
+}
+
+function tsForFilename() {
+    var d = new Date();
+    var p = function(n){ return (n<10?'0':'')+n; };
+    return d.getFullYear() + p(d.getMonth()+1) + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes());
+}
+
+function exportCSV() {
+    if (!lastAnalysis) { alert('Esegui prima l\'analisi.'); return; }
+    var L = lastAnalysis;
+    var lines = [];
+
+    // Section: parametri
+    lines.push('# CAMMES - Report analisi camme');
+    lines.push('# Timestamp,' + L.timestamp);
+    lines.push('# File asp.,' + csvEscape(L.inputs.intakeFile));
+    lines.push('# File scar.,' + csvEscape(L.inputs.exhaustFile));
+    lines.push('# Tipologia asp.,' + L.inputs.intakeType);
+    lines.push('# Tipologia scar.,' + L.inputs.exhaustType);
+    lines.push('# Angolo lobo asp. [deg],' + L.inputs.intakeAngle);
+    lines.push('# Angolo lobo scar. [deg],' + L.inputs.exhaustAngle);
+    lines.push('# Gioco asp. [mm],' + L.inputs.intakeClearance);
+    lines.push('# Gioco scar. [mm],' + L.inputs.exhaustClearance);
+    lines.push('# Anticipo [deg],' + L.inputs.advance);
+    lines.push('# RPM,' + L.inputs.rpm);
+    lines.push('# Rocker asp.,' + L.inputs.rockerIntake);
+    lines.push('# Rocker scar.,' + L.inputs.rockerExhaust);
+    lines.push('# Smooth S-G,' + L.inputs.smoothWindow);
+    lines.push('# k molla [N/mm],' + L.inputs.springK);
+    lines.push('# Precarico [N],' + L.inputs.springPreload);
+    lines.push('# Massa eq. asp. [g],' + L.inputs.massEqIntake);
+    lines.push('# Massa eq. scar. [g],' + L.inputs.massEqExhaust);
+    lines.push('');
+
+    // Section: risultati riassuntivi
+    lines.push('# === Risultati ===');
+    var R = L.results;
+    lines.push('Durata asp. [deg],' + R.durIntake);
+    lines.push('Durata scar. [deg],' + R.durExhaust);
+    lines.push('Durata asp. @ rif [deg],' + R.durRefIn);
+    lines.push('Durata scar. @ rif [deg],' + R.durRefEx);
+    lines.push('LSA [deg],' + R.LSA.toFixed(2));
+    lines.push('Centro asp. ATDC [deg],' + R.intakeCenter.toFixed(2));
+    lines.push('Centro scar. BTDC [deg],' + R.exhaustCenter.toFixed(2));
+    lines.push('Apertura asp. BTC [deg],' + R.intakeOpenBTC.toFixed(2));
+    lines.push('Chiusura asp. ABC [deg],' + R.intakeCloseABC.toFixed(2));
+    lines.push('Apertura scar. BBC [deg],' + R.exOpenBBC.toFixed(2));
+    lines.push('Chiusura scar. ATC [deg],' + R.exCloseATC.toFixed(2));
+    lines.push('Overlap [deg],' + R.overlap.toFixed(2));
+    lines.push('Alzata asp. al PMS [mm],' + R.liftInTDC.toFixed(3));
+    lines.push('Alzata scar. al PMS [mm],' + R.liftExTDC.toFixed(3));
+    lines.push('Max alzata asp. [mm],' + R.maxLiftIn.toFixed(3));
+    lines.push('Max alzata scar. [mm],' + R.maxLiftEx.toFixed(3));
+    lines.push('Pos. max alzata asp. [deg],' + R.maxPosIn);
+    lines.push('Pos. max alzata scar. [deg],' + R.maxPosEx);
+    lines.push('Area asp. [mm·deg],' + R.areaIn.toFixed(2));
+    lines.push('Area scar. [mm·deg],' + R.areaEx.toFixed(2));
+    lines.push('Delta area asp/scar [%],' + R.areaDelta.toFixed(2));
+    lines.push('Asimmetria lobo asp. [%],' + R.asymIn.toFixed(2));
+    lines.push('Asimmetria lobo scar. [%],' + R.asymEx.toFixed(2));
+    lines.push('F. inerzia max asp. [N],' + R.fInertiaMaxIn.toFixed(2));
+    lines.push('F. inerzia max scar. [N],' + R.fInertiaMaxEx.toFixed(2));
+    lines.push('F. molla a piena alzata asp. [N],' + R.fSpringFullIn.toFixed(2));
+    lines.push('F. molla a piena alzata scar. [N],' + R.fSpringFullEx.toFixed(2));
+    lines.push('Margine min asp. [N],' + R.marginMinIn.toFixed(2));
+    lines.push('Margine min scar. [N],' + R.marginMinEx.toFixed(2));
+    lines.push('RPM critico asp.,' + (isFinite(R.rpmCritIn) ? Math.round(R.rpmCritIn) : 'inf'));
+    lines.push('RPM critico scar.,' + (isFinite(R.rpmCritEx) ? Math.round(R.rpmCritEx) : 'inf'));
+    lines.push('Vel. max apertura asp.,' + R.kinIntake.velOpen.toFixed(3) + ' ' + R.kinIntake.unitVel);
+    lines.push('Vel. chiusura asp.,' + R.kinIntake.velClose.toFixed(3) + ' ' + R.kinIntake.unitVel);
+    lines.push('Acc. max+ asp.,' + R.kinIntake.accPos.toFixed(3) + ' ' + R.kinIntake.unitAcc);
+    lines.push('Acc. max- asp.,' + R.kinIntake.accNeg.toFixed(3) + ' ' + R.kinIntake.unitAcc);
+    lines.push('Vel. max apertura scar.,' + R.kinExhaust.velOpen.toFixed(3) + ' ' + R.kinExhaust.unitVel);
+    lines.push('Vel. chiusura scar.,' + R.kinExhaust.velClose.toFixed(3) + ' ' + R.kinExhaust.unitVel);
+    lines.push('Acc. max+ scar.,' + R.kinExhaust.accPos.toFixed(3) + ' ' + R.kinExhaust.unitAcc);
+    lines.push('Acc. max- scar.,' + R.kinExhaust.accNeg.toFixed(3) + ' ' + R.kinExhaust.unitAcc);
+    lines.push('');
+
+    // Section: dump per grado
+    lines.push('# === Dump per grado albero motore (1..720) ===');
+    lines.push('crank_deg,lift_in_mm,lift_ex_mm,vel_in_mmDeg,vel_ex_mmDeg,acc_in_mmDeg2,acc_ex_mmDeg2,jerk_in_mmDeg3,jerk_ex_mmDeg3,F_spring_in_N,F_inertia_in_N,F_spring_ex_N,F_inertia_ex_N');
+    var A = L.arrays;
+    for (var i = 1; i <= 720; i++) {
+        lines.push([
+            i,
+            (A.anlIn[i]||0).toFixed(4),
+            (A.anlEx[i]||0).toFixed(4),
+            (A.velIn[i]||0).toFixed(6),
+            (A.velEx[i]||0).toFixed(6),
+            (A.accIn[i]||0).toFixed(6),
+            (A.accEx[i]||0).toFixed(6),
+            (A.jerkIn[i]||0).toFixed(6),
+            (A.jerkEx[i]||0).toFixed(6),
+            (A.fSpringIn[i]||0).toFixed(2),
+            (A.fInertiaIn[i]||0).toFixed(2),
+            (A.fSpringEx[i]||0).toFixed(2),
+            (A.fInertiaEx[i]||0).toFixed(2)
+        ].join(','));
+    }
+
+    var blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    downloadBlob(blob, 'cammes_analisi_' + tsForFilename() + '.csv');
+}
+
+// ========== EXPORT PDF ==========
+
+function exportPDF() {
+    if (!lastAnalysis) { alert('Esegui prima l\'analisi.'); return; }
+    if (!window.jspdf || !window.jspdf.jsPDF) { alert('Libreria PDF non caricata.'); return; }
+
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    var L = lastAnalysis, R = L.results, I = L.inputs;
+    var pageW = doc.internal.pageSize.getWidth();
+    var pageH = doc.internal.pageSize.getHeight();
+    var margin = 12;
+    var y = margin;
+
+    // Header
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+    doc.text('CAMMES — Report analisi camme', margin, y); y += 7;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    doc.text(L.timestamp, margin, y); y += 6;
+    doc.setDrawColor(0, 212, 255); doc.line(margin, y, pageW - margin, y); y += 4;
+
+    // Inputs box
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text('Parametri', margin, y); y += 5;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    var col1 = margin, col2 = pageW / 2;
+    var inputLines = [
+        ['File asp.', I.intakeFile || '-'],
+        ['File scar.', I.exhaustFile || '-'],
+        ['Tipologia asp. / scar.', (TYPOLOGY[I.intakeType] ? TYPOLOGY[I.intakeType].label : I.intakeType) + ' / ' + (TYPOLOGY[I.exhaustType] ? TYPOLOGY[I.exhaustType].label : I.exhaustType)],
+        ['Angolo lobo asp. / scar.', I.intakeAngle + '° / ' + I.exhaustAngle + '°'],
+        ['Gioco asp. / scar.', I.intakeClearance + ' / ' + I.exhaustClearance + ' mm'],
+        ['Anticipo', I.advance + '°'],
+        ['RPM', I.rpm + ' giri/min'],
+        ['Rocker asp. / scar.', I.rockerIntake + ' / ' + I.rockerExhaust],
+        ['k molla / Precarico', I.springK + ' N/mm / ' + I.springPreload + ' N'],
+        ['Massa eq. asp. / scar.', I.massEqIntake + ' / ' + I.massEqExhaust + ' g']
+    ];
+    for (var i = 0; i < inputLines.length; i++) {
+        doc.text(inputLines[i][0] + ':', col1, y);
+        doc.text(String(inputLines[i][1]).substring(0, 70), col1 + 38, y);
+        y += 4.5;
+    }
+    y += 3;
+
+    // Results table
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text('Risultati principali', margin, y); y += 5;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    var rpmCritIn = isFinite(R.rpmCritIn) ? Math.round(R.rpmCritIn) + ' rpm' : '∞';
+    var rpmCritEx = isFinite(R.rpmCritEx) ? Math.round(R.rpmCritEx) + ' rpm' : '∞';
+    var rows = [
+        ['Durata asp. / scar.', R.durIntake + '° / ' + R.durExhaust + '°'],
+        ['Durata @ rif asp. / scar.', R.durRefIn + '° / ' + R.durRefEx + '°'],
+        ['Max alzata asp. / scar.', R.maxLiftIn.toFixed(3) + ' / ' + R.maxLiftEx.toFixed(3) + ' mm'],
+        ['LSA', R.LSA.toFixed(1) + '°'],
+        ['Centro asp. / scar.', R.intakeCenter.toFixed(1) + '° ATDC / ' + R.exhaustCenter.toFixed(1) + '° BTDC'],
+        ['Apertura asp. BTC / Chiusura ABC', R.intakeOpenBTC.toFixed(1) + '° / ' + R.intakeCloseABC.toFixed(1) + '°'],
+        ['Apertura scar. BBC / Chiusura ATC', R.exOpenBBC.toFixed(1) + '° / ' + R.exCloseATC.toFixed(1) + '°'],
+        ['Overlap', R.overlap.toFixed(1) + '°'],
+        ['Alzata al PMS asp. / scar.', R.liftInTDC.toFixed(3) + ' / ' + R.liftExTDC.toFixed(3) + ' mm'],
+        ['Area asp. / scar.', R.areaIn.toFixed(1) + ' / ' + R.areaEx.toFixed(1) + ' mm·°'],
+        ['Asimmetria lobo asp. / scar.', R.asymIn.toFixed(1) + ' % / ' + R.asymEx.toFixed(1) + ' %'],
+        ['F. inerzia max asp. / scar.', R.fInertiaMaxIn.toFixed(0) + ' / ' + R.fInertiaMaxEx.toFixed(0) + ' N'],
+        ['F. molla full lift asp. / scar.', R.fSpringFullIn.toFixed(0) + ' / ' + R.fSpringFullEx.toFixed(0) + ' N'],
+        ['Margine min asp. / scar.', R.marginMinIn.toFixed(0) + ' / ' + R.marginMinEx.toFixed(0) + ' N'],
+        ['RPM critico asp. / scar.', rpmCritIn + ' / ' + rpmCritEx]
+    ];
+    for (var k = 0; k < rows.length; k++) {
+        doc.text(rows[k][0] + ':', col1, y);
+        doc.text(String(rows[k][1]), col1 + 70, y);
+        y += 4.5;
+    }
+    y += 3;
+
+    // Charts as images (Chart.js native toBase64Image)
+    function addChartIfPresent(chart, title, w, h) {
+        if (!chart) return;
+        if (y + h + 10 > pageH - margin) { doc.addPage(); y = margin; }
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(title, margin, y); y += 4;
+        try {
+            var img = chart.toBase64Image();
+            doc.addImage(img, 'PNG', margin, y, w, h);
+            y += h + 4;
+        } catch (e) { doc.text('(grafico non disponibile)', margin, y); y += 5; }
+    }
+
+    var cw = pageW - 2 * margin;
+    addChartIfPresent(window.analisiLine,    'Profilo albero motore 720°', cw, 55);
+    addChartIfPresent(velocityChart,         'Velocità',                   cw, 55);
+    addChartIfPresent(accelerationChart,     'Accelerazione',              cw, 55);
+    addChartIfPresent(jerkChart,             'Jerk',                       cw, 55);
+    addChartIfPresent(forceChart,            'Forze treno valvole',        cw, 60);
+    addChartIfPresent(timingChartInstance,   'Diagramma fasatura',         80, 80);
+
+    doc.save('cammes_report_' + tsForFilename() + '.pdf');
+}
+
 // ========== RESET ==========
 
 function resetAll() {
@@ -1502,11 +2039,24 @@ function resetAll() {
     document.getElementById('rockerIntake').value = '1.00';
     document.getElementById('rockerExhaust').value = '1.00';
     document.getElementById('smoothWindow').value = '5';
+    document.getElementById('intakeType').value = 'bucket_mech';
+    document.getElementById('exhaustType').value = 'bucket_mech';
+    document.getElementById('intakeClearance').disabled = false;
+    document.getElementById('exhaustClearance').disabled = false;
+    document.getElementById('springK').value = '30';
+    document.getElementById('springPreload').value = '200';
+    document.getElementById('massEqIntake').value = '100';
+    document.getElementById('massEqExhaust').value = '100';
 
     if (timingChartInstance) { timingChartInstance.destroy(); timingChartInstance = null; }
     if (velocityChart) { velocityChart.destroy(); velocityChart = null; }
     if (accelerationChart) { accelerationChart.destroy(); accelerationChart = null; }
     if (jerkChart) { jerkChart.destroy(); jerkChart = null; }
+    if (forceChart) { forceChart.destroy(); forceChart = null; }
+
+    lastAnalysis = null;
+    document.getElementById('btnExportCSV').disabled = true;
+    document.getElementById('btnExportPDF').disabled = true;
 
     updateChart();
 }

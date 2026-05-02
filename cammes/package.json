@@ -25,6 +25,7 @@
       "Chart.bundle.js",
       "responsivevoice.js",
       "jquery.min.js",
+      "jspdf.umd.min.js",
       "images/**/*",
       "prove/**/*"
     ],
