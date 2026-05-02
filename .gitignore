@@ -15,5 +15,8 @@ Desktop.ini
 *.log
 .DS_Store
 
-# Installer incluso nel progetto (troppo pesante, si scarica)
-node-v10.15.1-x64.msi
+# Eseguibili e binari di build: distribuiti via GitHub Releases
+*.exe
+*.apk
+*.msi
+CAMMES_DIST/

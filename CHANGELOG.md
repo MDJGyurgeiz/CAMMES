@@ -2,8 +2,8 @@
 
 ## Panoramica Sistema
 Sistema di misura profili alberi a camme per motori.
-- **Arduino Uno** (`micrometro_SPI/`) - Lettura micrometro digitale via interrupt, invio SPI
-- **Arduino Mega** (`master/`) - Controllo motore stepper (32 step/grado), coordinamento misure
+- **Arduino Uno** (`micrometro_SPI/`) - Lettura micrometro digitale via interrupt, invio SPI [legacy: in via di unificazione su singolo Uno]
+- **Arduino Uno** (`master/`) - Controllo motore stepper (32 step/grado), coordinamento misure
 - **Server** (`cammes/cammes_server.js`) - Server unificato HTTP + WebSocket + Seriale
 - **Frontend** (`cammes/`) - UI browser con gauge, grafici Chart.js, controlli rotazione
 
@@ -182,15 +182,52 @@ CAMMES_DIST/
 
 ---
 
+## Sessione 4 - 2026-05-02 - Pulizia e allineamento (Fase A)
+
+### Audit progetto
+- Riesame completo dopo ~2 mesi di pausa
+- Confrontati README, CHANGELOG e sorgenti: rilevate incoerenze
+- Verificati direttamente master.ino e micrometro_SPI.ino
+
+### Correzioni documentazione
+- **README.md**: pin stepper corretti (PUL=7, DIR=6, ENA=5; era errato "2/3/5")
+- **README.md**: porta HTTP corretta (3000; era errato "8080" che è solo WS)
+- **README.md**: aggiunta nota su transizione architettura 2-Uno → 1-Uno
+- **CHANGELOG.md**: panoramica sistema allineata (entrambi gli sketch su Uno, non Mega)
+
+### Decisione architetturale (concordata con utente)
+- L'architettura attuale a 2 Arduino Uno verrà unificata su un singolo Uno
+- Trigger: finalizzazione stepper esterno (in lavorazione 2026-05-02)
+- I due sketch master.ino + micrometro_SPI.ino verranno fusi
+- Cartella `micrometro_SPI/` diventerà legacy
+
+### Pulizia repo
+- Rimossi artefatti binari dal tree (cammes.exe, cammes_server.exe, CAMMES.apk, node-v10.15.1-x64.msi) → spostati in GitHub Release v1.0.0
+- Rimossa cartella `cammes/charts/` (sorgenti Chart.js completi non necessari a runtime)
+- Rimosso `cammes/serve.js` (legacy, sostituito da cammes_server.js in sessione 3)
+- Aggiunto `.gitignore` per escludere binari, node_modules, file di build
+
+### Verifiche post-Fase-A
+- Comando 'q' (rotazione antioraria): VERIFICATO già implementato in master.ino:60-64 (non serve fix)
+- Reset buffer SPI overflow: VERIFICATO già implementato in master.ino:131-134 (non serve fix)
+- Validazione misura SPI: ANCORA DEBOLE (substring != "" non garantisce cifre); fix posticipato alla Fase B (unificazione firmware)
+
+---
+
 ## TODO - Prossime implementazioni
-- [ ] Fix comando 'q' in master.ino
-- [ ] Validazione misura SPI in master.ino
-- [ ] Reset buffer SPI overflow in master.ino
+- [x] ~~Fix comando 'q' in master.ino~~ (verificato già implementato sessione 4)
+- [ ] Validazione misura SPI: usare isDigit() invece di substring != "" (Fase B)
+- [x] ~~Reset buffer SPI overflow in master.ino~~ (verificato già implementato sessione 4)
 - [x] ~~Analisi file Excel camme-analisi~~ (completata sessione 2)
 - [x] ~~Pagina analisi.html~~ (completata sessione 2)
 - [x] ~~Server Node.js unificato (cammes_server.js)~~ (completata sessione 3)
 - [x] ~~Compilazione cammes.exe con pkg~~ (completata sessione 3)
-- [ ] Indicatore connessione WebSocket nell'UI
-- [ ] Export CSV dal browser
-- [ ] Barra progresso scansione
-- [ ] Ottimizzazione timing motore
+- [ ] **Fase B**: unificare master.ino + micrometro_SPI.ino su singolo Arduino Uno (al pronto dello stepper esterno)
+- [ ] **Fase B**: terminatore comando UART (\n) per evitare comandi spezzati
+- [ ] **Fase B**: sostituire String Arduino con char[] per ridurre frammentazione heap
+- [ ] **Fase C**: indicatore connessione WebSocket nell'UI
+- [ ] **Fase C**: export CSV dal browser
+- [ ] **Fase C**: barra progresso scansione 360°
+- [ ] **Fase C**: bump versionCode/versionName Android
+- [ ] **Fase D**: aprire issue GitHub per ogni TODO; aggiungere ESLint; tag v1.0.0
+- [ ] Ottimizzazione timing motore (delay 900 ms → detection misura stabile)

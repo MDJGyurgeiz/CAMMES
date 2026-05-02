@@ -20,14 +20,12 @@
       "grafici.html",
       "analisi.html",
       "style.css",
-      "serve.js",
       "gauge.min.js",
       "Chart.min.js",
       "Chart.bundle.js",
       "responsivevoice.js",
-      "samples/**/*",
+      "jquery.min.js",
       "images/**/*",
-      "charts/jquery.min.js",
       "prove/**/*"
     ],
     "targets": [

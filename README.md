@@ -2,6 +2,8 @@
 
 Sistema completo per la misurazione e l'analisi dei profili degli alberi a camme per motori. Comprende hardware (Arduino), software PC (server Node.js + interfaccia web) e app Android.
 
+> **Nota architettura (2026-05-02)**: il firmware è in transizione dall'attuale schema a 2 Arduino Uno (master + sensore via SPI) verso un singolo Arduino Uno che gestisce sia lettura sensore sia controllo stepper. Il passaggio avverrà con la finalizzazione dello stepper esterno. Documentazione di hardware e pinout qui sotto si riferisce all'architettura attuale.
+
 ---
 
 ## Architettura del Sistema
@@ -108,7 +110,7 @@ CAMMES/
 ### Componenti
 - **Arduino Uno** - Controller principale (stepper + lettura comparatore)
 - **Stepper NEMA 17** - Rotazione albero a camme (32 step/grado = 11.520 step/giro)
-- **Driver stepper** - Collegato ai pin 2(STEP), 3(DIR), 5(ENA)
+- **Driver stepper** - Collegato ai pin 7(PUL/STEP), 6(DIR), 5(ENA)
 - **Comparatore Neoteck** (0-25.4mm) - Misura alzata
 - **Op-amp LM339N** - Interfaccia comparatore-Arduino
   - Pin 14 LM339N → pin 5 Arduino (DATA) tramite resistenze
@@ -141,7 +143,7 @@ cd cammes
 npm install
 npm start
 ```
-Si apre automaticamente il browser su `http://localhost:8080`
+Si apre automaticamente il browser su `http://localhost:3000` (HTTP statico). Il server espone anche un WebSocket su `ws://localhost:8080` per il bridge seriale Arduino.
 
 ### App Android
 1. Copiare `CAMMES.apk` sul telefono
