@@ -1,138 +1,262 @@
 /* ============================================
-   CAMMES - Dark Theme Design System
+   CAMMES — Race Telemetry Design System
    ============================================ */
 
 :root {
-  --bg-body: #0f0f1a;
-  --bg-card: #1a1a2e;
-  --bg-card-alt: #16213e;
-  --border-card: #2a2a4a;
-  --accent: #00d4ff;
-  --accent-glow: rgba(0, 212, 255, 0.15);
+  /* Background hierarchy: deeper → richer */
+  --bg-body: #07090d;
+  --bg-card: #11151c;
+  --bg-card-elev: #161b24;
+  --bg-input: #0a0d13;
+  --bg-stripe: #1a1f29;
+
+  /* Borders + subtle glows */
+  --border: #232a36;
+  --border-strong: #2d3645;
+  --border-card: #232a36;
+  --input-border: #2d3645;
+
+  /* Race telemetry palette */
+  --accent: #00d4ff;            /* primary cyan */
+  --accent-2: #ffb820;          /* amber gauge */
+  --accent-3: #b14cff;          /* analytics violet */
+  --accent-glow: rgba(0, 212, 255, 0.18);
+  --amber-glow: rgba(255, 184, 32, 0.18);
   --success: #00e676;
-  --danger: #ff5252;
+  --success-glow: rgba(0, 230, 118, 0.22);
+  --danger: #ff3838;
+  --danger-glow: rgba(255, 56, 56, 0.22);
   --warning: #ffd740;
-  --text-primary: #e0e0e0;
-  --text-secondary: #8888aa;
-  --text-muted: #555577;
-  --input-bg: #0d0d1a;
-  --input-border: #2a2a4a;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-mono: 'Consolas', 'Courier New', monospace;
-  --transition: 0.2s ease;
+
+  /* Text */
+  --text-primary: #e9edf5;
+  --text-secondary: #94a0b3;
+  --text-muted: #5d6878;
+
+  /* Sizing */
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 14px;
+  --shadow: 0 6px 24px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 24px var(--accent-glow);
+
+  /* Typography */
+  --font: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-display: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+  --transition: 0.18s cubic-bezier(.4, 0, .2, 1);
 }
 
 /* Reset */
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
   font-family: var(--font);
   background: var(--bg-body);
   color: var(--text-primary);
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
+
+/* Subtle racing-grid background — diagonal carbon weave + soft cyan vignette */
+body {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 212, 255, 0.06), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(177, 76, 255, 0.04), transparent 60%),
+    linear-gradient(135deg, transparent 49%, rgba(255, 255, 255, 0.012) 50%, transparent 51%),
+    linear-gradient(45deg, transparent 49%, rgba(255, 255, 255, 0.012) 50%, transparent 51%);
+  background-size: auto, auto, 6px 6px, 6px 6px;
+  background-attachment: fixed;
+}
+
+/* Tabular numerals everywhere on mono */
+.input, .gauge-value, .gauge-degrees, .data-table td, .max-display, .status-text,
+.result-value, code { font-variant-numeric: tabular-nums; }
 
 /* ============================================
    Layout
    ============================================ */
 
 .app-container {
-  max-width: 1400px;
+  max-width: 1440px;
   margin: 0 auto;
-  padding: 16px 24px;
+  padding: 18px 24px 32px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
-/* Header */
+/* ============================================
+   Header — telemetry HUD bar
+   ============================================ */
+
 .header {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 20px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-card);
+  gap: 18px;
+  padding: 14px 22px;
+  background: linear-gradient(180deg, var(--bg-card-elev) 0%, var(--bg-card) 100%);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* Cyan accent strip on top edge */
+.header::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--accent) 30%, var(--accent) 70%, transparent 100%);
+  opacity: 0.6;
+}
+
+/* Diagonal hatch corner accent */
+.header::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 80px; height: 100%;
+  background: repeating-linear-gradient(135deg,
+    transparent 0 6px,
+    rgba(0, 212, 255, 0.04) 6px 8px);
+  pointer-events: none;
+  opacity: 0.7;
 }
 
 .header img {
-  height: 40px;
+  height: 44px;
   border-radius: 6px;
+  filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.15));
 }
 
 .header h1 {
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  background: linear-gradient(90deg, var(--accent) 0%, #7df0ff 50%, var(--accent) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  position: relative;
+}
+
+/* Vertical separator after title */
+.header h1::after {
+  content: '';
+  position: absolute;
+  right: -16px; top: 6px; bottom: 6px;
+  width: 1px;
+  background: var(--border-strong);
 }
 
 .header .nav-links {
   margin-left: auto;
   display: flex;
-  gap: 8px;
+  gap: 4px;
+  position: relative;
+  z-index: 1;
 }
 
 .header .nav-links a {
   color: var(--text-secondary);
   text-decoration: none;
-  padding: 6px 14px;
+  padding: 8px 16px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
   transition: var(--transition);
   border: 1px solid transparent;
+  position: relative;
 }
 
-.header .nav-links a:hover,
-.header .nav-links a.active {
+.header .nav-links a:hover {
   color: var(--accent);
-  border-color: var(--border-card);
   background: var(--accent-glow);
 }
 
-/* Main grid layout */
-.main-grid {
-  display: grid;
-  grid-template-columns: 340px 1fr;
-  gap: 16px;
-  align-items: start;
+.header .nav-links a.active {
+  color: var(--accent);
+  background: var(--accent-glow);
+  border-color: rgba(0, 212, 255, 0.4);
+  box-shadow: 0 0 12px var(--accent-glow), inset 0 0 0 1px rgba(0, 212, 255, 0.1);
 }
 
-.main-grid.single-col {
-  grid-template-columns: 1fr;
-}
-
-/* Card */
-.card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius);
-  padding: 20px;
-  box-shadow: var(--shadow);
-}
-
-.card-title {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  color: var(--text-muted);
-  margin-bottom: 16px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border-card);
+.header .nav-links a.active::before {
+  content: '';
+  position: absolute;
+  left: 50%; bottom: -1px;
+  transform: translateX(-50%);
+  width: 24px; height: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
 }
 
 /* ============================================
-   Gauge Card
+   Main grid
+   ============================================ */
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.main-grid.single-col { grid-template-columns: 1fr; }
+
+/* ============================================
+   Card — telemetry panel
+   ============================================ */
+
+.card {
+  position: relative;
+  background: linear-gradient(180deg, var(--bg-card-elev) 0%, var(--bg-card) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  transition: border-color var(--transition);
+}
+
+.card:hover { border-color: var(--border-strong); }
+
+.card-title {
+  position: relative;
+  font-family: var(--font-display);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 2.5px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  padding-left: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Cyan tab marker on card title */
+.card-title::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 2px;
+  width: 3px; height: 14px;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+  border-radius: 1px;
+}
+
+/* ============================================
+   Gauge Card — instrument cluster style
    ============================================ */
 
 .gauge-card {
@@ -145,24 +269,24 @@ html, body {
 .gauge-card canvas {
   display: block;
   align-self: center;
+  filter: drop-shadow(0 0 12px rgba(0, 212, 255, 0.06));
 }
 
-.gauge-card form {
-  width: 100%;
-}
+.gauge-card form { width: 100%; }
 
 .gauge-value {
   font-family: var(--font-mono);
   font-size: 42px;
   font-weight: 700;
   color: var(--danger);
-  background: var(--input-bg);
+  background: var(--bg-input);
   padding: 10px 20px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border);
   text-align: center;
   width: 100%;
-  box-sizing: border-box;
+  text-shadow: 0 0 12px rgba(255, 56, 56, 0.5);
+  letter-spacing: 1px;
 }
 
 .gauge-degrees {
@@ -170,244 +294,238 @@ html, body {
   font-size: 32px;
   font-weight: 600;
   color: var(--success);
-  background: var(--input-bg);
+  background: var(--bg-input);
   padding: 10px 16px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border);
   text-align: center;
   width: 100%;
-  box-sizing: border-box;
+  text-shadow: 0 0 10px rgba(0, 230, 118, 0.4);
+  letter-spacing: 1px;
 }
 
 /* ============================================
    Chart Card
    ============================================ */
 
-.chart-card {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
+.chart-card { display: flex; flex-direction: column; min-height: 0; }
 
 .chart-card canvas {
   width: 100% !important;
   height: auto !important;
-  max-height: 450px;
+  max-height: 460px;
 }
 
 /* ============================================
    Controls
    ============================================ */
 
-.controls-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
+.controls-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.controls-group { display: flex; align-items: center; gap: 8px; }
+.separator { width: 1px; height: 32px; background: var(--border); margin: 0 8px; }
 
-.controls-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+/* ============================================
+   Buttons — racing tactile feel
+   ============================================ */
 
-.separator {
-  width: 1px;
-  height: 32px;
-  background: var(--border-card);
-  margin: 0 8px;
-}
-
-/* Buttons */
 .btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 10px 20px;
-  border: none;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  font-family: var(--font);
-  font-size: 14px;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
   cursor: pointer;
   transition: var(--transition);
-  letter-spacing: 0.5px;
   white-space: nowrap;
+  overflow: hidden;
 }
 
-.btn:active {
-  transform: scale(0.96);
+.btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 50%);
+  pointer-events: none;
 }
+
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
 .btn-success {
-  background: var(--success);
-  color: #0a0a0a;
-  box-shadow: 0 2px 12px rgba(0, 230, 118, 0.25);
+  background: linear-gradient(180deg, #00ff88 0%, var(--success) 100%);
+  color: #002b14;
+  box-shadow: 0 2px 12px var(--success-glow), inset 0 -2px 0 rgba(0, 0, 0, 0.2);
 }
-.btn-success:hover {
-  background: #00ff88;
-  box-shadow: 0 4px 20px rgba(0, 230, 118, 0.4);
+.btn-success:hover:not(:disabled) {
+  box-shadow: 0 4px 22px var(--success-glow), inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
 }
 
 .btn-danger {
-  background: var(--danger);
+  background: linear-gradient(180deg, #ff5050 0%, var(--danger) 100%);
   color: #fff;
-  box-shadow: 0 2px 12px rgba(255, 82, 82, 0.25);
+  box-shadow: 0 2px 12px var(--danger-glow), inset 0 -2px 0 rgba(0, 0, 0, 0.25);
 }
-.btn-danger:hover {
-  background: #ff6b6b;
-  box-shadow: 0 4px 20px rgba(255, 82, 82, 0.4);
+.btn-danger:hover:not(:disabled) {
+  box-shadow: 0 4px 22px var(--danger-glow), inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
-  background: #2a2a4a;
+  background: linear-gradient(180deg, #2a3142 0%, #1d232f 100%);
   color: var(--text-primary);
-  border: 1px solid var(--border-card);
+  border-color: var(--border-strong);
 }
-.btn-secondary:hover {
-  background: #3a3a5a;
+.btn-secondary:hover:not(:disabled) {
   border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 2px 12px var(--accent-glow);
 }
 
 .btn-accent {
-  background: var(--accent);
-  color: #0a0a0a;
-  box-shadow: 0 2px 12px rgba(0, 212, 255, 0.25);
+  background: linear-gradient(180deg, #33e1ff 0%, var(--accent) 100%);
+  color: #00161c;
+  box-shadow: 0 2px 12px var(--accent-glow), inset 0 -2px 0 rgba(0, 0, 0, 0.2);
 }
-.btn-accent:hover {
-  box-shadow: 0 4px 20px rgba(0, 212, 255, 0.4);
+.btn-accent:hover:not(:disabled) {
+  box-shadow: 0 4px 22px var(--accent-glow), inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
 }
 
 .btn-sm {
   padding: 6px 12px;
-  font-size: 18px;
+  font-size: 16px;
   min-width: 36px;
-  justify-content: center;
 }
 
 .btn-icon {
   padding: 8px;
-  font-size: 20px;
+  font-size: 18px;
   min-width: 40px;
   min-height: 40px;
-  justify-content: center;
 }
 
 /* ============================================
-   Inputs
+   Inputs — telemetry display style
    ============================================ */
 
-.input {
+.input, select.input {
   font-family: var(--font-mono);
-  font-size: 16px;
+  font-size: 15px;
   padding: 8px 14px;
-  background: var(--input-bg);
-  color: var(--warning);
+  background: var(--bg-input);
+  color: var(--accent-2);
   border: 1px solid var(--input-border);
   border-radius: var(--radius-sm);
   outline: none;
   transition: var(--transition);
+  font-weight: 500;
 }
 
-.input:focus {
+.input:focus, select.input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-glow);
+  color: var(--accent);
 }
 
-.input::placeholder {
-  color: var(--text-muted);
+.input:disabled { opacity: 0.5; cursor: not-allowed; }
+.input::placeholder { color: var(--text-muted); }
+
+select.input {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--accent-2) 50%),
+                    linear-gradient(135deg, var(--accent-2) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 28px;
+  cursor: pointer;
 }
 
-.input-lg {
-  font-size: 24px;
-  padding: 10px 16px;
-}
-
-.input-save {
-  color: var(--success);
-}
+.input-lg { font-size: 22px; padding: 10px 16px; }
+.input-save { color: var(--success); }
 
 /* Max display */
 .max-display {
   font-family: var(--font-mono);
   font-size: 18px;
   color: var(--danger);
-  background: var(--input-bg);
+  background: var(--bg-input);
   padding: 10px 16px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border);
   flex: 1;
   min-width: 200px;
+  text-shadow: 0 0 10px rgba(255, 56, 56, 0.3);
 }
 
 /* ============================================
    Toggle Switch
    ============================================ */
 
-.toggle-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+.toggle-group { display: flex; align-items: center; gap: 12px; }
 
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 52px;
-  height: 28px;
-}
-
+.switch { position: relative; display: inline-block; width: 52px; height: 28px; }
 .switch input { display: none; }
 
 .slider {
   position: absolute;
   cursor: pointer;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-color: var(--success);
+  inset: 0;
+  background: linear-gradient(180deg, var(--success) 0%, #00bf63 100%);
   transition: 0.3s;
   border-radius: 28px;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.4), 0 0 12px var(--success-glow);
 }
 
 .slider:before {
   position: absolute;
   content: "";
-  height: 22px;
-  width: 22px;
-  left: 3px;
-  bottom: 3px;
-  background-color: #fff;
-  transition: 0.3s;
+  height: 22px; width: 22px;
+  left: 3px; bottom: 3px;
+  background: #fff;
+  transition: 0.3s cubic-bezier(.4, 0, .2, 1);
   border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
 input:checked + .slider {
-  background-color: var(--danger);
+  background: linear-gradient(180deg, var(--danger) 0%, #c92020 100%);
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.4), 0 0 12px var(--danger-glow);
 }
 
-input:checked + .slider:before {
-  transform: translateX(24px);
-}
+input:checked + .slider:before { transform: translateX(24px); }
 
 .toggle-label {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
 }
 
 /* ============================================
-   File saved status
+   Status text
    ============================================ */
 
 .status-text {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 13px;
   color: var(--success);
   padding: 4px 0;
+  text-shadow: 0 0 6px rgba(0, 230, 118, 0.3);
 }
 
 /* ============================================
-   Grafici page specific
+   Polar grid (grafici page)
    ============================================ */
 
 .polar-grid {
@@ -422,56 +540,101 @@ input:checked + .slider:before {
   align-items: center;
 }
 
-.polar-grid canvas {
-  width: 100% !important;
-  height: auto !important;
-}
+.polar-grid canvas { width: 100% !important; height: auto !important; }
+
+/* ============================================
+   Data table — telemetry log
+   ============================================ */
 
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .data-table th {
   text-align: left;
-  padding: 6px 12px;
+  padding: 8px 12px;
   color: var(--text-muted);
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-weight: 700;
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  border-bottom: 1px solid var(--border-card);
+  letter-spacing: 1.5px;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg-input);
 }
 
 .data-table td {
   padding: 6px 12px;
   font-family: var(--font-mono);
+  border-bottom: 1px solid var(--border);
 }
+
+.data-table tr:nth-child(even) td { background: rgba(255, 255, 255, 0.012); }
+
+.data-table tr:hover td { background: var(--accent-glow); }
 
 .data-table .color-dot {
   display: inline-block;
-  width: 10px;
-  height: 10px;
+  width: 10px; height: 10px;
   border-radius: 50%;
   margin-right: 8px;
   vertical-align: middle;
+  box-shadow: 0 0 6px currentColor;
 }
 
+/* ============================================
+   File input
+   ============================================ */
+
 .file-input {
-  font-size: 13px;
+  font-size: 12px;
   padding: 8px 12px;
-  background: var(--input-bg);
-  color: var(--text-primary);
+  background: var(--bg-input);
+  color: var(--text-secondary);
   border: 1px solid var(--input-border);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: var(--transition);
 }
 
-.file-input:hover {
+.file-input:hover { border-color: var(--accent); color: var(--accent); }
+
+.file-input::file-selector-button {
+  margin-right: 10px;
+  padding: 4px 10px;
+  background: var(--bg-stripe);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.file-input:hover::file-selector-button {
+  background: var(--accent-glow);
   border-color: var(--accent);
 }
+
+/* ============================================
+   Scrollbar
+   ============================================ */
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg-body); }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* ============================================
+   Selection
+   ============================================ */
+
+::selection { background: var(--accent); color: #00161c; }
 
 /* ============================================
    Utilities
@@ -489,3 +652,28 @@ input:checked + .slider:before {
 .ml-auto { margin-left: auto; }
 .text-center { text-align: center; }
 .w-full { width: 100%; }
+
+/* Number badge — racing-style stat */
+.stat-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.stat-badge .stat-label {
+  font-family: var(--font-display);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+}
+.stat-badge .stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+}
