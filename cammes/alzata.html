@@ -176,12 +176,19 @@ var k = 0;
 var pdata = new Array();
 var pdindex = new Array();
 var msg = "";
+var startflag = 0;
+var stepflag = 0;
+var i = 0;
 
 // Status indicators state
-var lastSensorRx  = 0;   // timestamp ultima misura numerica
-var lastEncoderRx = 0;   // timestamp ultima risposta encoder
-var SENSOR_FRESH_MS  = 3000;
-var ENCODER_FRESH_MS = 8000;
+var lastSensorRx     = 0;   // timestamp ultima misura numerica VALIDA
+var lastSensorAnyRx  = 0;   // timestamp ultima risposta dal firmware (anche NaN)
+var lastEncoderRx    = 0;
+var consecutiveNaN   = 0;   // contatore NaN consecutivi → auto-stop scan
+var SENSOR_FRESH_MS    = 3000;
+var SENSOR_DEAD_MS     = 5000;   // oltre questo: rosso (nessun frame dal firmware)
+var ENCODER_FRESH_MS   = 8000;
+var NAN_TO_AUTOSTOP    = 3;
 
 function updateStatusLeds() {
     var ledSrv = document.getElementById('ledServer');
@@ -191,10 +198,15 @@ function updateStatusLeds() {
     var wsOk = (typeof engineSocket !== 'undefined' && engineSocket.readyState === 1) &&
                (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1);
     var now = Date.now();
-    var senOk = (now - lastSensorRx)  < SENSOR_FRESH_MS;
-    var encOk = (now - lastEncoderRx) < ENCODER_FRESH_MS;
     ledSrv.className = 'led ' + (wsOk ? 'ok' : 'err');
-    ledSen.className = 'led ' + (senOk ? 'ok' : (lastSensorRx === 0 ? '' : 'warn'));
+    // Sensore: verde se misure valide fresche, giallo se NaN o nessuna misura valida ma firmware risponde, rosso se firmware morto
+    var senClass = '';
+    if (lastSensorAnyRx === 0)                            senClass = '';        // mai ricevuto nulla
+    else if ((now - lastSensorAnyRx) > SENSOR_DEAD_MS)    senClass = 'err';     // firmware non risponde
+    else if ((now - lastSensorRx) > SENSOR_FRESH_MS)      senClass = 'warn';    // sensore scollegato (NaN)
+    else                                                  senClass = 'ok';      // tutto bene
+    ledSen.className = 'led ' + senClass;
+    var encOk = (now - lastEncoderRx) < ENCODER_FRESH_MS;
     ledEnc.className = 'led ' + (encOk ? 'ok' : (lastEncoderRx === 0 ? '' : 'warn'));
 }
 setInterval(updateStatusLeds, 700);
@@ -226,8 +238,14 @@ engineSocket.onmessage = function(event) {
     var isNumericMeasure = /^-?\d+(\.\d+)?$|^NaN$/.test(msg);
 
     // Tracking timestamps per indicatori stato sensori
-    if (isNumericMeasure && msg !== 'NaN') {
-        lastSensorRx = Date.now();
+    if (isNumericMeasure) {
+        lastSensorAnyRx = Date.now();
+        if (msg !== 'NaN') {
+            lastSensorRx = Date.now();
+            consecutiveNaN = 0;
+        } else {
+            consecutiveNaN++;
+        }
     }
     if (msg.indexOf('encoder=') >= 0 || msg === '*pos') {
         lastEncoderRx = Date.now();
@@ -244,7 +262,13 @@ engineSocket.onmessage = function(event) {
             gaugemicrom.draw();
         } else {
             msg = "0.00";
-            document.cpot.cpot.value = "mic out";
+            document.cpot.cpot.value = "NO SENSORE";
+            // Auto-stop scan dopo N NaN consecutivi
+            if (typeof startflag !== 'undefined' && startflag === 1 && consecutiveNaN >= NAN_TO_AUTOSTOP) {
+                startflag = 0;
+                if (typeof stop === 'function') { try { stop(); } catch(e) {} }
+                console.warn('Auto-stop scan: sensore non risponde (' + consecutiveNaN + ' NaN consecutivi)');
+            }
         }
 
         if (startflag == 1 & i <= 360 & stepflag == 0) {
