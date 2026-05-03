@@ -199,6 +199,36 @@
                 </div>
             </div>
 
+            <!-- NEW: Virtual follower geometry -->
+            <div class="param-separator">
+                <div class="param-group-title">Follower simulato (bicchiere virtuale)</div>
+                <div class="param-row">
+                    <span class="param-label">Tipo follower</span>
+                    <select id="followerType" class="input" style="width:160px;" onchange="onFollowerTypeChange();">
+                        <option value="punt" selected>Puntalino (raw)</option>
+                        <option value="bicch">Bicchiere piatto &Oslash; ___ mm</option>
+                    </select>
+                </div>
+                <div class="param-row" id="rowDiamBicch" style="display:none;">
+                    <span class="param-label">&Oslash; Bicchiere</span>
+                    <input type="number" id="diamBicch" value="33.34" class="input" style="width:75px;" step="0.01" min="1">
+                    <span class="param-unit">mm</span>
+                </div>
+                <div class="param-row" id="rowRBase" style="display:none;">
+                    <span class="param-label">R cerchio base</span>
+                    <input type="number" id="rBase" value="14.0" class="input" style="width:75px;" step="0.1" min="1">
+                    <span class="param-unit">mm</span>
+                </div>
+                <div class="param-row" id="rowRPunt" style="display:none;">
+                    <span class="param-label">R puntalino</span>
+                    <input type="number" id="rPunt" value="1.5" class="input" style="width:75px;" step="0.1" min="0">
+                    <span class="param-unit">mm</span>
+                </div>
+                <div id="followerHint" style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4;display:none;">
+                    Una sola scansione fatta col puntalino → simulazione di qualsiasi bicchiere senza rifare misure.
+                </div>
+            </div>
+
             <!-- NEW: Spring force parameters -->
             <div class="param-separator">
                 <div class="param-group-title">Parametri molla &amp; treno valvole</div>
@@ -636,6 +666,60 @@ var TYPOLOGY = {
     roller:         { label: 'Bilancere a rullo',   rocker: 1.50, clearance: 0.15, lockClearance: false }
 };
 
+// ========== VIRTUAL FOLLOWER (bicchiere simulato) ==========
+//
+// L'utente misura la camma col puntalino sferico del comparatore. Per simulare
+// quello che vedrebbe un bicchiere piatto di Ø D, calcoliamo l'inviluppo:
+//
+//  r(θ) = r_base + lift_punt[θ]               (approssimazione puntalino piccolo)
+//  Per ogni angolo motore α e θ ∈ [0, 360):
+//      x = r(θ) · cos((θ - α) · π/180)
+//      y = r(θ) · sin((θ - α) · π/180)
+//  Il bicchiere piatto orizzontale di larghezza 2·R_bicch tocca la camma sopra,
+//  quindi vede il MAX di y tra i punti con |x| ≤ R_bicch:
+//      lift_bicch(α) = max{ y : |x| ≤ R_bicch } − r_base
+//
+function convertPuntToBicchiere(camLiftRaw, rBase, dBicch) {
+    var R = dBicch / 2;
+    var DEG = Math.PI / 180;
+    var raw = new Array(361);
+    raw[0] = 0;
+    // pre-compute r(θ) array
+    var r = new Array(361);
+    for (var t = 1; t <= 360; t++) r[t] = rBase + (camLiftRaw[t] || 0);
+    for (var a = 1; a <= 360; a++) {
+        var bestY = -Infinity;
+        for (var t2 = 1; t2 <= 360; t2++) {
+            var ang = (t2 - a) * DEG;
+            var x = r[t2] * Math.cos(ang);
+            if (x < -R || x > R) continue;
+            var y = r[t2] * Math.sin(ang);
+            if (y > bestY) bestY = y;
+        }
+        var lift = bestY - rBase;
+        raw[a] = lift > 0 ? lift : 0;
+    }
+    // Allineamento angolare: il raw del puntalino ha picco a θ_p,
+    // l'algoritmo qui sopra produce picco a (θ_p - 90)°. Compenso di +90°.
+    var out = new Array(361);
+    out[0] = 0;
+    for (var i = 1; i <= 360; i++) {
+        var src = ((i - 90) % 360 + 360) % 360;
+        if (src === 0) src = 360;
+        out[i] = raw[src];
+    }
+    return out;
+}
+
+function onFollowerTypeChange() {
+    var t = document.getElementById('followerType').value;
+    var show = t === 'bicch';
+    document.getElementById('rowDiamBicch').style.display = show ? 'flex' : 'none';
+    document.getElementById('rowRBase').style.display     = show ? 'flex' : 'none';
+    document.getElementById('rowRPunt').style.display     = show ? 'flex' : 'none';
+    document.getElementById('followerHint').style.display = show ? 'block' : 'none';
+}
+
 function onTypologyChange(side) {
     var typeSel  = document.getElementById(side + 'Type');
     var rockerEl = document.getElementById('rocker' + (side === 'intake' ? 'Intake' : 'Exhaust'));
@@ -743,6 +827,14 @@ function findMax(crankArr) {
 
 // ========== FILE IMPORT ==========
 
+function applyVirtualFollower(camLift) {
+    var t = document.getElementById('followerType').value;
+    if (t !== 'bicch') return camLift;
+    var rBase  = Number(document.getElementById('rBase').value)  || 14;
+    var dBicch = Number(document.getElementById('diamBicch').value) || 33.34;
+    return convertPuntToBicchiere(camLift, rBase, dBicch);
+}
+
 function importIntake() {
     var input = document.getElementById('fileIntake');
     if (!input.files || !input.files[0]) { alert('Selezionare un file'); return; }
@@ -756,6 +848,7 @@ function importIntake() {
     var fr = new FileReader();
     fr.onload = function() {
         var camLift = parseCamFile(fr.result);
+        camLift = applyVirtualFollower(camLift);
         var angle = Number(document.getElementById('intakeAngle').value);
         var clearance = Number(document.getElementById('intakeClearance').value);
 
@@ -787,6 +880,7 @@ function importExhaust() {
     var fr = new FileReader();
     fr.onload = function() {
         var camLift = parseCamFile(fr.result);
+        camLift = applyVirtualFollower(camLift);
         var angle = Number(document.getElementById('exhaustAngle').value);
         var clearance = Number(document.getElementById('exhaustClearance').value);
 
