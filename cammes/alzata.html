@@ -311,14 +311,14 @@ engineSocket.onmessage = function(event) {
         }
     }
 
-    if (msg.substring(0, 1) == "*") {
+    // Avanza alla prossima misura SOLO se siamo in una scansione attiva (startflag==1)
+    // e il terminatore è quello di una misura (*se), non altri (*pos / *zero / *dbg).
+    if (msg === '*se') {
         document.imp2.imp2.value = "  gradi  " + i;
-        if (i < 360) {
-            if (stepflag == 0) {
-                if (rsign == 1) { sendSocket.send('p'); }
-                if (rsign == -1) { sendSocket.send('q'); }
-                i = i + 1;
-            }
+        if (startflag == 1 && i < 360 && stepflag == 0) {
+            if (rsign == 1) { sendSocket.send('p'); }
+            if (rsign == -1) { sendSocket.send('q'); }
+            i = i + 1;
         }
     }
 };
