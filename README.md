@@ -2,7 +2,7 @@
 
 Sistema completo per la misurazione e l'analisi dei profili degli alberi a camme per motori. Comprende hardware (Arduino), software PC (server Node.js + interfaccia web) e app Android.
 
-> **Nota architettura (2026-05-02)**: il firmware è in transizione dall'attuale schema a 2 Arduino Uno (master + sensore via SPI) verso un singolo Arduino Uno che gestisce sia lettura sensore sia controllo stepper. Il passaggio avverrà con la finalizzazione dello stepper esterno. Documentazione di hardware e pinout qui sotto si riferisce all'architettura attuale.
+> **Architettura corrente (dal 2026-05-03)**: singolo Arduino Uno + driver stepper esterno opto-isolato + encoder rotativo LDP3806 sull'albero camme + comparatore Neoteck via LM339N. La vecchia configurazione a 2 Arduino (master + sensore via SPI) è stata sostituita; lo sketch dismesso vive in `legacy/micrometro_SPI/`.
 
 ---
 
@@ -25,9 +25,10 @@ Sistema completo per la misurazione e l'analisi dei profili degli alberi a camme
                          USB seriale           USB OTG
                               │                     │
                      ┌────────┴────────────────────┴────────┐
-                     │          Arduino Uno (master)          │
-                     │  Stepper 32 step/grado + lettura      │
-                     │  comparatore Neoteck via LM339N       │
+                     │          Arduino Uno (unico)           │
+                     │  Stepper esterno opto-isolato         │
+                     │  + encoder LDP3806 (1:1 albero camme) │
+                     │  + comparatore Neoteck via LM339N     │
                      └───────────────────────────────────────┘
 ```
 
@@ -60,13 +61,14 @@ CAMMES/
 │   │   └── 305_asp_pol.scr          #     Peugeot 305 aspirazione - polare
 │   └── package.json                 #   Dipendenze: ws, serialport
 │
-├── master/                          # Sketch Arduino - Controller principale
-│   └── master.ino                   #   Stepper NEMA 17 (32 step/grado),
-│                                    #   lettura comparatore, protocollo seriale
+├── master/                          # Sketch Arduino unificato (1 Uno)
+│   └── master.ino                   #   Stepper esterno + encoder LDP3806 +
+│                                    #   sensore Neoteck + UART seriale
 │
-├── micrometro_SPI/                  # Sketch Arduino - Lettura micrometro (legacy)
-│   └── micrometro_SPI.ino           #   Bit-banging 24-bit, interrupt FALLING,
-│                                    #   trasmissione SPI verso master
+├── legacy/                          # Materiale architettura precedente
+│   ├── README.md                    #   Note legacy
+│   └── micrometro_SPI/              #   Vecchio sketch del 2° Arduino (SPI)
+│       └── micrometro_SPI.ino       #   Bit-banging 24-bit, FALLING, SPI master
 │
 ├── cammes-android/                  # App Android (WebView + USB Serial)
 │   ├── app/src/main/
@@ -108,22 +110,41 @@ CAMMES/
 ## Hardware
 
 ### Componenti
-- **Arduino Uno** - Controller principale (stepper + lettura comparatore)
+- **Arduino Uno** - Controller unico (stepper + sensore + encoder)
+- **Driver stepper esterno opto-isolato** (es. TB6600/DM542 — 6 morsetti PUL±/DIR±/ENA±). Configurazione **common-anode**: 5V Arduino su PUL+/DIR+/ENA+; GND alimentazione 36V NON in comune con GND Arduino (giusto, è isolato dagli optocoupler).
 - **Stepper NEMA 17** - Rotazione albero a camme (32 step/grado = 11.520 step/giro)
-- **Driver stepper** - Collegato ai pin 7(PUL/STEP), 6(DIR), 5(ENA)
-- **Comparatore Neoteck** (0-25.4mm) - Misura alzata
+- **Encoder rotativo LDP3806-360BM-G5-24C** - 360 PPR, montato 1:1 sull'albero camme. Decoding x4 → 1440 conteggi/giro = 0.25°/conteggio. Output NPN open-collector, richiede pull-up 4.7 kΩ a +5V su entrambi i canali A e B.
+- **Comparatore Neoteck** (0-25.4 mm) - Sensore alzata
 - **Op-amp LM339N** - Interfaccia comparatore-Arduino
-  - Pin 14 LM339N → pin 5 Arduino (DATA) tramite resistenze
-  - Pin 2 LM339N → pin 2 Arduino (INT0 FALLING) tramite resistenze
+
+### Pinout Arduino Uno
+
+| Pin | Direzione | Collegato a | Funzione |
+|-----|-----------|-------------|----------|
+| **D2** (INT0) | IN | LM339N pin 2 | Clock impulsi sensore (FALLING) |
+| **D5** | IN | LM339N pin 14 | DATA bit sensore |
+| **D3** (INT1) | IN | encoder A (verde) + pull-up 4.7kΩ→5V | Canale A encoder |
+| **D8** (PCINT0) | IN | encoder B (bianco) + pull-up 4.7kΩ→5V | Canale B encoder |
+| **D7** | OUT | driver stepper PUL− | Impulso passo |
+| **D6** | OUT | driver stepper DIR− | Direzione |
+| **D4** | OUT | driver stepper ENA− | Enable driver |
+| **D0/D1** | UART | USB → PC | Seriale 9600 baud |
+| **5V** | — | rosso encoder + LM339N + Neoteck + PUL+/DIR+/ENA+ del driver | Alimentazione logica |
+| **GND** | — | nero encoder + shield + GND logico (NON al GND 36V motore) | Massa logica |
 
 ### Protocollo Seriale (9600 baud)
+
 | Comando | Direzione | Descrizione |
 |---------|-----------|-------------|
-| `p` | PC → Arduino | Avvia misurazione completa (360 gradi) |
-| `q` | PC → Arduino | Stop misurazione |
-| `$+NNN` | PC → Arduino | Rotazione manuale oraria (NNN step) |
-| `$-NNN` | PC → Arduino | Rotazione manuale antioraria |
-| `XX.XX*se` | Arduino → PC | Misura alzata in mm (terminatore `*se`) |
+| `p` | PC → Arduino | Rotazione 1° antiorario + emette misura |
+| `q` | PC → Arduino | Rotazione 1° orario + emette misura |
+| `$+NNN` | PC → Arduino | Rotazione manuale oraria (NNN gradi) |
+| `$-NNN` | PC → Arduino | Rotazione manuale antioraria (NNN gradi) |
+| `?` | PC → Arduino | Query encoder: stampa conteggio + gradi |
+| `!` | PC → Arduino | Reset zero encoder |
+| `XX.XX\n*se` | Arduino → PC | Misura alzata in mm + terminatore |
+| `encoder=NNN deg=XX.XX\n*pos` | Arduino → PC | Risposta a `?` |
+| `*zero` | Arduino → PC | Conferma reset encoder |
 
 ---
 

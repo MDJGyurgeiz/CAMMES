@@ -214,6 +214,61 @@ CAMMES_DIST/
 
 ---
 
+## Sessione 5 - 2026-05-03 - Unificazione firmware su 1 Arduino Uno + encoder LDP3806
+
+### Hardware
+- Architettura 2-Uno → **1-Uno** completata
+- Aggiunto encoder rotativo **LDP3806-360BM-G5-24C** (360 PPR, NPN open-collector, 5-24V)
+  - Montato 1:1 sull'albero camme
+  - Pull-up 4.7 kΩ a 5V su canali A e B
+  - Decoding x4 → 1440 conteggi/giro = 0.25°/conteggio
+- Driver stepper esterno opto-isolato (6 morsetti) in configurazione common-anode
+  - 5V Arduino su PUL+/DIR+/ENA+
+  - GND alimentazione 36V NON in comune con GND Arduino (corretto, isolamento opto)
+
+### Pinout finale Arduino Uno
+| Pin | Funzione |
+|-----|----------|
+| D2 (INT0) | LM339N pin 2 — clock impulsi sensore Neoteck |
+| D5 | LM339N pin 14 — DATA bit sensore |
+| D3 (INT1) | encoder canale A |
+| D8 (PCINT0) | encoder canale B |
+| D7 | stepper PUL− |
+| D6 | stepper DIR− |
+| D4 | stepper ENA− (era D5 nel vecchio sketch, collideva col DATA sensore) |
+| D0/D1 | UART USB-PC |
+
+### Firmware (`master/master.ino`)
+- Riscritto da zero, sostituisce vecchi master.ino + micrometro_SPI.ino
+- Lettura sensore Neoteck integrata (interrupt FALLING su D2, bit-banging 16 bit utili)
+- Reset frame sensore su timeout impulsi (50 ms) per robustezza
+- Encoder x4 con LUT di transizione, INT1 su A + PCINT0 su B
+- Stepper con stessa cinematica del firmware originale (32 step/grado, 50 µs pulse)
+- Sostituito uso di `String` Arduino con `char[]` (riduce frammentazione heap)
+- Comando UART terminato da `\r`/`\n` (no più rottura su comandi multi-byte)
+- Validazione misura: timeout in lettura, ritorno NaN se frame non completo nella finestra
+- **Nuovi comandi seriali**:
+  - `?` → query encoder, risposta `encoder=NNN deg=XX.XX *pos`
+  - `!` → reset zero encoder, risposta `*zero`
+- Comandi storici invariati: `p`, `q`, `$+NNN`, `$-NNN`, output `XX.XX\n*se`
+
+### Pulizia struttura progetto
+- Spostato `micrometro_SPI/` in `legacy/micrometro_SPI/` (sketch non più in uso)
+- Aggiunto `legacy/README.md` con note storiche
+- README principale aggiornato:
+  - Nota architettura ora dichiara "completata"
+  - Diagramma architettura aggiornato (1 Uno)
+  - Sezione Hardware con pinout completo + driver opto + encoder
+  - Protocollo seriale esteso con `?`, `!`, `*pos`, `*zero`
+
+### Da fare nelle prossime sessioni
+- [ ] Test su hardware reale: caricare master.ino, verificare scansione 360°
+- [ ] Eventuale tuning costanti (settle time, pulse width) in base a comportamento reale
+- [ ] Sync UI: aggiungere nelle pagine alzata.html / polare.html un indicatore di posizione encoder (richiede comando `?` periodico via WebSocket)
+- [ ] Sanity check stepper vs encoder (allarme se conteggi divergono)
+
+---
+
 ## TODO - Prossime implementazioni
 - [x] ~~Fix comando 'q' in master.ino~~ (verificato già implementato sessione 4)
 - [ ] Validazione misura SPI: usare isDigit() invece di substring != "" (Fase B)
@@ -222,9 +277,9 @@ CAMMES_DIST/
 - [x] ~~Pagina analisi.html~~ (completata sessione 2)
 - [x] ~~Server Node.js unificato (cammes_server.js)~~ (completata sessione 3)
 - [x] ~~Compilazione cammes.exe con pkg~~ (completata sessione 3)
-- [ ] **Fase B**: unificare master.ino + micrometro_SPI.ino su singolo Arduino Uno (al pronto dello stepper esterno)
-- [ ] **Fase B**: terminatore comando UART (\n) per evitare comandi spezzati
-- [ ] **Fase B**: sostituire String Arduino con char[] per ridurre frammentazione heap
+- [x] ~~**Fase B**: unificare master.ino + micrometro_SPI.ino su singolo Arduino Uno~~ (completato sessione 5)
+- [x] ~~**Fase B**: terminatore comando UART (\n)~~ (completato sessione 5)
+- [x] ~~**Fase B**: sostituire String Arduino con char[]~~ (completato sessione 5)
 - [ ] **Fase C**: indicatore connessione WebSocket nell'UI
 - [ ] **Fase C**: export CSV dal browser
 - [ ] **Fase C**: barra progresso scansione 360°
