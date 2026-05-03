@@ -15,13 +15,22 @@
 //    D0/D1      ↔ UART USB → server PC (9600 baud)
 //
 //  Protocollo seriale (PC → Arduino):
-//    p          rotazione 1° antiorario   (32 step)
-//    q          rotazione 1° orario       (32 step)
-//    $+NNN      rotazione multi-grado avanti (NNN gradi)
-//    $-NNN      rotazione multi-grado indietro
+//    p          rotazione antioraria di 1 'unità di scansione' (default 1°)
+//    q          rotazione oraria di 1 'unità di scansione' (default 1°)
+//    $+NNN      rotazione multi-unità avanti (NNN unità)
+//    $-NNN      rotazione multi-unità indietro
 //    ?          query: stampa "encoder=NNN deg=XX.XX*pos\r\n"
 //    !          reset zero encoder
 //    m          measure only (lettura sensore senza muovere motore)
+//    cN         configura N campioni per misura (1..9), media filtrata NaN
+//                  cN=1 → 1 campione (default, veloce)
+//                  cN=3 → media di 3 campioni (rumore -42%, +50% tempo)
+//                  cN=5 → media di 5 campioni (rumore -55%, +100% tempo)
+//    rN         configura risoluzione step: micropassi per unità di scansione
+//                  r32 → 1° per p/q (default, 32 step/grado camma)
+//                  r16 → 0.5° per p/q (doppia risoluzione angolare)
+//                  r8  → 0.25° per p/q (massima risoluzione)
+//    @          stampa configurazione corrente "samp=N step=NN*cfg\r\n"
 //
 //  Risposta Arduino dopo movimento:
 //    XX.XX            (alzata in mm)
@@ -42,7 +51,7 @@ const uint8_t PIN_ENC_A    = 3;
 const uint8_t PIN_ENC_B    = 8;
 
 // ---- Costanti meccaniche ----
-const uint8_t  STEPS_PER_DEGREE     = 32;          // 32 step/grado = 11520 step/giro
+const uint8_t  DEFAULT_STEPS_PER_UNIT = 32;        // 32 micropassi = 1° camma (riduzione inclusa)
 const uint16_t STEP_PULSE_US        = 50;
 const uint16_t SENSOR_SETTLE_MS     = 900;         // attesa per lettura stabile (come da firmware originale)
 const uint16_t SENSOR_TIMEOUT_MS    = 50;          // se passa più di X ms tra impulsi → reset frame sensore
@@ -73,6 +82,10 @@ volatile uint8_t encoderState  = 0;   // (A<<1)|B
 // ---- Comando seriale ----
 char    cmdBuf[16];
 uint8_t cmdLen = 0;
+
+// ---- Config runtime ----
+uint8_t cfgSamples       = 1;   // campioni per misura (1..9)
+uint8_t cfgStepsPerUnit  = DEFAULT_STEPS_PER_UNIT;  // micropassi per p/q
 
 // =============================================================
 //  ISR: sensore Neoteck — fronte FALLING su D2
@@ -125,34 +138,47 @@ void stepperPulse() {
   delayMicroseconds(STEP_PULSE_US);
 }
 
-void stepperMove(int16_t degrees) {
-  if (degrees == 0) return;
-  digitalWrite(PIN_ENA, HIGH);                       // attiva driver
-  digitalWrite(PIN_DIR, degrees > 0 ? HIGH : LOW);
-  uint16_t steps = (uint16_t)abs(degrees) * STEPS_PER_DEGREE;
+void stepperMove(int16_t units) {
+  // 'units' = unità di scansione (default 1 unità = 1°). Effettivi micropassi = units * cfgStepsPerUnit
+  if (units == 0) return;
+  digitalWrite(PIN_ENA, HIGH);
+  digitalWrite(PIN_DIR, units > 0 ? HIGH : LOW);
+  uint16_t steps = (uint16_t)abs(units) * cfgStepsPerUnit;
   for (uint16_t s = 0; s < steps; s++) stepperPulse();
 }
 
 // =============================================================
-//  Lettura misura: aspetta finestra di settle e restituisce mm
+//  Lettura singolo frame: aspetta finestra di settle e restituisce mm
 // =============================================================
-float readSensorMm() {
+float readSensorMmOnce() {
   uint32_t deadline = millis() + SENSOR_SETTLE_MS;
-  // svuota stato per accettare un frame nuovo nella finestra
   noInterrupts();
   sensorReady = false;
   interrupts();
-  // attendi un frame (o timeout)
   while (millis() < deadline) {
     if (sensorReady) break;
   }
-  // legge in modo atomico
   noInterrupts();
   uint16_t raw = sensorRaw;
   bool ok      = sensorReady;
   interrupts();
-  if (!ok) return NAN;                               // frame non arrivato in finestra
+  if (!ok) return NAN;
   return (float)raw / SENSOR_DIVIDER;
+}
+
+// =============================================================
+//  Lettura con media filtrata di cfgSamples campioni (NaN scartati)
+// =============================================================
+float readSensorMm() {
+  if (cfgSamples <= 1) return readSensorMmOnce();
+  float sum = 0;
+  uint8_t valid = 0;
+  for (uint8_t i = 0; i < cfgSamples; i++) {
+    float v = readSensorMmOnce();
+    if (!isnan(v)) { sum += v; valid++; }
+  }
+  if (valid == 0) return NAN;
+  return sum / valid;
 }
 
 // =============================================================
@@ -204,6 +230,21 @@ void executeCommand() {
       interrupts();
       Serial.println(F("*zero"));
     }
+    else if (c == '@') {
+      Serial.print(F("samp=")); Serial.print(cfgSamples);
+      Serial.print(F(" step="));  Serial.println(cfgStepsPerUnit);
+      Serial.println(F("*cfg"));
+    }
+  } else if (cmdLen >= 2 && cmdBuf[0] == 'c') {
+    int v = atoi(&cmdBuf[1]);
+    if (v >= 1 && v <= 9) cfgSamples = (uint8_t)v;
+    Serial.print(F("samp=")); Serial.println(cfgSamples);
+    Serial.println(F("*cfg"));
+  } else if (cmdLen >= 2 && cmdBuf[0] == 'r') {
+    int v = atoi(&cmdBuf[1]);
+    if (v == 8 || v == 16 || v == 32 || v == 64) cfgStepsPerUnit = (uint8_t)v;
+    Serial.print(F("step=")); Serial.println(cfgStepsPerUnit);
+    Serial.println(F("*cfg"));
   } else if (cmdLen >= 4 && cmdBuf[0] == '$') {
     // $+NNN o $-NNN
     int sign  = (cmdBuf[1] == '+') ? +1 : -1;
@@ -254,7 +295,7 @@ void loop() {
     } else if (cmdLen < sizeof(cmdBuf) - 1) {
       cmdBuf[cmdLen++] = c;
       // comandi a singolo carattere si eseguono immediatamente
-      if (cmdLen == 1 && (c == 'p' || c == 'q' || c == 'm' || c == 'd' || c == '?' || c == '!')) {
+      if (cmdLen == 1 && (c == 'p' || c == 'q' || c == 'm' || c == 'd' || c == '?' || c == '!' || c == '@')) {
         executeCommand();
       }
     } else {

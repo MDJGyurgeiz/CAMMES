@@ -78,6 +78,18 @@
 
             <div class="separator"></div>
 
+            <div class="controls-group">
+                <span class="toggle-label">Modalit&agrave;</span>
+                <select id="scanMode" class="input" style="width:170px;" onchange="onScanModeChange();">
+                    <option value="fast" selected>Veloce  &middot; 60s (stradale)</option>
+                    <option value="std">Standard &middot; 110s</option>
+                    <option value="race">Race  &middot; 220s (0.5&deg;)</option>
+                    <option value="ultra">Ultra &middot; 350s (0.5&deg; +5x)</option>
+                </select>
+            </div>
+
+            <div class="separator"></div>
+
             <form name="mas">
                 <input type="text" name="mas" value=" max" readonly class="max-display">
             </form>
@@ -179,6 +191,26 @@ var msg = "";
 var startflag = 0;
 var stepflag = 0;
 var i = 0;
+
+// Modalità scansione: ogni preset definisce campioni media e micropassi per unità
+// totalSteps = numero di "p" da inviare per coprire 360° camma
+var SCAN_MODES = {
+    fast:  { samples: 1, microsteps: 32, totalSteps: 360,  label: 'Veloce'   },
+    std:   { samples: 3, microsteps: 32, totalSteps: 360,  label: 'Standard' },
+    race:  { samples: 3, microsteps: 16, totalSteps: 720,  label: 'Race'     },
+    ultra: { samples: 5, microsteps: 16, totalSteps: 720,  label: 'Ultra'    }
+};
+var currentMode = SCAN_MODES.fast;
+
+function onScanModeChange() {
+    var sel = document.getElementById('scanMode');
+    if (!sel) return;
+    currentMode = SCAN_MODES[sel.value] || SCAN_MODES.fast;
+    if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1) {
+        sendSocket.send('c' + currentMode.samples);
+        sendSocket.send('r' + currentMode.microsteps);
+    }
+}
 
 // Status indicators state
 var lastSensorRx     = 0;   // timestamp ultima misura numerica VALIDA
@@ -289,7 +321,7 @@ engineSocket.onmessage = function(event) {
         }
     }
 
-    if (i == 360) {
+    if (i == currentMode.totalSteps) {
         if (startflag == 1) {
             var x = "sequenza di misura   terminata ";
             responsiveVoice.speak(x, "Italian Female", { volume: 3 });
@@ -314,8 +346,10 @@ engineSocket.onmessage = function(event) {
     // Avanza alla prossima misura SOLO se siamo in una scansione attiva (startflag==1)
     // e il terminatore è quello di una misura (*se), non altri (*pos / *zero / *dbg).
     if (msg === '*se') {
-        document.imp2.imp2.value = "  gradi  " + i;
-        if (startflag == 1 && i < 360 && stepflag == 0) {
+        // visualizza progresso in gradi camma reali (i unità × passo angolare effettivo)
+        var degShown = (i * (32 / currentMode.microsteps)).toFixed(1);
+        document.imp2.imp2.value = "  gradi  " + degShown;
+        if (startflag == 1 && i < currentMode.totalSteps && stepflag == 0) {
             if (rsign == 1) { sendSocket.send('p'); }
             if (rsign == -1) { sendSocket.send('q'); }
             i = i + 1;
