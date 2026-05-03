@@ -122,12 +122,12 @@ CAMMES/
 | Pin | Direzione | Collegato a | Funzione |
 |-----|-----------|-------------|----------|
 | **D2** (INT0) | IN | LM339N pin 2 | Clock impulsi sensore (FALLING) |
-| **D5** | IN | LM339N pin 14 | DATA bit sensore |
+| **D4** | IN | LM339N pin 14 | DATA bit sensore |
 | **D3** (INT1) | IN | encoder A (verde) + pull-up 4.7kΩ→5V | Canale A encoder |
 | **D8** (PCINT0) | IN | encoder B (bianco) + pull-up 4.7kΩ→5V | Canale B encoder |
-| **D7** | OUT | driver stepper PUL− | Impulso passo |
-| **D6** | OUT | driver stepper DIR− | Direzione |
-| **D4** | OUT | driver stepper ENA− | Enable driver |
+| **D7** | OUT | driver stepper PUL− | Impulso passo (pin storico) |
+| **D6** | OUT | driver stepper DIR− | Direzione (pin storico) |
+| **D5** | OUT | driver stepper ENA− | Enable driver (pin storico) |
 | **D0/D1** | UART | USB → PC | Seriale 9600 baud |
 | **5V** | — | rosso encoder + LM339N + Neoteck + PUL+/DIR+/ENA+ del driver | Alimentazione logica |
 | **GND** | — | nero encoder + shield + GND logico (NON al GND 36V motore) | Massa logica |

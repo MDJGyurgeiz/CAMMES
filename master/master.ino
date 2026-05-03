@@ -6,12 +6,12 @@
 //
 //  Pinout:
 //    D2 (INT0)  ← LM339N pin 2  : clock impulsi sensore (FALLING)
-//    D5         ← LM339N pin 14 : DATA bit sensore
+//    D4         ← LM339N pin 14 : DATA bit sensore
 //    D3 (INT1)  ← encoder canale A (verde) — pull-up 4.7k a 5V
 //    D8 (PCINT0)← encoder canale B (bianco) — pull-up 4.7k a 5V
-//    D7         → driver stepper PUL−
-//    D6         → driver stepper DIR−
-//    D4         → driver stepper ENA−
+//    D7         → driver stepper PUL−   (pin storico)
+//    D6         → driver stepper DIR−   (pin storico)
+//    D5         → driver stepper ENA−   (pin storico)
 //    D0/D1      ↔ UART USB → server PC (9600 baud)
 //
 //  Protocollo seriale (PC → Arduino):
@@ -34,9 +34,9 @@
 // ---- Pin ----
 const uint8_t PIN_PUL      = 7;
 const uint8_t PIN_DIR      = 6;
-const uint8_t PIN_ENA      = 4;
+const uint8_t PIN_ENA      = 5;
 const uint8_t PIN_SENS_INT = 2;
-const uint8_t PIN_SENS_DAT = 5;
+const uint8_t PIN_SENS_DAT = 4;
 const uint8_t PIN_ENC_A    = 3;
 const uint8_t PIN_ENC_B    = 8;
 
@@ -88,7 +88,7 @@ void sensorISR() {
 
   if (sensorBitIdx >= SENSOR_BIT_FIRST && sensorBitIdx <= SENSOR_BIT_LAST) {
     // bit n° 2..17 → posizioni 0..15 (LSB-first, come firmware originale)
-    if (PIND & (1 << PIN_SENS_DAT)) {                // pin 5 = PD5
+    if (PIND & (1 << PIN_SENS_DAT)) {                // pin 4 = PD4
       sensorBuf |= (1 << (sensorBitIdx - SENSOR_BIT_FIRST));
     }
   }

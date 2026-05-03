@@ -230,13 +230,15 @@ CAMMES_DIST/
 | Pin | Funzione |
 |-----|----------|
 | D2 (INT0) | LM339N pin 2 — clock impulsi sensore Neoteck |
-| D5 | LM339N pin 14 — DATA bit sensore |
+| D4 | LM339N pin 14 — DATA bit sensore (spostato da D5 per liberare il pin storico ENA stepper) |
 | D3 (INT1) | encoder canale A |
 | D8 (PCINT0) | encoder canale B |
-| D7 | stepper PUL− |
-| D6 | stepper DIR− |
-| D4 | stepper ENA− (era D5 nel vecchio sketch, collideva col DATA sensore) |
+| D7 | stepper PUL− (pin storico) |
+| D6 | stepper DIR− (pin storico) |
+| D5 | stepper ENA− (pin storico, mantenuto come da progetto iniziale) |
 | D0/D1 | UART USB-PC |
+
+**Decisione pin storici stepper**: PUL=7, DIR=6, ENA=5 mantenuti identici al progetto iniziale del 2019 (master.ino legacy). Il DATA del sensore Neoteck si è spostato da D5 a D4 per evitare collisione con ENA stepper. Solo 1 filo da rispostare sul prototipo: LM339N pin 14 da D5 a D4.
 
 ### Firmware (`master/master.ino`)
 - Riscritto da zero, sostituisce vecchi master.ino + micrometro_SPI.ino
