@@ -21,6 +21,7 @@
 //    $-NNN      rotazione multi-grado indietro
 //    ?          query: stampa "encoder=NNN deg=XX.XX*pos\r\n"
 //    !          reset zero encoder
+//    m          measure only (lettura sensore senza muovere motore)
 //
 //  Risposta Arduino dopo movimento:
 //    XX.XX            (alzata in mm)
@@ -45,8 +46,8 @@ const uint8_t  STEPS_PER_DEGREE     = 32;          // 32 step/grado = 11520 step
 const uint16_t STEP_PULSE_US        = 50;
 const uint16_t SENSOR_SETTLE_MS     = 900;         // attesa per lettura stabile (come da firmware originale)
 const uint16_t SENSOR_TIMEOUT_MS    = 50;          // se passa più di X ms tra impulsi → reset frame sensore
-const uint8_t  SENSOR_BIT_FIRST     = 2;           // bit utili: dal 2° impulso al 17°
-const uint8_t  SENSOR_BIT_LAST      = 17;
+const uint8_t  SENSOR_BIT_FIRST     = 1;           // bit utili: dal 1° impulso al 16°
+const uint8_t  SENSOR_BIT_LAST      = 16;
 const float    SENSOR_DIVIDER       = 2000.0f;     // mm = raw / 2000
 const uint16_t ENC_COUNTS_PER_REV   = 1440;        // 360 PPR × decoding x4
 const uint8_t  ENC_COUNTS_PER_DEG   = 4;
@@ -182,6 +183,20 @@ void executeCommand() {
     char c = cmdBuf[0];
     if (c == 'p')      { stepperMove(-1); emitMeasure(readSensorMm()); }
     else if (c == 'q') { stepperMove(+1); emitMeasure(readSensorMm()); }
+    else if (c == 'm') { emitMeasure(readSensorMm()); }
+    else if (c == 'd') {
+      // debug: dump raw sensor value (16 bit utili)
+      noInterrupts();
+      uint16_t r = sensorRaw;
+      uint8_t  bi = sensorBitIdx;
+      interrupts();
+      Serial.print(F("raw=")); Serial.print(r);
+      Serial.print(F(" mm=")); Serial.print((float)r / SENSOR_DIVIDER, 3);
+      Serial.print(F(" bin=0b"));
+      for (int8_t b = 15; b >= 0; b--) Serial.print((r >> b) & 1);
+      Serial.print(F(" bitIdx=")); Serial.println(bi);
+      Serial.println(F("*dbg"));
+    }
     else if (c == '?') { emitEncoderQuery(); }
     else if (c == '!') {
       noInterrupts();
@@ -239,7 +254,7 @@ void loop() {
     } else if (cmdLen < sizeof(cmdBuf) - 1) {
       cmdBuf[cmdLen++] = c;
       // comandi a singolo carattere si eseguono immediatamente
-      if (cmdLen == 1 && (c == 'p' || c == 'q' || c == '?' || c == '!')) {
+      if (cmdLen == 1 && (c == 'p' || c == 'q' || c == 'm' || c == 'd' || c == '?' || c == '!')) {
         executeCommand();
       }
     } else {

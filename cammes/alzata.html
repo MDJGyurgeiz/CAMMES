@@ -4,6 +4,19 @@
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <title>CAMMES - Alzata</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        .status-row {
+            display: flex; gap: 14px; margin-left: 18px; align-items: center;
+            font-family: var(--font-display); font-size: 11px; letter-spacing: 1px;
+            text-transform: uppercase; color: var(--text-muted);
+        }
+        .status-item { display: inline-flex; align-items: center; gap: 6px; }
+        .led { width: 9px; height: 9px; border-radius: 50%; background: #555;
+               box-shadow: 0 0 0 1px rgba(255,255,255,.05); transition: 0.2s; }
+        .led.ok   { background: var(--success); box-shadow: 0 0 8px var(--success-glow); }
+        .led.warn { background: var(--warning); box-shadow: 0 0 8px rgba(255,215,64,.5); }
+        .led.err  { background: var(--danger);  box-shadow: 0 0 8px var(--danger-glow); }
+    </style>
 </head>
 <body>
 
@@ -17,6 +30,11 @@
     <div class="header">
         <img src="images/logo.jpg" alt="CAMMES">
         <h1>CAMMES</h1>
+        <div class="status-row">
+            <span class="status-item"><span id="ledServer" class="led"></span>Server</span>
+            <span class="status-item"><span id="ledSensor" class="led"></span>Sensore</span>
+            <span class="status-item"><span id="ledEncoder" class="led"></span>Encoder</span>
+        </div>
         <div class="nav-links">
             <a href="alzata.html" class="active">Alzata</a>
             <a href="polare.html">Polare</a>
@@ -158,6 +176,37 @@ var k = 0;
 var pdata = new Array();
 var pdindex = new Array();
 var msg = "";
+
+// Status indicators state
+var lastSensorRx  = 0;   // timestamp ultima misura numerica
+var lastEncoderRx = 0;   // timestamp ultima risposta encoder
+var SENSOR_FRESH_MS  = 3000;
+var ENCODER_FRESH_MS = 8000;
+
+function updateStatusLeds() {
+    var ledSrv = document.getElementById('ledServer');
+    var ledSen = document.getElementById('ledSensor');
+    var ledEnc = document.getElementById('ledEncoder');
+    if (!ledSrv) return;
+    var wsOk = (typeof engineSocket !== 'undefined' && engineSocket.readyState === 1) &&
+               (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1);
+    var now = Date.now();
+    var senOk = (now - lastSensorRx)  < SENSOR_FRESH_MS;
+    var encOk = (now - lastEncoderRx) < ENCODER_FRESH_MS;
+    ledSrv.className = 'led ' + (wsOk ? 'ok' : 'err');
+    ledSen.className = 'led ' + (senOk ? 'ok' : (lastSensorRx === 0 ? '' : 'warn'));
+    ledEnc.className = 'led ' + (encOk ? 'ok' : (lastEncoderRx === 0 ? '' : 'warn'));
+}
+setInterval(updateStatusLeds, 700);
+
+// Probe periodico encoder per mantenere fresco lo stato (ogni 5s in idle)
+setInterval(function() {
+    if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1
+        && (typeof startflag === 'undefined' || startflag !== 1)) {
+        try { sendSocket.send('?'); } catch(e) {}
+    }
+}, 5000);
+
 var engineSocket = new WebSocket("ws:localhost:8080");
 
 engineSocket.onopen = function(event) {
@@ -172,11 +221,24 @@ engineSocket.onopen = function(event) {
 engineSocket.onmessage = function(event) {
     msg = event.data;
 
-    if (msg.substring(0, 1) != "*") {
+    // Riconosce solo righe puramente numeriche come misura del sensore Neoteck.
+    // Risposte come "encoder=...", "raw=...", "*se", "*pos" non sono misure.
+    var isNumericMeasure = /^-?\d+(\.\d+)?$|^NaN$/.test(msg);
+
+    // Tracking timestamps per indicatori stato sensori
+    if (isNumericMeasure && msg !== 'NaN') {
+        lastSensorRx = Date.now();
+    }
+    if (msg.indexOf('encoder=') >= 0 || msg === '*pos') {
+        lastEncoderRx = Date.now();
+    }
+
+    if (isNumericMeasure) {
+        var n = Number(msg);
         if (Number(msg) < 10) { msg2 = "0" + msg; }
         else { msg2 = msg; }
 
-        if (msg < 32) {
+        if (n >= 0 && n < 32) {
             document.cpot.cpot.value = " " + msg2;
             gaugemicrom.value = msg;
             gaugemicrom.draw();
