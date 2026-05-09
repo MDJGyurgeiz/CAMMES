@@ -251,10 +251,10 @@ function updateStatusLeds() {
 }
 setInterval(updateStatusLeds, 700);
 
-// Probe periodico encoder + sensore per mantenere fresco lo stato in idle.
-// Encoder ogni 5s (lento, basta per LED giallo→verde), sensore ogni 2s
-// così il LED Sensore diventa subito verde appena il comparatore è acceso
-// e l'utente vede il valore live anche senza scansione attiva.
+// Probe periodico in idle:
+// - sensore a 5 Hz (200 ms) → display alzata "real-time" anche fuori scansione
+// - encoder a 0.2 Hz (5 s) → basta per LED + posizione assoluta
+// Disattivati durante scansione attiva (startflag==1) per non interferire.
 setInterval(function() {
     if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1
         && (typeof startflag === 'undefined' || startflag !== 1)) {
@@ -266,7 +266,7 @@ setInterval(function() {
         && (typeof startflag === 'undefined' || startflag !== 1)) {
         try { sendSocket.send('m'); } catch(e) {}
     }
-}, 2000);
+}, 200);
 
 var engineSocket = new WebSocket("ws:localhost:8080");
 
@@ -284,6 +284,12 @@ engineSocket.onopen = function(event) {
         try {
             sendSocket.send('c' + currentMode.samples);
             sendSocket.send('r' + currentMode.microsteps);
+            // Ping immediato sensore + encoder per accendere subito i LED
+            // (senza aspettare il prossimo tick di polling).
+            setTimeout(function(){
+                try { sendSocket.send('m'); } catch(e) {}
+                try { sendSocket.send('?'); } catch(e) {}
+            }, 100);
         } catch (e) { console.warn('Config sync fallito:', e); }
     };
     msgold = "***";
