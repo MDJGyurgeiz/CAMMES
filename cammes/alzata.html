@@ -251,13 +251,22 @@ function updateStatusLeds() {
 }
 setInterval(updateStatusLeds, 700);
 
-// Probe periodico encoder per mantenere fresco lo stato (ogni 5s in idle)
+// Probe periodico encoder + sensore per mantenere fresco lo stato in idle.
+// Encoder ogni 5s (lento, basta per LED giallo→verde), sensore ogni 2s
+// così il LED Sensore diventa subito verde appena il comparatore è acceso
+// e l'utente vede il valore live anche senza scansione attiva.
 setInterval(function() {
     if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1
         && (typeof startflag === 'undefined' || startflag !== 1)) {
         try { sendSocket.send('?'); } catch(e) {}
     }
 }, 5000);
+setInterval(function() {
+    if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1
+        && (typeof startflag === 'undefined' || startflag !== 1)) {
+        try { sendSocket.send('m'); } catch(e) {}
+    }
+}, 2000);
 
 var engineSocket = new WebSocket("ws:localhost:8080");
 
