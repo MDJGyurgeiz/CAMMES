@@ -393,7 +393,11 @@ var i = 0;
 function start() {
     var x = "sequenza di misura   iniziata ";
     responsiveVoice.speak(x, "Italian Female", { volume: 3 });
-    // reset stato scansione
+    // reset COMPLETO stato scansione (incluso il contatore i: senza questo,
+    // se il motore è stato mosso prima, i poteva già essere >= totalSteps
+    // e il loop non avanzava mai)
+    i = 0;
+    consecutiveNaN = 0;
     subBuffer = {};
     pdata.length = 0; pdindex.length = 0;
     max = 0; maxg = 0;
