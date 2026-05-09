@@ -316,6 +316,18 @@ engineSocket.onmessage = function(event) {
         lastEncoderRx = Date.now();
     }
 
+    // Conferma di fine movimento da firmware ($+/$- completato)
+    // Usata dal 0 virtuale per ricaricare la pagina solo DOPO che il motore
+    // ha effettivamente finito di sfasare la camma.
+    if (msg === '*mv' && window._waiting_mv) {
+        window._waiting_mv = false;
+        clearTimeout(window._mv_fallback);
+        console.log('[0V] movimento confermato (*mv), reload pagina');
+        // Piccolo delay per permettere a *mv di arrivare al display log,
+        // ma niente di troppo lungo (tutto è già finito lato Arduino).
+        setTimeout(function(){ location.reload(true); }, 200);
+    }
+
     if (isNumericMeasure) {
         var n = Number(msg);
         if (Number(msg) < 10) { msg2 = "0" + msg; }
@@ -396,13 +408,17 @@ engineSocket.onmessage = function(event) {
             var stepEl = document.getElementById("step");
             if (stepEl) stepEl.value = oldg;
             labms = 0;
-            // Attendi che il motore completi il movimento prima di ricaricare.
-            // Stima conservativa: 100µs/step × 32 step/° × 180° = 576ms in fast,
-            // ma in atomic 100µs × 1 × 5760 = 576ms uguale (stessi step). Diamo 2s.
-            setTimeout(function(){
-                console.log('[0V] reload pagina');
-                location.reload(true);
-            }, 2000);
+            window._waiting_mv = true;
+            // Reload solo DOPO conferma '*mv' dal firmware (= movimento completato).
+            // Fallback timeout di 8s in caso il movimento non emetta *mv (Atomic
+            // con units alti può richiedere fino a ~6s).
+            window._mv_fallback = setTimeout(function(){
+                if (window._waiting_mv) {
+                    console.warn('[0V] timeout fallback, reload forzato');
+                    window._waiting_mv = false;
+                    location.reload(true);
+                }
+            }, 8000);
         }
     }
 
