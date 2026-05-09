@@ -189,12 +189,21 @@ float readSensorMm() {
 //          usa per AVANZARE il loop di scansione
 //   *sm  → misura emessa per 'm' (solo lettura) — il browser la usa solo
 //          per aggiornare display/gauge, NON avanza la scansione.
-// Senza questa distinzione, il polling 'm' di un altro client (es. tab
-// aperta in idle) saturava il flusso di *se e faceva scattare incrementi
-// spuri nel loop di scansione.
+//
+// La misura di scansione include anche il conteggio encoder ATTUALE (dopo
+// il movimento), così il browser può associare ogni misura a una posizione
+// angolare REALE della camma (non quella nominale derivata dal contatore
+// di scansione). Formato: "X.XX N\n*se\n" dove N = encoder count cumulativo.
+// Necessario per il "Zero virtuale": il browser usa encoder_at_max come
+// riferimento per calcolare il movimento di sfasamento di +180°.
 void emitMeasureScan(float mm) {
-  if (isnan(mm)) Serial.println(F("NaN"));
-  else           Serial.println(mm, 2);
+  if (isnan(mm)) Serial.print(F("NaN"));
+  else           Serial.print(mm, 2);
+  Serial.print(' ');
+  noInterrupts();
+  int32_t cnt = encoderCount;
+  interrupts();
+  Serial.println(cnt);
   Serial.println(F("*se"));
 }
 void emitMeasureOnly(float mm) {

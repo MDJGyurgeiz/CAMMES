@@ -193,6 +193,8 @@ var msg = "";
 var startflag = 0;
 var stepflag = 0;
 var i = 0;
+var maxg_encoder       = null;   // conteggio encoder al momento del picco (per 0 virtuale)
+var currentEncoderCount = null;   // ultimo conteggio encoder ricevuto (con la misura)
 
 // Modalità scansione: ogni preset definisce campioni media, micropassi per unità,
 // passo motore totale per coprire 360° camma e quante letture aggregare per ogni
@@ -312,8 +314,24 @@ engineSocket.onmessage = function(event) {
         return;
     }
 
-    // Riconosce solo righe puramente numeriche come misura del sensore Neoteck.
-    // Risposte come "encoder=...", "raw=...", "*se", "*pos" non sono misure.
+    // Riconosce le misure del sensore Neoteck. Il firmware nuovo emette
+    // due varianti:
+    //   "X.XX"        — misura solo (risposta a 'm', tab idle)
+    //   "X.XX N"      — misura + conteggio encoder cumulativo (risposta a p/q)
+    //                   N è int (anche negativo). Il browser estrae:
+    //                   * msgMeasure = parte misura (per display/gauge/pdata)
+    //                   * msgEncoder = N (per associare a maxg in 0V)
+    var spIdx = msg.indexOf(' ');
+    var msgEncoder = null;
+    if (spIdx > 0) {
+        var headPart = msg.substring(0, spIdx);
+        var tailPart = msg.substring(spIdx + 1);
+        if (/^-?\d+(\.\d+)?$|^NaN$/.test(headPart) && /^-?\d+$/.test(tailPart)) {
+            msgEncoder = parseInt(tailPart, 10);
+            currentEncoderCount = msgEncoder;
+            msg = headPart;  // d'ora in poi msg è solo la misura
+        }
+    }
     var isNumericMeasure = /^-?\d+(\.\d+)?$|^NaN$/.test(msg);
 
     // Tracking timestamps per indicatori stato sensori
@@ -377,6 +395,10 @@ engineSocket.onmessage = function(event) {
             if (currentBinVal > max) {
                 max = currentBinVal;
                 maxg = deg;
+                // Memorizza la posizione encoder REALE al momento del picco.
+                // È il riferimento usato dal 0 virtuale per calcolare il
+                // sfasamento di +180° in coordinate angolari assolute.
+                if (msgEncoder !== null) maxg_encoder = msgEncoder;
             }
             document.mas.mas.value = " max  " + maxg + " gradi       " + max.toFixed(3);
 
@@ -398,32 +420,52 @@ engineSocket.onmessage = function(event) {
         startflag = 0;
 
         if (labms == 1) {
-            // 0 virtuale: porta la camma a +180° dal picco (in gradi camma).
-            // Conversione in unità di scansione attuali per modalità sub-step.
-            var degTarget = (Number(maxg) + 180) % 360;
-            var units     = Math.round(degTarget * currentMode.subStepsPerDeg);
-            var rgradi    = (units < 10) ? '00' + units
-                          : (units < 100) ? '0' + units
-                          : '' + units;
-            var rgradi2   = (rsign == -1 ? '$-' : '$+') + rgradi;
-            console.log('[0V] sequenza terminata. maxg=' + maxg + '° target=' + degTarget + '° units=' + units + ' cmd="' + rgradi2 + '"');
-            sendSocket.send(rgradi2 + '\n');
-            oldg = units;
-            var stepEl = document.getElementById("step");
-            if (stepEl) stepEl.value = oldg;
-            labms = 0;
-            // Aspetta l'ack '*mv' dal firmware (fine stepperMove + drain seriale)
-            // prima di ricaricare. Senza questa attesa, location.reload() chiude
-            // la WebSocket prima che il comando finisca lungo la pipeline
-            // browser → server → seriale → Arduino.
-            window._waiting_mv  = true;
-            window._mv_fallback = setTimeout(function(){
-                if (window._waiting_mv) {
-                    console.warn('[0V] timeout fallback 8s, reload forzato');
-                    window._waiting_mv = false;
-                    location.reload(true);
-                }
-            }, 8000);
+            // 0 virtuale BASATO SU ENCODER: la camma viene portata a una
+            // posizione assoluta tale che il picco sia a +180° dallo zero
+            // di scansione, usando il conteggio encoder REALE registrato al
+            // momento del picco (immune a backlash, slittamenti, errori
+            // cumulativi del contatore di scansione).
+            //
+            // Encoder: 4 conteggi = 1° camma. 180° = 720 conteggi.
+            //
+            // target_encoder = maxg_encoder + 720 (conteggi assoluti)
+            // delta_count    = target_encoder − currentEncoderCount
+            // delta_deg      = delta_count / 4
+            // delta_units    = delta_deg × currentMode.subStepsPerDeg
+            //                  (1 unità motore = 1/subStepsPerDeg gradi camma)
+            //
+            // Comando inviato: $+delta_units oppure $-|delta_units|
+            // a seconda del segno.
+            if (maxg_encoder === null || currentEncoderCount === null) {
+                console.warn('[0V] dati encoder mancanti (maxg_encoder=' + maxg_encoder + ', current=' + currentEncoderCount + '), abort 0V');
+                labms = 0;
+                location.reload(true);
+            } else {
+                var encoderTarget = maxg_encoder + 720;  // +180° in conteggi encoder x4
+                var deltaCount    = encoderTarget - currentEncoderCount;
+                var deltaDeg      = deltaCount / 4;
+                var deltaUnits    = Math.round(deltaDeg * currentMode.subStepsPerDeg);
+                var sign          = (deltaUnits >= 0) ? '+' : '-';
+                var absUnits      = Math.abs(deltaUnits);
+                var rgradi        = (absUnits < 10) ? '00' + absUnits
+                                  : (absUnits < 100) ? '0' + absUnits
+                                  : '' + absUnits;
+                var rgradi2       = '$' + sign + rgradi;
+                console.log('[0V] picco encoder=' + maxg_encoder + ' (=' + (maxg_encoder/4).toFixed(2) + '°), target=' + encoderTarget + ' (=' + (encoderTarget/4).toFixed(2) + '°), now=' + currentEncoderCount + ', delta=' + deltaCount + ' cnt = ' + deltaDeg.toFixed(2) + '° = ' + deltaUnits + ' units. cmd="' + rgradi2 + '"');
+                sendSocket.send(rgradi2 + '\n');
+                oldg = absUnits;
+                var stepEl = document.getElementById("step");
+                if (stepEl) stepEl.value = oldg;
+                labms = 0;
+                window._waiting_mv  = true;
+                window._mv_fallback = setTimeout(function(){
+                    if (window._waiting_mv) {
+                        console.warn('[0V] timeout fallback 8s, reload forzato');
+                        window._waiting_mv = false;
+                        location.reload(true);
+                    }
+                }, 8000);
+            }
         }
     }
 
@@ -457,7 +499,7 @@ function start() {
     consecutiveNaN = 0;
     subBuffer = {};
     pdata.length = 0; pdindex.length = 0;
-    max = 0; maxg = 0;
+    max = 0; maxg = 0; maxg_encoder = null;
     if (config && config.data) { config.data.labels.length = 0; config.data.datasets.forEach(function(d){ d.data.length = 0; }); }
     if (window.myLine) { try { window.myLine.update(); } catch(e) {} }
     i = i + 1;
