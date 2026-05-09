@@ -390,14 +390,19 @@ engineSocket.onmessage = function(event) {
             var units     = Math.round(degTarget * currentMode.subStepsPerDeg);
             // Convenzione direzione: usa la stessa rsign della scansione appena finita.
             var cmd = (rsign == -1 ? '$-' : '$+') + units;
+            console.log('[0V] sequenza terminata. maxg=' + maxg + '° target=' + degTarget + '° units=' + units + ' modalita=' + currentMode.label + ' cmd="' + cmd + '"');
             sendSocket.send(cmd);
             oldg = degTarget;
             var stepEl = document.getElementById("step");
             if (stepEl) stepEl.value = oldg;
             labms = 0;
-            // Attendi un attimo per dare tempo al motore di completare il movimento
-            // prima del reload (movimento di 180° camma può richiedere fino a ~10s in atomic).
-            setTimeout(function(){ location.reload(true); }, 1500);
+            // Attendi che il motore completi il movimento prima di ricaricare.
+            // Stima conservativa: 100µs/step × 32 step/° × 180° = 576ms in fast,
+            // ma in atomic 100µs × 1 × 5760 = 576ms uguale (stessi step). Diamo 2s.
+            setTimeout(function(){
+                console.log('[0V] reload pagina');
+                location.reload(true);
+            }, 2000);
         }
     }
 
