@@ -215,8 +215,8 @@ function onScanModeChange() {
     if (!sel) return;
     currentMode = SCAN_MODES[sel.value] || SCAN_MODES.fast;
     if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1) {
-        sendSocket.send('c' + currentMode.samples);
-        sendSocket.send('r' + currentMode.microsteps);
+        sendSocket.send('c' + currentMode.samples + '\n');
+        sendSocket.send('r' + currentMode.microsteps + '\n');
     }
 }
 
@@ -255,13 +255,16 @@ setInterval(updateStatusLeds, 700);
 // - sensore a 5 Hz (200 ms) → display alzata "real-time" anche fuori scansione
 // - encoder a 0.2 Hz (5 s) → basta per LED + posizione assoluta
 // Disattivati durante scansione attiva (startflag==1) per non interferire.
-setInterval(function() {
+// Gli handle sono memorizzati così che ms()/start() possano fermarli
+// completamente prima di emettere un comando finale ($+units di 0V),
+// liberando la coda WebSocket dai messaggi di polling accodati.
+var pollEncoderId = setInterval(function() {
     if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1
         && (typeof startflag === 'undefined' || startflag !== 1)) {
         try { sendSocket.send('?'); } catch(e) {}
     }
 }, 5000);
-setInterval(function() {
+var pollSensorId = setInterval(function() {
     if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1
         && (typeof startflag === 'undefined' || startflag !== 1)) {
         try { sendSocket.send('m'); } catch(e) {}
@@ -297,6 +300,17 @@ engineSocket.onopen = function(event) {
 
 engineSocket.onmessage = function(event) {
     msg = event.data;
+
+    // Ack di fine movimento ($+/$- terminato dal firmware): se stiamo
+    // attendendo per un 0 virtuale, il motore ha appena finito il
+    // sfasamento → possiamo ricaricare la pagina in sicurezza.
+    if (msg === '*mv' && window._waiting_mv) {
+        window._waiting_mv = false;
+        clearTimeout(window._mv_fallback);
+        console.log('[0V] *mv ricevuto, reload pagina');
+        setTimeout(function(){ location.reload(true); }, 200);
+        return;
+    }
 
     // Riconosce solo righe puramente numeriche come misura del sensore Neoteck.
     // Risposte come "encoder=...", "raw=...", "*se", "*pos" non sono misure.
@@ -384,25 +398,32 @@ engineSocket.onmessage = function(event) {
         startflag = 0;
 
         if (labms == 1) {
-            // 0 virtuale: come nel codice originale. La camma viene portata a
-            // +180° dal picco (gradi camma). Per modalità ad alta densità
-            // (Race/Hyper/Atomic) convertiamo in unità di scansione effettive.
+            // 0 virtuale: porta la camma a +180° dal picco (in gradi camma).
+            // Conversione in unità di scansione attuali per modalità sub-step.
             var degTarget = (Number(maxg) + 180) % 360;
             var units     = Math.round(degTarget * currentMode.subStepsPerDeg);
-            // Stop polling immediatamente per liberare la coda WS prima del send finale,
-            // così il '$+units' non finisce dietro misure di polling accodate.
-            for (var __id = 1; __id < 5000; __id++) clearInterval(__id);
-            var rgradi = (units < 10) ? '00' + units
-                       : (units < 100) ? '0' + units
-                       : '' + units;
-            var rgradi2 = (rsign == -1 ? '$-' : '$+') + rgradi;
+            var rgradi    = (units < 10) ? '00' + units
+                          : (units < 100) ? '0' + units
+                          : '' + units;
+            var rgradi2   = (rsign == -1 ? '$-' : '$+') + rgradi;
             console.log('[0V] sequenza terminata. maxg=' + maxg + '° target=' + degTarget + '° units=' + units + ' cmd="' + rgradi2 + '"');
-            sendSocket.send(rgradi2);
+            sendSocket.send(rgradi2 + '\n');
             oldg = units;
             var stepEl = document.getElementById("step");
             if (stepEl) stepEl.value = oldg;
             labms = 0;
-            location.reload(true);
+            // Aspetta l'ack '*mv' dal firmware (fine stepperMove + drain seriale)
+            // prima di ricaricare. Senza questa attesa, location.reload() chiude
+            // la WebSocket prima che il comando finisca lungo la pipeline
+            // browser → server → seriale → Arduino.
+            window._waiting_mv  = true;
+            window._mv_fallback = setTimeout(function(){
+                if (window._waiting_mv) {
+                    console.warn('[0V] timeout fallback 8s, reload forzato');
+                    window._waiting_mv = false;
+                    location.reload(true);
+                }
+            }, 8000);
         }
     }
 
@@ -426,6 +447,9 @@ var i = 0;
 function start() {
     var x = "sequenza di misura   iniziata ";
     responsiveVoice.speak(x, "Italian Female", { volume: 3 });
+    // Disabilita selector modalità durante scansione: cambiare modalità mid-scan
+    // farebbe variare currentMode.subStepsPerDeg e corrompere il calcolo di units.
+    var sm = document.getElementById('scanMode'); if (sm) sm.disabled = true;
     // reset COMPLETO stato scansione (incluso il contatore i: senza questo,
     // se il motore è stato mosso prima, i poteva già essere >= totalSteps
     // e il loop non avanzava mai)
@@ -454,6 +478,8 @@ function stop() {
     stepflag  = 1;
     startflag = 0;
     labms     = 0;     // annulla anche un eventuale 0 virtuale in corso
+    // Riabilita selector modalità (era disabilitato da start()/ms())
+    var sm = document.getElementById('scanMode'); if (sm) sm.disabled = false;
 }
 </script>
 
@@ -590,7 +616,7 @@ function ruota() {
         if (rsign == 1) { crot = "$+" + (dif); }
         if (rsign == -1) { crot = "$-" + (dif); }
     }
-    if (dg - oldg != 0) { sendSocket.send(crot); }
+    if (dg - oldg != 0) { sendSocket.send(crot + '\n'); }
     oldg = dg;
 }
 </script>
@@ -598,8 +624,8 @@ function ruota() {
 <script>
 function p1() {
     oldg = Number(oldg) + 1;
-    if (rsign == 1) { sendSocket.send('$+001'); }
-    if (rsign == -1) { sendSocket.send('$-001'); }
+    if (rsign == 1) { sendSocket.send('$+001\n'); }
+    if (rsign == -1) { sendSocket.send('$-001\n'); }
     document.getElementById("step").value = oldg;
 }
 </script>
@@ -607,8 +633,8 @@ function p1() {
 <script>
 function m1() {
     oldg = Number(oldg) - 1;
-    if (rsign == 1) { sendSocket.send('$-001'); }
-    if (rsign == -1) { sendSocket.send('$+001'); }
+    if (rsign == 1) { sendSocket.send('$-001\n'); }
+    if (rsign == -1) { sendSocket.send('$+001\n'); }
     document.getElementById("step").value = oldg;
 }
 </script>
@@ -616,6 +642,16 @@ function m1() {
 <script>
 var labms = 0;
 function ms() {
+    // Ferma SUBITO i polling: la coda WebSocket deve essere libera
+    // quando il blocco di fine 0V invierà '$+units'. Senza questo,
+    // i 'm' di polling accodati possono ritardare la trasmissione del
+    // comando finale oltre il momento del location.reload().
+    clearInterval(pollSensorId);
+    clearInterval(pollEncoderId);
+    // Disabilita selector modalità: cambiare modalità in mezzo alla
+    // scansione cambierebbe currentMode.subStepsPerDeg e farebbe
+    // calcolare un 'units' sbagliato a fine scansione.
+    var sm = document.getElementById('scanMode'); if (sm) sm.disabled = true;
     i = 0;
     labms = 1;
     max = 0;

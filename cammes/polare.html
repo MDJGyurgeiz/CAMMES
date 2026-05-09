@@ -381,7 +381,7 @@ function ruota() {
         if (rsign == 1) { crot = "$+" + (dif); }
         if (rsign == -1) { crot = "$-" + (dif); }
     }
-    if (dg - oldg != 0) { sendSocket.send(crot); }
+    if (dg - oldg != 0) { sendSocket.send(crot + '\n'); }
     oldg = dg;
 }
 </script>
@@ -389,8 +389,8 @@ function ruota() {
 <script>
 function p1() {
     oldg = Number(oldg) + 1;
-    if (rsign == 1) { sendSocket.send('$+001'); }
-    if (rsign == -1) { sendSocket.send('$-001'); }
+    if (rsign == 1) { sendSocket.send('$+001\n'); }
+    if (rsign == -1) { sendSocket.send('$-001\n'); }
     document.getElementById("step").value = oldg;
 }
 </script>
@@ -398,8 +398,8 @@ function p1() {
 <script>
 function m1() {
     oldg = Number(oldg) - 1;
-    if (rsign == 1) { sendSocket.send('$-001'); }
-    if (rsign == -1) { sendSocket.send('$+001'); }
+    if (rsign == 1) { sendSocket.send('$-001\n'); }
+    if (rsign == -1) { sendSocket.send('$+001\n'); }
     document.getElementById("step").value = oldg;
 }
 </script>
