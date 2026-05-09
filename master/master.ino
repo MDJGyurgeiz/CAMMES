@@ -184,10 +184,23 @@ float readSensorMm() {
 // =============================================================
 //  Helper output seriale
 // =============================================================
-void emitMeasure(float mm) {
+// Terminatori distinti per separare misure di scansione da misure-only:
+//   *se  → misura emessa dopo p/q (movimento + lettura) — il browser la
+//          usa per AVANZARE il loop di scansione
+//   *sm  → misura emessa per 'm' (solo lettura) — il browser la usa solo
+//          per aggiornare display/gauge, NON avanza la scansione.
+// Senza questa distinzione, il polling 'm' di un altro client (es. tab
+// aperta in idle) saturava il flusso di *se e faceva scattare incrementi
+// spuri nel loop di scansione.
+void emitMeasureScan(float mm) {
   if (isnan(mm)) Serial.println(F("NaN"));
   else           Serial.println(mm, 2);
   Serial.println(F("*se"));
+}
+void emitMeasureOnly(float mm) {
+  if (isnan(mm)) Serial.println(F("NaN"));
+  else           Serial.println(mm, 2);
+  Serial.println(F("*sm"));
 }
 
 void emitEncoderQuery() {
@@ -207,9 +220,9 @@ void executeCommand() {
   cmdBuf[cmdLen] = '\0';
   if (cmdLen == 1) {
     char c = cmdBuf[0];
-    if (c == 'p')      { stepperMove(-1); emitMeasure(readSensorMm()); }
-    else if (c == 'q') { stepperMove(+1); emitMeasure(readSensorMm()); }
-    else if (c == 'm') { emitMeasure(readSensorMm()); }
+    if (c == 'p')      { stepperMove(-1); emitMeasureScan(readSensorMm()); }
+    else if (c == 'q') { stepperMove(+1); emitMeasureScan(readSensorMm()); }
+    else if (c == 'm') { emitMeasureOnly(readSensorMm()); }
     else if (c == 'd') {
       // debug: dump raw sensor value (16 bit utili)
       noInterrupts();
