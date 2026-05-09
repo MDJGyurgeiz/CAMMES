@@ -30,7 +30,11 @@
 //                  r32 → 1° per p/q (default, 32 step/grado camma)
 //                  r16 → 0.5° per p/q (doppia risoluzione angolare)
 //                  r8  → 0.25° per p/q (massima risoluzione)
-//    @          stampa configurazione corrente "samp=N step=NN*cfg\r\n"
+//    wN         configura settle time post-movimento (0..2000 ms)
+//                  w0   → no delay (rapido, vibrazioni residue rilevabili)
+//                  w50  → 50 ms (smorza vibrazioni leggere)
+//                  w200 → 200 ms (smorza vibrazioni gravi, scansione lenta)
+//    @          stampa configurazione corrente "samp=N step=NN settle=Mms*cfg"
 //
 //  Risposta Arduino dopo movimento:
 //    XX.XX            (alzata in mm)
@@ -84,8 +88,10 @@ char    cmdBuf[16];
 uint8_t cmdLen = 0;
 
 // ---- Config runtime ----
-uint8_t cfgSamples       = 1;   // campioni per misura (1..9)
-uint8_t cfgStepsPerUnit  = DEFAULT_STEPS_PER_UNIT;  // micropassi per p/q
+uint8_t  cfgSamples       = 1;   // campioni per misura (1..9)
+uint8_t  cfgStepsPerUnit  = DEFAULT_STEPS_PER_UNIT;  // micropassi per p/q
+uint16_t cfgSettleMs      = 0;   // delay dopo stepperMove() prima di leggere sensore (0..2000)
+                                 // smorza vibrazioni meccaniche residue del motore stepper
 
 // =============================================================
 //  ISR: sensore Neoteck — fronte FALLING su D2
@@ -145,6 +151,9 @@ void stepperMove(int16_t units) {
   digitalWrite(PIN_DIR, units > 0 ? HIGH : LOW);
   uint16_t steps = (uint16_t)abs(units) * cfgStepsPerUnit;
   for (uint16_t s = 0; s < steps; s++) stepperPulse();
+  // Settle time: dà tempo alle vibrazioni meccaniche del puntalino di
+  // smorzarsi prima che la prossima readSensorMm() campioni il sensore.
+  if (cfgSettleMs) delay(cfgSettleMs);
 }
 
 // =============================================================
@@ -254,7 +263,8 @@ void executeCommand() {
     }
     else if (c == '@') {
       Serial.print(F("samp=")); Serial.print(cfgSamples);
-      Serial.print(F(" step="));  Serial.println(cfgStepsPerUnit);
+      Serial.print(F(" step=")); Serial.print(cfgStepsPerUnit);
+      Serial.print(F(" settle=")); Serial.print(cfgSettleMs); Serial.println(F("ms"));
       Serial.println(F("*cfg"));
     }
   } else if (cmdLen >= 2 && cmdBuf[0] == 'c') {
@@ -266,6 +276,11 @@ void executeCommand() {
     int v = atoi(&cmdBuf[1]);
     if (v == 8 || v == 16 || v == 32 || v == 64) cfgStepsPerUnit = (uint8_t)v;
     Serial.print(F("step=")); Serial.println(cfgStepsPerUnit);
+    Serial.println(F("*cfg"));
+  } else if (cmdLen >= 2 && cmdBuf[0] == 'w') {
+    int v = atoi(&cmdBuf[1]);
+    if (v >= 0 && v <= 2000) cfgSettleMs = (uint16_t)v;
+    Serial.print(F("settle=")); Serial.print(cfgSettleMs); Serial.println(F("ms"));
     Serial.println(F("*cfg"));
   } else if (cmdLen >= 4 && cmdBuf[0] == '$') {
     // $+NNN o $-NNN

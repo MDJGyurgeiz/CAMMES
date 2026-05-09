@@ -80,13 +80,13 @@
 
             <div class="controls-group">
                 <span class="toggle-label">Modalit&agrave;</span>
-                <select id="scanMode" class="input" style="width:200px;" onchange="onScanModeChange();">
-                    <option value="fast" selected>Veloce &middot; 60s (stradale)</option>
-                    <option value="std">Standard &middot; 110s</option>
-                    <option value="race">Race &middot; 220s (0.5&deg;)</option>
-                    <option value="ultra">Ultra &middot; 350s (0.5&deg; +5x)</option>
-                    <option value="hyper">Hyper &middot; 7m30s (8 sub/&deg;)</option>
-                    <option value="atomic">Atomic &middot; 30m (passo motore minimo)</option>
+                <select id="scanMode" class="input" style="width:230px;" onchange="onScanModeChange();">
+                    <option value="fast" selected>Veloce &middot; ~1m (stradale)</option>
+                    <option value="std">Standard &middot; ~2m (mediana 3)</option>
+                    <option value="race">Race &middot; ~5m (0.5&deg; + settle 80ms)</option>
+                    <option value="ultra">Ultra &middot; ~7m30s (max precisione)</option>
+                    <option value="hyper">Hyper &middot; ~10m (8 sub/&deg;)</option>
+                    <option value="atomic">Atomic &middot; ~36m (passo motore minimo)</option>
                 </select>
             </div>
 
@@ -200,13 +200,16 @@ var currentEncoderCount = null;   // ultimo conteggio encoder ricevuto (con la m
 // passo motore totale per coprire 360° camma e quante letture aggregare per ogni
 // grado camma (subStepsPerDeg). Per modalità ad alta densità il file di output
 // resta a 360 punti, ottenuti come media di subStepsPerDeg letture vicine.
+// settleMs = pausa dopo ogni movimento prima di leggere il sensore (firmware).
+// Smorza le vibrazioni meccaniche del puntalino del comparatore. Più alto =
+// curva di alzata più pulita ma scansione più lenta.
 var SCAN_MODES = {
-    fast:   { samples: 1, microsteps: 32, totalSteps: 360,   subStepsPerDeg: 1,  label: 'Veloce',   timeSec: 60   },
-    std:    { samples: 3, microsteps: 32, totalSteps: 360,   subStepsPerDeg: 1,  label: 'Standard', timeSec: 110  },
-    race:   { samples: 3, microsteps: 16, totalSteps: 720,   subStepsPerDeg: 2,  label: 'Race',     timeSec: 220  },
-    ultra:  { samples: 5, microsteps: 16, totalSteps: 720,   subStepsPerDeg: 2,  label: 'Ultra',    timeSec: 350  },
-    hyper:  { samples: 1, microsteps: 4,  totalSteps: 2880,  subStepsPerDeg: 8,  label: 'Hyper',    timeSec: 460  },
-    atomic: { samples: 1, microsteps: 1,  totalSteps: 11520, subStepsPerDeg: 32, label: 'Atomic',   timeSec: 1820 }
+    fast:   { samples: 1, microsteps: 32, totalSteps: 360,   subStepsPerDeg: 1,  settleMs: 30,  label: 'Veloce',   timeSec: 60   },
+    std:    { samples: 3, microsteps: 32, totalSteps: 360,   subStepsPerDeg: 1,  settleMs: 50,  label: 'Standard', timeSec: 130  },
+    race:   { samples: 3, microsteps: 16, totalSteps: 720,   subStepsPerDeg: 2,  settleMs: 80,  label: 'Race',     timeSec: 280  },
+    ultra:  { samples: 5, microsteps: 16, totalSteps: 720,   subStepsPerDeg: 2,  settleMs: 120, label: 'Ultra',    timeSec: 450  },
+    hyper:  { samples: 1, microsteps: 4,  totalSteps: 2880,  subStepsPerDeg: 8,  settleMs: 50,  label: 'Hyper',    timeSec: 600  },
+    atomic: { samples: 1, microsteps: 1,  totalSteps: 11520, subStepsPerDeg: 32, settleMs: 30,  label: 'Atomic',   timeSec: 2160 }
 };
 var currentMode = SCAN_MODES.fast;
 // Buffer di accumulo per modalità ad alta densità (chiave = grado camma 1..360)
@@ -219,6 +222,7 @@ function onScanModeChange() {
     if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1) {
         sendSocket.send('c' + currentMode.samples + '\n');
         sendSocket.send('r' + currentMode.microsteps + '\n');
+        sendSocket.send('w' + currentMode.settleMs + '\n');
     }
 }
 
@@ -287,8 +291,9 @@ engineSocket.onopen = function(event) {
     // con scaling sbagliato (es. 180° browser ↔ 5° camma se r=1 residuo).
     sendSocket.onopen = function() {
         try {
-            sendSocket.send('c' + currentMode.samples);
-            sendSocket.send('r' + currentMode.microsteps);
+            sendSocket.send('c' + currentMode.samples + '\n');
+            sendSocket.send('r' + currentMode.microsteps + '\n');
+            sendSocket.send('w' + currentMode.settleMs + '\n');
             // Ping immediato sensore + encoder per accendere subito i LED
             // (senza aspettare il prossimo tick di polling).
             setTimeout(function(){
