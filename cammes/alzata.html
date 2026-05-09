@@ -267,6 +267,16 @@ engineSocket.onopen = function(event) {
     gaugemicrom.value = 0;
     gaugemicrom.draw();
     sendSocket = new WebSocket("ws:localhost:8080");
+    // Allinea la config Arduino alla modalità corrente del browser appena
+    // sendSocket è pronto. Senza questo, dopo un reload la config Arduino
+    // resta quella dell'ultima sessione e $+N a fine 0 virtuale può finire
+    // con scaling sbagliato (es. 180° browser ↔ 5° camma se r=1 residuo).
+    sendSocket.onopen = function() {
+        try {
+            sendSocket.send('c' + currentMode.samples);
+            sendSocket.send('r' + currentMode.microsteps);
+        } catch (e) { console.warn('Config sync fallito:', e); }
+    };
     msgold = "***";
 };
 

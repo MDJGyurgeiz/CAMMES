@@ -249,7 +249,14 @@ void executeCommand() {
     // $+NNN o $-NNN
     int sign  = (cmdBuf[1] == '+') ? +1 : -1;
     int value = atoi(&cmdBuf[2]);
-    if (value > 0) stepperMove(sign * value);
+    if (value > 0) {
+      stepperMove(sign * value);
+      // Drain del buffer seriale: durante il movimento il PC potrebbe aver
+      // accodato altri comandi (polling encoder, ecc.) che ora sono accumulati.
+      // Li scartiamo per non andare fuori sequenza nello stato del parser.
+      while (Serial.available() > 0) Serial.read();
+      Serial.println(F("*mv"));   // notifica fine movimento al PC
+    }
   }
   cmdLen = 0;
 }
