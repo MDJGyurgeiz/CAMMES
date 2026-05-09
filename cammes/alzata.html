@@ -442,16 +442,21 @@ engineSocket.onmessage = function(event) {
                 location.reload(true);
             } else {
                 var encoderTarget = maxg_encoder + 720;  // +180° in conteggi encoder x4
-                var deltaCount    = encoderTarget - currentEncoderCount;
-                var deltaDeg      = deltaCount / 4;
-                var deltaUnits    = Math.round(deltaDeg * currentMode.subStepsPerDeg);
+                var rawDelta      = encoderTarget - currentEncoderCount;
+                // Modulo 360° (1440 conteggi): posizioni fisiche equivalenti.
+                // Scegliamo il movimento più corto fra +Δ e -Δ per evitare di
+                // far girare il motore di un giro intero in più (più backlash).
+                var deltaCount = ((rawDelta % 1440) + 1440) % 1440;  // 0..1439
+                if (deltaCount > 720) deltaCount -= 1440;             // -719..720
+                var deltaDeg   = deltaCount / 4;
+                var deltaUnits = Math.round(deltaDeg * currentMode.subStepsPerDeg);
                 var sign          = (deltaUnits >= 0) ? '+' : '-';
                 var absUnits      = Math.abs(deltaUnits);
                 var rgradi        = (absUnits < 10) ? '00' + absUnits
                                   : (absUnits < 100) ? '0' + absUnits
                                   : '' + absUnits;
                 var rgradi2       = '$' + sign + rgradi;
-                console.log('[0V] picco encoder=' + maxg_encoder + ' (=' + (maxg_encoder/4).toFixed(2) + '°), target=' + encoderTarget + ' (=' + (encoderTarget/4).toFixed(2) + '°), now=' + currentEncoderCount + ', delta=' + deltaCount + ' cnt = ' + deltaDeg.toFixed(2) + '° = ' + deltaUnits + ' units. cmd="' + rgradi2 + '"');
+                console.log('[0V] picco encoder=' + maxg_encoder + ' (=' + (maxg_encoder/4).toFixed(2) + '°), target=' + encoderTarget + ' (=' + (encoderTarget/4).toFixed(2) + '°), now=' + currentEncoderCount + ', delta_raw=' + rawDelta + ' cnt → short=' + deltaCount + ' cnt = ' + deltaDeg.toFixed(2) + '° = ' + deltaUnits + ' units. cmd="' + rgradi2 + '"');
                 sendSocket.send(rgradi2 + '\n');
                 oldg = absUnits;
                 var stepEl = document.getElementById("step");
