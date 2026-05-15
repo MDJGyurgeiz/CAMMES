@@ -77,7 +77,7 @@
         <div class="nav-links">
             <a href="alzata.html">Alzata</a>
             <a href="polare.html">Polare</a>
-            <a href="grafici.html">Grafici</a>
+            <a href="grafici.html">Confronto</a>
             <a href="analisi.html" class="active">Analisi</a>
         </div>
         <div class="header-spacer"></div>
@@ -105,10 +105,12 @@
 
             <!-- Intake section -->
             <div class="section-intake">
-                <div class="section-title" style="color: var(--accent);">Aspirazione (Intake)</div>
+                <div class="section-title" style="color: var(--accent);">Aspirazione (Intake)
+                    <span class="help-icon" data-tip="<strong>Camma aspirazione</strong>Carica il file _alz.scr della camma di aspirazione. Modifica i parametri sotto in base al motore reale, poi premi 'Importa Aspirazione'." tabindex="0">?</span>
+                </div>
                 <input type="file" id="fileIntake" class="file-input" style="width:100%;" accept=".scr,.txt,.csv,.*">
                 <div class="param-row">
-                    <span class="param-label">Tipologia</span>
+                    <span class="param-label">Tipologia <span class="help-icon" data-tip="<strong>Tipo di treno valvole</strong>Determina il rapporto di trasmissione tra alzata camma e alzata valvola. <b>Bicchiere meccanico/idraulico</b>: rapporto 1:1. <b>Aste+bilancere</b>: tipicamente 1.4-1.6:1. <b>Finger follower</b>: ~1.5-1.8:1. <b>Bilancere a rullo</b>: ~1.3-1.7:1." tabindex="0">?</span></span>
                     <select id="intakeType" class="input" style="width:160px;" onchange="onTypologyChange('intake');">
                         <option value="bucket_mech" selected>Bicchiere meccanico</option>
                         <option value="bucket_hyd">Bicchiere idraulico</option>
@@ -118,12 +120,12 @@
                     </select>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Angolo lobo</span>
+                    <span class="param-label">Angolo lobo <span class="help-icon" data-tip="<strong>Angolo lobo (Lobe angle)</strong>Posizione angolare del centro del lobo (massima alzata) rispetto al PMS, misurata sull'albero a CAMME. Tipicamente 100-115&deg; per motori stradali, 100-108&deg; per motori sportivi. Pi&ugrave; basso = camma pi&ugrave; aggressiva." tabindex="0">?</span></span>
                     <input type="number" id="intakeAngle" value="100" class="input" style="width:75px;" step="0.5">
                     <span class="param-unit">&deg;</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Gioco valvola</span>
+                    <span class="param-label">Gioco valvola <span class="help-icon" data-tip="<strong>Gioco (lash) valvola</strong>Spazio meccanico tra fine corsa camma e valvola, a freddo. Tipicamente 0.10-0.30 mm aspirazione, 0.15-0.40 mm scarico. <b>Bicchiere idraulico</b>: 0.00 (auto-recupero). Influenza durata effettiva: pi&ugrave; gioco = durata pi&ugrave; corta." tabindex="0">?</span></span>
                     <input type="number" id="intakeClearance" value="0.50" class="input" style="width:75px;" step="0.01">
                     <span class="param-unit">mm</span>
                 </div>
@@ -135,10 +137,12 @@
 
             <!-- Exhaust section -->
             <div class="section-exhaust">
-                <div class="section-title" style="color: var(--danger);">Scarico (Exhaust)</div>
+                <div class="section-title" style="color: var(--danger);">Scarico (Exhaust)
+                    <span class="help-icon" data-tip="<strong>Camma scarico</strong>Carica il file _alz.scr della camma di scarico. La curva risultante apparir&agrave; sovrapposta a quella di aspirazione sul diagramma 720&deg;." tabindex="0">?</span>
+                </div>
                 <input type="file" id="fileExhaust" class="file-input" style="width:100%;" accept=".scr,.txt,.csv,.*">
                 <div class="param-row">
-                    <span class="param-label">Tipologia</span>
+                    <span class="param-label">Tipologia <span class="help-icon" data-tip="<strong>Tipo treno valvole scarico</strong>Stessa logica della tipologia aspirazione." tabindex="0">?</span></span>
                     <select id="exhaustType" class="input" style="width:160px;" onchange="onTypologyChange('exhaust');">
                         <option value="bucket_mech" selected>Bicchiere meccanico</option>
                         <option value="bucket_hyd">Bicchiere idraulico</option>
@@ -148,12 +152,12 @@
                     </select>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Angolo lobo</span>
+                    <span class="param-label">Angolo lobo <span class="help-icon" data-tip="<strong>Angolo lobo scarico</strong>Posizione del centro del lobo scarico rispetto al PMS, sull'albero camme. Tipicamente 105-115&deg; stradale, 100-108&deg; sportivo." tabindex="0">?</span></span>
                     <input type="number" id="exhaustAngle" value="100" class="input" style="width:75px;" step="0.5">
                     <span class="param-unit">&deg;</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Gioco valvola</span>
+                    <span class="param-label">Gioco valvola <span class="help-icon" data-tip="<strong>Gioco valvola scarico</strong>Solitamente maggiore di aspirazione (espansione termica). 0.15-0.40 mm a freddo per motori meccanici." tabindex="0">?</span></span>
                     <input type="number" id="exhaustClearance" value="0.50" class="input" style="width:75px;" step="0.01">
                     <span class="param-unit">mm</span>
                 </div>
@@ -165,7 +169,7 @@
 
             <!-- Advance -->
             <div class="param-row" style="margin-top:16px;">
-                <span class="param-label">Anticipo</span>
+                <span class="param-label">Anticipo <span class="help-icon" data-tip="<strong>Anticipo albero motore</strong>Sfasamento angolare tra albero motore e albero camme. Positivo = anticipa l'apertura (pi&ugrave; aggressivo). Tipicamente 0&deg; per camma neutra, 2-4&deg; in piloti sportivi." tabindex="0">?</span></span>
                 <input type="number" id="advance" value="0" class="input" style="width:75px;" step="0.5">
                 <span class="param-unit">&deg;</span>
             </div>
@@ -174,27 +178,27 @@
             <div class="param-separator">
                 <div class="param-group-title">Parametri analisi avanzata</div>
                 <div class="param-row">
-                    <span class="param-label">Rif. durata</span>
+                    <span class="param-label">Rif. durata <span class="help-icon" data-tip="<strong>Alzata di riferimento per durata</strong>Soglia di alzata sopra cui contare i gradi di durata. SAE/Ford: 1.27 mm (0.050 in). Tipico stradale: 1.0 mm. Race: 0.05 mm. La durata 'effettiva' si calcola sottraendo il gioco valvola." tabindex="0">?</span></span>
                     <input type="number" id="durationRef" value="1.0" class="input" style="width:75px;" step="0.1" min="0">
                     <span class="param-unit">mm</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">RPM</span>
+                    <span class="param-label">RPM <span class="help-icon" data-tip="<strong>Regime motore (RPM)</strong>Giri/minuto a cui calcolare velocit&agrave;, accelerazione e forze inerziali. Usa l'RPM massimo previsto: se F.inerzia &gt; F.molla la valvola galleggia (valve float) → pista pericolosa." tabindex="0">?</span></span>
                     <input type="number" id="rpmInput" value="6000" class="input" style="width:75px;" step="100" min="0">
                     <span class="param-unit">giri/min</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Bilanciere asp.</span>
+                    <span class="param-label">Bilanciere asp. <span class="help-icon" data-tip="<strong>Rapporto bilanciere (rocker ratio)</strong>Moltiplicatore tra alzata camma e alzata valvola. 1.0 per attacco diretto (bicchiere). 1.5 tipico per aste/finger. Una camma da 7mm con bilanciere 1.5 alza la valvola di 10.5mm." tabindex="0">?</span></span>
                     <input type="number" id="rockerIntake" value="1.00" class="input" style="width:75px;" step="0.01" min="0.1">
                     <span class="param-unit">rapporto</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Bilanciere scar.</span>
+                    <span class="param-label">Bilanciere scar. <span class="help-icon" data-tip="<strong>Rapporto bilanciere scarico</strong>Stesso significato del bilanciere aspirazione, applicato al lato scarico." tabindex="0">?</span></span>
                     <input type="number" id="rockerExhaust" value="1.00" class="input" style="width:75px;" step="0.01" min="0.1">
                     <span class="param-unit">rapporto</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Smooth derivate</span>
+                    <span class="param-label">Smooth derivate <span class="help-icon" data-tip="<strong>Filtro Savitzky-Golay</strong>Finestra di smoothing applicata a velocit&agrave; e accelerazione. Le derivate amplificano il rumore di misura, lo smoothing lo riduce. 5pt: aggressivo. 11pt: morbido. Off: dati grezzi (utile per debug)." tabindex="0">?</span></span>
                     <select id="smoothWindow" class="input" style="width:75px;">
                         <option value="0">Off</option>
                         <option value="5" selected>5 pt</option>
@@ -208,26 +212,28 @@
 
             <!-- NEW: Virtual follower geometry -->
             <div class="param-separator">
-                <div class="param-group-title">Follower simulato (bicchiere virtuale)</div>
+                <div class="param-group-title">Follower simulato (bicchiere virtuale)
+                    <span class="help-icon" data-tip="<strong>Cosa fa il bicchiere virtuale</strong>Permette di simulare quale alzata <i>vera</i> avresti se invece del puntalino sferico usato per misurare la camma, avessi un bicchiere piatto reale. Cos&igrave; misuri UNA volta col puntalino e simuli infiniti bicchieri diversi senza rifare scansioni." tabindex="0">?</span>
+                </div>
                 <div class="param-row">
-                    <span class="param-label">Tipo follower</span>
+                    <span class="param-label">Tipo follower <span class="help-icon" data-tip="<strong>Puntalino vs Bicchiere</strong><b>Puntalino</b>: dati grezzi della scansione, senza correzione. <b>Bicchiere piatto</b>: ricostruisce l'alzata che misurerebbe un piatto di diametro Ø sulla camma reale (corregge la differenza geometrica tra punta sferica e piano)." tabindex="0">?</span></span>
                     <select id="followerType" class="input" style="width:160px;" onchange="onFollowerTypeChange();">
                         <option value="punt" selected>Puntalino (raw)</option>
                         <option value="bicch">Bicchiere piatto &Oslash; ___ mm</option>
                     </select>
                 </div>
                 <div class="param-row" id="rowDiamBicch" style="display:none;">
-                    <span class="param-label">&Oslash; Bicchiere</span>
+                    <span class="param-label">&Oslash; Bicchiere <span class="help-icon" data-tip="<strong>Diametro bicchiere reale</strong>Misura il diametro del bicchiere che verr&agrave; effettivamente montato sul motore. Tipico moto: 24-33mm. Auto: 30-40mm. Più grande = pi&ugrave; contatto con i fianchi del lobo (pu&ograve; cambiare la curva di alzata effettiva)." tabindex="0">?</span></span>
                     <input type="number" id="diamBicch" value="33.34" class="input" style="width:75px;" step="0.01" min="1">
                     <span class="param-unit">mm</span>
                 </div>
                 <div class="param-row" id="rowRBase" style="display:none;">
-                    <span class="param-label">R cerchio base</span>
+                    <span class="param-label">R cerchio base <span class="help-icon" data-tip="<strong>Raggio base camma</strong>Raggio della parte non sollevata della camma (il 'fondo'). Si misura con calibro nella zona dove la valvola &egrave; chiusa. Tipici: 12-18 mm per moto, 14-22 mm per auto." tabindex="0">?</span></span>
                     <input type="number" id="rBase" value="14.0" class="input" style="width:75px;" step="0.1" min="1">
                     <span class="param-unit">mm</span>
                 </div>
                 <div class="param-row" id="rowRPunt" style="display:none;">
-                    <span class="param-label">R puntalino</span>
+                    <span class="param-label">R puntalino <span class="help-icon" data-tip="<strong>Raggio punta del comparatore</strong>Raggio della sfera del puntalino del Neoteck usato per la misura. Standard: 1.5 mm. Pi&ugrave; piccolo = pi&ugrave; preciso ma pi&ugrave; sensibile al rumore." tabindex="0">?</span></span>
                     <input type="number" id="rPunt" value="1.5" class="input" style="width:75px;" step="0.1" min="0">
                     <span class="param-unit">mm</span>
                 </div>
@@ -238,24 +244,26 @@
 
             <!-- NEW: Spring force parameters -->
             <div class="param-separator">
-                <div class="param-group-title">Parametri molla &amp; treno valvole</div>
+                <div class="param-group-title">Parametri molla &amp; treno valvole
+                    <span class="help-icon" data-tip="<strong>Forze in gioco</strong>L'app confronta la forza esercitata dalla molla (k·x + F&#8320;) con la forza inerziale richiesta per accelerare la massa (m·a). Se F.inerzia &gt; F.molla, la valvola perde contatto con la camma (<i>valve float</i>) → rischio rotture e perdita di tenuta." tabindex="0">?</span>
+                </div>
                 <div class="param-row">
-                    <span class="param-label">Rigidezza k</span>
+                    <span class="param-label">Rigidezza k <span class="help-icon" data-tip="<strong>Costante elastica molla</strong>Forza per mm di compressione. Tipici: <b>20-40 N/mm</b> stradale, <b>40-80 N/mm</b> sportivo, <b>80-150 N/mm</b> race/F1. Si pu&ograve; misurare in officina con dinamometro." tabindex="0">?</span></span>
                     <input type="number" id="springK" value="30" class="input" style="width:75px;" step="1" min="0">
                     <span class="param-unit">N/mm</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Precarico F&#8320;</span>
+                    <span class="param-label">Precarico F&#8320; <span class="help-icon" data-tip="<strong>Forza a valvola chiusa</strong>Forza esercitata dalla molla quando la valvola &egrave; in posizione di riposo (alzata = 0). Tipici: 150-300 N stradale, 300-600 N sport. Influenza l'RPM massimo prima del valve float." tabindex="0">?</span></span>
                     <input type="number" id="springPreload" value="200" class="input" style="width:75px;" step="10" min="0">
                     <span class="param-unit">N (valv. chiusa)</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Massa eq. asp.</span>
+                    <span class="param-label">Massa eq. asp. <span class="help-icon" data-tip="<strong>Massa equivalente aspirazione</strong>Massa di tutto il treno valvole (valvola + scodellino + cotters + 1/3 molla) riportata alla valvola. Tipico: 60-120 g stradale, 30-80 g titanio/race. Pi&ugrave; bassa = RPM critico pi&ugrave; alto." tabindex="0">?</span></span>
                     <input type="number" id="massEqIntake" value="100" class="input" style="width:75px;" step="5" min="1">
                     <span class="param-unit">g</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Massa eq. scar.</span>
+                    <span class="param-label">Massa eq. scar. <span class="help-icon" data-tip="<strong>Massa equivalente scarico</strong>Idem ma per il lato scarico. Spesso identica all'aspirazione tranne in motori a valvole di diametro diverso." tabindex="0">?</span></span>
                     <input type="number" id="massEqExhaust" value="100" class="input" style="width:75px;" step="5" min="1">
                     <span class="param-unit">g</span>
                 </div>
@@ -266,12 +274,12 @@
 
             <!-- Action buttons -->
             <div class="flex gap-8" style="margin-top:16px;">
-                <button class="btn btn-success" onclick="analyze();" style="flex:1;">&#9654; Analizza</button>
-                <button class="btn btn-secondary" onclick="resetAll();">&#8634; Reset</button>
+                <button class="btn btn-success" onclick="analyze();" style="flex:1;" data-tip="<strong>Esegui analisi</strong>Calcola durata, LSA, centri lobi, velocit&agrave; e accelerazione, forze inerziali, RPM critico. Risultati nella sezione 'Risultati Analisi' sotto. Necessario aver importato almeno una delle due camme (asp. o scar.).">&#9654; Analizza</button>
+                <button class="btn btn-secondary" onclick="resetAll();" data-tip="<strong>Reset analisi</strong>Cancella i dati importati e i risultati. I parametri di configurazione restano.">&#8634; Reset</button>
             </div>
             <div class="flex gap-8" style="margin-top:8px;">
-                <button class="btn btn-secondary" id="btnExportCSV" onclick="exportCSV();" style="flex:1;" disabled>&#8595; CSV</button>
-                <button class="btn btn-secondary" id="btnExportPDF" onclick="exportPDF();" style="flex:1;" disabled>&#8595; PDF</button>
+                <button class="btn btn-secondary" id="btnExportCSV" onclick="exportCSV();" style="flex:1;" disabled data-tip="<strong>Esporta tabella CSV</strong>Salva tutti i dati 360&deg; (alzata, velocit&agrave;, accelerazione, forze) in un file .csv apribile con Excel/LibreOffice.">&#8595; CSV</button>
+                <button class="btn btn-secondary" id="btnExportPDF" onclick="exportPDF();" style="flex:1;" disabled data-tip="<strong>Esporta report PDF</strong>Genera un report stampabile con grafici, tabelle dei risultati e parametri della scheda tecnica del motore.">&#8595; PDF</button>
             </div>
         </div>
 

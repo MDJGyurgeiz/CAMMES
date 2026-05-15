@@ -1141,10 +1141,236 @@ input:checked + .slider:before { transform: translateX(22px); }
   outline-offset: 2px;
 }
 
+/* ---------- SVG GAUGE (race-telemetry) ----------------------------------- */
+.gauge-svg {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  height: auto;
+  margin: 0 auto;
+  overflow: visible;
+}
+.gauge-svg-plate {
+  fill: var(--bg-elev-1);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.gauge-svg-arc-bg {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 8;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+.gauge-svg-arc-value {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: d 250ms var(--ease);
+}
+.gauge-svg-tick-major {
+  stroke: var(--text-secondary);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.gauge-svg-tick-minor {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  stroke-linecap: round;
+  opacity: 0.6;
+}
+.gauge-svg-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 11px;
+  fill: var(--text-secondary);
+  letter-spacing: 0.5px;
+}
+.gauge-svg-value {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 38px;
+  fill: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
+.gauge-svg-unit {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 14px;
+  fill: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+/* ---------- RICH TOOLTIP ------------------------------------------------- */
+.cammes-tooltip {
+  position: absolute;
+  z-index: var(--z-top);
+  background: var(--bg-elev-3);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.45;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--e-3);
+  max-width: 320px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+  white-space: normal;
+}
+.cammes-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.cammes-tooltip strong {
+  display: block;
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.cammes-tooltip::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--bg-elev-3);
+  border-right: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  bottom: -5px;
+}
+.cammes-tooltip[data-placement="bottom"]::after {
+  bottom: auto;
+  top: -5px;
+  border: none;
+  border-top: 1px solid var(--border-strong);
+  border-left: 1px solid var(--border-strong);
+}
+
+/* ---------- HELP ICON (?) ------------------------------------------------ */
+.help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg-elev-3);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  cursor: help;
+  margin-left: 6px;
+  transition: all var(--t-fast) var(--ease);
+  user-select: none;
+  vertical-align: middle;
+}
+.help-icon:hover, .help-icon:focus-visible {
+  background: var(--accent);
+  color: #06121b;
+  border-color: var(--accent);
+  transform: scale(1.1);
+}
+
+/* ---------- INPUT ERROR STATE ------------------------------------------- */
+.input-error,
+input.input-error {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px var(--danger-glow) !important;
+  animation: shake 0.4s var(--ease);
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+
+/* ---------- SCAN PROGRESS WRAPPER --------------------------------------- */
+.scan-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  margin-top: var(--sp-3);
+  opacity: 0.55;
+  transition: opacity var(--t-base) var(--ease), border-color var(--t-base) var(--ease);
+}
+.scan-progress-wrap.active {
+  opacity: 1;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-glow);
+}
+.scan-progress-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.scan-progress-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-input);
+  border-radius: var(--r-full);
+  overflow: hidden;
+  position: relative;
+}
+.scan-progress-wrap.active .scan-progress-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(0,212,255,0.15) 50%,
+    transparent 100%);
+  animation: shimmer 2s linear infinite;
+}
+.scan-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 100%);
+  border-radius: var(--r-full);
+  transition: width 200ms linear;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+.scan-progress-pct {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  min-width: 42px;
+  text-align: right;
+}
+.scan-progress-eta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 70px;
+  text-align: right;
+}
+
 /* ---------- PRINT -------------------------------------------------------- */
 @media print {
   body { background: white; color: black; }
-  .header, .controls-row, .btn { display: none; }
+  .header, .controls-row, .btn, .scan-progress-wrap { display: none; }
   .card { box-shadow: none; border: 1px solid #ddd; }
 }
 </content>

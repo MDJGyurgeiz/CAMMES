@@ -9,7 +9,6 @@
 </head>
 <body>
 
-<script src="gauge.min.js"></script>
 <script src="responsivevoice.js"></script>
 
 <div class="app-container">
@@ -21,7 +20,7 @@
         <div class="nav-links">
             <a href="alzata.html" class="active">Alzata</a>
             <a href="polare.html">Polare</a>
-            <a href="grafici.html">Grafici</a>
+            <a href="grafici.html">Confronto</a>
             <a href="analisi.html">Analisi</a>
         </div>
         <div class="header-spacer"></div>
@@ -42,7 +41,7 @@
         <!-- Left: Gauge -->
         <div class="card gauge-card">
             <div class="card-title">Misura in tempo reale</div>
-            <canvas id="microm"></canvas>
+            <div id="microm" class="gauge-svg-host"></div>
             <form name="cpot">
                 <input type="text" name="cpot" readonly class="gauge-value">
             </form>
@@ -61,19 +60,19 @@
 
     <!-- Controls -->
     <div class="card">
-        <div class="card-title">Controlli</div>
+        <div class="card-title">Controlli scansione</div>
         <div class="controls-row">
             <div class="controls-group">
-                <button class="btn btn-success" onclick="start();">&#9654; START</button>
-                <button class="btn btn-danger" onclick="stop();">&#10074;&#10074; STOP</button>
-                <button class="btn btn-secondary" onclick="location.reload(true);">&#8634; RESET</button>
+                <button class="btn btn-success" onclick="start();" data-tip="<strong>Avvia scansione</strong>Esegue una rotazione completa di 360&deg; sull'albero a camme misurando il profilo di alzata. Tempo dipende dalla modalit&agrave; selezionata.">&#9654; START</button>
+                <button class="btn btn-danger" onclick="stop();" data-tip="<strong>Interrompi</strong>Ferma la scansione in corso. Dati parziali non vengono salvati. Il prossimo START riparte da zero.">&#10074;&#10074; STOP</button>
+                <button class="btn btn-secondary" onclick="location.reload(true);" data-tip="<strong>Reset completo</strong>Ricarica la pagina e azzera tutto: grafico, contatori, posizione encoder.">&#8634; RESET</button>
             </div>
 
             <div class="separator"></div>
 
             <div class="controls-group">
                 <span class="toggle-label">Modalit&agrave;</span>
-                <select id="scanMode" class="input" style="width:230px;" onchange="onScanModeChange();">
+                <select id="scanMode" class="input" style="width:230px;" onchange="onScanModeChange();" data-tip="<strong>Modalit&agrave; di scansione</strong>Definisce densit&agrave; di campionamento, settle delay e numero di campioni per ogni grado camma. Modalit&agrave; alte = pi&ugrave; precisione ma scansione pi&ugrave; lunga.">
                     <option value="fast" selected>Veloce &middot; ~1m (stradale)</option>
                     <option value="std">Standard &middot; ~2m (mediana 3)</option>
                     <option value="race">Race &middot; ~5m (0.5&deg; + settle 80ms)</option>
@@ -81,47 +80,58 @@
                     <option value="hyper">Hyper &middot; ~10m (8 sub/&deg;)</option>
                     <option value="atomic">Atomic &middot; ~36m (passo motore minimo)</option>
                 </select>
+                <span class="help-icon" data-tip="<strong>Quale scegliere?</strong><b>Veloce</b>: cammette stradali, verifica rapida. <b>Standard</b>: default per profili stradali. <b>Race</b>: camme da competizione (alzate &gt; 10mm). <b>Ultra/Hyper/Atomic</b>: solo per studi metrologici, sensibili al rumore." tabindex="0">?</span>
             </div>
 
             <div class="separator"></div>
 
             <form name="mas">
-                <input type="text" name="mas" value=" max" readonly class="max-display">
+                <input type="text" name="mas" value=" max" readonly class="max-display" data-tip="<strong>Picco rilevato</strong>Grado camma e alzata mm del punto massimo durante la scansione in corso.">
             </form>
 
             <div class="separator"></div>
 
             <div class="controls-group">
-                <input type="text" id="nome" placeholder="nome file" class="input">
+                <input type="text" id="nome" placeholder="nome file" class="input" data-tip="<strong>Nome file</strong>Suffisso '_alz' viene aggiunto automaticamente. Es: 'duc916_a' &rarr; 'duc916_a_alz'.">
                 <input type="submit" value="Salva" class="btn btn-accent" onclick="sav();">
             </div>
             <form name="salva" style="display:inline;">
                 <input type="text" name="salva" readonly class="status-text" style="background:transparent;border:none;" size="12">
             </form>
         </div>
+
+        <!-- Progress bar scansione (attivata da startflag, gestita da cammesScanProgress.set) -->
+        <div id="scan-progress-wrap" class="scan-progress-wrap" aria-live="polite">
+            <span class="scan-progress-label">Scansione</span>
+            <div class="scan-progress-bar">
+                <div id="scan-progress-fill" class="scan-progress-fill"></div>
+            </div>
+            <span id="scan-progress-pct" class="scan-progress-pct">0%</span>
+            <span id="scan-progress-eta" class="scan-progress-eta"></span>
+        </div>
     </div>
 
     <!-- Manual rotation -->
     <div class="card">
-        <div class="card-title">Rotazione manuale</div>
+        <div class="card-title">Rotazione manuale e zero</div>
         <div class="controls-row">
             <div class="controls-group">
-                <button class="btn btn-secondary btn-sm" onclick="m1();">&#8722;</button>
-                <input type="text" name="step" placeholder="gradi" id="step" class="input" style="width:120px;">
-                <button class="btn btn-secondary btn-sm" onclick="p1();">+</button>
-                <button class="btn btn-accent" id="cf" onclick="ruota();">Ruota</button>
+                <button class="btn btn-secondary btn-sm" onclick="m1();" data-tip="<strong>-1&deg;</strong>Ruota indietro di 1 grado camma.">&#8722;</button>
+                <input type="text" name="step" placeholder="gradi" id="step" class="input" style="width:120px;" data-tip="<strong>Posizione target</strong>Inserisci il grado camma assoluto desiderato, poi premi Ruota.">
+                <button class="btn btn-secondary btn-sm" onclick="p1();" data-tip="<strong>+1&deg;</strong>Ruota avanti di 1 grado camma.">+</button>
+                <button class="btn btn-accent" id="cf" onclick="ruota();" data-tip="<strong>Ruota a target</strong>Sposta l'albero alla posizione angolare scritta nel campo a sinistra.">Ruota</button>
             </div>
 
             <div class="separator"></div>
 
-            <button class="btn btn-secondary" onclick="ms();" title="Zero virtuale">
+            <button class="btn btn-secondary" onclick="ms();" data-tip="<strong>Zero virtuale</strong>Esegue una scansione completa, trova il picco di alzata e ruota il motore di +180&deg; rispetto al picco. Cos&igrave; il punto di riferimento &egrave; identico per ogni albero misurato, indipendentemente da come l'hai montato. Tempo: pari a una scansione completa nella modalit&agrave; selezionata.">
                 &#9678; Zero virtuale
             </button>
 
             <div class="separator"></div>
 
             <div class="toggle-group">
-                <label class="switch">
+                <label class="switch" data-tip="<strong>Senso di rotazione</strong>Inverte il senso del motore. Utile se hai montato la camma al contrario o se vuoi misurare profili in entrambe le direzioni.">
                     <input type="checkbox" onchange="rlb();">
                     <span class="slider"></span>
                 </label>
@@ -137,41 +147,19 @@
      ============================================ -->
 
 <script>
-// Gauge setup
-var gaugemicrom = new RadialGauge({
-    renderTo: 'microm',
-    width: 280,
-    height: 280,
-    units: 'mm',
-    title: false,
-    minValue: 0.00,
-    maxValue: 25.00,
-    majorTicks: ['0','2.5','5','7.5','10','12.5','15','17.5','20','22.5','25'],
-    minorTicks: 2,
-    strokeTicks: false,
-    highlights: [{ from: 0, to: 25, color: '#00d4ff' }],
-    colorPlate: '#1a1a2e',
-    colorMajorTicks: '#f5f5f5',
-    colorMinorTicks: '#555577',
-    colorTitle: '#fff',
-    colorUnits: '#8888aa',
-    colorNumbers: '#e0e0e0',
-    colorNeedle: 'rgba(0, 212, 255, 1)',
-    colorNeedleEnd: 'rgba(0, 180, 220, .9)',
-    colorBorderOuter: '#2a2a4a',
-    colorBorderOuterEnd: '#1a1a2e',
-    colorBorderMiddle: '#2a2a4a',
-    colorBorderMiddleEnd: '#0f0f1a',
-    colorBorderInner: '#1a1a2e',
-    colorBorderInnerEnd: '#0f0f1a',
-    colorNeedleShadowUp: 'rgba(0,0,0,0)',
-    colorNeedleShadowDown: 'rgba(0,0,0,0.3)',
-    valueBox: false,
-    valueInt: 2,
-    valueDec: 2,
-    animation: false,
+// Gauge moderno SVG (sostituisce gauge.min.js 2014). Tema-aware: colori dai
+// CSS custom properties di style.css. API: gaugemicrom.setValue(v).
+var gaugemicrom = window.cammesGauge.create('microm', {
+    min: 0, max: 25, size: 260, unit: 'mm', decimals: 2,
+    majorTicks: 10, minorTicksBetween: 4
 });
-gaugemicrom.draw();
+// Shim retro-compat: alcuni vecchi snippet potrebbero leggere/scrivere
+// gaugemicrom.value direttamente. Non più necessario, ma innocuo.
+gaugemicrom.draw = function () {};
+Object.defineProperty(gaugemicrom, 'value', {
+    set: function (v) { gaugemicrom.setValue(v); },
+    get: function () { return 0; }
+});
 </script>
 
 <script>
@@ -207,6 +195,8 @@ var SCAN_MODES = {
 var currentMode = SCAN_MODES.fast;
 // Buffer di accumulo per modalità ad alta densità (chiave = grado camma 1..360)
 var subBuffer = {};
+// ETA tracker condiviso fra start() / ms() / stop()
+var scanEta = window.cammesEta ? window.cammesEta.create() : { start:function(){return this;}, tick:function(){return null;}, stop:function(){} };
 
 function onScanModeChange() {
     var sel = document.getElementById('scanMode');
@@ -414,6 +404,13 @@ engineSocket.onmessage = function(event) {
         if (startflag == 1) {
             var x = "sequenza di misura   terminata ";
             responsiveVoice.speak(x, "Italian Female", { volume: 3 });
+            if (window.cammesScanProgress) window.cammesScanProgress.set(currentMode.totalSteps, currentMode.totalSteps, 0);
+            if (scanEta) scanEta.stop();
+            if (window.cammesToast && labms !== 1) {
+                window.cammesToast({ kind: 'success', title: 'Scansione completata', body: 'Picco ' + max.toFixed(3) + ' mm a ' + maxg + '&deg; camma.', duration: 5000 });
+            }
+            // Riabilita selector modalità a fine scansione
+            var sm = document.getElementById('scanMode'); if (sm) sm.disabled = false;
         }
         startflag = 0;
 
@@ -478,6 +475,11 @@ engineSocket.onmessage = function(event) {
         // visualizza progresso in gradi camma reali (i sub-step ÷ subStepsPerDeg)
         var degShown = (i / currentMode.subStepsPerDeg).toFixed(2);
         document.imp2.imp2.value = "  gradi  " + degShown;
+        // Aggiorna progress bar + ETA solo durante scansione attiva.
+        if (startflag === 1 && window.cammesScanProgress) {
+            var etaSec = scanEta.tick(i);
+            window.cammesScanProgress.set(i, currentMode.totalSteps, etaSec);
+        }
         if (startflag == 1 && i < currentMode.totalSteps && stepflag == 0) {
             if (rsign == 1) { sendSocket.send('p'); }
             if (rsign == -1) { sendSocket.send('q'); }
@@ -511,6 +513,9 @@ function start() {
     if (rsign == -1) { sendSocket.send('q'); }
     stepflag = 0;
     startflag = 1;
+    scanEta.start(currentMode.totalSteps);
+    if (window.cammesScanProgress) window.cammesScanProgress.set(0, currentMode.totalSteps, currentMode.timeSec);
+    if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Scansione avviata', body: 'Modalit&agrave; ' + currentMode.label + ' &middot; ~' + Math.round(currentMode.timeSec/60) + 'm', duration: 2500 });
 }
 </script>
 
@@ -525,6 +530,9 @@ function stop() {
     labms     = 0;     // annulla anche un eventuale 0 virtuale in corso
     // Riabilita selector modalità (era disabilitato da start()/ms())
     var sm = document.getElementById('scanMode'); if (sm) sm.disabled = false;
+    if (scanEta) scanEta.stop();
+    if (window.cammesScanProgress) window.cammesScanProgress.reset();
+    if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Scansione interrotta', body: 'I dati parziali non sono stati salvati.', duration: 3000 });
 }
 </script>
 
@@ -629,14 +637,28 @@ function update() {
 <script>
 var stringa = "";
 function sav() {
+    var nameEl = document.getElementById("nome");
+    var rawName = (nameEl && nameEl.value || '').trim();
+    if (!rawName) {
+        if (window.cammesValidate) window.cammesValidate.error(nameEl, 'Inserisci un nome file prima di salvare.');
+        else alert('Inserisci un nome file');
+        return;
+    }
+    if (!pdindex || pdindex.length < 2) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Nessun dato', body: 'Esegui una scansione prima di salvare.', duration: 3000 });
+        return;
+    }
+    // Sanifica nome (no spazi/caratteri non sicuri per filesystem)
+    var safeName = rawName.replace(/[^A-Za-z0-9_\-]/g, '_');
+    stringa = "";
     for (t = 1; t < pdindex.length; t++) {
         stringa = stringa + pdindex[t] + "," + pdata[t] + "\r\n";
     }
-    fname = document.getElementById("nome").value;
-    fname = fname + "_alz";
+    fname = safeName + "_alz";
     stringa2 = "*" + fname + "*" + "_pline" + "\r\n" + stringa;
     sendSocket.send(stringa2);
     document.salva.salva.value = " file salvato";
+    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'File salvato', body: fname + '.scr in cartella misure.', duration: 4000 });
 }
 </script>
 

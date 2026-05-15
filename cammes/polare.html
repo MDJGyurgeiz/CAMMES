@@ -9,7 +9,6 @@
 </head>
 <body>
 
-<script src="gauge.min.js"></script>
 <script src="responsivevoice.js"></script>
 
 <div class="app-container">
@@ -21,7 +20,7 @@
         <div class="nav-links">
             <a href="alzata.html">Alzata</a>
             <a href="polare.html" class="active">Polare</a>
-            <a href="grafici.html">Grafici</a>
+            <a href="grafici.html">Confronto</a>
             <a href="analisi.html">Analisi</a>
         </div>
         <div class="header-spacer"></div>
@@ -42,7 +41,7 @@
         <!-- Left: Gauge -->
         <div class="card gauge-card">
             <div class="card-title">Misura in tempo reale</div>
-            <canvas id="microm"></canvas>
+            <div id="microm" class="gauge-svg-host"></div>
             <form name="cpot">
                 <input type="text" name="cpot" readonly class="gauge-value">
             </form>
@@ -50,7 +49,8 @@
                 <input type="text" name="imp2" readonly class="gauge-degrees">
             </form>
             <div class="controls-group mt-8">
-                <input type="text" id="diam" placeholder="diametro mm" autofocus class="input" style="width:160px;">
+                <input type="text" id="diam" placeholder="diametro mm" autofocus class="input" style="width:160px;" data-tip="<strong>Diametro a riposo</strong>Diametro nominale dell'albero base (parte non sollevata). Necessario per costruire il grafico polare partendo dalla circonferenza esterna.">
+                <span class="help-icon" data-tip="<strong>Come misurarlo</strong>Con un calibro, misura il diametro dell'albero in una zona NON sollevata (lobo base, non sul fianco/picco). Esempio: 26 mm per camme moto da 600cc, 32 mm per auto 4 cilindri." tabindex="0">?</span>
             </div>
             <span style="font-size:12px;color:var(--text-muted);">diametro albero a riposo</span>
         </div>
@@ -65,29 +65,39 @@
 
     <!-- Controls -->
     <div class="card">
-        <div class="card-title">Controlli</div>
+        <div class="card-title">Controlli scansione polare</div>
         <div class="controls-row">
             <div class="controls-group">
-                <button class="btn btn-success" onclick="start();">&#9654; START</button>
-                <button class="btn btn-danger" onclick="stop();">&#10074;&#10074; PAUSA</button>
-                <button class="btn btn-secondary" onclick="location.reload(true);">&#8634; RESET</button>
+                <button class="btn btn-success" onclick="start();" data-tip="<strong>Avvia scansione polare</strong>Misura ogni grado camma e calcola il raggio polare = diametro/2 + alzata. Necessario aver inserito il diametro a riposo.">&#9654; START</button>
+                <button class="btn btn-danger" onclick="stop();" data-tip="<strong>Pausa</strong>Sospende temporaneamente la scansione. Premi PAUSA nuovamente per riprendere.">&#10074;&#10074; PAUSA</button>
+                <button class="btn btn-secondary" onclick="location.reload(true);" data-tip="<strong>Reset completo</strong>Ricarica la pagina e azzera tutto.">&#8634; RESET</button>
             </div>
 
             <div class="separator"></div>
 
             <form name="mas">
-                <input type="text" name="mas" value=" max" readonly class="max-display">
+                <input type="text" name="mas" value=" max" readonly class="max-display" data-tip="<strong>Picco rilevato</strong>Grado camma e raggio polare massimo durante la scansione.">
             </form>
 
             <div class="separator"></div>
 
             <div class="controls-group">
-                <input type="text" id="nome" placeholder="nome file" class="input">
+                <input type="text" id="nome" placeholder="nome file" class="input" data-tip="<strong>Nome file</strong>Suffisso '_pol' viene aggiunto automaticamente. Salva i punti come coppie (cos,sin) per la sezione 'Confronto'.">
                 <input type="submit" value="Salva" class="btn btn-accent" onclick="sav();">
             </div>
             <form name="salva" style="display:inline;">
                 <input type="text" name="salva" readonly class="status-text" style="background:transparent;border:none;" size="12">
             </form>
+        </div>
+
+        <!-- Progress bar scansione -->
+        <div id="scan-progress-wrap" class="scan-progress-wrap" aria-live="polite">
+            <span class="scan-progress-label">Scansione</span>
+            <div class="scan-progress-bar">
+                <div id="scan-progress-fill" class="scan-progress-fill"></div>
+            </div>
+            <span id="scan-progress-pct" class="scan-progress-pct">0%</span>
+            <span id="scan-progress-eta" class="scan-progress-eta"></span>
         </div>
     </div>
 
@@ -96,16 +106,16 @@
         <div class="card-title">Rotazione manuale</div>
         <div class="controls-row">
             <div class="controls-group">
-                <button class="btn btn-secondary btn-sm" onclick="m1();">&#8722;</button>
-                <input type="text" name="step" placeholder="gradi" id="step" class="input" style="width:120px;">
-                <button class="btn btn-secondary btn-sm" onclick="p1();">+</button>
-                <button class="btn btn-accent" id="cf" onclick="ruota();">Ruota</button>
+                <button class="btn btn-secondary btn-sm" onclick="m1();" data-tip="<strong>-1&deg;</strong>Ruota indietro di 1 grado camma.">&#8722;</button>
+                <input type="text" name="step" placeholder="gradi" id="step" class="input" style="width:120px;" data-tip="<strong>Posizione target</strong>Grado camma assoluto. Premi Ruota per spostarti.">
+                <button class="btn btn-secondary btn-sm" onclick="p1();" data-tip="<strong>+1&deg;</strong>Ruota avanti di 1 grado camma.">+</button>
+                <button class="btn btn-accent" id="cf" onclick="ruota();" data-tip="<strong>Ruota</strong>Sposta l'albero al grado camma indicato a sinistra.">Ruota</button>
             </div>
 
             <div class="separator"></div>
 
             <div class="toggle-group">
-                <label class="switch">
+                <label class="switch" data-tip="<strong>Senso di rotazione</strong>Inverte il senso del motore.">
                     <input type="checkbox" onchange="rlb();">
                     <span class="slider"></span>
                 </label>
@@ -121,41 +131,16 @@
      ============================================ -->
 
 <script>
-// Gauge setup
-var gaugemicrom = new RadialGauge({
-    renderTo: 'microm',
-    width: 280,
-    height: 280,
-    units: 'mm',
-    title: false,
-    minValue: 0.00,
-    maxValue: 25.00,
-    majorTicks: ['0','2.5','5','7.5','10','12.5','15','17.5','20','22.5','25'],
-    minorTicks: 2,
-    strokeTicks: false,
-    highlights: [{ from: 0, to: 25, color: '#00d4ff' }],
-    colorPlate: '#1a1a2e',
-    colorMajorTicks: '#f5f5f5',
-    colorMinorTicks: '#555577',
-    colorTitle: '#fff',
-    colorUnits: '#8888aa',
-    colorNumbers: '#e0e0e0',
-    colorNeedle: 'rgba(0, 212, 255, 1)',
-    colorNeedleEnd: 'rgba(0, 180, 220, .9)',
-    colorBorderOuter: '#2a2a4a',
-    colorBorderOuterEnd: '#1a1a2e',
-    colorBorderMiddle: '#2a2a4a',
-    colorBorderMiddleEnd: '#0f0f1a',
-    colorBorderInner: '#1a1a2e',
-    colorBorderInnerEnd: '#0f0f1a',
-    colorNeedleShadowUp: 'rgba(0,0,0,0)',
-    colorNeedleShadowDown: 'rgba(0,0,0,0.3)',
-    valueBox: false,
-    valueInt: 2,
-    valueDec: 2,
-    animation: false,
+// Gauge moderno SVG (vedi alzata.html per dettagli)
+var gaugemicrom = window.cammesGauge.create('microm', {
+    min: 0, max: 25, size: 260, unit: 'mm', decimals: 2,
+    majorTicks: 10, minorTicksBetween: 4
 });
-gaugemicrom.draw();
+gaugemicrom.draw = function () {};
+Object.defineProperty(gaugemicrom, 'value', {
+    set: function (v) { gaugemicrom.setValue(v); },
+    get: function () { return 0; }
+});
 </script>
 
 <script>
@@ -166,6 +151,9 @@ var maxg = 0;
 var pdata = new Array();
 var pdindex = new Array();
 var msg = "";
+var POL_TOTAL_STEPS = 360;
+var POL_TIME_SEC    = 90;  // stima a priori (ordine grandezza, usata per ETA iniziale)
+var scanEta = window.cammesEta ? window.cammesEta.create() : { start:function(){return this;}, tick:function(){return null;}, stop:function(){} };
 var engineSocket = new WebSocket("ws:localhost:8080");
 
 engineSocket.onopen = function(event) {
@@ -226,12 +214,19 @@ engineSocket.onmessage = function(event) {
         if (startflag == 1) {
             var x = "sequenza di misura   terminata ";
             responsiveVoice.speak(x, "Italian Female", { volume: 3 });
+            if (window.cammesScanProgress) window.cammesScanProgress.set(POL_TOTAL_STEPS, POL_TOTAL_STEPS, 0);
+            if (scanEta) scanEta.stop();
+            if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Scansione polare completata', body: 'Picco ' + (max ? max.toFixed(3) : '0') + ' mm a ' + maxg + '&deg;.', duration: 5000 });
         }
         startflag = 0;
     }
 
     if (msg.substring(0, 1) == "*") {
         document.imp2.imp2.value = "  gradi  " + i;
+        if (startflag === 1 && window.cammesScanProgress) {
+            var etaSec = scanEta.tick(i);
+            window.cammesScanProgress.set(i, POL_TOTAL_STEPS, etaSec);
+        }
         if (i < 360) {
             if (stepflag == 0) {
                 if (rsign == 1) { sendSocket.send('p'); }
@@ -246,28 +241,41 @@ engineSocket.onmessage = function(event) {
 <script>
 var i = 0;
 function start() {
-    diametro = document.getElementById("diam").value;
-    radius = diametro / 2;
-    if (radius == 0) { alert('inserire diametro a riposo'); }
-    if (radius != 0) {
-        var x = "sequenza di misura   iniziata ";
-        responsiveVoice.speak(x, "Italian Female", { volume: 3 });
-        i = i + 1;
-        document.imp2.imp2.value = "  gradi  " + i;
-        if (rsign == 1) { sendSocket.send('p'); }
-        if (rsign == -1) { sendSocket.send('q'); }
-        stepflag = 0;
-        startflag = 1;
+    var diamEl = document.getElementById("diam");
+    diametro = diamEl ? diamEl.value : '';
+    radius = Number(diametro) / 2;
+    if (!isFinite(radius) || radius <= 0) {
+        if (window.cammesValidate) window.cammesValidate.error(diamEl, 'Inserisci il diametro a riposo (mm) prima di avviare.');
+        else alert('inserire diametro a riposo');
+        return;
     }
+    var x = "sequenza di misura   iniziata ";
+    responsiveVoice.speak(x, "Italian Female", { volume: 3 });
+    i = i + 1;
+    document.imp2.imp2.value = "  gradi  " + i;
+    if (rsign == 1) { sendSocket.send('p'); }
+    if (rsign == -1) { sendSocket.send('q'); }
+    stepflag = 0;
+    startflag = 1;
+    scanEta.start(POL_TOTAL_STEPS);
+    if (window.cammesScanProgress) window.cammesScanProgress.set(0, POL_TOTAL_STEPS, POL_TIME_SEC);
+    if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Scansione polare avviata', body: 'Diametro base ' + Number(diametro).toFixed(2) + ' mm.', duration: 2500 });
 }
 </script>
 
 <script>
 var stepflag = 0;
 function stop() {
-    if (stepflag == 0) { stepflag = 1; }
-    else {
-        if (stepflag == 1) { stepflag = 0; }
+    if (stepflag == 0) {
+        stepflag = 1;
+        if (scanEta) scanEta.stop();
+        if (window.cammesScanProgress) window.cammesScanProgress.reset();
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Scansione in pausa', body: 'Premi PAUSA di nuovo per riprendere.', duration: 2500 });
+    } else {
+        if (stepflag == 1) {
+            stepflag = 0;
+            if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Scansione ripresa', duration: 1800 });
+        }
     }
 }
 </script>
@@ -354,6 +362,19 @@ function update() {
 <script>
 var stringa = "";
 function sav() {
+    var nameEl = document.getElementById("nome");
+    var rawName = (nameEl && nameEl.value || '').trim();
+    if (!rawName) {
+        if (window.cammesValidate) window.cammesValidate.error(nameEl, 'Inserisci un nome file prima di salvare.');
+        else alert('Inserisci un nome file');
+        return;
+    }
+    if (!pdindex || pdindex.length < 2) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Nessun dato', body: 'Esegui una scansione prima di salvare.', duration: 3000 });
+        return;
+    }
+    var safeName = rawName.replace(/[^A-Za-z0-9_\-]/g, '_');
+    stringa = "";
     for (t = 1; t < pdindex.length; t++) {
         seno = pdata[t] * Math.sin(2 * Math.PI * pdindex[t] / 360);
         coseno = pdata[t] * Math.cos(2 * Math.PI * pdindex[t] / 360);
@@ -361,11 +382,11 @@ function sav() {
         cosenr = Math.round(coseno * Math.pow(10, 8)) / Math.pow(10, 8);
         stringa = stringa + cosenr + "," + senr + "\r\n";
     }
-    fname = document.getElementById("nome").value;
-    fname = fname + "_pol";
+    fname = safeName + "_pol";
     stringa2 = "*" + fname + "*" + "_pline" + "\r\n" + stringa;
     document.salva.salva.value = " file salvato";
     sendSocket.send(stringa2);
+    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'File polare salvato', body: fname + '.scr in cartella misure.', duration: 4000 });
 }
 </script>
 

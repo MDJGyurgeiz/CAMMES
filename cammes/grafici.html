@@ -3,7 +3,7 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>CAMMES - Grafici</title>
+    <title>CAMMES - Confronto</title>
     <link rel="stylesheet" href="style.css">
     <script src="cammes-ui.js"></script>
     <style>
@@ -28,7 +28,7 @@
         <div class="nav-links">
             <a href="alzata.html">Alzata</a>
             <a href="polare.html">Polare</a>
-            <a href="grafici.html" class="active">Grafici</a>
+            <a href="grafici.html" class="active">Confronto</a>
             <a href="analisi.html">Analisi</a>
         </div>
         <div class="header-spacer"></div>
@@ -43,17 +43,19 @@
 
         <!-- Left: Line chart -->
         <div class="card chart-card">
-            <div class="card-title">Grafico Alzata</div>
+            <div class="card-title">Confronto profili (fino a 4 alberi)</div>
             <canvas id="canvas"></canvas>
         </div>
 
         <!-- Right: Data table + File inputs -->
         <div class="card">
-            <div class="card-title">Dati misurazione</div>
+            <div class="card-title">Dati misurazione
+                <span class="help-icon" data-tip="<strong>Come usare il confronto</strong>Carica fino a 4 file '.scr' (alzata o polare) salvati dalle pagine Alzata/Polare. Il grafico li sovrappone con colori diversi. La tabella mostra grado e valore massimo di ciascuno. Utile per: <ul><li>verificare ripetibilit&agrave; sulla stessa camma</li><li>confrontare camme diverse (race vs stradale)</li><li>misurare usura tra prima e dopo</li></ul>" tabindex="0">?</span>
+            </div>
 
             <div class="flex items-center gap-8 mt-8">
                 <label style="font-size:13px;color:var(--text-muted);">File alzata:</label>
-                <input type="file" id="fileinput1" class="file-input" onchange="loadFile();">
+                <input type="file" id="fileinput1" class="file-input" onchange="loadFile();" data-tip="<strong>File alzata cartesiano</strong>Carica file .scr salvato dalla pagina Alzata (suffisso _alz). Fino a 4 file simultaneamente.">
             </div>
 
             <table class="data-table mt-16">

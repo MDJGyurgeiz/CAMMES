@@ -1,6 +1,6 @@
 /* ==========================================================================
    CAMMES — UI helpers condivisi tra le 4 pagine
-   Theme toggle, toast notifications, scan progress bar.
+   Theme toggle, toast, scan progress, SVG gauge, rich tooltips, ETA tracker.
    ========================================================================== */
 
 (function () {
@@ -77,14 +77,13 @@
   window.cammesToast = showToast;
 
   // -------- SCAN PROGRESS BAR --------------------------------------------
-  // Helper per aggiornare una barra di progresso e tempo stimato per la
-  // scansione corrente. Chiama setScanProgress(current, total, etaSec) durante
-  // il loop; resetScanProgress() quando finisce o si stoppa.
   function setScanProgress(current, total, etaSec) {
     const fill = document.getElementById('scan-progress-fill');
     const pct  = document.getElementById('scan-progress-pct');
     const eta  = document.getElementById('scan-progress-eta');
+    const wrap = document.getElementById('scan-progress-wrap');
     if (!fill || !pct) return;
+    if (wrap) wrap.classList.add('active');
     const p = Math.max(0, Math.min(100, total > 0 ? (current / total) * 100 : 0));
     fill.style.width = p.toFixed(1) + '%';
     pct.textContent = p.toFixed(0) + '%';
@@ -98,14 +97,265 @@
     setScanProgress(0, 1, null);
     const eta = document.getElementById('scan-progress-eta');
     if (eta) eta.textContent = '';
+    const wrap = document.getElementById('scan-progress-wrap');
+    if (wrap) wrap.classList.remove('active');
   }
   window.cammesScanProgress = { set: setScanProgress, reset: resetScanProgress };
 
+  // -------- ETA TRACKER --------------------------------------------------
+  // Stima tempo residuo di un loop. Usage:
+  //   const eta = cammesEta.start(totalSteps);
+  //   eta.tick(currentStep);  // returns secondsRemaining
+  //   eta.stop();
+  function createEtaTracker() {
+    let t0 = null;
+    let total = 0;
+    let last = 0;
+    return {
+      start: function (totalSteps) {
+        t0 = Date.now();
+        total = totalSteps;
+        last = 0;
+        return this;
+      },
+      tick: function (current) {
+        if (t0 == null || total <= 0 || current <= 0) return null;
+        const elapsed = (Date.now() - t0) / 1000;
+        const rate = current / elapsed; // steps/sec
+        if (rate <= 0) return null;
+        const remaining = (total - current) / rate;
+        last = remaining;
+        return remaining;
+      },
+      stop: function () {
+        t0 = null;
+        total = 0;
+      },
+      last: function () { return last; }
+    };
+  }
+  window.cammesEta = { create: createEtaTracker };
+
+  // -------- SVG GAUGE (race-telemetry style) -----------------------------
+  // Sostituisce gauge.min.js del 2014. API:
+  //   const g = cammesGauge.create('container-id', { min:0, max:25, unit:'mm',
+  //                                                  decimals:2, majorTicks:10 });
+  //   g.setValue(12.34);  // anima fino al valore
+  //   g.destroy();
+  //
+  // Renderizza un SVG inline con:
+  // - Arco di sfondo (270° da -135 a +135)
+  // - Arco progressivo colorato (riempie proporzionale al valore)
+  // - Tacche maggiori + minori
+  // - Etichette numeriche maggiori
+  // - Valore centrale grande (font mono)
+  // - Tutti i colori da CSS variables → segue theme dark/light
+  function polarToCart(cx, cy, r, angleDeg) {
+    const rad = (angleDeg - 90) * Math.PI / 180.0;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  }
+
+  function describeArc(cx, cy, r, startAngle, endAngle) {
+    if (Math.abs(endAngle - startAngle) < 0.01) {
+      // Arco zero: punto singolo (M senza L)
+      const p = polarToCart(cx, cy, r, startAngle);
+      return 'M ' + p.x + ' ' + p.y;
+    }
+    const start = polarToCart(cx, cy, r, endAngle);
+    const end   = polarToCart(cx, cy, r, startAngle);
+    const largeArcFlag = Math.abs(endAngle - startAngle) <= 180 ? '0' : '1';
+    return [
+      'M', start.x, start.y,
+      'A', r, r, 0, largeArcFlag, 0, end.x, end.y
+    ].join(' ');
+  }
+
+  function createGauge(containerId, opts) {
+    const o = opts || {};
+    const container = typeof containerId === 'string' ? document.getElementById(containerId) : containerId;
+    if (!container) return null;
+
+    const min        = o.min ?? 0;
+    const max        = o.max ?? 25;
+    const size       = o.size ?? 260;
+    const unit       = o.unit ?? '';
+    const decimals   = o.decimals ?? 2;
+    const majorTicks = o.majorTicks ?? 10;
+    const minorTicksBetween = o.minorTicksBetween ?? 4;
+    const startAng   = -135;
+    const endAng     =  135;
+    const totalArc   = endAng - startAng; // 270°
+
+    const cx = size / 2;
+    const cy = size / 2;
+    const r  = size * 0.40;
+    const rTickOuter = r;
+    const rTickMajorInner = r * 0.86;
+    const rTickMinorInner = r * 0.92;
+    const rLabel = r * 0.72;
+
+    // Build SVG
+    const uid = 'g' + Math.random().toString(36).slice(2, 8);
+    let ticksSvg = '';
+    let labelsSvg = '';
+    for (let i = 0; i <= majorTicks; i++) {
+      const ang = startAng + (i / majorTicks) * totalArc;
+      const p1 = polarToCart(cx, cy, rTickOuter, ang);
+      const p2 = polarToCart(cx, cy, rTickMajorInner, ang);
+      ticksSvg += `<line class="gauge-svg-tick-major" x1="${p1.x.toFixed(2)}" y1="${p1.y.toFixed(2)}" x2="${p2.x.toFixed(2)}" y2="${p2.y.toFixed(2)}" />`;
+      // Label
+      const labelVal = min + (i / majorTicks) * (max - min);
+      const labelText = (max - min) % majorTicks === 0 ? labelVal.toFixed(0) : labelVal.toFixed(1);
+      const pl = polarToCart(cx, cy, rLabel, ang);
+      labelsSvg += `<text class="gauge-svg-label" x="${pl.x.toFixed(2)}" y="${(pl.y + 4).toFixed(2)}" text-anchor="middle">${labelText}</text>`;
+      // Minor ticks
+      if (i < majorTicks) {
+        for (let j = 1; j <= minorTicksBetween; j++) {
+          const angMinor = startAng + ((i + j / (minorTicksBetween + 1)) / majorTicks) * totalArc;
+          const m1 = polarToCart(cx, cy, rTickOuter, angMinor);
+          const m2 = polarToCart(cx, cy, rTickMinorInner, angMinor);
+          ticksSvg += `<line class="gauge-svg-tick-minor" x1="${m1.x.toFixed(2)}" y1="${m1.y.toFixed(2)}" x2="${m2.x.toFixed(2)}" y2="${m2.y.toFixed(2)}" />`;
+        }
+      }
+    }
+
+    const bgArcPath = describeArc(cx, cy, r * 0.98, startAng, endAng);
+    const valueArcPath = describeArc(cx, cy, r * 0.98, startAng, startAng);  // start empty
+
+    container.innerHTML = `
+      <svg class="gauge-svg" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" aria-label="Gauge ${unit}">
+        <defs>
+          <linearGradient id="${uid}-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%"   stop-color="var(--accent)"   />
+            <stop offset="55%"  stop-color="var(--accent)"   />
+            <stop offset="80%"  stop-color="var(--accent-2)" />
+            <stop offset="100%" stop-color="var(--danger)"   />
+          </linearGradient>
+          <filter id="${uid}-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2.5" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <!-- Disco scuro centrale (effetto profondità) -->
+        <circle class="gauge-svg-plate" cx="${cx}" cy="${cy}" r="${(r * 1.02).toFixed(2)}" />
+        <!-- Arco di sfondo -->
+        <path class="gauge-svg-arc-bg" d="${bgArcPath}" />
+        <!-- Arco valore -->
+        <path class="gauge-svg-arc-value" d="${valueArcPath}" stroke="url(#${uid}-grad)" filter="url(#${uid}-glow)" />
+        <!-- Tacche -->
+        <g class="gauge-svg-ticks">${ticksSvg}</g>
+        <!-- Etichette tacche maggiori -->
+        <g class="gauge-svg-labels">${labelsSvg}</g>
+        <!-- Valore centrale -->
+        <text class="gauge-svg-value" x="${cx}" y="${cy + 8}" text-anchor="middle">${(0).toFixed(decimals)}</text>
+        <text class="gauge-svg-unit"  x="${cx}" y="${cy + 30}" text-anchor="middle">${unit}</text>
+      </svg>
+    `;
+
+    const arcValueEl = container.querySelector('.gauge-svg-arc-value');
+    const valueEl    = container.querySelector('.gauge-svg-value');
+
+    function setValue(v) {
+      const num = Number(v);
+      const safe = isFinite(num) ? num : 0;
+      const clamped = Math.max(min, Math.min(max, safe));
+      const frac = (clamped - min) / (max - min);
+      const ang = startAng + frac * totalArc;
+      const d = describeArc(cx, cy, r * 0.98, startAng, ang);
+      arcValueEl.setAttribute('d', d);
+      if (valueEl) valueEl.textContent = isFinite(num) ? num.toFixed(decimals) : '--';
+    }
+
+    return {
+      setValue: setValue,
+      destroy: function () { container.innerHTML = ''; }
+    };
+  }
+  window.cammesGauge = { create: createGauge };
+
+  // -------- RICH TOOLTIPS (data-tip="...") -------------------------------
+  // Inietta un tooltip floating per ogni elemento con attributo data-tip.
+  // Posizionamento: sopra l'elemento, freccia in basso. Si chiude on
+  // mouseleave/blur. Per attivare programmaticamente nuovi elementi
+  // chiamare cammesTooltip.refresh().
+  function ensureTooltipEl() {
+    let tt = document.getElementById('cammes-tooltip');
+    if (!tt) {
+      tt = document.createElement('div');
+      tt.id = 'cammes-tooltip';
+      tt.className = 'cammes-tooltip';
+      tt.setAttribute('role', 'tooltip');
+      document.body.appendChild(tt);
+    }
+    return tt;
+  }
+  function positionTooltip(target, tt) {
+    const rect = target.getBoundingClientRect();
+    const ttRect = tt.getBoundingClientRect();
+    // Default: sopra. Se non c'è spazio sopra, mettilo sotto.
+    let top = rect.top - ttRect.height - 10;
+    let placement = 'top';
+    if (top < 8) {
+      top = rect.bottom + 10;
+      placement = 'bottom';
+    }
+    let left = rect.left + rect.width / 2 - ttRect.width / 2;
+    // Mantieni nel viewport
+    const margin = 8;
+    if (left < margin) left = margin;
+    if (left + ttRect.width > window.innerWidth - margin) left = window.innerWidth - ttRect.width - margin;
+    tt.style.top  = (top + window.scrollY) + 'px';
+    tt.style.left = (left + window.scrollX) + 'px';
+    tt.setAttribute('data-placement', placement);
+  }
+  function bindTooltipEl(el) {
+    if (el.__tipBound) return;
+    el.__tipBound = true;
+    const tt = ensureTooltipEl();
+    el.addEventListener('mouseenter', function () {
+      tt.innerHTML = el.getAttribute('data-tip');
+      tt.classList.add('visible');
+      // Devi aspettare che ttRect sia computato dopo il render
+      requestAnimationFrame(function () { positionTooltip(el, tt); });
+    });
+    el.addEventListener('mouseleave', function () {
+      tt.classList.remove('visible');
+    });
+    el.addEventListener('focus', function () {
+      tt.innerHTML = el.getAttribute('data-tip');
+      tt.classList.add('visible');
+      requestAnimationFrame(function () { positionTooltip(el, tt); });
+    });
+    el.addEventListener('blur', function () {
+      tt.classList.remove('visible');
+    });
+  }
+  function refreshTooltips() {
+    const els = document.querySelectorAll('[data-tip]');
+    for (let i = 0; i < els.length; i++) bindTooltipEl(els[i]);
+  }
+  window.cammesTooltip = { refresh: refreshTooltips };
+
+  // -------- VALIDATION HELPERS ------------------------------------------
+  // Marca un input come errato/ok con styling + (opzionale) messaggio toast.
+  function markInputError(el, msg) {
+    if (!el) return;
+    el.classList.add('input-error');
+    el.setAttribute('aria-invalid', 'true');
+    if (msg) showToast({ kind: 'err', title: 'Attenzione', body: msg, duration: 3000 });
+    setTimeout(function () {
+      el.classList.remove('input-error');
+      el.removeAttribute('aria-invalid');
+    }, 2400);
+    if (typeof el.focus === 'function') el.focus();
+  }
+  window.cammesValidate = { error: markInputError };
+
   // -------- INIT al DOM ready --------------------------------------------
   function init() {
-    // Wire del bottone toggle theme se presente nel DOM
     const btn = document.getElementById('theme-toggle');
     if (btn) btn.addEventListener('click', toggleTheme);
+    refreshTooltips();
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
