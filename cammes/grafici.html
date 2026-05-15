@@ -428,43 +428,21 @@ function loadFile2() {
 </script>
 
 <script>
+// Aggiorna l'N-esimo chart polare con i dati di valori5 (raggi 1..360).
+// Usa direttamente chart.data invece di variabili globali birdsData* che
+// non vengono più create dal refactor v4 (makePolar incapsula i data).
 function update2() {
-    if (index2 == 1) {
-        for (x = 1; x <= 360; x++) {
-            birdsData.labels.push(x);
-            birdsData.datasets.forEach((dataset) => {
-                dataset.data.push(valori5[x]);
-            });
-        }
-        window.polarAreaChart.update();
+    var charts = [polarAreaChart, polarAreaChart2, polarAreaChart3, polarAreaChart4];
+    var idx = index2 - 1;
+    if (idx < 0 || idx >= charts.length) return;
+    var ch = charts[idx];
+    if (!ch) return;
+    if (!ch.data.labels) ch.data.labels = [];
+    for (var x = 1; x <= 360; x++) {
+        ch.data.labels.push(x);
+        ch.data.datasets.forEach(function (ds) { ds.data.push(valori5[x]); });
     }
-    if (index2 == 2) {
-        for (x = 1; x <= 360; x++) {
-            birdsData2.labels.push(x);
-            birdsData2.datasets.forEach((dataset) => {
-                dataset.data.push(valori5[x]);
-            });
-        }
-        window.polarAreaChart2.update();
-    }
-    if (index2 == 3) {
-        for (x = 1; x <= 360; x++) {
-            birdsData3.labels.push(x);
-            birdsData3.datasets.forEach((dataset) => {
-                dataset.data.push(valori5[x]);
-            });
-        }
-        window.polarAreaChart3.update();
-    }
-    if (index2 == 4) {
-        for (x = 1; x <= 360; x++) {
-            birdsData4.labels.push(x);
-            birdsData4.datasets.forEach((dataset) => {
-                dataset.data.push(valori5[x]);
-            });
-        }
-        window.polarAreaChart4.update();
-    }
+    ch.update('none');
 }
 </script>
 

@@ -389,7 +389,7 @@
       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg>',
       body: '&bull; Passa il mouse sul <b>?</b> accanto a un parametro per la spiegazione e i <b>valori tipici</b>.<br>' +
             '&bull; Il <b>tema chiaro/scuro</b> si cambia col bottone sole/luna in header (salvato in localStorage).<br>' +
-            '&bull; I file <code>.scr</code> salvati vanno nella cartella <code>misure/</code> sul server.<br>' +
+            '&bull; I file <code>.scr</code> salvati vanno nella cartella <code>prove/</code> sul server.<br>' +
             '&bull; Se il sensore d&agrave; <b>NaN</b> per 3 letture consecutive, la scansione si ferma automaticamente.<br><br>' +
             'Buon lavoro! &#x1F527;'
     }
@@ -448,17 +448,22 @@
       if (idx < WIZARD_STEPS.length - 1) { idx++; render(); }
       else close();
     };
-    closeBtn.onclick = close;
-    back.onclick = (e) => { if (e.target === back) close(); };
-    document.addEventListener('keydown', function onKey(e) {
-      if (!document.body.contains(back)) {
-        document.removeEventListener('keydown', onKey);
-        return;
-      }
+    // Listener keydown salvato come variabile così possiamo rimuoverlo
+    // immediatamente alla chiusura (evita accumulo su open/close ripetuti).
+    function onKey(e) {
       if (e.key === 'Escape') close();
       else if (e.key === 'ArrowRight') nextBtn.click();
       else if (e.key === 'ArrowLeft') prevBtn.click();
-    });
+    }
+    document.addEventListener('keydown', onKey);
+
+    var origClose = close;
+    close = function () {
+      document.removeEventListener('keydown', onKey);
+      origClose();
+    };
+    closeBtn.onclick = close;
+    back.onclick = (e) => { if (e.target === back) close(); };
 
     render();
     requestAnimationFrame(() => back.classList.add('visible'));

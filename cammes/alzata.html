@@ -151,10 +151,18 @@
 <script>
 // Gauge moderno SVG (sostituisce gauge.min.js 2014). Tema-aware: colori dai
 // CSS custom properties di style.css. API: gaugemicrom.setValue(v).
-var gaugemicrom = window.cammesGauge.create('microm', {
-    min: 0, max: 25, size: 260, unit: 'mm', decimals: 2,
-    majorTicks: 10, minorTicksBetween: 4
-});
+var gaugemicrom = (window.cammesGauge && window.cammesGauge.create)
+    ? window.cammesGauge.create('microm', {
+        min: 0, max: 25, size: 260, unit: 'mm', decimals: 2,
+        majorTicks: 10, minorTicksBetween: 4
+      })
+    : null;
+// Fallback se cammesGauge è assente o l'elemento manca: stub no-op che
+// previene errori sui setter più sotto (gaugemicrom.value = ...).
+if (!gaugemicrom) {
+    console.warn('cammesGauge non disponibile, uso stub no-op');
+    gaugemicrom = { setValue: function () {}, destroy: function () {} };
+}
 // Shim retro-compat: alcuni vecchi snippet potrebbero leggere/scrivere
 // gaugemicrom.value direttamente. Non più necessario, ma innocuo.
 gaugemicrom.draw = function () {};
@@ -262,14 +270,14 @@ var pollSensorId = setInterval(function() {
     }
 }, 200);
 
-var engineSocket = new WebSocket("ws:localhost:8080");
+var engineSocket = new WebSocket("ws://localhost:8080");
 
 engineSocket.onopen = function(event) {
     document.imp2.imp2.value = "  gradi  " + "0";
     document.cpot.cpot.value = " " + "00.00";
     gaugemicrom.value = 0;
     gaugemicrom.draw();
-    sendSocket = new WebSocket("ws:localhost:8080");
+    sendSocket = new WebSocket("ws://localhost:8080");
     // Allinea la config Arduino alla modalità corrente del browser appena
     // sendSocket è pronto. Senza questo, dopo un reload la config Arduino
     // resta quella dell'ultima sessione e $+N a fine 0 virtuale può finire
@@ -678,7 +686,7 @@ function sav() {
     stringa2 = "*" + fname + "*" + "_pline" + "\r\n" + stringa;
     sendSocket.send(stringa2);
     document.salva.salva.value = " file salvato";
-    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'File salvato', body: fname + '.scr in cartella misure.', duration: 4000 });
+    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'File salvato', body: fname + '.scr in cartella prove/.', duration: 4000 });
 }
 </script>
 

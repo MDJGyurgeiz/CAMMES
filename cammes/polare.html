@@ -134,10 +134,16 @@
 
 <script>
 // Gauge moderno SVG (vedi alzata.html per dettagli)
-var gaugemicrom = window.cammesGauge.create('microm', {
-    min: 0, max: 25, size: 260, unit: 'mm', decimals: 2,
-    majorTicks: 10, minorTicksBetween: 4
-});
+var gaugemicrom = (window.cammesGauge && window.cammesGauge.create)
+    ? window.cammesGauge.create('microm', {
+        min: 0, max: 25, size: 260, unit: 'mm', decimals: 2,
+        majorTicks: 10, minorTicksBetween: 4
+      })
+    : null;
+if (!gaugemicrom) {
+    console.warn('cammesGauge non disponibile, uso stub no-op');
+    gaugemicrom = { setValue: function () {}, destroy: function () {} };
+}
 gaugemicrom.draw = function () {};
 Object.defineProperty(gaugemicrom, 'value', {
     set: function (v) { gaugemicrom.setValue(v); },
@@ -156,14 +162,14 @@ var msg = "";
 var POL_TOTAL_STEPS = 360;
 var POL_TIME_SEC    = 90;  // stima a priori (ordine grandezza, usata per ETA iniziale)
 var scanEta = window.cammesEta ? window.cammesEta.create() : { start:function(){return this;}, tick:function(){return null;}, stop:function(){} };
-var engineSocket = new WebSocket("ws:localhost:8080");
+var engineSocket = new WebSocket("ws://localhost:8080");
 
 engineSocket.onopen = function(event) {
     document.imp2.imp2.value = "  gradi  " + "0";
     document.cpot.cpot.value = " " + "00.00";
     gaugemicrom.value = 0;
     gaugemicrom.draw();
-    sendSocket = new WebSocket("ws:localhost:8080");
+    sendSocket = new WebSocket("ws://localhost:8080");
     msgold = "***";
 };
 
@@ -413,7 +419,7 @@ function sav() {
     stringa2 = "*" + fname + "*" + "_pline" + "\r\n" + stringa;
     document.salva.salva.value = " file salvato";
     sendSocket.send(stringa2);
-    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'File polare salvato', body: fname + '.scr in cartella misure.', duration: 4000 });
+    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'File polare salvato', body: fname + '.scr in cartella prove/.', duration: 4000 });
 }
 </script>
 

@@ -94,6 +94,24 @@
     .delta-arrow.pos { color: var(--success); }
     .delta-arrow.neg { color: var(--danger); }
     .delta-arrow.neu { color: var(--text-muted); }
+
+    /* Live tuning badge */
+    .live-tuning-badge {
+        display: inline-flex; align-items: center; gap: 5px;
+        font-family: var(--font-display); font-size: 10px; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 1.5px;
+        color: var(--success); padding: 3px 9px;
+        border: 1px solid var(--success);
+        border-radius: var(--r-full);
+        background: color-mix(in oklab, var(--success) 12%, transparent);
+        cursor: help;
+    }
+    .live-tuning-badge::before {
+        content: ''; width: 6px; height: 6px;
+        border-radius: 50%; background: var(--success);
+        box-shadow: 0 0 6px var(--success);
+        animation: led-pulse 1.6s ease-in-out infinite;
+    }
     </style>
 </head>
 <body>
@@ -455,7 +473,10 @@
 
                 <!-- Forze molla &amp; Cam Float (NEW) -->
                 <div class="result-section">
-                    <div class="result-section-title">Forze molla e RPM critico</div>
+                    <div class="result-section-title" style="display:flex;justify-content:space-between;align-items:center;">
+                        <span>Forze molla e RPM critico</span>
+                        <span id="liveTuningBadge" class="live-tuning-badge" style="display:none;" data-tip="<strong>Live tuning attivo</strong>Cambia i campi <b>RPM</b>, <b>k</b>, <b>F&#8320;</b> o <b>massa eq.</b> sopra per vedere aggiornarsi forze e RPM critico in tempo reale, senza ri-premere Analizza.">&#9679; Live tuning</span>
+                    </div>
                     <div class="result-row">
                         <span class="result-label">F. inerzia max asp. @ RPM</span>
                         <span class="result-value cyan" id="resFInertiaIn">-</span>
@@ -1270,6 +1291,106 @@ function extractKinematicResults(vel, acc, jerk, peakIdx, rpm) {
 //   - F_inerzia(theta) = m_eq[kg] * |acc_tempo|[m/s^2]   solo dove acc<0 (decelerazione = la valvola tende a "scappare")
 //   - F_molla(theta)   = preload[N] + k[N/mm] * liftValve(theta)[mm]
 //
+// ==========================================================
+// Helper formattazione celle forze + RPM critico (globali, riusati
+// sia da analyze() sia da liveRetuneForces() per live tuning).
+// ==========================================================
+function fmtN(v) { return (typeof formatKinValue === 'function' ? formatKinValue(v) : v.toFixed(0)) + ' N'; }
+function fmtRpm(v) { return isFinite(v) ? Math.round(v).toLocaleString('it-IT') + ' rpm' : '∞'; }
+function rpmClass(crit, rpm) { return crit > rpm * 1.5 ? 'green' : (crit > rpm * 1.05 ? 'yellow' : 'red'); }
+function rpmIcon(crit, rpm) {
+    if (!isFinite(crit) || crit > rpm * 1.5) return '✓ ';
+    if (crit > rpm * 1.05)                   return '⚠ ';
+    return '✗ ';
+}
+function setRpmCell(id, crit, rpm) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = rpmIcon(crit, rpm) + fmtRpm(crit);
+    el.className = 'result-value ' + rpmClass(crit, rpm);
+    var margin = isFinite(crit) ? ((crit/rpm - 1) * 100).toFixed(0) : '∞';
+    el.title = 'Margine: ' + (isFinite(crit) ? (margin + '%') : 'sicuro') +
+               ' (RPM target ' + rpm.toLocaleString('it-IT') + ')';
+}
+function applyForceResults(forcesIn, forcesEx, rpm) {
+    document.getElementById('resFInertiaIn').textContent = fmtN(forcesIn.fInertiaMax) + ' @ ' + rpm.toLocaleString('it-IT') + ' rpm';
+    document.getElementById('resFInertiaEx').textContent = fmtN(forcesEx.fInertiaMax) + ' @ ' + rpm.toLocaleString('it-IT') + ' rpm';
+    document.getElementById('resFSpringIn').textContent = fmtN(forcesIn.fSpringFullLift);
+    document.getElementById('resFSpringEx').textContent = fmtN(forcesEx.fSpringFullLift);
+    document.getElementById('resMarginIn').textContent = fmtN(forcesIn.marginMin) + ' @ ' + (forcesIn.marginMinIdx - 360) + '°';
+    document.getElementById('resMarginEx').textContent = fmtN(forcesEx.marginMin) + ' @ ' + (forcesEx.marginMinIdx - 360) + '°';
+    setRpmCell('resRpmCritIn', forcesIn.rpmCrit, rpm);
+    setRpmCell('resRpmCritEx', forcesEx.rpmCrit, rpm);
+}
+
+// Live tuning: ricomputa le forze e aggiorna DOM + forceChart al volo
+// quando l'utente cambia RPM, k, F0 o massa eq, SENZA dover ri-premere
+// "Analizza". Usa il contesto cacheato (lift e accel) dell'ultima analisi.
+// Debounce nativo via setTimeout: 80ms tra una digitazione e l'altra.
+var _liveRetuneTimer = null;
+function scheduleLiveRetune() {
+    if (!window.lastForceContext) return;
+    clearTimeout(_liveRetuneTimer);
+    _liveRetuneTimer = setTimeout(liveRetuneForces, 80);
+}
+function liveRetuneForces() {
+    var ctx = window.lastForceContext;
+    if (!ctx) return;
+    var rpm     = Number(document.getElementById('rpmInput').value) || 0;
+    if (rpm <= 0) return;
+    var springK = Number(document.getElementById('springK').value) || 0;
+    var springF0 = Number(document.getElementById('springPreload').value) || 0;
+    var mEqIn   = Number(document.getElementById('massEqIntake').value) || 0;
+    var mEqEx   = Number(document.getElementById('massEqExhaust').value) || 0;
+    var fIn = computeForces(ctx.anlIn, ctx.accIntake, mEqIn, rpm, springK, springF0);
+    var fEx = computeForces(ctx.anlEx, ctx.accExhaust, mEqEx, rpm, springK, springF0);
+    applyForceResults(fIn, fEx, rpm);
+    // Aggiorna forceChart in place (no destroy/recreate per ridurre lag)
+    if (window.forceChart) {
+        var sIn = [], sEx = [], iIn = [], iEx = [];
+        for (var i = 1; i <= 720; i++) {
+            sIn.push(fIn.fSpring[i]);
+            sEx.push(fEx.fSpring[i]);
+            iIn.push(fIn.fInertia[i] > 0 ? fIn.fInertia[i] : null);
+            iEx.push(fEx.fInertia[i] > 0 ? fEx.fInertia[i] : null);
+        }
+        window.forceChart.data.datasets[0].data = sIn;
+        window.forceChart.data.datasets[1].data = iIn;
+        window.forceChart.data.datasets[2].data = sEx;
+        window.forceChart.data.datasets[3].data = iEx;
+        var tEl = document.getElementById('forceChartTitle');
+        if (tEl) tEl.textContent = 'Forze treno valvole (N) — F. molla vs F. inerzia @ ' + rpm.toLocaleString('it-IT') + ' rpm';
+        window.forceChart.update('none');
+    }
+    // Aggiorna lastAnalysis.results.rpmCritIn/Ex/Margin/Inertia per coerenza export
+    if (window.lastAnalysis && window.lastAnalysis.results) {
+        var R = window.lastAnalysis.results;
+        R.rpmCritIn = fIn.rpmCrit; R.rpmCritEx = fEx.rpmCrit;
+        R.fInertiaMaxIn = fIn.fInertiaMax; R.fInertiaMaxEx = fEx.fInertiaMax;
+        R.fSpringFullIn = fIn.fSpringFullLift; R.fSpringFullEx = fEx.fSpringFullLift;
+        R.marginMinIn = fIn.marginMin; R.marginMinEx = fEx.marginMin;
+        window.lastAnalysis.inputs.rpm = rpm;
+        window.lastAnalysis.inputs.springK = springK;
+        window.lastAnalysis.inputs.springPreload = springF0;
+        window.lastAnalysis.inputs.massEqIntake = mEqIn;
+        window.lastAnalysis.inputs.massEqExhaust = mEqEx;
+    }
+}
+
+// Wire-up listener live tuning (chiamato a DOMContentLoaded)
+function initLiveTuning() {
+    var ids = ['rpmInput', 'springK', 'springPreload', 'massEqIntake', 'massEqExhaust'];
+    ids.forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('input', scheduleLiveRetune);
+    });
+}
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initLiveTuning);
+} else {
+    initLiveTuning();
+}
+
 // RPM critico: regime al quale F_inerzia eguaglia F_molla nel punto piu' sfavorevole.
 //   Poiche' F_inerzia ~ omega^2 ~ rpm^2, per ogni grado theta:
 //        rpm_crit(theta)^2 = rpm_test^2 * F_molla(theta) / F_inerzia_test(theta)
@@ -1523,31 +1644,15 @@ function analyze() {
     document.getElementById('resAsymEx').textContent = asymEx.toFixed(1) + ' %';
 
     // ====== FORCE RESULTS ======
-    function fmtN(v) { return formatKinValue(v) + ' N'; }
-    function fmtRpm(v) { return isFinite(v) ? Math.round(v).toLocaleString('it-IT') + ' rpm' : '∞'; }
-    function rpmClass(crit) { return crit > rpm * 1.5 ? 'green' : (crit > rpm * 1.05 ? 'yellow' : 'red'); }
-    function rpmIcon(crit) {
-        if (!isFinite(crit) || crit > rpm * 1.5) return '✓ ';
-        if (crit > rpm * 1.05)                   return '⚠ ';
-        return '✗ ';
-    }
-    function setRpmCell(id, crit) {
-        var el = document.getElementById(id);
-        el.innerHTML = rpmIcon(crit) + fmtRpm(crit);
-        el.className = 'result-value ' + rpmClass(crit);
-        var margin = isFinite(crit) ? ((crit/rpm - 1) * 100).toFixed(0) : '∞';
-        el.title = 'Margine: ' + (isFinite(crit) ? (margin + '%') : 'sicuro') +
-                   ' (RPM target ' + rpm.toLocaleString('it-IT') + ')';
-    }
+    applyForceResults(forcesIn, forcesEx, rpm);
 
-    document.getElementById('resFInertiaIn').textContent = fmtN(forcesIn.fInertiaMax) + ' @ ' + rpm + ' rpm';
-    document.getElementById('resFInertiaEx').textContent = fmtN(forcesEx.fInertiaMax) + ' @ ' + rpm + ' rpm';
-    document.getElementById('resFSpringIn').textContent = fmtN(forcesIn.fSpringFullLift);
-    document.getElementById('resFSpringEx').textContent = fmtN(forcesEx.fSpringFullLift);
-    document.getElementById('resMarginIn').textContent = fmtN(forcesIn.marginMin) + ' @ ' + (forcesIn.marginMinIdx - 360) + '°';
-    document.getElementById('resMarginEx').textContent = fmtN(forcesEx.marginMin) + ' @ ' + (forcesEx.marginMinIdx - 360) + '°';
-    setRpmCell('resRpmCritIn', forcesIn.rpmCrit);
-    setRpmCell('resRpmCritEx', forcesEx.rpmCrit);
+    // Salva contesto per live tuning (vedi liveRetuneForces sotto)
+    window.lastForceContext = {
+        anlIn: anlIn, anlEx: anlEx,
+        accIntake: accIntake, accExhaust: accExhaust
+    };
+    var tuningBadge = document.getElementById('liveTuningBadge');
+    if (tuningBadge) tuningBadge.style.display = 'inline-flex';
 
     // ====== KINEMATIC RESULTS ======
     document.getElementById('kinematicsCard').style.display = 'block';
@@ -1879,7 +1984,7 @@ function createForceChart(forcesIn, forcesEx, rpm) {
         'Forze treno valvole (N) — F. molla vs F. inerzia @ ' + rpm + ' rpm';
 
     var ctx = document.getElementById('forceCanvas').getContext('2d');
-    forceChart = new Chart(ctx, {
+    forceChart = window.forceChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,

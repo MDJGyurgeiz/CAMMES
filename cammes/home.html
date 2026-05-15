@@ -300,6 +300,12 @@
 </div>
 
 <script>
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+}
+
 function fmtBytes(b) {
     if (b == null) return '--';
     if (b < 1024) return b + ' B';
@@ -355,20 +361,21 @@ function loadRecents() {
                     '<a href="polare.html">Polare</a>.</div>';
                 return;
             }
+            // Tutti gli input utente (f.name) sono escapati: il server già whitelista
+            // [A-Za-z0-9._-] ma la difesa-in-profondità è importante.
             var rows = files.slice(0, 10).map(function (f) {
                 var typeLabel = f.type === 'alz' ? 'alzata'
                               : f.type === 'pol' ? 'polare'
                               : 'altro';
-                var targetPage = f.type === 'alz' ? 'grafici.html'
-                               : f.type === 'pol' ? 'grafici.html'
-                               : '#';
+                var safeName = escapeHtml(f.name);
+                var safeType = escapeHtml(f.type);
                 return '<tr>' +
-                    '<td><span class="type-pill ' + f.type + '">' + typeLabel + '</span></td>' +
-                    '<td><span class="fname">' + f.name + '</span></td>' +
+                    '<td><span class="type-pill ' + safeType + '">' + typeLabel + '</span></td>' +
+                    '<td><span class="fname">' + safeName + '</span></td>' +
                     '<td class="fsize">' + fmtBytes(f.size) + '</td>' +
-                    '<td class="fdate">' + fmtDate(f.mtime) + '</td>' +
+                    '<td class="fdate">' + escapeHtml(fmtDate(f.mtime)) + '</td>' +
                     '<td style="text-align:right;">' +
-                      '<a class="home-action-btn" href="/api/file/' + encodeURIComponent(f.name) + '" target="_blank" download="' + f.name + '" title="Scarica">&darr; Scarica</a>' +
+                      '<a class="home-action-btn" href="/api/file/' + encodeURIComponent(f.name) + '" target="_blank" download="' + safeName + '" title="Scarica">&darr; Scarica</a>' +
                     '</td>' +
                     '</tr>';
             }).join('');

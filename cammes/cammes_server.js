@@ -253,14 +253,30 @@ function handleFileSave(msg) {
     var fileName = msg.substring(firstStar + 1, secondStar);
     var fileData = msg.substring(secondStar + 1);
 
+    // SECURITY: valida nome file lato server. Il client sanitizza già
+    // (sav() in alzata/polare), ma un client WS ostile può inviare
+    // qualunque cosa. Whitelist conservativa: solo A-Z a-z 0-9 _ - punti.
+    // Niente '/', '\', '..', ':' (path traversal), niente nullbyte.
+    if (!fileName || fileName.length > 120 ||
+        !/^[A-Za-z0-9._-]+$/.test(fileName) ||
+        fileName.indexOf('..') !== -1) {
+        log('FILE', 'Nome file rifiutato (security): "' + String(fileName).substring(0,40) + '"');
+        return;
+    }
+
     // Crea la cartella prove/ se non esiste
     if (!fs.existsSync(PROVE_DIR)) {
         fs.mkdirSync(PROVE_DIR, { recursive: true });
         log('FILE', 'Creata cartella: ' + PROVE_DIR);
     }
 
-    // Salva il file
+    // Salva il file (path.join + verifica resolved per safety extra)
     var filePath = path.join(PROVE_DIR, fileName + '.scr');
+    var resolved = path.resolve(filePath);
+    if (resolved.indexOf(path.resolve(PROVE_DIR)) !== 0) {
+        log('FILE', 'Path traversal tentato, rifiutato: ' + resolved);
+        return;
+    }
     fs.writeFile(filePath, fileData, function (err) {
         if (err) {
             log('FILE', 'Errore salvataggio: ' + err.message);
