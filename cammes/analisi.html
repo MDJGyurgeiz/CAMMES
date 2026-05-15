@@ -59,6 +59,41 @@
     .ab-set-a .ab-set-title { color: var(--accent); }
     .ab-set-b .ab-set-title { color: var(--warning); }
     .ab-delta-table { margin-top: 16px; }
+
+    /* AB summary chips - hero KPIs in alto */
+    .ab-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 12px 0; }
+    .ab-chip {
+        background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 10px;
+        padding: 10px 12px; position: relative; overflow: hidden;
+    }
+    .ab-chip-label {
+        font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+        color: var(--text-muted); margin-bottom: 4px; font-family: var(--font-display);
+    }
+    .ab-chip-value {
+        font-family: var(--font-mono); font-size: 18px; font-weight: 700;
+        color: var(--text-primary); font-variant-numeric: tabular-nums;
+    }
+    .ab-chip-delta {
+        font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+        margin-top: 2px; display: flex; align-items: center; gap: 3px;
+    }
+    .ab-chip-delta.pos { color: var(--success); }
+    .ab-chip-delta.neg { color: var(--danger); }
+    .ab-chip-delta.neu { color: var(--text-muted); }
+    .ab-chip::after {
+        content: ''; position: absolute; left: 0; bottom: 0; height: 2px; width: 100%;
+        background: var(--border-card);
+    }
+    .ab-chip.pos::after { background: var(--success); box-shadow: 0 0 8px var(--success-glow); }
+    .ab-chip.neg::after { background: var(--danger);  box-shadow: 0 0 8px var(--danger-glow); }
+
+    /* Delta cell con freccia colorata */
+    .delta-cell { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); }
+    .delta-arrow { font-size: 11px; font-weight: 700; }
+    .delta-arrow.pos { color: var(--success); }
+    .delta-arrow.neg { color: var(--danger); }
+    .delta-arrow.neu { color: var(--text-muted); }
     </style>
 </head>
 <body>
@@ -613,6 +648,10 @@
 
             <!-- AB Results (hidden until comparison) -->
             <div id="abResultsWrap" style="display:none; margin-top:16px;">
+
+                <!-- Hero summary chips: 4 KPI a colpo d'occhio -->
+                <div class="ab-summary" id="abSummary"></div>
+
                 <div class="kin-chart-wrap">
                     <div class="kin-chart-title">
                         <span>Overlay A vs B</span>
@@ -620,31 +659,58 @@
                     </div>
                     <canvas id="abCanvas"></canvas>
                 </div>
+
                 <div class="ab-delta-table">
-                    <div class="result-section-title">Delta A vs B</div>
+                    <div class="result-section-title">Aspirazione &mdash; A vs B (&Delta; = B − A)</div>
                     <div class="result-row">
-                        <span class="result-label">Max alzata asp. A / B</span>
-                        <span class="result-value yellow" id="abMaxIn">-</span>
+                        <span class="result-label">Max alzata</span>
+                        <span class="result-value" id="abMaxIn">-</span>
                     </div>
                     <div class="result-row">
-                        <span class="result-label">Max alzata scar. A / B</span>
-                        <span class="result-value yellow" id="abMaxEx">-</span>
+                        <span class="result-label">Durata @ 0&deg;</span>
+                        <span class="result-value" id="abDurIn">-</span>
                     </div>
                     <div class="result-row">
-                        <span class="result-label">&Delta; Area asp.</span>
-                        <span class="result-value yellow" id="abAreaIn">-</span>
+                        <span class="result-label">Area sotto curva</span>
+                        <span class="result-value" id="abAreaIn">-</span>
                     </div>
                     <div class="result-row">
-                        <span class="result-label">&Delta; Area scar.</span>
-                        <span class="result-value yellow" id="abAreaEx">-</span>
+                        <span class="result-label">Velocit&agrave; picco</span>
+                        <span class="result-value" id="abVelIn">-</span>
                     </div>
                     <div class="result-row">
-                        <span class="result-label">&Delta; Durata asp.</span>
-                        <span class="result-value yellow" id="abDurIn">-</span>
+                        <span class="result-label">Accelerazione picco</span>
+                        <span class="result-value" id="abAccIn">-</span>
                     </div>
                     <div class="result-row">
-                        <span class="result-label">&Delta; Durata scar.</span>
-                        <span class="result-value yellow" id="abDurEx">-</span>
+                        <span class="result-label">Asimmetria lobo</span>
+                        <span class="result-value" id="abAsymIn">-</span>
+                    </div>
+
+                    <div class="result-section-title" style="margin-top:16px;">Scarico &mdash; A vs B</div>
+                    <div class="result-row">
+                        <span class="result-label">Max alzata</span>
+                        <span class="result-value" id="abMaxEx">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Durata @ 0&deg;</span>
+                        <span class="result-value" id="abDurEx">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Area sotto curva</span>
+                        <span class="result-value" id="abAreaEx">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Velocit&agrave; picco</span>
+                        <span class="result-value" id="abVelEx">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Accelerazione picco</span>
+                        <span class="result-value" id="abAccEx">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Asimmetria lobo</span>
+                        <span class="result-value" id="abAsymEx">-</span>
                     </div>
                 </div>
             </div>
@@ -1459,10 +1525,18 @@ function analyze() {
     function fmtN(v) { return formatKinValue(v) + ' N'; }
     function fmtRpm(v) { return isFinite(v) ? Math.round(v).toLocaleString('it-IT') + ' rpm' : '∞'; }
     function rpmClass(crit) { return crit > rpm * 1.5 ? 'green' : (crit > rpm * 1.05 ? 'yellow' : 'red'); }
+    function rpmIcon(crit) {
+        if (!isFinite(crit) || crit > rpm * 1.5) return '✓ ';
+        if (crit > rpm * 1.05)                   return '⚠ ';
+        return '✗ ';
+    }
     function setRpmCell(id, crit) {
         var el = document.getElementById(id);
-        el.textContent = fmtRpm(crit);
+        el.innerHTML = rpmIcon(crit) + fmtRpm(crit);
         el.className = 'result-value ' + rpmClass(crit);
+        var margin = isFinite(crit) ? ((crit/rpm - 1) * 100).toFixed(0) : '∞';
+        el.title = 'Margine: ' + (isFinite(crit) ? (margin + '%') : 'sicuro') +
+                   ' (RPM target ' + rpm.toLocaleString('it-IT') + ')';
     }
 
     document.getElementById('resFInertiaIn').textContent = fmtN(forcesIn.fInertiaMax) + ' @ ' + rpm + ' rpm';
@@ -1552,14 +1626,36 @@ function analyze() {
     document.getElementById('btnExportCSV').disabled = false;
     document.getElementById('btnExportPDF').disabled = false;
     if (window.cammesToast) {
+        var minRpmCrit = Math.min(forcesIn.rpmCrit, forcesEx.rpmCrit);
         var rpmCritStr = isFinite(forcesIn.rpmCrit) && isFinite(forcesEx.rpmCrit)
-            ? Math.round(Math.min(forcesIn.rpmCrit, forcesEx.rpmCrit)) + ' rpm'
+            ? Math.round(minRpmCrit).toLocaleString('it-IT') + ' rpm'
             : '&#x221e; (sicuro)';
         window.cammesToast({
             kind: 'success', title: 'Analisi completata',
             body: 'LSA <b>' + LSA.toFixed(1) + '&deg;</b> &middot; durata asp. <b>' + durIntake + '&deg;</b> &middot; RPM critico <b>' + rpmCritStr + '</b>',
             duration: 5500
         });
+        // Warning extra se RPM critico è troppo vicino al regime target
+        if (isFinite(minRpmCrit) && minRpmCrit < rpm * 1.05) {
+            setTimeout(function () {
+                window.cammesToast({
+                    kind: 'err', title: 'Valve float a rischio!',
+                    body: 'RPM critico (<b>' + Math.round(minRpmCrit).toLocaleString('it-IT') +
+                          '</b>) &egrave; sotto o vicinissimo al regime target (' + rpm.toLocaleString('it-IT') +
+                          '). Aumenta k molla, F&#8320; precarico o riduci massa.',
+                    duration: 8000
+                });
+            }, 500);
+        } else if (isFinite(minRpmCrit) && minRpmCrit < rpm * 1.5) {
+            setTimeout(function () {
+                window.cammesToast({
+                    kind: 'warn', title: 'Margine stretto',
+                    body: 'RPM critico ha solo +' + Math.round((minRpmCrit/rpm-1)*100) +
+                          '% di margine sul target. Considera molla pi&ugrave; rigida per uso prolungato in zona rossa.',
+                    duration: 7000
+                });
+            }, 500);
+        }
     }
 }
 
@@ -1925,7 +2021,12 @@ function runABComparison() {
     var fileBExh = document.getElementById('fileB_exh').files[0];
 
     if (!fileAInt || !fileAExh || !fileBInt || !fileBExh) {
-        alert('Caricare tutti e 4 i file per il confronto A vs B.');
+        if (window.cammesToast) {
+            window.cammesToast({ kind: 'warn', title: 'File mancanti',
+                body: 'Carica <b>tutti e 4</b> i file (A asp/scar + B asp/scar) per il confronto.', duration: 4000 });
+        } else {
+            alert('Caricare tutti e 4 i file per il confronto A vs B.');
+        }
         return;
     }
 
@@ -1968,20 +2069,110 @@ function runABComparison() {
         var durB_int = computeDurationAtRef(crankB_int, 0.001);
         var durB_exh = computeDurationAtRef(crankB_exh, 0.001);
 
-        // Display results
+        // Derivate (vel, acc) e asimmetria
+        var kinA_int = computeDerivatives(crankA_int);
+        var kinA_exh = computeDerivatives(crankA_exh);
+        var kinB_int = computeDerivatives(crankB_int);
+        var kinB_exh = computeDerivatives(crankB_exh);
+        function peakAbs(arr) {
+            var m = 0; for (var i = 1; i <= 720; i++) { var v = Math.abs(arr[i]); if (v > m) m = v; }
+            return m;
+        }
+        var velA_int = peakAbs(kinA_int.vel), velB_int = peakAbs(kinB_int.vel);
+        var velA_exh = peakAbs(kinA_exh.vel), velB_exh = peakAbs(kinB_exh.vel);
+        var accA_int = peakAbs(kinA_int.acc), accB_int = peakAbs(kinB_int.acc);
+        var accA_exh = peakAbs(kinA_exh.acc), accB_exh = peakAbs(kinB_exh.acc);
+        var asymA_int = computeLobeAsymmetry(crankA_int, maxA_int.idx);
+        var asymA_exh = computeLobeAsymmetry(crankA_exh, maxA_exh.idx);
+        var asymB_int = computeLobeAsymmetry(crankB_int, maxB_int.idx);
+        var asymB_exh = computeLobeAsymmetry(crankB_exh, maxB_exh.idx);
+
         document.getElementById('abResultsWrap').style.display = 'block';
 
-        document.getElementById('abMaxIn').textContent =
-            maxA_int.lift.toFixed(2) + ' / ' + maxB_int.lift.toFixed(2) + ' mm  (\u0394 ' + (maxB_int.lift - maxA_int.lift).toFixed(2) + ')';
-        document.getElementById('abMaxEx').textContent =
-            maxA_exh.lift.toFixed(2) + ' / ' + maxB_exh.lift.toFixed(2) + ' mm  (\u0394 ' + (maxB_exh.lift - maxA_exh.lift).toFixed(2) + ')';
+        // Helper per popolare cella delta con freccia + colore
+        function fillDelta(elId, a, b, unit, decimals) {
+            decimals = decimals != null ? decimals : 2;
+            var delta = b - a;
+            var arrow = Math.abs(delta) < Math.pow(10, -decimals) ? '\u25C6' : (delta > 0 ? '\u25B2' : '\u25BC');
+            var cls   = Math.abs(delta) < Math.pow(10, -decimals) ? 'neu' : (delta > 0 ? 'pos' : 'neg');
+            var sign  = delta > 0 ? '+' : '';
+            document.getElementById(elId).innerHTML =
+                '<span class="delta-cell">' +
+                a.toFixed(decimals) + ' / ' + b.toFixed(decimals) + ' ' + unit +
+                ' <span class="delta-arrow ' + cls + '">' + arrow + ' ' + sign + delta.toFixed(decimals) + '</span>' +
+                '</span>';
+        }
+        function fillDeltaInt(elId, a, b, unit) {
+            var delta = b - a;
+            var arrow = delta === 0 ? '\u25C6' : (delta > 0 ? '\u25B2' : '\u25BC');
+            var cls   = delta === 0 ? 'neu' : (delta > 0 ? 'pos' : 'neg');
+            var sign  = delta > 0 ? '+' : '';
+            document.getElementById(elId).innerHTML =
+                '<span class="delta-cell">' + a + ' / ' + b + ' ' + unit +
+                ' <span class="delta-arrow ' + cls + '">' + arrow + ' ' + sign + delta + '</span></span>';
+        }
+        function fillDeltaPct(elId, a, b) {
+            var pct = a > 0 ? ((b - a) / a * 100) : 0;
+            var arrow = Math.abs(pct) < 0.05 ? '\u25C6' : (pct > 0 ? '\u25B2' : '\u25BC');
+            var cls   = Math.abs(pct) < 0.05 ? 'neu' : (pct > 0 ? 'pos' : 'neg');
+            var sign  = pct > 0 ? '+' : '';
+            document.getElementById(elId).innerHTML =
+                '<span class="delta-cell">' + a.toFixed(1) + ' / ' + b.toFixed(1) +
+                ' <span class="delta-arrow ' + cls + '">' + arrow + ' ' + sign + pct.toFixed(1) + ' %</span></span>';
+        }
 
-        var dAreaIn = areaA_int > 0 ? ((areaB_int - areaA_int) / areaA_int * 100) : 0;
-        var dAreaEx = areaA_exh > 0 ? ((areaB_exh - areaA_exh) / areaA_exh * 100) : 0;
-        document.getElementById('abAreaIn').textContent = dAreaIn.toFixed(1) + ' %';
-        document.getElementById('abAreaEx').textContent = dAreaEx.toFixed(1) + ' %';
-        document.getElementById('abDurIn').textContent = (durB_int - durA_int) + '\u00B0';
-        document.getElementById('abDurEx').textContent = (durB_exh - durA_exh) + '\u00B0';
+        // Aspirazione
+        fillDelta('abMaxIn',  maxA_int.lift, maxB_int.lift, 'mm', 2);
+        fillDeltaInt('abDurIn', durA_int, durB_int, '\u00B0');
+        fillDeltaPct('abAreaIn', areaA_int, areaB_int);
+        fillDelta('abVelIn',  velA_int, velB_int, 'mm/\u00B0', 3);
+        fillDelta('abAccIn',  accA_int, accB_int, 'mm/\u00B0\u00B2', 3);
+        fillDelta('abAsymIn', asymA_int, asymB_int, '%', 1);
+
+        // Scarico
+        fillDelta('abMaxEx',  maxA_exh.lift, maxB_exh.lift, 'mm', 2);
+        fillDeltaInt('abDurEx', durA_exh, durB_exh, '\u00B0');
+        fillDeltaPct('abAreaEx', areaA_exh, areaB_exh);
+        fillDelta('abVelEx',  velA_exh, velB_exh, 'mm/\u00B0', 3);
+        fillDelta('abAccEx',  accA_exh, accB_exh, 'mm/\u00B0\u00B2', 3);
+        fillDelta('abAsymEx', asymA_exh, asymB_exh, '%', 1);
+
+        // Hero chip summary: max alzata asp, durata asp, area asp%, velocit\u00E0 asp
+        function chipHTML(label, valueB, deltaText, deltaCls) {
+            return '<div class="ab-chip ' + deltaCls + '">' +
+                   '  <div class="ab-chip-label">' + label + '</div>' +
+                   '  <div class="ab-chip-value">' + valueB + '</div>' +
+                   '  <div class="ab-chip-delta ' + deltaCls + '">' + deltaText + '</div>' +
+                   '</div>';
+        }
+        function deltaCls(delta) { return Math.abs(delta) < 0.001 ? 'neu' : (delta > 0 ? 'pos' : 'neg'); }
+        function deltaArrow(delta) { return Math.abs(delta) < 0.001 ? '\u25C6' : (delta > 0 ? '\u25B2' : '\u25BC'); }
+        var dMaxIn = maxB_int.lift - maxA_int.lift;
+        var dDurIn = durB_int - durA_int;
+        var dAreaPctIn = areaA_int > 0 ? ((areaB_int - areaA_int)/areaA_int*100) : 0;
+        var dVelIn = velB_int - velA_int;
+        document.getElementById('abSummary').innerHTML =
+            chipHTML('Max asp. B', maxB_int.lift.toFixed(2) + ' mm',
+                     deltaArrow(dMaxIn) + ' ' + (dMaxIn >= 0 ? '+' : '') + dMaxIn.toFixed(2) + ' mm vs A',
+                     deltaCls(dMaxIn)) +
+            chipHTML('Durata asp. B', durB_int + '\u00B0',
+                     deltaArrow(dDurIn) + ' ' + (dDurIn >= 0 ? '+' : '') + dDurIn + '\u00B0 vs A',
+                     deltaCls(dDurIn)) +
+            chipHTML('Area asp.', '+' + dAreaPctIn.toFixed(1) + ' %',
+                     deltaArrow(dAreaPctIn) + ' B vs A',
+                     deltaCls(dAreaPctIn)) +
+            chipHTML('Vel. picco asp.', velB_int.toFixed(3) + ' mm/\u00B0',
+                     deltaArrow(dVelIn) + ' ' + (dVelIn >= 0 ? '+' : '') + dVelIn.toFixed(3) + ' vs A',
+                     deltaCls(dVelIn));
+
+        // Toast riepilogo (notifica visiva)
+        if (window.cammesToast) {
+            window.cammesToast({
+                kind: 'success', title: 'Confronto A vs B',
+                body: 'B vs A asp.: max <b>' + (dMaxIn >= 0 ? '+' : '') + dMaxIn.toFixed(2) + ' mm</b>, durata <b>' + (dDurIn >= 0 ? '+' : '') + dDurIn + '\u00B0</b>, area <b>' + (dAreaPctIn >= 0 ? '+' : '') + dAreaPctIn.toFixed(1) + ' %</b>',
+                duration: 6000
+            });
+        }
 
         // Create overlay chart
         createABChart(crankA_int, crankA_exh, crankB_int, crankB_exh);

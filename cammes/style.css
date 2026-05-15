@@ -1367,6 +1367,38 @@ input.input-error {
   text-align: right;
 }
 
+/* ---------- CARD ENTER ANIMATIONS --------------------------------------- */
+/* Stagger fade+slide all'avvio della pagina. Disabilitato per stampa e per
+   utenti con prefers-reduced-motion. */
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+@keyframes header-enter {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.app-container .header {
+  animation: header-enter 0.5s cubic-bezier(0.2, 0.9, 0.2, 1) backwards;
+}
+.app-container .card {
+  animation: card-enter 0.55s cubic-bezier(0.2, 0.9, 0.2, 1) backwards;
+}
+.app-container .card:nth-of-type(1) { animation-delay: 80ms; }
+.app-container .card:nth-of-type(2) { animation-delay: 160ms; }
+.app-container .card:nth-of-type(3) { animation-delay: 240ms; }
+.app-container .card:nth-of-type(4) { animation-delay: 320ms; }
+.app-container .card:nth-of-type(5) { animation-delay: 400ms; }
+.app-container .card:nth-of-type(6) { animation-delay: 480ms; }
+.app-container .card:nth-of-type(n+7) { animation-delay: 560ms; }
+.main-grid .card                    { animation-delay: 120ms; }
+.main-grid .card + .card            { animation-delay: 200ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .app-container .header,
+  .app-container .card { animation: none; }
+}
+
 /* ---------- ONBOARDING WIZARD ------------------------------------------- */
 .cammes-wizard-backdrop {
   position: fixed;
