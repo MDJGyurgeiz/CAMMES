@@ -157,9 +157,9 @@
   --border-focus:  var(--accent);
 
   --text-primary:   #0d1117;
-  --text-secondary: #4a5365;
-  --text-muted:     #6b7588;
-  --text-disabled:  #a4afc1;
+  --text-secondary: #3d4555;  /* era #4a5365 — più scuro per AAA */
+  --text-muted:     #525a6d;  /* era #6b7588 — ora ~5.4:1 su bg-input (WCAG AA) */
+  --text-disabled:  #8b94a8;  /* era #a4afc1 — più visibile */
 
   --grid:        #e2e8f0;
   --grid-zero:   #d9534f;
@@ -1397,6 +1397,17 @@ input.input-error {
 @media (prefers-reduced-motion: reduce) {
   .app-container .header,
   .app-container .card { animation: none; }
+  /* Disabilita anche le transizioni morbide e animazioni periodiche */
+  .gauge-svg-arc-value { transition: none !important; }
+  .cammes-wizard-backdrop,
+  .cammes-wizard { transition: none !important; }
+  .scan-progress-wrap.active .scan-progress-bar::after { animation: none !important; }
+  .led.ok.pulse,
+  .led.warn.pulse,
+  .live-tuning-badge::before { animation: none !important; }
+  .toast { transition: none !important; }
+  .btn::after,
+  .btn:hover { transition: none !important; }
 }
 
 /* ---------- ONBOARDING WIZARD ------------------------------------------- */

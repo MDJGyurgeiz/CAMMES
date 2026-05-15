@@ -307,7 +307,7 @@ engineSocket.onmessage = function(event) {
     if (msg === '*mv' && window._waiting_mv) {
         window._waiting_mv = false;
         clearTimeout(window._mv_fallback);
-        console.log('[0V] *mv ricevuto, reload pagina');
+        if (window.CAMMES_DEBUG) console.log('[0V] *mv ricevuto, reload pagina');
         setTimeout(function(){ location.reload(true); }, 200);
         return;
     }
@@ -366,7 +366,7 @@ engineSocket.onmessage = function(event) {
             }
         }
 
-        if (startflag == 1 & i <= currentMode.totalSteps & stepflag == 0) {
+        if (startflag === 1 && i <= currentMode.totalSteps && stepflag === 0) {
             // Bin angolare 1..360 (grado camma reale). Se subStepsPerDeg>1 aggreghiamo
             // più letture nello stesso bin con media filtrata di NaN.
             var deg = Math.floor((i - 1) / currentMode.subStepsPerDeg) + 1;
@@ -442,7 +442,7 @@ engineSocket.onmessage = function(event) {
             // Comando inviato: $+delta_units oppure $-|delta_units|
             // a seconda del segno.
             if (maxg_encoder === null || currentEncoderCount === null) {
-                console.warn('[0V] dati encoder mancanti (maxg_encoder=' + maxg_encoder + ', current=' + currentEncoderCount + '), abort 0V');
+                if (window.CAMMES_DEBUG) console.warn('[0V] dati encoder mancanti (maxg_encoder=' + maxg_encoder + ', current=' + currentEncoderCount + '), abort 0V');
                 labms = 0;
                 location.reload(true);
             } else {
@@ -461,7 +461,7 @@ engineSocket.onmessage = function(event) {
                                   : (absUnits < 100) ? '0' + absUnits
                                   : '' + absUnits;
                 var rgradi2       = '$' + sign + rgradi;
-                console.log('[0V] picco encoder=' + maxg_encoder + ' (=' + (maxg_encoder/4).toFixed(2) + '°), target=' + encoderTarget + ' (=' + (encoderTarget/4).toFixed(2) + '°), now=' + currentEncoderCount + ', delta_raw=' + rawDelta + ' cnt → short=' + deltaCount + ' cnt = ' + deltaDeg.toFixed(2) + '° = ' + deltaUnits + ' units. cmd="' + rgradi2 + '"');
+                if (window.CAMMES_DEBUG) console.log('[0V] picco encoder=' + maxg_encoder + ' (=' + (maxg_encoder/4).toFixed(2) + '°), target=' + encoderTarget + ' (=' + (encoderTarget/4).toFixed(2) + '°), now=' + currentEncoderCount + ', delta_raw=' + rawDelta + ' cnt → short=' + deltaCount + ' cnt = ' + deltaDeg.toFixed(2) + '° = ' + deltaUnits + ' units. cmd="' + rgradi2 + '"');
                 sendSocket.send(rgradi2 + '\n');
                 oldg = absUnits;
                 var stepEl = document.getElementById("step");
@@ -470,7 +470,7 @@ engineSocket.onmessage = function(event) {
                 window._waiting_mv  = true;
                 window._mv_fallback = setTimeout(function(){
                     if (window._waiting_mv) {
-                        console.warn('[0V] timeout fallback 8s, reload forzato');
+                        if (window.CAMMES_DEBUG) console.warn('[0V] timeout fallback 8s, reload forzato');
                         window._waiting_mv = false;
                         location.reload(true);
                     }
@@ -682,8 +682,8 @@ function sav() {
     for (t = 1; t < pdindex.length; t++) {
         stringa = stringa + pdindex[t] + "," + pdata[t] + "\r\n";
     }
-    fname = safeName + "_alz";
-    stringa2 = "*" + fname + "*" + "_pline" + "\r\n" + stringa;
+    var fname = safeName + "_alz";
+    var stringa2 = "*" + fname + "*" + "_pline" + "\r\n" + stringa;
     sendSocket.send(stringa2);
     document.salva.salva.value = " file salvato";
     if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'File salvato', body: fname + '.scr in cartella prove/.', duration: 4000 });
@@ -693,21 +693,21 @@ function sav() {
 <script>
 var dif = 0;
 function ruota() {
-    dg = document.getElementById("step").value;
-    w = "rotazione a   " + dg + " gradi  attivata";
+    var dg = document.getElementById("step").value;
+    var w = "rotazione a   " + dg + " gradi  attivata";
     responsiveVoice.speak(w, "Italian Female", { volume: 3 });
 
     if (dg - oldg < 0) {
         dif = -(dg - oldg);
         if (dif < 10) { dif = "00" + dif; }
-        if (dif < 100 & dif >= 10) { dif = "0" + dif; }
+        if (dif < 100 && dif >= 10) { dif = "0" + dif; }
         if (rsign == 1) { crot = "$-" + (dif); }
         if (rsign == -1) { crot = "$+" + (dif); }
     }
     if (dg - oldg > 0) {
         dif = dg - oldg;
         if (dif < 10) { dif = "00" + dif; }
-        if (dif < 100 & dif >= 10) { dif = "0" + dif; }
+        if (dif < 100 && dif >= 10) { dif = "0" + dif; }
         if (rsign == 1) { crot = "$+" + (dif); }
         if (rsign == -1) { crot = "$-" + (dif); }
     }

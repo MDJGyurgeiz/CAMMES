@@ -190,6 +190,72 @@
         transition: all var(--t-fast) var(--ease);
     }
     .home-action-btn:hover { background: var(--accent); color: #06121b; border-color: var(--accent); }
+
+    /* Activity bar chart (SVG inline, ultimi 14 giorni) */
+    .activity-chart {
+        display: flex;
+        align-items: flex-end;
+        gap: 3px;
+        height: 80px;
+        margin: var(--sp-3) 0;
+        padding: 0 4px;
+    }
+    .activity-bar {
+        flex: 1;
+        background: var(--bg-input);
+        border-radius: var(--r-sm) var(--r-sm) 0 0;
+        position: relative;
+        min-height: 3px;
+        transition: all var(--t-fast) var(--ease);
+        cursor: pointer;
+    }
+    .activity-bar > span {
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        background: linear-gradient(180deg, var(--accent) 0%, color-mix(in oklab, var(--accent) 60%, var(--accent-3)) 100%);
+        border-radius: var(--r-sm) var(--r-sm) 0 0;
+        display: block;
+        transition: height var(--t-base) var(--ease);
+    }
+    .activity-bar:hover { transform: translateY(-2px); }
+    .activity-bar:hover > span { background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2-glow); }
+    .activity-bar .activity-tip {
+        position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%) translateY(-4px);
+        background: var(--bg-elev-3); color: var(--text-primary);
+        border: 1px solid var(--border-strong); border-radius: var(--r-sm);
+        font-family: var(--font-mono); font-size: 11px;
+        padding: 3px 7px; white-space: nowrap;
+        opacity: 0; pointer-events: none; transition: opacity var(--t-fast) var(--ease);
+    }
+    .activity-bar:hover .activity-tip { opacity: 1; }
+    .activity-labels {
+        display: flex;
+        justify-content: space-between;
+        font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+        padding: 0 4px;
+    }
+
+    /* Star bookmark button */
+    .star-btn {
+        background: none; border: none; cursor: pointer;
+        color: var(--text-muted); font-size: 16px; padding: 0 4px;
+        transition: all var(--t-fast) var(--ease);
+        line-height: 1;
+    }
+    .star-btn:hover { color: var(--accent-2); transform: scale(1.15); }
+    .star-btn.active { color: var(--accent-2); text-shadow: 0 0 6px var(--accent-2-glow); }
+    .home-recents-table tr.bookmarked td:first-child { border-left: 2px solid var(--accent-2); }
+    .filter-toggle {
+        display: inline-flex; align-items: center; gap: 5px;
+        font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
+        padding: 4px 10px; border-radius: var(--r-full);
+        background: var(--bg-input); border: 1px solid var(--border);
+        cursor: pointer; user-select: none;
+        margin-left: var(--sp-2);
+        transition: all var(--t-fast) var(--ease);
+    }
+    .filter-toggle.active { background: var(--accent-2); color: #1a1a0a; border-color: var(--accent-2); }
+    .filter-toggle:hover:not(.active) { color: var(--text-primary); border-color: var(--border-strong); }
     </style>
 </head>
 <body>
@@ -286,11 +352,24 @@
         </div>
     </div>
 
+    <!-- Activity (ultimi 14 giorni) -->
+    <div class="card" id="activityCard" style="display:none;">
+        <div class="card-title">Attivit&agrave; ultimi 14 giorni</div>
+        <div class="activity-chart" id="activityChart"></div>
+        <div class="activity-labels" id="activityLabels"></div>
+    </div>
+
     <!-- Recenti -->
     <div class="card">
-        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
             <span>Misurazioni recenti</span>
-            <button class="home-action-btn" onclick="loadRecents();" title="Ricarica lista">&#8634; Aggiorna</button>
+            <span style="display:inline-flex;align-items:center;gap:8px;">
+                <label class="filter-toggle" id="filterBookmarkedLabel" onclick="toggleBookmarkFilter();">
+                    <input type="checkbox" id="filterBookmarked" style="display:none;">
+                    <span id="filterBookmarkedIcon">&#9734;</span> Solo preferiti
+                </label>
+                <button class="home-action-btn" onclick="loadRecents();" title="Ricarica lista">&#8634; Aggiorna</button>
+            </span>
         </div>
         <div id="recentsWrap">
             <div class="home-recents-empty">Caricamento&hellip;</div>
@@ -304,6 +383,83 @@ function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
         return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
     });
+}
+
+// ===== Bookmark (preferiti) =====
+var BOOKMARK_KEY = 'cammes-bookmarks-v1';
+function loadBookmarks() {
+    try { return JSON.parse(localStorage.getItem(BOOKMARK_KEY)) || []; } catch (e) { return []; }
+}
+function saveBookmarks(arr) {
+    try { localStorage.setItem(BOOKMARK_KEY, JSON.stringify(arr)); } catch (e) {}
+}
+function isBookmarked(name) { return loadBookmarks().indexOf(name) !== -1; }
+function toggleBookmark(name, ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    var list = loadBookmarks();
+    var i = list.indexOf(name);
+    if (i === -1) {
+        list.push(name);
+        if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Aggiunto ai preferiti', body: name, duration: 2000 });
+    } else {
+        list.splice(i, 1);
+    }
+    saveBookmarks(list);
+    loadRecents();
+}
+var filterOnlyBookmarks = false;
+function toggleBookmarkFilter() {
+    filterOnlyBookmarks = !filterOnlyBookmarks;
+    var label = document.getElementById('filterBookmarkedLabel');
+    var icon  = document.getElementById('filterBookmarkedIcon');
+    if (filterOnlyBookmarks) {
+        label.classList.add('active');
+        icon.innerHTML = '&#9733;';
+    } else {
+        label.classList.remove('active');
+        icon.innerHTML = '&#9734;';
+    }
+    loadRecents();
+}
+window.toggleBookmark = toggleBookmark;
+window.toggleBookmarkFilter = toggleBookmarkFilter;
+
+// ===== Activity chart (mini bar chart degli ultimi 14 giorni) =====
+function renderActivityChart(files) {
+    var card  = document.getElementById('activityCard');
+    var chart = document.getElementById('activityChart');
+    var labels = document.getElementById('activityLabels');
+    if (!chart || !labels) return;
+    if (!files || files.length === 0) { card.style.display = 'none'; return; }
+    var DAYS = 14;
+    var buckets = new Array(DAYS).fill(0);
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var todayMs = today.getTime();
+    files.forEach(function (f) {
+        var fd = new Date(f.mtime); fd.setHours(0, 0, 0, 0);
+        var diff = Math.floor((todayMs - fd.getTime()) / 86400000);
+        if (diff >= 0 && diff < DAYS) buckets[DAYS - 1 - diff]++;
+    });
+    var maxVal = Math.max.apply(null, buckets) || 1;
+    var barsHTML = '';
+    for (var i = 0; i < DAYS; i++) {
+        var pct = (buckets[i] / maxVal) * 100;
+        var dayDate = new Date(today.getTime() - (DAYS - 1 - i) * 86400000);
+        var dayLabel = dayDate.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
+        var countLabel = buckets[i] === 0 ? 'nessuna' : buckets[i] + (buckets[i] === 1 ? ' scansione' : ' scansioni');
+        barsHTML += '<div class="activity-bar" title="' + dayLabel + ': ' + countLabel + '">' +
+                      '<span style="height:' + pct.toFixed(1) + '%"></span>' +
+                      '<span class="activity-tip">' + dayLabel + ' &middot; ' + countLabel + '</span>' +
+                    '</div>';
+    }
+    chart.innerHTML = barsHTML;
+    // Labels solo agli estremi e centro (per ridurre clutter)
+    var firstDate = new Date(today.getTime() - (DAYS - 1) * 86400000);
+    var midDate   = new Date(today.getTime() - Math.floor(DAYS / 2) * 86400000);
+    labels.innerHTML = '<span>' + firstDate.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' }) + '</span>' +
+                       '<span>' + midDate.toLocaleDateString('it-IT',   { day: '2-digit', month: 'short' }) + '</span>' +
+                       '<span>oggi</span>';
+    card.style.display = '';
 }
 
 function fmtBytes(b) {
@@ -354,22 +510,42 @@ function loadRecents() {
                 welcome.textContent = files.length + ' misurazion' + (files.length === 1 ? 'e' : 'i') + ' salvat' + (files.length === 1 ? 'a' : 'e') + '. Ultima: ' + fmtDate(files[0].mtime) + '.';
             }
 
-            // Tabella recenti (max 10)
-            if (files.length === 0) {
-                wrap.innerHTML = '<div class="home-recents-empty">Nessun file misura ancora salvato. ' +
-                    'Salva la prima scansione dalla pagina <a href="alzata.html">Alzata</a> o ' +
-                    '<a href="polare.html">Polare</a>.</div>';
+            // Activity chart (ultimi 14 giorni)
+            renderActivityChart(files);
+
+            // Filtra solo bookmarks se richiesto, e ordina: bookmarks in cima.
+            var bookmarks = loadBookmarks();
+            var bookmarkSet = {};
+            bookmarks.forEach(function (n) { bookmarkSet[n] = true; });
+            var displayed = filterOnlyBookmarks
+                ? files.filter(function (f) { return bookmarkSet[f.name]; })
+                : files.slice();
+            displayed.sort(function (a, b) {
+                var aMark = bookmarkSet[a.name] ? 1 : 0;
+                var bMark = bookmarkSet[b.name] ? 1 : 0;
+                if (aMark !== bMark) return bMark - aMark;
+                return b.mtime - a.mtime;
+            });
+
+            // Tabella recenti (max 10) — input utente escaped (XSS difesa-in-profondità).
+            if (displayed.length === 0) {
+                var emptyMsg = filterOnlyBookmarks
+                    ? 'Nessun file tra i preferiti. Aggiungili cliccando la stella accanto al nome.'
+                    : 'Nessun file misura ancora salvato. Salva la prima scansione dalla pagina <a href="alzata.html">Alzata</a> o <a href="polare.html">Polare</a>.';
+                wrap.innerHTML = '<div class="home-recents-empty">' + emptyMsg + '</div>';
                 return;
             }
-            // Tutti gli input utente (f.name) sono escapati: il server già whitelista
-            // [A-Za-z0-9._-] ma la difesa-in-profondità è importante.
-            var rows = files.slice(0, 10).map(function (f) {
+            var rows = displayed.slice(0, 10).map(function (f) {
                 var typeLabel = f.type === 'alz' ? 'alzata'
                               : f.type === 'pol' ? 'polare'
                               : 'altro';
                 var safeName = escapeHtml(f.name);
                 var safeType = escapeHtml(f.type);
-                return '<tr>' +
+                var bm = bookmarkSet[f.name];
+                var starChar = bm ? '&#9733;' : '&#9734;';
+                var starTitle = bm ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti';
+                return '<tr class="' + (bm ? 'bookmarked' : '') + '">' +
+                    '<td><button class="star-btn' + (bm ? ' active' : '') + '" title="' + starTitle + '" onclick="toggleBookmark(\'' + safeName.replace(/'/g, '&#39;') + '\', event);">' + starChar + '</button></td>' +
                     '<td><span class="type-pill ' + safeType + '">' + typeLabel + '</span></td>' +
                     '<td><span class="fname">' + safeName + '</span></td>' +
                     '<td class="fsize">' + fmtBytes(f.size) + '</td>' +
@@ -380,7 +556,7 @@ function loadRecents() {
                     '</tr>';
             }).join('');
             wrap.innerHTML = '<table class="home-recents-table">' +
-                '<thead><tr><th>Tipo</th><th>Nome file</th><th>Dim.</th><th>Quando</th><th></th></tr></thead>' +
+                '<thead><tr><th></th><th>Tipo</th><th>Nome file</th><th>Dim.</th><th>Quando</th><th></th></tr></thead>' +
                 '<tbody>' + rows + '</tbody></table>';
         })
         .catch(function (err) {

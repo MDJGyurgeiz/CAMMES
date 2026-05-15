@@ -192,7 +192,7 @@ engineSocket.onmessage = function(event) {
         diametro = document.getElementById("diam").value;
         radius = Number(diametro) / 2;
 
-        if (startflag == 1 & i <= 360 & stepflag == 0) {
+        if (startflag === 1 && i <= 360 && stepflag === 0) {
             pdindex[i] = i;
             pdata[i] = Number(msg) + radius;
 
@@ -435,14 +435,14 @@ function ruota() {
     if (dg - oldg < 0) {
         dif = -(dg - oldg);
         if (dif < 10) { dif = "00" + dif; }
-        if (dif < 100 & dif >= 10) { dif = "0" + dif; }
+        if (dif < 100 && dif >= 10) { dif = "0" + dif; }
         if (rsign == 1) { crot = "$-" + (dif); }
         if (rsign == -1) { crot = "$+" + (dif); }
     }
     if (dg - oldg > 0) {
         dif = dg - oldg;
         if (dif < 10) { dif = "00" + dif; }
-        if (dif < 100 & dif >= 10) { dif = "0" + dif; }
+        if (dif < 100 && dif >= 10) { dif = "0" + dif; }
         if (rsign == 1) { crot = "$+" + (dif); }
         if (rsign == -1) { crot = "$-" + (dif); }
     }
