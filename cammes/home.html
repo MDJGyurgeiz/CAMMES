@@ -1,0 +1,390 @@
+<!doctype html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CAMMES - Home</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="cammes-ui.js"></script>
+    <style>
+    .home-hero {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--sp-3);
+        padding: var(--sp-6);
+        background: linear-gradient(135deg, var(--bg-elev-1) 0%, var(--bg-elev-2) 100%);
+        border-radius: var(--r-lg);
+        border: 1px solid var(--border);
+        margin-bottom: var(--sp-5);
+    }
+    .home-hero-title {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 28px;
+        letter-spacing: -0.5px;
+        color: var(--text-primary);
+    }
+    .home-hero-sub {
+        font-size: 14px;
+        color: var(--text-muted);
+    }
+    .home-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: var(--sp-3);
+        margin-top: var(--sp-4);
+    }
+    .home-stat {
+        background: var(--bg-input);
+        padding: var(--sp-3) var(--sp-4);
+        border-radius: var(--r-md);
+        border: 1px solid var(--border);
+    }
+    .home-stat-label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: var(--text-muted);
+        font-family: var(--font-display);
+        margin-bottom: 4px;
+    }
+    .home-stat-value {
+        font-family: var(--font-mono);
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--accent);
+        font-variant-numeric: tabular-nums;
+    }
+    .home-stat-sub {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 2px;
+    }
+
+    .home-tiles {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: var(--sp-4);
+        margin-bottom: var(--sp-5);
+    }
+    .home-tile {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: var(--sp-2);
+        padding: var(--sp-5);
+        background: var(--bg-elev-2);
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        text-decoration: none;
+        color: var(--text-primary);
+        transition: all var(--t-base) var(--ease);
+        overflow: hidden;
+    }
+    .home-tile::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: var(--tile-accent, var(--accent));
+        opacity: 0;
+        transition: opacity var(--t-base) var(--ease);
+    }
+    .home-tile:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--e-3);
+        border-color: var(--tile-accent, var(--accent));
+    }
+    .home-tile:hover::before { opacity: 0.04; }
+    .home-tile-icon {
+        width: 48px; height: 48px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: var(--r-md);
+        background: color-mix(in oklab, var(--tile-accent, var(--accent)) 18%, transparent);
+        color: var(--tile-accent, var(--accent));
+    }
+    .home-tile-icon svg { width: 26px; height: 26px; }
+    .home-tile-title {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 18px;
+        color: var(--text-primary);
+    }
+    .home-tile-desc {
+        font-size: 13px;
+        color: var(--text-muted);
+        line-height: 1.45;
+    }
+    .home-tile-arrow {
+        position: absolute;
+        top: var(--sp-4); right: var(--sp-4);
+        font-size: 22px;
+        color: var(--text-muted);
+        transition: transform var(--t-base) var(--ease);
+    }
+    .home-tile:hover .home-tile-arrow {
+        transform: translateX(4px);
+        color: var(--tile-accent, var(--accent));
+    }
+
+    .home-recents-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: var(--sp-3);
+    }
+    .home-recents-table th {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        color: var(--text-muted);
+        text-align: left;
+        padding: var(--sp-2) var(--sp-3);
+        border-bottom: 1px solid var(--border);
+    }
+    .home-recents-table td {
+        padding: var(--sp-3);
+        border-bottom: 1px solid var(--border);
+        font-size: 13.5px;
+    }
+    .home-recents-table tr:hover td { background: var(--bg-stripe); }
+    .home-recents-table .type-pill {
+        display: inline-block;
+        padding: 2px 8px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        border-radius: var(--r-full);
+        letter-spacing: 0.5px;
+    }
+    .type-pill.alz { background: color-mix(in oklab, var(--accent) 20%, transparent); color: var(--accent); }
+    .type-pill.pol { background: color-mix(in oklab, var(--accent-2) 20%, transparent); color: var(--accent-2); }
+    .type-pill.other { background: var(--bg-input); color: var(--text-muted); }
+    .home-recents-table .fname {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+    .home-recents-table .fsize, .home-recents-table .fdate {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--text-muted);
+        text-align: right;
+        white-space: nowrap;
+    }
+    .home-recents-empty {
+        text-align: center;
+        padding: var(--sp-8);
+        color: var(--text-muted);
+        font-style: italic;
+        font-size: 14px;
+    }
+    .home-action-btn {
+        display: inline-flex; align-items: center; gap: 4px;
+        font-family: var(--font-mono); font-size: 11px;
+        padding: 2px 8px; border-radius: var(--r-sm);
+        background: transparent; color: var(--text-muted);
+        border: 1px solid var(--border-strong); cursor: pointer;
+        transition: all var(--t-fast) var(--ease);
+    }
+    .home-action-btn:hover { background: var(--accent); color: #06121b; border-color: var(--accent); }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+
+    <!-- Header -->
+    <div class="header">
+        <img src="images/logo.jpg" alt="CAMMES">
+        <h1>CAMMES</h1>
+        <div class="nav-links">
+            <a href="home.html" class="active">Home</a>
+            <a href="alzata.html">Alzata</a>
+            <a href="polare.html">Polare</a>
+            <a href="grafici.html">Confronto</a>
+            <a href="analisi.html">Analisi</a>
+        </div>
+        <div class="header-spacer"></div>
+        <button id="help-toggle" class="help-toggle" type="button" aria-label="Guida rapida" title="Apri la guida rapida">?</button>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambia tema" title="Cambia tema chiaro/scuro">
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+    </div>
+
+    <!-- Hero + Stats -->
+    <div class="card">
+        <div class="home-hero">
+            <div>
+                <div class="home-hero-title">Benvenuto in CAMMES</div>
+                <div class="home-hero-sub" id="homeWelcomeSub">Sistema di misura, confronto e analisi profili alberi a camme.</div>
+            </div>
+            <div class="home-stats" id="homeStats">
+                <div class="home-stat">
+                    <div class="home-stat-label">Misure totali</div>
+                    <div class="home-stat-value" id="statTotal">--</div>
+                    <div class="home-stat-sub">file in <code>prove/</code></div>
+                </div>
+                <div class="home-stat">
+                    <div class="home-stat-label">Alzata (.scr)</div>
+                    <div class="home-stat-value" id="statAlz">--</div>
+                    <div class="home-stat-sub">profili cartesiani</div>
+                </div>
+                <div class="home-stat">
+                    <div class="home-stat-label">Polari (.scr)</div>
+                    <div class="home-stat-value" id="statPol">--</div>
+                    <div class="home-stat-sub">profili polari</div>
+                </div>
+                <div class="home-stat">
+                    <div class="home-stat-label">Ultimo file</div>
+                    <div class="home-stat-value" id="statLast" style="font-size:13px;color:var(--text-primary);font-weight:600;">--</div>
+                    <div class="home-stat-sub" id="statLastDate">&nbsp;</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tiles (4 funzionalità principali) -->
+    <div class="card">
+        <div class="card-title">Funzionalit&agrave;</div>
+        <div class="home-tiles">
+            <a href="alzata.html" class="home-tile" style="--tile-accent: var(--accent);">
+                <div class="home-tile-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>
+                </div>
+                <div class="home-tile-title">Alzata</div>
+                <div class="home-tile-desc">Scansione cartesiana del profilo di alzata in tempo reale. Modalit&agrave; da Veloce ad Atomic per ogni esigenza.</div>
+                <span class="home-tile-arrow">&rarr;</span>
+            </a>
+            <a href="polare.html" class="home-tile" style="--tile-accent: var(--accent-2);">
+                <div class="home-tile-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg>
+                </div>
+                <div class="home-tile-title">Polare</div>
+                <div class="home-tile-desc">Profilo polare 360&deg; con diametro a riposo come riferimento. Visualizzazione grafica della camma completa.</div>
+                <span class="home-tile-arrow">&rarr;</span>
+            </a>
+            <a href="grafici.html" class="home-tile" style="--tile-accent: var(--accent-3);">
+                <div class="home-tile-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
+                </div>
+                <div class="home-tile-title">Confronto</div>
+                <div class="home-tile-desc">Sovrapponi fino a 4 misurazioni per verificare ripetibilit&agrave;, prima/dopo usura, o camme diverse.</div>
+                <span class="home-tile-arrow">&rarr;</span>
+            </a>
+            <a href="analisi.html" class="home-tile" style="--tile-accent: var(--success);">
+                <div class="home-tile-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg>
+                </div>
+                <div class="home-tile-title">Analisi</div>
+                <div class="home-tile-desc">Cinematica completa, fasatura 720&deg;, forze inerziali, RPM critico. Preset motore + export CSV/PDF.</div>
+                <span class="home-tile-arrow">&rarr;</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Recenti -->
+    <div class="card">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Misurazioni recenti</span>
+            <button class="home-action-btn" onclick="loadRecents();" title="Ricarica lista">&#8634; Aggiorna</button>
+        </div>
+        <div id="recentsWrap">
+            <div class="home-recents-empty">Caricamento&hellip;</div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+function fmtBytes(b) {
+    if (b == null) return '--';
+    if (b < 1024) return b + ' B';
+    if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+    return (b / 1024 / 1024).toFixed(1) + ' MB';
+}
+function fmtDate(ms) {
+    if (!ms) return '--';
+    var d = new Date(ms);
+    var now = new Date();
+    var diffSec = (now - d) / 1000;
+    if (diffSec < 60)     return 'adesso';
+    if (diffSec < 3600)   return Math.floor(diffSec / 60)  + ' min fa';
+    if (diffSec < 86400)  return Math.floor(diffSec / 3600) + ' h fa';
+    if (diffSec < 604800) return Math.floor(diffSec / 86400) + ' g fa';
+    return d.toLocaleDateString('it-IT') + ' ' + d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+}
+
+function loadRecents() {
+    var wrap = document.getElementById('recentsWrap');
+    wrap.innerHTML = '<div class="home-recents-empty">Caricamento&hellip;</div>';
+    fetch('/api/files', { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            var files = data.files || [];
+
+            // Stats
+            var nAlz = files.filter(function (f) { return f.type === 'alz'; }).length;
+            var nPol = files.filter(function (f) { return f.type === 'pol'; }).length;
+            document.getElementById('statTotal').textContent = files.length;
+            document.getElementById('statAlz').textContent   = nAlz;
+            document.getElementById('statPol').textContent   = nPol;
+            if (files.length > 0) {
+                document.getElementById('statLast').textContent = files[0].name;
+                document.getElementById('statLastDate').textContent = fmtDate(files[0].mtime);
+            } else {
+                document.getElementById('statLast').textContent = 'nessuno';
+                document.getElementById('statLastDate').textContent = ' ';
+            }
+
+            // Welcome message dinamico
+            var welcome = document.getElementById('homeWelcomeSub');
+            if (files.length === 0) {
+                welcome.innerHTML = 'Nessuna misurazione ancora salvata. Inizia da <a href="alzata.html" style="color:var(--accent);">Alzata</a> per scansionare la tua prima camma.';
+            } else {
+                welcome.textContent = files.length + ' misurazion' + (files.length === 1 ? 'e' : 'i') + ' salvat' + (files.length === 1 ? 'a' : 'e') + '. Ultima: ' + fmtDate(files[0].mtime) + '.';
+            }
+
+            // Tabella recenti (max 10)
+            if (files.length === 0) {
+                wrap.innerHTML = '<div class="home-recents-empty">Nessun file misura ancora salvato. ' +
+                    'Salva la prima scansione dalla pagina <a href="alzata.html">Alzata</a> o ' +
+                    '<a href="polare.html">Polare</a>.</div>';
+                return;
+            }
+            var rows = files.slice(0, 10).map(function (f) {
+                var typeLabel = f.type === 'alz' ? 'alzata'
+                              : f.type === 'pol' ? 'polare'
+                              : 'altro';
+                var targetPage = f.type === 'alz' ? 'grafici.html'
+                               : f.type === 'pol' ? 'grafici.html'
+                               : '#';
+                return '<tr>' +
+                    '<td><span class="type-pill ' + f.type + '">' + typeLabel + '</span></td>' +
+                    '<td><span class="fname">' + f.name + '</span></td>' +
+                    '<td class="fsize">' + fmtBytes(f.size) + '</td>' +
+                    '<td class="fdate">' + fmtDate(f.mtime) + '</td>' +
+                    '<td style="text-align:right;">' +
+                      '<a class="home-action-btn" href="/api/file/' + encodeURIComponent(f.name) + '" target="_blank" download="' + f.name + '" title="Scarica">&darr; Scarica</a>' +
+                    '</td>' +
+                    '</tr>';
+            }).join('');
+            wrap.innerHTML = '<table class="home-recents-table">' +
+                '<thead><tr><th>Tipo</th><th>Nome file</th><th>Dim.</th><th>Quando</th><th></th></tr></thead>' +
+                '<tbody>' + rows + '</tbody></table>';
+        })
+        .catch(function (err) {
+            wrap.innerHTML = '<div class="home-recents-empty">Errore caricamento: ' + err.message + '</div>';
+            if (window.cammesToast) {
+                window.cammesToast({ kind: 'err', title: 'Errore', body: 'Impossibile contattare il server.', duration: 3500 });
+            }
+        });
+}
+window.addEventListener('DOMContentLoaded', loadRecents);
+</script>
+
+</body>
+</html>

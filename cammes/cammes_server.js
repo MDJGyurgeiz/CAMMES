@@ -56,6 +56,47 @@ function log(tag, msg) {
 }
 
 // ============================================================
+// Utility - lista dei file misurazione su disco (cartella prove/)
+// Ritorna: [{ name, type:'alz'|'pol'|'other', size, mtime }, ...]
+// Ordinato per mtime DESC.
+// ============================================================
+
+function listMisureFiles(cb) {
+    fs.readdir(PROVE_DIR, function (err, files) {
+        if (err) {
+            // Cartella non esiste ancora → lista vuota, non errore
+            if (err.code === 'ENOENT') return cb(null, []);
+            return cb(err);
+        }
+        var results = [];
+        var pending = files.length;
+        if (pending === 0) return cb(null, []);
+        files.forEach(function (f) {
+            fs.stat(path.join(PROVE_DIR, f), function (e, st) {
+                if (!e && st.isFile()) {
+                    // Inferisci tipo dal suffisso _alz / _pol prima dell'estensione
+                    var base = f.replace(/\.(scr|txt|csv)$/i, '');
+                    var lower = base.toLowerCase();
+                    var type = lower.endsWith('_alz') ? 'alz'
+                             : lower.endsWith('_pol') ? 'pol'
+                             : 'other';
+                    results.push({
+                        name:  f,
+                        type:  type,
+                        size:  st.size,
+                        mtime: st.mtimeMs
+                    });
+                }
+                if (--pending === 0) {
+                    results.sort(function (a, b) { return b.mtime - a.mtime; });
+                    cb(null, results);
+                }
+            });
+        });
+    });
+}
+
+// ============================================================
 // 1. HTTP Server Statico (porta 3000)
 // ============================================================
 
@@ -76,9 +117,35 @@ var mimeTypes = {
 };
 
 var httpServer = http.createServer(function (req, res) {
-    // Route default: / -> alzata.html
     var urlPath = req.url.split('?')[0]; // Rimuovi query string
-    var filePath = path.join(STATIC_DIR, urlPath === '/' ? 'alzata.html' : urlPath);
+
+    // API: lista file misure (JSON)
+    if (urlPath === '/api/files') {
+        listMisureFiles(function (err, files) {
+            res.setHeader('Cache-Control', 'no-store');
+            res.writeHead(err ? 500 : 200, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify(err ? { error: err.message } : { files: files }));
+        });
+        return;
+    }
+
+    // API: scarica un file misura specifico
+    if (urlPath.indexOf('/api/file/') === 0) {
+        var fname = decodeURIComponent(urlPath.substring('/api/file/'.length));
+        if (fname.indexOf('..') !== -1 || fname.indexOf('/') !== -1 || fname.indexOf('\\') !== -1) {
+            res.writeHead(400); res.end('Bad filename'); return;
+        }
+        var fpath = path.join(PROVE_DIR, fname);
+        fs.readFile(fpath, function (err, data) {
+            if (err) { res.writeHead(404); res.end('Not found'); return; }
+            res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end(data);
+        });
+        return;
+    }
+
+    // Route default: / -> home.html
+    var filePath = path.join(STATIC_DIR, urlPath === '/' ? 'home.html' : urlPath);
 
     // Sicurezza: impedisci path traversal
     var resolved = path.resolve(filePath);
