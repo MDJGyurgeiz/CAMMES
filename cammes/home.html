@@ -269,6 +269,65 @@
     }
     .delete-btn:hover { background: var(--danger); color: white; border-color: var(--danger); }
 
+    /* Search + filtri toolbar */
+    .recents-toolbar {
+        display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
+        margin-bottom: var(--sp-3); padding: var(--sp-2) 0;
+    }
+    .recents-search {
+        flex: 1; min-width: 180px;
+        position: relative; display: flex; align-items: center;
+    }
+    .recents-search-input {
+        flex: 1; padding: 7px 32px 7px 30px;
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        border-radius: var(--r-md);
+        color: var(--text-primary);
+        font-family: var(--font-mono); font-size: 13px;
+        transition: border-color var(--t-fast) var(--ease);
+    }
+    .recents-search-input:focus {
+        outline: none; border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-glow);
+    }
+    .recents-search-icon {
+        position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+        color: var(--text-muted); pointer-events: none;
+        font-size: 14px;
+    }
+    .recents-search-clear {
+        position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+        background: none; border: none; cursor: pointer;
+        color: var(--text-muted); font-size: 16px; line-height: 1;
+        padding: 4px; display: none;
+    }
+    .recents-search-clear.visible { display: block; }
+    .recents-search-clear:hover { color: var(--danger); }
+
+    .chip-filters {
+        display: inline-flex; gap: 4px;
+        background: var(--bg-input); padding: 3px;
+        border-radius: var(--r-full); border: 1px solid var(--border);
+    }
+    .chip-filter {
+        padding: 4px 12px; font-family: var(--font-display);
+        font-size: 11px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 1px; color: var(--text-muted);
+        border: none; background: transparent;
+        border-radius: var(--r-full); cursor: pointer;
+        transition: all var(--t-fast) var(--ease);
+    }
+    .chip-filter:hover { color: var(--text-primary); }
+    .chip-filter.active { background: var(--accent); color: #06121b; }
+    .chip-filter[data-filter="pol"].active   { background: var(--accent-2); color: #1a1a0a; }
+    .chip-filter[data-filter="other"].active { background: var(--accent-3); color: white; }
+
+    .recents-count {
+        font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
+        margin-left: auto; align-self: center; white-space: nowrap;
+    }
+
     /* Generic confirm modal (riusabile per delete e altre azioni distruttive) */
     .confirm-backdrop {
         position: fixed; inset: 0; z-index: var(--z-modal);
@@ -418,7 +477,7 @@
     <!-- Recenti -->
     <div class="card">
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-            <span>Misurazioni recenti</span>
+            <span>Misurazioni</span>
             <span style="display:inline-flex;align-items:center;gap:8px;">
                 <label class="filter-toggle" id="filterBookmarkedLabel" onclick="toggleBookmarkFilter();">
                     <input type="checkbox" id="filterBookmarked" style="display:none;">
@@ -427,6 +486,29 @@
                 <button class="home-action-btn" onclick="loadRecents();" title="Ricarica lista">&#8634; Aggiorna</button>
             </span>
         </div>
+
+        <!-- Toolbar search + chip filtri tipo + filtri date -->
+        <div class="recents-toolbar">
+            <div class="recents-search">
+                <span class="recents-search-icon">&#128269;</span>
+                <input type="text" id="recentsSearch" class="recents-search-input" placeholder="Cerca per nome file&hellip;" oninput="onSearchInput();" autocomplete="off">
+                <button class="recents-search-clear" id="recentsSearchClear" onclick="clearSearch();" title="Cancella" type="button">&times;</button>
+            </div>
+            <div class="chip-filters" id="typeFilters" role="tablist" aria-label="Filtra per tipo file">
+                <button class="chip-filter active" data-filter="all"   onclick="setTypeFilter('all');"   type="button">Tutti</button>
+                <button class="chip-filter"        data-filter="alz"   onclick="setTypeFilter('alz');"   type="button">Alzata</button>
+                <button class="chip-filter"        data-filter="pol"   onclick="setTypeFilter('pol');"   type="button">Polare</button>
+                <button class="chip-filter"        data-filter="other" onclick="setTypeFilter('other');" type="button">Altri</button>
+            </div>
+            <div class="chip-filters" id="dateFilters" role="tablist" aria-label="Filtra per intervallo date">
+                <button class="chip-filter active" data-date="all"     onclick="setDateFilter('all');"   type="button">Sempre</button>
+                <button class="chip-filter"        data-date="today"   onclick="setDateFilter('today');" type="button">Oggi</button>
+                <button class="chip-filter"        data-date="week"    onclick="setDateFilter('week');"  type="button">7 g</button>
+                <button class="chip-filter"        data-date="month"   onclick="setDateFilter('month');" type="button">30 g</button>
+            </div>
+            <span class="recents-count" id="recentsCount"></span>
+        </div>
+
         <div id="recentsWrap">
             <div class="home-recents-empty">Caricamento&hellip;</div>
         </div>
@@ -475,10 +557,54 @@ function toggleBookmarkFilter() {
         label.classList.remove('active');
         icon.innerHTML = '&#9734;';
     }
-    loadRecents();
+    renderRecentsTable();
+}
+
+// ===== Stato filtri (search + tipo + intervallo date) =====
+// Cache dell'ultima risposta /api/files, così i filtri non rifanno
+// chiamate al server. loadRecents() chiama il server e poi
+// renderRecentsTable() applica i filtri client-side.
+var _cachedFiles = [];
+var searchQuery = '';
+var typeFilter = 'all';       // 'all' | 'alz' | 'pol' | 'other'
+var dateFilter = 'all';       // 'all' | 'today' | 'week' | 'month'
+var _searchDebounce = null;
+
+function onSearchInput() {
+    var el = document.getElementById('recentsSearch');
+    searchQuery = el.value.trim().toLowerCase();
+    var clear = document.getElementById('recentsSearchClear');
+    if (clear) clear.classList.toggle('visible', searchQuery.length > 0);
+    clearTimeout(_searchDebounce);
+    _searchDebounce = setTimeout(renderRecentsTable, 100);
+}
+function clearSearch() {
+    var el = document.getElementById('recentsSearch');
+    if (el) el.value = '';
+    searchQuery = '';
+    document.getElementById('recentsSearchClear').classList.remove('visible');
+    renderRecentsTable();
+}
+function setTypeFilter(t) {
+    typeFilter = t;
+    Array.prototype.forEach.call(document.querySelectorAll('#typeFilters .chip-filter'), function (el) {
+        el.classList.toggle('active', el.getAttribute('data-filter') === t);
+    });
+    renderRecentsTable();
+}
+function setDateFilter(t) {
+    dateFilter = t;
+    Array.prototype.forEach.call(document.querySelectorAll('#dateFilters .chip-filter'), function (el) {
+        el.classList.toggle('active', el.getAttribute('data-date') === t);
+    });
+    renderRecentsTable();
 }
 window.toggleBookmark = toggleBookmark;
 window.toggleBookmarkFilter = toggleBookmarkFilter;
+window.onSearchInput = onSearchInput;
+window.clearSearch = clearSearch;
+window.setTypeFilter = setTypeFilter;
+window.setDateFilter = setDateFilter;
 
 // ===== Activity chart (mini bar chart degli ultimi 14 giorni) =====
 function renderActivityChart(files) {
@@ -566,56 +692,9 @@ function loadRecents() {
                 welcome.textContent = files.length + ' misurazion' + (files.length === 1 ? 'e' : 'i') + ' salvat' + (files.length === 1 ? 'a' : 'e') + '. Ultima: ' + fmtDate(files[0].mtime) + '.';
             }
 
-            // Activity chart (ultimi 14 giorni)
+            // Activity chart + tabella (filtrata client-side)
             renderActivityChart(files);
-
-            // Filtra solo bookmarks se richiesto, e ordina: bookmarks in cima.
-            var bookmarks = loadBookmarks();
-            var bookmarkSet = {};
-            bookmarks.forEach(function (n) { bookmarkSet[n] = true; });
-            var displayed = filterOnlyBookmarks
-                ? files.filter(function (f) { return bookmarkSet[f.name]; })
-                : files.slice();
-            displayed.sort(function (a, b) {
-                var aMark = bookmarkSet[a.name] ? 1 : 0;
-                var bMark = bookmarkSet[b.name] ? 1 : 0;
-                if (aMark !== bMark) return bMark - aMark;
-                return b.mtime - a.mtime;
-            });
-
-            // Tabella recenti (max 10) — input utente escaped (XSS difesa-in-profondità).
-            if (displayed.length === 0) {
-                var emptyMsg = filterOnlyBookmarks
-                    ? 'Nessun file tra i preferiti. Aggiungili cliccando la stella accanto al nome.'
-                    : 'Nessun file misura ancora salvato. Salva la prima scansione dalla pagina <a href="alzata.html">Alzata</a> o <a href="polare.html">Polare</a>.';
-                wrap.innerHTML = '<div class="home-recents-empty">' + emptyMsg + '</div>';
-                return;
-            }
-            var rows = displayed.slice(0, 10).map(function (f) {
-                var typeLabel = f.type === 'alz' ? 'alzata'
-                              : f.type === 'pol' ? 'polare'
-                              : 'altro';
-                var safeName = escapeHtml(f.name);
-                var safeType = escapeHtml(f.type);
-                var bm = bookmarkSet[f.name];
-                var starChar = bm ? '&#9733;' : '&#9734;';
-                var starTitle = bm ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti';
-                var nameJs = safeName.replace(/'/g, '&#39;');
-                return '<tr class="' + (bm ? 'bookmarked' : '') + '">' +
-                    '<td><button class="star-btn' + (bm ? ' active' : '') + '" title="' + starTitle + '" onclick="toggleBookmark(\'' + nameJs + '\', event);">' + starChar + '</button></td>' +
-                    '<td><span class="type-pill ' + safeType + '">' + typeLabel + '</span></td>' +
-                    '<td><span class="fname">' + safeName + '</span></td>' +
-                    '<td class="fsize">' + fmtBytes(f.size) + '</td>' +
-                    '<td class="fdate">' + escapeHtml(fmtDate(f.mtime)) + '</td>' +
-                    '<td style="text-align:right;white-space:nowrap;">' +
-                      '<a class="home-action-btn" href="/api/file/' + encodeURIComponent(f.name) + '" target="_blank" download="' + safeName + '" title="Scarica">&darr;</a>' +
-                      '<button class="delete-btn" title="Elimina" onclick="confirmDelete(\'' + nameJs + '\');">&times;</button>' +
-                    '</td>' +
-                    '</tr>';
-            }).join('');
-            wrap.innerHTML = '<table class="home-recents-table">' +
-                '<thead><tr><th></th><th>Tipo</th><th>Nome file</th><th>Dim.</th><th>Quando</th><th></th></tr></thead>' +
-                '<tbody>' + rows + '</tbody></table>';
+            renderRecentsTable();
         })
         .catch(function (err) {
             wrap.innerHTML = '<div class="home-recents-empty">Errore caricamento: ' + err.message + '</div>';
@@ -625,6 +704,113 @@ function loadRecents() {
         });
 }
 window.addEventListener('DOMContentLoaded', loadRecents);
+
+// renderRecentsTable: applica i filtri (search + tipo + date + bookmarks)
+// e disegna la tabella. Chiamato sia da loadRecents() che dai toggle dei
+// filtri senza rifare la fetch al server.
+function renderRecentsTable() {
+    var files = _cachedFiles || [];
+    var wrap = document.getElementById('recentsWrap');
+    var countEl = document.getElementById('recentsCount');
+    if (!wrap) return;
+
+    var bookmarks = loadBookmarks();
+    var bookmarkSet = {};
+    bookmarks.forEach(function (n) { bookmarkSet[n] = true; });
+
+    // Soglia mtime in base al filtro date
+    var now = Date.now();
+    var dateThreshold = 0;  // 0 = no filtro
+    if (dateFilter === 'today') {
+        var tStart = new Date(); tStart.setHours(0, 0, 0, 0);
+        dateThreshold = tStart.getTime();
+    } else if (dateFilter === 'week')  { dateThreshold = now - 7  * 86400000; }
+    else if (dateFilter === 'month')   { dateThreshold = now - 30 * 86400000; }
+
+    var filtered = files.filter(function (f) {
+        if (filterOnlyBookmarks && !bookmarkSet[f.name]) return false;
+        if (typeFilter !== 'all' && f.type !== typeFilter) return false;
+        if (dateThreshold > 0 && f.mtime < dateThreshold) return false;
+        if (searchQuery && f.name.toLowerCase().indexOf(searchQuery) === -1) return false;
+        return true;
+    });
+    filtered.sort(function (a, b) {
+        var aMark = bookmarkSet[a.name] ? 1 : 0;
+        var bMark = bookmarkSet[b.name] ? 1 : 0;
+        if (aMark !== bMark) return bMark - aMark;
+        return b.mtime - a.mtime;
+    });
+
+    if (countEl) {
+        if (filtered.length === files.length) countEl.textContent = files.length + ' tot';
+        else countEl.textContent = filtered.length + ' / ' + files.length + ' file';
+    }
+
+    if (filtered.length === 0) {
+        var emptyMsg;
+        if (files.length === 0) {
+            emptyMsg = 'Nessun file misura ancora salvato. Salva la prima scansione dalla pagina <a href="alzata.html">Alzata</a> o <a href="polare.html">Polare</a>.';
+        } else if (searchQuery || typeFilter !== 'all' || dateFilter !== 'all' || filterOnlyBookmarks) {
+            emptyMsg = 'Nessun file corrisponde ai filtri correnti. <a href="javascript:void(0)" onclick="resetAllFilters();" style="color:var(--accent);">Azzera tutti i filtri</a>.';
+        } else {
+            emptyMsg = 'Nessun file da mostrare.';
+        }
+        wrap.innerHTML = '<div class="home-recents-empty">' + emptyMsg + '</div>';
+        return;
+    }
+
+    // Limite di rendering (50 righe). Avviso se truncato.
+    var truncatedNote = '';
+    var displayed = filtered;
+    if (filtered.length > 50) {
+        displayed = filtered.slice(0, 50);
+        truncatedNote = '<div style="text-align:center;padding:8px;color:var(--text-muted);font-size:12px;">' +
+            'Mostrati primi 50 di ' + filtered.length + ' file. Affina i filtri per vedere gli altri.</div>';
+    }
+
+    var rows = displayed.map(function (f) {
+        var typeLabel = f.type === 'alz' ? 'alzata'
+                      : f.type === 'pol' ? 'polare'
+                      : 'altro';
+        var safeName = escapeHtml(f.name);
+        var safeType = escapeHtml(f.type);
+        var bm = bookmarkSet[f.name];
+        var starChar = bm ? '&#9733;' : '&#9734;';
+        var starTitle = bm ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti';
+        var nameJs = safeName.replace(/'/g, '&#39;');
+        return '<tr class="' + (bm ? 'bookmarked' : '') + '">' +
+            '<td><button class="star-btn' + (bm ? ' active' : '') + '" title="' + starTitle + '" onclick="toggleBookmark(\'' + nameJs + '\', event);">' + starChar + '</button></td>' +
+            '<td><span class="type-pill ' + safeType + '">' + typeLabel + '</span></td>' +
+            '<td><span class="fname">' + safeName + '</span></td>' +
+            '<td class="fsize">' + fmtBytes(f.size) + '</td>' +
+            '<td class="fdate">' + escapeHtml(fmtDate(f.mtime)) + '</td>' +
+            '<td style="text-align:right;white-space:nowrap;">' +
+              '<a class="home-action-btn" href="/api/file/' + encodeURIComponent(f.name) + '" target="_blank" download="' + safeName + '" title="Scarica">&darr;</a>' +
+              '<button class="delete-btn" title="Elimina" onclick="confirmDelete(\'' + nameJs + '\');">&times;</button>' +
+            '</td>' +
+            '</tr>';
+    }).join('');
+    wrap.innerHTML = '<table class="home-recents-table">' +
+        '<thead><tr><th></th><th>Tipo</th><th>Nome file</th><th>Dim.</th><th>Quando</th><th></th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table>' + truncatedNote;
+}
+window.renderRecentsTable = renderRecentsTable;
+
+function resetAllFilters() {
+    searchQuery = ''; typeFilter = 'all'; dateFilter = 'all'; filterOnlyBookmarks = false;
+    var s = document.getElementById('recentsSearch'); if (s) s.value = '';
+    var clear = document.getElementById('recentsSearchClear'); if (clear) clear.classList.remove('visible');
+    Array.prototype.forEach.call(document.querySelectorAll('#typeFilters .chip-filter'), function (el) {
+        el.classList.toggle('active', el.getAttribute('data-filter') === 'all');
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#dateFilters .chip-filter'), function (el) {
+        el.classList.toggle('active', el.getAttribute('data-date') === 'all');
+    });
+    var lb = document.getElementById('filterBookmarkedLabel'); if (lb) lb.classList.remove('active');
+    var li = document.getElementById('filterBookmarkedIcon'); if (li) li.innerHTML = '&#9734;';
+    renderRecentsTable();
+}
+window.resetAllFilters = resetAllFilters;
 
 // ===== Delete file (con conferma modale) =====
 function confirmDelete(fileName) {

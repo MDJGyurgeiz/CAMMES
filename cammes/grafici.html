@@ -44,7 +44,13 @@
 
         <!-- Left: Line chart -->
         <div class="card chart-card">
-            <div class="card-title">Confronto profili (fino a 4 alberi)</div>
+            <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+                <span>Confronto profili (fino a 4 alberi)</span>
+                <span style="display:inline-flex;gap:6px;">
+                    <button id="replayBtn" class="btn btn-secondary btn-sm" onclick="replayAnimation();" data-tip="<strong>Replay animazione</strong>Ridipinge le curve caricate da 0&deg; a 360&deg; in 4 secondi. Utile per visualizzare l'apertura/chiusura della valvola.">&#9658; Replay</button>
+                    <button id="replayStopBtn" class="btn btn-secondary btn-sm" onclick="stopReplay();" style="display:none;">&#10074;&#10074; Stop</button>
+                </span>
+            </div>
             <canvas id="canvas"></canvas>
         </div>
 
@@ -444,6 +450,96 @@ function update2() {
     }
     ch.update('none');
 }
+</script>
+
+<!-- Replay animazione: ridipinge le 4 linee da 0 a 360 gradi in 4 sec.
+     Salva una copia originale dei dataset, anima troncando progressivamente
+     e a fine animazione ripristina. Cancellabile via stopReplay(). -->
+<script>
+var _replayRaf = null;
+var _replayCancelled = false;
+var _replayBackup = null;
+
+function replayAnimation() {
+    if (!window.myLine || !lineChartData || !lineChartData.datasets) return;
+    // Verifica che ci sia almeno una linea con dati
+    var anyData = lineChartData.datasets.some(function (d) { return d.data && d.data.length > 0; });
+    if (!anyData) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'warn', title: 'Nessun grafico caricato',
+            body: 'Carica almeno un file alzata prima di lanciare il replay.',
+            duration: 3000
+        });
+        return;
+    }
+    // Salva backup (deep copy delle data array) e resetta i dataset a vuoto
+    _replayBackup = lineChartData.datasets.map(function (d) { return d.data.slice(); });
+    var maxLen = _replayBackup.reduce(function (m, arr) { return Math.max(m, arr.length); }, 0);
+    if (maxLen === 0) return;
+
+    _replayCancelled = false;
+    document.getElementById('replayBtn').style.display = 'none';
+    document.getElementById('replayStopBtn').style.display = '';
+
+    var DURATION = 4000;   // ms totali per arrivare a 360°
+    var startTs = null;
+    // Disabilita animazione di Chart.js durante il replay (le abbiamo già)
+    var origAnim = window.myLine.options.animation;
+    window.myLine.options.animation = { duration: 0 };
+
+    function frame(ts) {
+        if (_replayCancelled) {
+            _restoreFromBackup();
+            return;
+        }
+        if (!startTs) startTs = ts;
+        var elapsed = ts - startTs;
+        var progress = Math.min(1, elapsed / DURATION);
+        // Easing out-quad (decelerazione progressiva, più piacevole)
+        var eased = 1 - (1 - progress) * (1 - progress);
+        var idx = Math.floor(eased * maxLen);
+        if (idx < 1) idx = 1;
+        lineChartData.datasets.forEach(function (d, i) {
+            var orig = _replayBackup[i];
+            d.data = orig.slice(0, idx);
+        });
+        window.myLine.update('none');
+        if (progress < 1) {
+            _replayRaf = requestAnimationFrame(frame);
+        } else {
+            // Restore finale + animazione Chart.js
+            _restoreFromBackup();
+            window.myLine.options.animation = origAnim;
+            if (window.cammesToast) window.cammesToast({
+                kind: 'success', title: 'Replay completato', duration: 2000
+            });
+        }
+    }
+    _replayRaf = requestAnimationFrame(frame);
+}
+
+function _restoreFromBackup() {
+    if (!_replayBackup) return;
+    lineChartData.datasets.forEach(function (d, i) {
+        if (_replayBackup[i]) d.data = _replayBackup[i].slice();
+    });
+    window.myLine.update('none');
+    _replayBackup = null;
+    document.getElementById('replayBtn').style.display = '';
+    document.getElementById('replayStopBtn').style.display = 'none';
+}
+
+function stopReplay() {
+    _replayCancelled = true;
+    if (_replayRaf) { cancelAnimationFrame(_replayRaf); _replayRaf = null; }
+    _restoreFromBackup();
+    if (window.cammesToast) window.cammesToast({
+        kind: 'info', title: 'Replay interrotto', duration: 1500
+    });
+}
+
+window.replayAnimation = replayAnimation;
+window.stopReplay = stopReplay;
 </script>
 
 </body>
