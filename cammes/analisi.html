@@ -2396,91 +2396,336 @@ function exportPDF() {
     var L = lastAnalysis, R = L.results, I = L.inputs;
     var pageW = doc.internal.pageSize.getWidth();
     var pageH = doc.internal.pageSize.getHeight();
-    var margin = 12;
+    var margin = 14;
+
+    // Palette CAMMES (RGB) — coerente con il theme dell'app
+    var COL = {
+        accent:   [0,   212, 255],   // cyan
+        accent2:  [255, 184,  32],   // oro
+        accent3:  [177,  76, 255],   // viola
+        success:  [0,   200,  90],   // verde
+        warn:     [255, 200,  30],
+        danger:   [220,  50,  50],
+        dark:     [22,  28,  40],
+        text:     [40,  46,  60],
+        muted:    [120, 130, 145],
+        bgLight:  [245, 247, 251],
+        bgStripe: [232, 238, 247],
+        border:   [200, 208, 220]
+    };
+
+    function setFill(c)  { doc.setFillColor(c[0], c[1], c[2]); }
+    function setDraw(c)  { doc.setDrawColor(c[0], c[1], c[2]); }
+    function setText(c)  { doc.setTextColor(c[0], c[1], c[2]); }
+
+    // Determina classe RPM critico per colorazione cover
+    var rpm = I.rpm || 0;
+    var minRpmCrit = Math.min(R.rpmCritIn, R.rpmCritEx);
+    var safetyClass = !isFinite(minRpmCrit) || minRpmCrit > rpm * 1.5 ? 'safe'
+                    : minRpmCrit > rpm * 1.05 ? 'caution'
+                    : 'danger';
+    var safetyCol   = safetyClass === 'safe' ? COL.success
+                    : safetyClass === 'caution' ? COL.warn
+                    : COL.danger;
+    var safetyText  = safetyClass === 'safe'    ? 'OK · Margine ampio'
+                    : safetyClass === 'caution' ? 'ATTENZIONE · Margine stretto'
+                    : 'CRITICO · Rischio valve float';
+
+    // ============================================================
+    // FOOTER + PAGE NUMBERS (chiamati alla fine, su tutte le pagine)
+    // ============================================================
+    function drawFooter(pageNum, pageTotal) {
+        var fy = pageH - 8;
+        setDraw(COL.border); doc.setLineWidth(0.2);
+        doc.line(margin, fy - 3, pageW - margin, fy - 3);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+        setText(COL.muted);
+        doc.text('CAMMES · Report analisi camme', margin, fy);
+        var pageStr = 'Pagina ' + pageNum + ' di ' + pageTotal;
+        doc.text(pageStr, pageW - margin - doc.getTextWidth(pageStr), fy);
+        var tsStr = L.timestamp || '';
+        doc.text(tsStr, pageW / 2 - doc.getTextWidth(tsStr) / 2, fy);
+    }
+
+    // ============================================================
+    // COVER PAGE
+    // ============================================================
+    function drawCover() {
+        // Banda superiore colorata (gradient simulato con due rettangoli)
+        setFill(COL.dark); doc.rect(0, 0, pageW, 60, 'F');
+        setFill(COL.accent); doc.rect(0, 60, pageW, 3, 'F');
+
+        // Titolo brand
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(34);
+        setText([255, 255, 255]);
+        doc.text('CAMMES', margin, 28);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+        setText(COL.accent);
+        doc.text('Report analisi profili alberi a camme', margin, 36);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+        setText([180, 195, 215]);
+        doc.text(L.timestamp || '', margin, 50);
+
+        // Box riepilogo principale (KPI grandi)
+        var y = 75;
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+        setText(COL.text);
+        doc.text('Riepilogo principale', margin, y); y += 3;
+        setDraw(COL.accent); doc.setLineWidth(1.2);
+        doc.line(margin, y, margin + 50, y); y += 8;
+
+        // 4 KPI box in grid 2x2
+        var boxW = (pageW - 2 * margin - 6) / 2;
+        var boxH = 26;
+        function drawKPI(x, y, label, value, sub, col) {
+            setFill(COL.bgLight); doc.roundedRect(x, y, boxW, boxH, 2, 2, 'F');
+            setDraw(col); doc.setLineWidth(0.6);
+            doc.line(x, y, x, y + boxH);
+            doc.setLineWidth(0.2);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+            setText(COL.muted);
+            doc.text(label.toUpperCase(), x + 4, y + 5);
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+            setText(col);
+            doc.text(value, x + 4, y + 16);
+            if (sub) {
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+                setText(COL.muted);
+                doc.text(sub, x + 4, y + 22);
+            }
+        }
+        drawKPI(margin,          y, 'LSA',                R.LSA.toFixed(1) + ' deg',                'Separazione lobi',                          COL.accent);
+        drawKPI(margin + boxW+6, y, 'Durata asp.',        R.durIntake + ' deg',                     'Durata totale aspirazione',                 COL.accent);
+        y += boxH + 6;
+        drawKPI(margin,          y, 'Max alzata asp.',    R.maxLiftIn.toFixed(2) + ' mm',           'Alzata massima @ rocker ' + I.rockerIntake, COL.accent2);
+        var rpmCritStr = isFinite(minRpmCrit) ? Math.round(minRpmCrit).toLocaleString('it-IT') + ' rpm' : '> ' + rpm + ' (sicuro)';
+        drawKPI(margin + boxW+6, y, 'RPM critico min',    rpmCritStr,                               'Verso valve float',                          safetyCol);
+        y += boxH + 12;
+
+        // Box sicurezza (banner colorato a piena larghezza)
+        var bannerH = 18;
+        setFill(safetyCol); doc.roundedRect(margin, y, pageW - 2 * margin, bannerH, 2, 2, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+        setText([255, 255, 255]);
+        doc.text('Sicurezza treno valvole', margin + 4, y + 7);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+        doc.text(safetyText, margin + 4, y + 14);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+        var marginPct = isFinite(minRpmCrit) ? '+' + Math.round((minRpmCrit/rpm-1)*100) + '%' : 'inf';
+        var safetyDetail = 'Target ' + (rpm || '?') + ' rpm · Critico ' + (isFinite(minRpmCrit) ? Math.round(minRpmCrit) : 'inf') + ' rpm · Margine ' + marginPct;
+        doc.text(safetyDetail, pageW - margin - doc.getTextWidth(safetyDetail), y + 14);
+        y += bannerH + 12;
+
+        // File analizzati
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+        setText(COL.text);
+        doc.text('Sorgenti analizzate', margin, y); y += 3;
+        setDraw(COL.accent); doc.setLineWidth(1.2);
+        doc.line(margin, y, margin + 50, y); y += 7;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+        setText(COL.text);
+        doc.text('Aspirazione:  ' + (I.intakeFile || '-'), margin, y); y += 5;
+        doc.text('Scarico:      ' + (I.exhaustFile || '-'), margin, y); y += 8;
+
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+        setText(COL.text);
+        doc.text('Tipologia treno valvole', margin, y); y += 3;
+        setDraw(COL.accent); doc.setLineWidth(1.2);
+        doc.line(margin, y, margin + 50, y); y += 7;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+        var typIn = TYPOLOGY[I.intakeType] ? TYPOLOGY[I.intakeType].label : I.intakeType;
+        var typEx = TYPOLOGY[I.exhaustType] ? TYPOLOGY[I.exhaustType].label : I.exhaustType;
+        doc.text('Aspirazione:  ' + typIn  + '  (rocker ' + I.rockerIntake  + ')', margin, y); y += 5;
+        doc.text('Scarico:      ' + typEx  + '  (rocker ' + I.rockerExhaust + ')', margin, y); y += 5;
+
+        // Footer cover (no page number — viene aggiunto dopo)
+    }
+
+    drawCover();
+
+    // ============================================================
+    // PAGINA 2 — Parametri input (2 colonne) + Risultati dettagliati
+    // ============================================================
+    doc.addPage();
     var y = margin;
 
-    // Header
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
-    doc.text('CAMMES — Report analisi camme', margin, y); y += 7;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-    doc.text(L.timestamp, margin, y); y += 6;
-    doc.setDrawColor(0, 212, 255); doc.line(margin, y, pageW - margin, y); y += 4;
-
-    // Inputs box
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text('Parametri', margin, y); y += 5;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-    var col1 = margin, col2 = pageW / 2;
-    var inputLines = [
-        ['File asp.', I.intakeFile || '-'],
-        ['File scar.', I.exhaustFile || '-'],
-        ['Tipologia asp. / scar.', (TYPOLOGY[I.intakeType] ? TYPOLOGY[I.intakeType].label : I.intakeType) + ' / ' + (TYPOLOGY[I.exhaustType] ? TYPOLOGY[I.exhaustType].label : I.exhaustType)],
-        ['Angolo lobo asp. / scar.', I.intakeAngle + '° / ' + I.exhaustAngle + '°'],
-        ['Gioco asp. / scar.', I.intakeClearance + ' / ' + I.exhaustClearance + ' mm'],
-        ['Anticipo', I.advance + '°'],
-        ['RPM', I.rpm + ' giri/min'],
-        ['Rocker asp. / scar.', I.rockerIntake + ' / ' + I.rockerExhaust],
-        ['k molla / Precarico', I.springK + ' N/mm / ' + I.springPreload + ' N'],
-        ['Massa eq. asp. / scar.', I.massEqIntake + ' / ' + I.massEqExhaust + ' g']
-    ];
-    for (var i = 0; i < inputLines.length; i++) {
-        doc.text(inputLines[i][0] + ':', col1, y);
-        doc.text(String(inputLines[i][1]).substring(0, 70), col1 + 38, y);
-        y += 4.5;
+    // Section header con barra verticale colorata
+    function sectionHeader(label, col) {
+        col = col || COL.accent;
+        setFill(col); doc.rect(margin, y - 1, 1.5, 6, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+        setText(COL.text);
+        doc.text(label, margin + 4, y + 4); y += 9;
     }
-    y += 3;
 
-    // Results table
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text('Risultati principali', margin, y); y += 5;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-    var rpmCritIn = isFinite(R.rpmCritIn) ? Math.round(R.rpmCritIn) + ' rpm' : '∞';
-    var rpmCritEx = isFinite(R.rpmCritEx) ? Math.round(R.rpmCritEx) + ' rpm' : '∞';
+    sectionHeader('Parametri di input');
+    var col1X = margin, col2X = pageW / 2 + 2;
+    var rowH = 5;
+    doc.setFontSize(9);
+    var inLeft = [
+        ['File asp.',           I.intakeFile || '-'],
+        ['File scar.',          I.exhaustFile || '-'],
+        ['Tipologia asp.',      TYPOLOGY[I.intakeType] ? TYPOLOGY[I.intakeType].label : I.intakeType],
+        ['Tipologia scar.',     TYPOLOGY[I.exhaustType] ? TYPOLOGY[I.exhaustType].label : I.exhaustType],
+        ['Angolo lobo asp.',    I.intakeAngle + ' deg'],
+        ['Angolo lobo scar.',   I.exhaustAngle + ' deg'],
+        ['Gioco asp.',          I.intakeClearance + ' mm'],
+        ['Gioco scar.',         I.exhaustClearance + ' mm'],
+        ['Anticipo',            I.advance + ' deg']
+    ];
+    var inRight = [
+        ['RPM target',          I.rpm.toLocaleString('it-IT') + ' rpm'],
+        ['Rocker asp.',         I.rockerIntake],
+        ['Rocker scar.',        I.rockerExhaust],
+        ['Rif. durata',         I.durationRef + ' mm'],
+        ['Smooth derivate',     I.smoothWindow + ' pt (S-G)'],
+        ['Rigidezza k',         I.springK + ' N/mm'],
+        ['Precarico F0',        I.springPreload + ' N'],
+        ['Massa eq. asp.',      I.massEqIntake + ' g'],
+        ['Massa eq. scar.',     I.massEqExhaust + ' g']
+    ];
+    function drawKV(x, ry, k, v) {
+        doc.setFont('helvetica', 'normal'); setText(COL.muted);
+        doc.text(k, x, ry);
+        doc.setFont('helvetica', 'bold'); setText(COL.text);
+        doc.text(String(v).substring(0, 36), x + 36, ry);
+    }
+    var ystart = y;
+    for (var i = 0; i < inLeft.length; i++) drawKV(col1X, y + i * rowH, inLeft[i][0], inLeft[i][1]);
+    for (var j = 0; j < inRight.length; j++) drawKV(col2X, ystart + j * rowH, inRight[j][0], inRight[j][1]);
+    y = ystart + Math.max(inLeft.length, inRight.length) * rowH + 6;
+
+    // ====== Risultati dettagliati (tabella zebra 2 col) ======
+    sectionHeader('Risultati dettagliati');
+    var rpmCritInStr = isFinite(R.rpmCritIn) ? Math.round(R.rpmCritIn).toLocaleString('it-IT') + ' rpm' : 'inf';
+    var rpmCritExStr = isFinite(R.rpmCritEx) ? Math.round(R.rpmCritEx).toLocaleString('it-IT') + ' rpm' : 'inf';
     var rows = [
-        ['Durata asp. / scar.', R.durIntake + '° / ' + R.durExhaust + '°'],
-        ['Durata @ rif asp. / scar.', R.durRefIn + '° / ' + R.durRefEx + '°'],
-        ['Max alzata asp. / scar.', R.maxLiftIn.toFixed(3) + ' / ' + R.maxLiftEx.toFixed(3) + ' mm'],
-        ['LSA', R.LSA.toFixed(1) + '°'],
-        ['Centro asp. / scar.', R.intakeCenter.toFixed(1) + '° ATDC / ' + R.exhaustCenter.toFixed(1) + '° BTDC'],
-        ['Apertura asp. BTC / Chiusura ABC', R.intakeOpenBTC.toFixed(1) + '° / ' + R.intakeCloseABC.toFixed(1) + '°'],
-        ['Apertura scar. BBC / Chiusura ATC', R.exOpenBBC.toFixed(1) + '° / ' + R.exCloseATC.toFixed(1) + '°'],
-        ['Overlap', R.overlap.toFixed(1) + '°'],
-        ['Alzata al PMS asp. / scar.', R.liftInTDC.toFixed(3) + ' / ' + R.liftExTDC.toFixed(3) + ' mm'],
-        ['Area asp. / scar.', R.areaIn.toFixed(1) + ' / ' + R.areaEx.toFixed(1) + ' mm·°'],
-        ['Asimmetria lobo asp. / scar.', R.asymIn.toFixed(1) + ' % / ' + R.asymEx.toFixed(1) + ' %'],
-        ['F. inerzia max asp. / scar.', R.fInertiaMaxIn.toFixed(0) + ' / ' + R.fInertiaMaxEx.toFixed(0) + ' N'],
-        ['F. molla full lift asp. / scar.', R.fSpringFullIn.toFixed(0) + ' / ' + R.fSpringFullEx.toFixed(0) + ' N'],
-        ['Margine min asp. / scar.', R.marginMinIn.toFixed(0) + ' / ' + R.marginMinEx.toFixed(0) + ' N'],
-        ['RPM critico asp. / scar.', rpmCritIn + ' / ' + rpmCritEx]
+        ['Durata totale',                      R.durIntake + ' deg',                          R.durExhaust + ' deg'],
+        ['Durata @ rif (' + I.durationRef + 'mm)', R.durRefIn + ' deg',                       R.durRefEx + ' deg'],
+        ['Max alzata',                         R.maxLiftIn.toFixed(3) + ' mm',                R.maxLiftEx.toFixed(3) + ' mm'],
+        ['LSA',                                R.LSA.toFixed(1) + ' deg',                     ''],
+        ['Centro lobo',                        R.intakeCenter.toFixed(1) + ' ATDC',           R.exhaustCenter.toFixed(1) + ' BTDC'],
+        ['Apertura',                           R.intakeOpenBTC.toFixed(1) + ' BTC',           R.exOpenBBC.toFixed(1) + ' BBC'],
+        ['Chiusura',                           R.intakeCloseABC.toFixed(1) + ' ABC',          R.exCloseATC.toFixed(1) + ' ATC'],
+        ['Overlap',                            R.overlap.toFixed(1) + ' deg',                 ''],
+        ['Alzata al PMS',                      R.liftInTDC.toFixed(3) + ' mm',                R.liftExTDC.toFixed(3) + ' mm'],
+        ['Area sotto curva',                   R.areaIn.toFixed(1) + ' mm*deg',               R.areaEx.toFixed(1) + ' mm*deg'],
+        ['Asimmetria lobo',                    R.asymIn.toFixed(1) + ' %',                    R.asymEx.toFixed(1) + ' %'],
+        ['F. inerzia max',                     R.fInertiaMaxIn.toFixed(0) + ' N',             R.fInertiaMaxEx.toFixed(0) + ' N'],
+        ['F. molla full lift',                 R.fSpringFullIn.toFixed(0) + ' N',             R.fSpringFullEx.toFixed(0) + ' N'],
+        ['Margine F min',                      R.marginMinIn.toFixed(0) + ' N',               R.marginMinEx.toFixed(0) + ' N'],
+        ['RPM critico',                        rpmCritInStr,                                  rpmCritExStr]
     ];
-    for (var k = 0; k < rows.length; k++) {
-        doc.text(rows[k][0] + ':', col1, y);
-        doc.text(String(rows[k][1]), col1 + 70, y);
-        y += 4.5;
-    }
-    y += 3;
 
-    // Charts as images (Chart.js native toBase64Image)
-    function addChartIfPresent(chart, title, w, h) {
+    // Header tabella
+    var c1 = margin, c2 = margin + 70, c3 = margin + 130;
+    setFill(COL.dark); doc.rect(margin, y - 1, pageW - 2 * margin, 7, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+    setText([255, 255, 255]);
+    doc.text('METRICA',     c1 + 2, y + 4);
+    doc.text('ASPIRAZIONE', c2 + 2, y + 4);
+    doc.text('SCARICO',     c3 + 2, y + 4);
+    y += 7;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+
+    for (var r = 0; r < rows.length; r++) {
+        if (y + rowH + 2 > pageH - 18) {
+            doc.addPage();
+            y = margin;
+            sectionHeader('Risultati dettagliati (continua)');
+            setFill(COL.dark); doc.rect(margin, y - 1, pageW - 2 * margin, 7, 'F');
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+            setText([255, 255, 255]);
+            doc.text('METRICA',     c1 + 2, y + 4);
+            doc.text('ASPIRAZIONE', c2 + 2, y + 4);
+            doc.text('SCARICO',     c3 + 2, y + 4);
+            y += 7;
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+        }
+        if (r % 2 === 0) {
+            setFill(COL.bgStripe);
+            doc.rect(margin, y - 1, pageW - 2 * margin, rowH + 1, 'F');
+        }
+        // Highlight riga RPM critico se danger
+        if (rows[r][0] === 'RPM critico' && safetyClass !== 'safe') {
+            setFill(safetyClass === 'caution' ? [255, 245, 200] : [255, 220, 220]);
+            doc.rect(margin, y - 1, pageW - 2 * margin, rowH + 1, 'F');
+        }
+        setText(COL.text);
+        doc.text(rows[r][0], c1 + 2, y + 3);
+        doc.text(rows[r][1], c2 + 2, y + 3);
+        doc.text(rows[r][2], c3 + 2, y + 3);
+        y += rowH;
+    }
+    y += 6;
+
+    // ====== Indicatore visivo margine RPM critico ======
+    if (y + 26 > pageH - 18) { doc.addPage(); y = margin; }
+    sectionHeader('Margine RPM critico');
+    var barX = margin, barW = pageW - 2 * margin, barH = 8;
+    setFill(COL.bgLight); doc.rect(barX, y, barW, barH, 'F');
+    setDraw(COL.border); doc.rect(barX, y, barW, barH, 'S');
+    // Target line (a 50% se 100% del target)
+    var ratio = isFinite(minRpmCrit) ? Math.min(2, minRpmCrit / Math.max(1, rpm)) : 2;
+    var fillW = (ratio / 2) * barW;
+    setFill(safetyCol);
+    doc.rect(barX, y, fillW, barH, 'F');
+    // Target marker (linea verticale a 50% = rapporto 1.0)
+    var targetX = barX + barW * 0.5;
+    setDraw([60, 60, 60]); doc.setLineWidth(0.4);
+    doc.line(targetX, y - 2, targetX, y + barH + 2);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+    setText(COL.muted);
+    doc.text('target ' + (rpm || '?'), targetX - 8, y + barH + 5);
+    var safeX = barX + barW * 0.75;
+    doc.line(safeX, y - 1, safeX, y + barH + 1);
+    doc.text('+50% (sicuro)', safeX - 12, y + barH + 5);
+    y += barH + 12;
+
+    // ============================================================
+    // GRAFICI (uno per riga, footer/header automatico)
+    // ============================================================
+    function addChartIfPresent(chart, title, h) {
         if (!chart) return;
-        if (y + h + 10 > pageH - margin) { doc.addPage(); y = margin; }
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(title, margin, y); y += 4;
+        if (y + h + 18 > pageH - 18) { doc.addPage(); y = margin; }
+        sectionHeader(title);
         try {
-            var img = chart.toBase64Image();
-            doc.addImage(img, 'PNG', margin, y, w, h);
-            y += h + 4;
+            var img = chart.toBase64Image('image/png', 1);
+            doc.addImage(img, 'PNG', margin, y, pageW - 2 * margin, h);
+            y += h + 6;
         } catch (e) { doc.text('(grafico non disponibile)', margin, y); y += 5; }
     }
 
-    var cw = pageW - 2 * margin;
-    addChartIfPresent(window.analisiLine,    'Profilo albero motore 720°', cw, 55);
-    addChartIfPresent(velocityChart,         'Velocità',                   cw, 55);
-    addChartIfPresent(accelerationChart,     'Accelerazione',              cw, 55);
-    addChartIfPresent(jerkChart,             'Jerk',                       cw, 55);
-    addChartIfPresent(forceChart,            'Forze treno valvole',        cw, 60);
-    addChartIfPresent(timingChartInstance,   'Diagramma fasatura',         80, 80);
+    addChartIfPresent(window.analisiLine,    'Profilo albero motore 720 deg', 60);
+    addChartIfPresent(velocityChart,         'Velocita',                       55);
+    addChartIfPresent(accelerationChart,     'Accelerazione',                  55);
+    addChartIfPresent(jerkChart,             'Jerk',                           55);
+    addChartIfPresent(forceChart,            'Forze treno valvole',            60);
+
+    // Timing diagram fa pagina a sé per leggibilità
+    if (timingChartInstance) {
+        doc.addPage(); y = margin;
+        sectionHeader('Diagramma fasatura');
+        try {
+            var img = timingChartInstance.toBase64Image('image/png', 1);
+            var w = 110;
+            doc.addImage(img, 'PNG', (pageW - w) / 2, y, w, w);
+            y += w + 6;
+        } catch (e) {}
+    }
+
+    // ============================================================
+    // Footer su ogni pagina + page numbers (calcolato a fine doc)
+    // ============================================================
+    var totalPages = doc.internal.getNumberOfPages();
+    for (var p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        drawFooter(p, totalPages);
+    }
 
     var pdfName = 'cammes_report_' + tsForFilename() + '.pdf';
     doc.save(pdfName);
-    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'PDF esportato', body: pdfName, duration: 3500 });
+    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'PDF esportato', body: pdfName + ' (' + totalPages + ' pagine)', duration: 4000 });
 }
 
 // ========== RESET ==========
