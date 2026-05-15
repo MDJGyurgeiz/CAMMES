@@ -281,34 +281,48 @@ function stop() {
 }
 </script>
 
-<script src="Chart.min.js"></script>
+<script src="lib/chart.umd.min.js"></script>
 
 <script>
-var birdsCanvas = document.getElementById("birdsChart");
-Chart.defaults.global.defaultFontFamily = "Lato";
-Chart.defaults.global.defaultFontSize = 18;
-Chart.defaults.global.defaultFontColor = "#8888aa";
+// Chart.js v4 — polar area (theme-aware)
+function polColors() {
+    var css = window.cammesGetCssVar || function(){ return ''; };
+    return {
+        accent: css('--accent')     || '#00d4ff',
+        grid:   css('--grid')       || '#2a2a4a',
+        text:   css('--text-muted') || '#8888aa'
+    };
+}
 
+Chart.defaults.font.family = 'var(--font-sans), Inter, system-ui, sans-serif';
+Chart.defaults.font.size = 13;
+Chart.defaults.color = polColors().text;
+
+var birdsCanvas = document.getElementById("birdsChart");
 var birdsData = {
     labels: [],
     datasets: [{
         data: [],
         backgroundColor: [],
-        borderColor: "rgba(0, 212, 255, 0.3)"
+        borderColor: polColors().accent + '55',
+        borderWidth: 1
     }]
 };
 
 var chartOptions = {
-    startAngle: 0,
-    legend: { position: 'left', display: false },
-    animation: { animateRotate: false },
-    scale: {
-        ticks: {
-            fontColor: '#8888aa',
-            backdropColor: 'transparent'
-        },
-        gridLines: { color: '#2a2a4a' },
-        angleLines: { color: '#2a2a4a' }
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { animateRotate: false, duration: 0 },
+    plugins: {
+        legend: { display: false }
+    },
+    scales: {
+        r: {
+            ticks:      { color: polColors().text, backdropColor: 'transparent' },
+            grid:       { color: polColors().grid },
+            angleLines: { color: polColors().grid },
+            startAngle: 0
+        }
     }
 };
 
@@ -316,6 +330,17 @@ var polarAreaChart = new Chart(birdsCanvas, {
     type: 'polarArea',
     data: birdsData,
     options: chartOptions
+});
+window.polarAreaChart = polarAreaChart;
+
+document.addEventListener('cammes:theme:change', function () {
+    var c = polColors();
+    polarAreaChart.data.datasets[0].borderColor = c.accent + '55';
+    var r = polarAreaChart.options.scales.r;
+    r.ticks.color = c.text;
+    r.grid.color = c.grid;
+    r.angleLines.color = c.grid;
+    polarAreaChart.update('none');
 });
 </script>
 

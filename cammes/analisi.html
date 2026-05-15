@@ -63,9 +63,9 @@
 </head>
 <body>
 
-<script src="Chart.bundle.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@0.7.7/dist/chartjs-plugin-zoom.min.js"></script>
+<script src="lib/chart.umd.min.js"></script>
+<script src="lib/hammer.min.js"></script>
+<script src="lib/chartjs-plugin-zoom.min.js"></script>
 <script src="jspdf.umd.min.js"></script>
 
 <div class="app-container">
@@ -1565,34 +1565,54 @@ function analyze() {
 
 // ========== KINEMATIC CHARTS ==========
 
+// Chart.js v4 + chartjs-plugin-zoom v2 \u2014 opzioni zoom comuni
+function anaColors() {
+    var css = window.cammesGetCssVar || function(){ return ''; };
+    return {
+        grid:     css('--grid')      || '#2a2a4a',
+        text:     css('--text-muted')|| '#8888aa',
+        zeroLine: css('--grid-zero') || '#ffd740'
+    };
+}
 var zoomPanOptions = {
-    pan: { enabled: false },
-    zoom: { enabled: true, drag: true, mode: 'x',
-            threshold: 10,
-            backgroundColor: 'rgba(0,212,255,0.1)',
-            borderColor: 'rgba(0,212,255,0.4)' }
+    pan:  { enabled: false },
+    zoom: {
+        wheel: { enabled: false },
+        pinch: { enabled: false },
+        drag:  { enabled: true, threshold: 10,
+                 backgroundColor: 'rgba(0,212,255,0.1)',
+                 borderColor: 'rgba(0,212,255,0.4)' },
+        mode:  'x'
+    }
 };
 
 function kinChartOptions(yLabel) {
+    var c = anaColors();
     return {
         responsive: true,
+        maintainAspectRatio: false,
         animation: { duration: 0 },
-        legend: { labels: { fontColor: '#8888aa', fontSize: 11 } },
-        scales: {
-            xAxes: [{
-                display: true,
-                scaleLabel: { display: true, labelString: 'Gradi albero motore (\u00B0)', fontColor: '#8888aa' },
-                gridLines: { color: '#2a2a4a' },
-                ticks: { fontColor: '#8888aa', maxTicksLimit: 13 }
-            }],
-            yAxes: [{
-                type: 'linear',
-                scaleLabel: { display: true, labelString: yLabel, fontColor: '#8888aa' },
-                gridLines: { color: '#2a2a4a', zeroLineColor: '#ffd740', zeroLineWidth: 1 },
-                ticks: { fontColor: '#8888aa', callback: function(val) { return formatAxisValue(val); } }
-            }]
+        plugins: {
+            legend:  { labels: { color: c.text, font: { size: 11 } } },
+            tooltip: { mode: 'index', intersect: false },
+            zoom:    zoomPanOptions
         },
-        plugins: { zoom: zoomPanOptions }
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+            x: {
+                display: true,
+                title: { display: true, text: 'Gradi albero motore (\u00B0)', color: c.text },
+                grid:  { color: c.grid },
+                ticks: { color: c.text, maxTicksLimit: 13 }
+            },
+            y: {
+                type: 'linear',
+                title: { display: true, text: yLabel, color: c.text },
+                grid:  { color: c.grid },
+                border: { color: c.zeroLine },
+                ticks: { color: c.text, callback: function(val) { return formatAxisValue(val); } }
+            }
+        }
     };
 }
 
@@ -1827,31 +1847,32 @@ function updateTimingDiagram(durIn, durEx, intAng, exAng, adv, LSA) {
         },
         options: {
             responsive: false,
-            cutoutPercentage: 30,
-            rotation: -Math.PI / 2,
-            legend: {
-                display: true,
-                position: 'bottom',
-                labels: {
-                    fontColor: '#8888aa',
-                    fontSize: 11,
-                    padding: 8,
-                    generateLabels: function(chart) {
-                        return [
-                            { text: 'Asp. aperta: ' + intakeOpen + '\u00B0', fillStyle: 'rgba(0,212,255,0.8)', strokeStyle: '#00d4ff', lineWidth: 1 },
-                            { text: 'Scar. aperto: ' + exhaustOpen + '\u00B0', fillStyle: 'rgba(255,82,82,0.8)', strokeStyle: '#ff5252', lineWidth: 1 },
-                            { text: 'Overlap: ' + (intakeOpen + exhaustOpen - 720 > 0 ? (intakeOpen + exhaustOpen - 720) : 0) + '\u00B0', fillStyle: 'rgba(255,215,64,0.8)', strokeStyle: '#ffd740', lineWidth: 1 }
-                        ];
+            cutout: '30%',
+            rotation: -90,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom',
+                    labels: {
+                        color: anaColors().text,
+                        font: { size: 11 },
+                        padding: 8,
+                        generateLabels: function (chart) {
+                            return [
+                                { text: 'Asp. aperta: ' + intakeOpen + '\u00B0', fillStyle: 'rgba(0,212,255,0.8)', strokeStyle: '#00d4ff', lineWidth: 1, index: 0 },
+                                { text: 'Scar. aperto: ' + exhaustOpen + '\u00B0', fillStyle: 'rgba(255,82,82,0.8)', strokeStyle: '#ff5252', lineWidth: 1, index: 1 },
+                                { text: 'Overlap: ' + (intakeOpen + exhaustOpen - 720 > 0 ? (intakeOpen + exhaustOpen - 720) : 0) + '\u00B0', fillStyle: 'rgba(255,215,64,0.8)', strokeStyle: '#ffd740', lineWidth: 1, index: 2 }
+                            ];
+                        }
                     }
-                }
-            },
-            tooltips: {
-                callbacks: {
-                    label: function(item, data) {
-                        var ds = data.datasets[item.datasetIndex];
-                        var label = item.datasetIndex === 0 ? 'Aspirazione' : 'Scarico';
-                        var state = item.index === 0 ? 'Aperta' : 'Chiusa';
-                        return label + ' ' + state + ': ' + ds.data[item.index] + '\u00B0';
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function (ctx) {
+                            var label = ctx.datasetIndex === 0 ? 'Aspirazione' : 'Scarico';
+                            var state = ctx.dataIndex === 0 ? 'Aperta' : 'Chiusa';
+                            return label + ' ' + state + ': ' + ctx.parsed + '\u00B0';
+                        }
                     }
                 }
             }
@@ -1992,24 +2013,33 @@ function createABChart(aInt, aExh, bInt, bExh) {
             { label: 'B - Scar.', data: dB_exh, borderColor: '#ffd740', backgroundColor: 'transparent', pointRadius: 0, borderWidth: 2, borderDash: [6, 3], fill: false }
             ]
         },
-        options: {
-            responsive: true,
-            animation: { duration: 0 },
-            legend: { labels: { fontColor: '#8888aa', fontSize: 11 } },
-            scales: {
-                xAxes: [{
-                    scaleLabel: { display: true, labelString: 'Gradi albero motore (\u00B0)', fontColor: '#8888aa' },
-                    gridLines: { color: '#2a2a4a' },
-                    ticks: { fontColor: '#8888aa', maxTicksLimit: 13 }
-                }],
-                yAxes: [{
-                    scaleLabel: { display: true, labelString: 'Alzata (mm)', fontColor: '#8888aa' },
-                    gridLines: { color: '#2a2a4a' },
-                    ticks: { fontColor: '#8888aa', beginAtZero: true }
-                }]
-            },
-            plugins: { zoom: zoomPanOptions }
-        }
+        options: (function () {
+            var c = anaColors();
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 0 },
+                plugins: {
+                    legend:  { labels: { color: c.text, font: { size: 11 } } },
+                    tooltip: { mode: 'index', intersect: false },
+                    zoom:    zoomPanOptions
+                },
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Gradi albero motore (\u00B0)', color: c.text },
+                        grid:  { color: c.grid },
+                        ticks: { color: c.text, maxTicksLimit: 13 }
+                    },
+                    y: {
+                        title: { display: true, text: 'Alzata (mm)', color: c.text },
+                        grid:  { color: c.grid },
+                        ticks: { color: c.text },
+                        beginAtZero: true
+                    }
+                }
+            };
+        })()
     });
 }
 
@@ -2328,7 +2358,6 @@ var chartData = {
         pointHoverRadius: 5,
         pointRadius: 0,
         data: [],
-        yAxisID: 'y-axis-1',
         borderWidth: 2
     }, {
         label: 'Scarico',
@@ -2338,63 +2367,63 @@ var chartData = {
         pointHoverRadius: 5,
         pointRadius: 0,
         data: [],
-        yAxisID: 'y-axis-1',
         borderWidth: 2
     }]
 };
 
 window.onload = function() {
     var ctx = document.getElementById('analisiChart').getContext('2d');
-    window.analisiLine = Chart.Line(ctx, {
+    var c = anaColors();
+    window.analisiLine = new Chart(ctx, {
+        type: 'line',
         data: chartData,
         options: {
             responsive: true,
-            hoverMode: 'index',
-            stacked: false,
-            title: { display: false },
-            legend: {
-                labels: { fontColor: '#8888aa' }
-            },
-            scales: {
-                xAxes: [{
-                    display: true,
-                    scaleLabel: {
-                        display: true,
-                        labelString: 'Gradi albero motore (\u00B0)',
-                        fontColor: '#8888aa'
-                    },
-                    gridLines: { color: "#2a2a4a" },
-                    ticks: {
-                        fontColor: '#8888aa',
-                        maxTicksLimit: 13,
-                        callback: function(val) { return val; }
-                    }
-                }],
-                yAxes: [{
-                    type: 'linear',
-                    scaleLabel: {
-                        display: true,
-                        labelString: 'Alzata (mm)',
-                        fontColor: '#8888aa'
-                    },
-                    position: 'left',
-                    id: 'y-axis-1',
-                    gridLines: {
-                        drawOnChartArea: true,
-                        color: "#2a2a4a"
-                    },
-                    ticks: {
-                        fontColor: '#8888aa',
-                        beginAtZero: true
-                    }
-                }]
-            },
+            maintainAspectRatio: false,
+            animation: { duration: 250 },
             plugins: {
-                zoom: zoomPanOptions
+                legend:  { labels: { color: c.text } },
+                tooltip: { mode: 'index', intersect: false },
+                zoom:    zoomPanOptions
+            },
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: {
+                    display: true,
+                    title: { display: true, text: 'Gradi albero motore (\u00B0)', color: c.text },
+                    grid:  { color: c.grid },
+                    ticks: { color: c.text, maxTicksLimit: 13 }
+                },
+                y: {
+                    type: 'linear',
+                    title: { display: true, text: 'Alzata (mm)', color: c.text },
+                    grid:  { color: c.grid },
+                    ticks: { color: c.text },
+                    beginAtZero: true
+                }
             }
         }
     });
 };
+
+// Theme observer: rebuilds tick/grid/legend colors and triggers update.
+document.addEventListener('cammes:theme:change', function () {
+    var c = anaColors();
+    [window.analisiLine, velocityChart, accelerationChart, jerkChart, forceChart, abChart].forEach(function (ch) {
+        if (!ch) return;
+        try {
+            var o = ch.options;
+            if (o.plugins && o.plugins.legend && o.plugins.legend.labels) o.plugins.legend.labels.color = c.text;
+            ['x','y'].forEach(function (k) {
+                if (!o.scales || !o.scales[k]) return;
+                if (o.scales[k].title) o.scales[k].title.color = c.text;
+                if (o.scales[k].grid)  o.scales[k].grid.color  = c.grid;
+                if (o.scales[k].ticks) o.scales[k].ticks.color = c.text;
+            });
+            ch.update('none');
+        } catch (e) {}
+    });
+});
 </script>
 
 </body>

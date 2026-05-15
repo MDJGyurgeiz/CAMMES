@@ -537,56 +537,74 @@ function stop() {
 }
 </script>
 
-<script src="Chart.min.js"></script>
-<script src="Chart.bundle.js"></script>
-<script src="samples/utils.js"></script>
+<script src="lib/chart.umd.min.js"></script>
 
 <script>
-var chartColors = {
-    red: 'rgb(255,0, 0)',
-    orange: 'rgb(255, 159, 64)',
-    yellow: 'rgb(255, 205, 86)',
-    green: 'rgb(75, 192, 192)',
-    blue: 'rgb(54, 162, 235)',
-    purple: 'rgb(153, 102, 255)',
-    grey: 'rgb(231,233,237)'
-};
+// Chart.js v4: helper colori legati alle CSS vars (segue il tema).
+function alzColors() {
+    var css = window.cammesGetCssVar || function(){ return ''; };
+    return {
+        accent: css('--accent')      || '#00d4ff',
+        grid:   css('--grid')        || '#2a2a4a',
+        text:   css('--text-muted')  || '#8888aa'
+    };
+}
 
 var config = {
     type: 'line',
     data: {
         labels: [],
         datasets: [{
-            label: 'mm',
-            backgroundColor: '#00d4ff',
-            borderColor: '#00d4ff',
+            label: 'alzata (mm)',
             data: [],
+            borderColor:     alzColors().accent,
+            backgroundColor: alzColors().accent + '22',
             fill: false,
+            borderWidth: 2,
             pointHoverRadius: 5,
             pointRadius: 0,
+            tension: 0.15
         }]
     },
     options: {
         responsive: true,
-        title: { display: false, text: 'test' },
-        tooltips: { mode: 'index', intersect: false },
-        hover: { mode: 'nearest', intersect: true },
-        legend: { labels: { fontColor: '#8888aa' } },
+        maintainAspectRatio: false,
+        animation: { duration: 0 },  // scan veloce: niente animazione
+        plugins: {
+            legend: { labels: { color: alzColors().text } },
+            tooltip: { mode: 'index', intersect: false }
+        },
+        interaction: { mode: 'nearest', intersect: false },
         scales: {
-            xAxes: [{
+            x: {
                 display: false,
-                scaleLabel: { display: true, labelString: 'gradi', fontColor: '#8888aa' },
-                gridLines: { color: "#2a2a4a" }
-            }],
-            yAxes: [{
+                title: { display: true, text: 'gradi', color: alzColors().text },
+                grid:  { color: alzColors().grid },
+                ticks: { color: alzColors().text }
+            },
+            y: {
                 display: true,
-                scaleLabel: { display: true, labelString: 'misura mm', fontColor: '#8888aa' },
-                gridLines: { color: "#2a2a4a" },
-                ticks: { fontColor: '#8888aa' }
-            }]
+                title: { display: true, text: 'alzata (mm)', color: alzColors().text },
+                grid:  { color: alzColors().grid },
+                ticks: { color: alzColors().text }
+            }
         }
     }
 };
+
+function refreshAlzColors() {
+    if (!window.myLine) return;
+    var c = alzColors();
+    var ds = window.myLine.data.datasets[0];
+    ds.borderColor = c.accent;
+    ds.backgroundColor = c.accent + '22';
+    var s = window.myLine.options.scales;
+    s.x.grid.color = c.grid;  s.x.ticks.color = c.text;  s.x.title.color = c.text;
+    s.y.grid.color = c.grid;  s.y.ticks.color = c.text;  s.y.title.color = c.text;
+    window.myLine.options.plugins.legend.labels.color = c.text;
+    window.myLine.update('none');
+}
+document.addEventListener('cammes:theme:change', refreshAlzColors);
 
 window.onload = function() {
     var ctx = document.getElementById('grafico').getContext('2d');

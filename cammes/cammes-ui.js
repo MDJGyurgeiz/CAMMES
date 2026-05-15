@@ -28,8 +28,17 @@
     const next = cur === 'dark' ? 'light' : 'dark';
     applyTheme(next);
     setStoredTheme(next);
+    document.dispatchEvent(new CustomEvent('cammes:theme:change', { detail: { theme: next } }));
   }
   window.cammesToggleTheme = toggleTheme;
+
+  // Helper: legge una CSS custom property dal :root (utile per Chart.js v4
+  // che vuole stringhe-colore esplicite — i grafici si aggiornano a tema
+  // cambiato ascoltando l'evento 'cammes:theme:change').
+  function getCssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+  window.cammesGetCssVar = getCssVar;
 
   // -------- TOAST NOTIFICATIONS ------------------------------------------
   function ensureToastStack() {

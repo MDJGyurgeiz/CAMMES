@@ -16,8 +16,7 @@
 </head>
 <body>
 
-<script src="Chart.bundle.js"></script>
-<script src="utils.js"></script>
+<script src="lib/chart.umd.min.js"></script>
 
 <div class="app-container">
 
@@ -131,88 +130,73 @@
      ============================================ -->
 
 <script>
+// Chart.js v4 — confronto fino a 4 alzate (theme-aware)
 var valori = new Array();
 var chartColors = {
-    red: 'rgb(255,0, 0)',
-    orange: 'rgb(255, 159, 64)',
-    yellow: 'rgb(255, 205, 86)',
+    red:   'rgb(255, 0, 0)',
+    blue:  'rgb(0, 0, 200)',
     green: 'rgb(0, 150, 0)',
-    blue: 'rgb(0, 0, 200)',
-    purple: 'rgb(153, 102, 255)',
-    grey: 'rgb(231,233,237)',
-    black: 'rgb(200,200,200)'
+    black: 'rgb(200, 200, 200)'
 };
+
+function grfColors() {
+    var css = window.cammesGetCssVar || function(){ return ''; };
+    return {
+        grid: css('--grid')       || '#2a2a4a',
+        text: css('--text-muted') || '#8888aa'
+    };
+}
 
 var lineChartData = {
     labels: [],
-    datasets: [{
-        label: 'grafico1',
-        borderColor: window.chartColors.red,
-        backgroundColor: window.chartColors.red,
-        fill: false,
-        pointHoverRadius: 5,
-        pointRadius: 1,
-        data: [],
-        yAxisID: 'y-axis-1',
-    }, {
-        label: 'grafico2',
-        borderColor: window.chartColors.blue,
-        backgroundColor: window.chartColors.blue,
-        fill: false,
-        pointHoverRadius: 5,
-        pointRadius: 1,
-        data: [],
-        yAxisID: 'y-axis-1',
-    }, {
-        label: 'grafico3',
-        borderColor: window.chartColors.green,
-        backgroundColor: window.chartColors.green,
-        fill: false,
-        pointHoverRadius: 5,
-        pointRadius: 1,
-        data: [],
-        yAxisID: 'y-axis-1',
-    }, {
-        label: 'grafico4',
-        borderColor: window.chartColors.black,
-        backgroundColor: window.chartColors.black,
-        fill: false,
-        pointHoverRadius: 5,
-        pointRadius: 1,
-        data: [],
-        yAxisID: 'y-axis-1',
-    }]
+    datasets: [
+        { label: 'grafico1', borderColor: chartColors.red,   backgroundColor: chartColors.red,   fill: false, pointHoverRadius: 5, pointRadius: 1, borderWidth: 2, tension: 0.15, data: [] },
+        { label: 'grafico2', borderColor: chartColors.blue,  backgroundColor: chartColors.blue,  fill: false, pointHoverRadius: 5, pointRadius: 1, borderWidth: 2, tension: 0.15, data: [] },
+        { label: 'grafico3', borderColor: chartColors.green, backgroundColor: chartColors.green, fill: false, pointHoverRadius: 5, pointRadius: 1, borderWidth: 2, tension: 0.15, data: [] },
+        { label: 'grafico4', borderColor: chartColors.black, backgroundColor: chartColors.black, fill: false, pointHoverRadius: 5, pointRadius: 1, borderWidth: 2, tension: 0.15, data: [] }
+    ]
 };
 
 window.onload = function() {
     var ctx = document.getElementById('canvas').getContext('2d');
-    window.myLine = Chart.Line(ctx, {
+    window.myLine = new Chart(ctx, {
+        type: 'line',
         data: lineChartData,
         options: {
             responsive: true,
-            hoverMode: 'index',
-            stacked: false,
-            title: { display: false, text: '' },
-            legend: { labels: { fontColor: '#8888aa' } },
+            maintainAspectRatio: false,
+            animation: { duration: 250 },
+            plugins: {
+                legend:  { labels: { color: grfColors().text } },
+                tooltip: { mode: 'index', intersect: false }
+            },
+            interaction: { mode: 'index', intersect: false },
             scales: {
-                display: true,
-                xAxes: [{
+                x: {
                     display: false,
-                    scaleLabel: { display: true, labelString: 'gradi', fontColor: '#8888aa' },
-                    gridLines: { color: "#2a2a4a" },
-                }],
-                yAxes: [{
+                    title: { display: true, text: 'gradi', color: grfColors().text },
+                    grid:  { color: grfColors().grid }
+                },
+                y: {
                     type: 'linear',
-                    scaleLabel: { display: true, labelString: 'valore', fontColor: '#8888aa' },
-                    position: 'left',
-                    id: 'y-axis-1',
-                    gridLines: { drawOnChartArea: true, color: "#2a2a4a" },
-                    ticks: { fontColor: '#8888aa' }
-                }],
+                    title: { display: true, text: 'valore (mm)', color: grfColors().text },
+                    grid:  { color: grfColors().grid, drawOnChartArea: true },
+                    ticks: { color: grfColors().text }
+                }
             }
         }
     });
 };
+
+document.addEventListener('cammes:theme:change', function () {
+    if (!window.myLine) return;
+    var c = grfColors();
+    var o = window.myLine.options;
+    o.plugins.legend.labels.color = c.text;
+    o.scales.x.grid.color = c.grid;  o.scales.x.title.color = c.text;
+    o.scales.y.grid.color = c.grid;  o.scales.y.title.color = c.text;  o.scales.y.ticks.color = c.text;
+    window.myLine.update('none');
+});
 </script>
 
 <script type="text/javascript">
@@ -318,121 +302,48 @@ function update() {
 }
 </script>
 
-<script src="Chart.min.js"></script>
-
-<!-- Polar Chart 1 -->
+<!-- 4 Polar Charts (Chart.js v4) -->
 <script>
-var birdsCanvas = document.getElementById("birdsChart");
-Chart.defaults.global.defaultFontFamily = "Lato";
-Chart.defaults.global.defaultFontSize = 18;
-Chart.defaults.global.defaultFontColor = "#8888aa";
+function polChartOptions() {
+    var c = grfColors();
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { animateRotate: false, duration: 0 },
+        plugins: { legend: { display: false } },
+        scales: {
+            r: {
+                ticks:      { color: c.text, backdropColor: 'transparent' },
+                grid:       { color: c.grid },
+                angleLines: { color: c.grid },
+                startAngle: 0
+            }
+        }
+    };
+}
 
-var birdsData = {
-    datasets: [{
-        label: 'g2',
-        data: [],
-        backgroundColor: [],
-        borderColor: "rgba(250, 0, 0, 0.2)",
-    }]
-};
-var chartOptions = {
-    startAngle: 0,
-    legend: { position: 'left', display: false },
-    animation: { animateRotate: false },
-    scale: {
-        ticks: { fontColor: '#8888aa', backdropColor: 'transparent' },
-        gridLines: { color: '#2a2a4a' },
-        angleLines: { color: '#2a2a4a' }
-    }
-};
-var polarAreaChart = new Chart(birdsCanvas, {
-    type: 'polarArea',
-    data: birdsData,
-    options: chartOptions
-});
-</script>
+function makePolar(canvasId, borderColor) {
+    return new Chart(document.getElementById(canvasId), {
+        type: 'polarArea',
+        data: { datasets: [{ label: 'g', data: [], backgroundColor: [], borderColor: borderColor, borderWidth: 1 }] },
+        options: polChartOptions()
+    });
+}
 
-<!-- Polar Chart 2 -->
-<script>
-var birdsCanvas2 = document.getElementById("birdsChart2");
-var birdsData2 = {
-    datasets: [{
-        label: 'g2',
-        data: [],
-        backgroundColor: [],
-        borderColor: "rgba(0, 0, 250, 0.2)",
-    }]
-};
-var chartOptions2 = {
-    startAngle: 0,
-    legend: { position: 'left', display: false },
-    animation: { animateRotate: false },
-    scale: {
-        ticks: { fontColor: '#8888aa', backdropColor: 'transparent' },
-        gridLines: { color: '#2a2a4a' },
-        angleLines: { color: '#2a2a4a' }
-    }
-};
-var polarAreaChart2 = new Chart(birdsCanvas2, {
-    type: 'polarArea',
-    data: birdsData2,
-    options: chartOptions2
-});
-</script>
+var polarAreaChart  = makePolar('birdsChart',  'rgba(255, 0, 0, 0.45)');
+var polarAreaChart2 = makePolar('birdsChart2', 'rgba(0, 0, 250, 0.45)');
+var polarAreaChart3 = makePolar('birdsChart3', 'rgba(0, 200, 0, 0.45)');
+var polarAreaChart4 = makePolar('birdsChart4', 'rgba(200, 200, 200, 0.45)');
 
-<!-- Polar Chart 3 -->
-<script>
-var birdsCanvas3 = document.getElementById("birdsChart3");
-var birdsData3 = {
-    datasets: [{
-        label: 'g2',
-        data: [],
-        backgroundColor: [],
-        borderColor: "rgba(0, 250, 0, 0.2)",
-    }]
-};
-var chartOptions3 = {
-    startAngle: 0,
-    legend: { position: 'left', display: false },
-    animation: { animateRotate: false },
-    scale: {
-        ticks: { fontColor: '#8888aa', backdropColor: 'transparent' },
-        gridLines: { color: '#2a2a4a' },
-        angleLines: { color: '#2a2a4a' }
-    }
-};
-var polarAreaChart3 = new Chart(birdsCanvas3, {
-    type: 'polarArea',
-    data: birdsData3,
-    options: chartOptions3
-});
-</script>
-
-<!-- Polar Chart 4 -->
-<script>
-var birdsCanvas4 = document.getElementById("birdsChart4");
-var birdsData4 = {
-    datasets: [{
-        label: 'g2',
-        data: [],
-        backgroundColor: [],
-        borderColor: "rgba(200, 200, 200, 0.2)",
-    }]
-};
-var chartOptions4 = {
-    startAngle: 0,
-    legend: { position: 'left', display: false },
-    animation: { animateRotate: false },
-    scale: {
-        ticks: { fontColor: '#8888aa', backdropColor: 'transparent' },
-        gridLines: { color: '#2a2a4a' },
-        angleLines: { color: '#2a2a4a' }
-    }
-};
-var polarAreaChart4 = new Chart(birdsCanvas4, {
-    type: 'polarArea',
-    data: birdsData4,
-    options: chartOptions4
+document.addEventListener('cammes:theme:change', function () {
+    [polarAreaChart, polarAreaChart2, polarAreaChart3, polarAreaChart4].forEach(function (ch) {
+        var c = grfColors();
+        var r = ch.options.scales.r;
+        r.ticks.color = c.text;
+        r.grid.color = c.grid;
+        r.angleLines.color = c.grid;
+        ch.update('none');
+    });
 });
 </script>
 
