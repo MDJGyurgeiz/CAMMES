@@ -87,6 +87,14 @@
 
             <div class="separator"></div>
 
+            <div class="controls-group">
+                <span class="toggle-label">Ripetizioni</span>
+                <select id="scanRepeat" class="input" style="width:170px;" data-tip="<strong>Scansioni ripetute</strong>Ripete N volte la stessa scansione e calcola media + deviazione standard per ogni grado camma. Utile per stimare la ripetibilit&agrave; del sistema o ridurre il rumore di misura. Il file salvato contiene la media."><option value="1" selected>1 (singola)</option><option value="2">2 run + medie</option><option value="3">3 run + medie</option><option value="5">5 run + statistiche</option></select>
+                <span class="help-icon" data-tip="<strong>Quando ripetere?</strong>Stesso albero, stessa modalit&agrave;: dovresti ottenere la stessa curva. Se la dev. std. &egrave; alta (&gt; 5%), il sistema ha rumore meccanico/elettronico da indagare. Tempo totale = N × tempo singolo." tabindex="0">?</span>
+            </div>
+
+            <div class="separator"></div>
+
             <form name="mas">
                 <input type="text" name="mas" value=" max" readonly class="max-display" data-tip="<strong>Picco rilevato</strong>Grado camma e alzata mm del punto massimo durante la scansione in corso.">
             </form>
@@ -207,6 +215,13 @@ var currentMode = SCAN_MODES.fast;
 var subBuffer = {};
 // ETA tracker condiviso fra start() / ms() / stop()
 var scanEta = window.cammesEta ? window.cammesEta.create() : { start:function(){return this;}, tick:function(){return null;}, stop:function(){} };
+
+// Scansione ripetuta: target N run, contatore corrente, buffer dati per run.
+// Quando target > 1, alla fine di ogni run il sistema riparte automaticamente.
+// A fine ultimo run, calcola media + std dev per ogni grado camma 1..360.
+var repeatRunsTarget = 1;
+var repeatRunsDone   = 0;
+var repeatedRuns     = [];   // Array di Array[1..360] (pdata di ciascun run)
 
 function onScanModeChange() {
     var sel = document.getElementById('scanMode');
@@ -416,8 +431,38 @@ engineSocket.onmessage = function(event) {
             responsiveVoice.speak(x, "Italian Female", { volume: 3 });
             if (window.cammesScanProgress) window.cammesScanProgress.set(currentMode.totalSteps, currentMode.totalSteps, 0);
             if (scanEta) scanEta.stop();
-            if (window.cammesToast && labms !== 1) {
-                window.cammesToast({ kind: 'success', title: 'Scansione completata', body: 'Picco ' + max.toFixed(3) + ' mm a ' + maxg + '&deg; camma.', duration: 5000 });
+
+            // === Scansione ripetuta: salva questo run e decide se ripartire ===
+            if (labms !== 1 && repeatRunsTarget > 1) {
+                // Snapshot pdata (deep copy della parte 1..360)
+                var snapshot = [];
+                for (var d = 1; d <= 360; d++) snapshot[d] = pdata[d];
+                snapshot.maxg = maxg; snapshot.max = max;
+                repeatedRuns.push(snapshot);
+                repeatRunsDone++;
+
+                if (repeatRunsDone < repeatRunsTarget) {
+                    // Restart automatico dopo 1.5 s (lascia tempo alle vibrazioni)
+                    if (window.cammesToast) {
+                        window.cammesToast({
+                            kind: 'info', title: 'Run ' + repeatRunsDone + '/' + repeatRunsTarget + ' completato',
+                            body: 'Picco ' + max.toFixed(3) + ' mm a ' + maxg + '&deg;. Avvio prossimo run...',
+                            duration: 3500
+                        });
+                    }
+                    startflag = 0;
+                    setTimeout(function () { _startSingleRun(false); }, 1500);
+                    return;
+                }
+
+                // === ULTIMO RUN: calcola statistiche su tutti i N run ===
+                _showRepeatedRunsStats();
+                // Riabilita scanRepeat
+                var rs = document.getElementById('scanRepeat'); if (rs) rs.disabled = false;
+            } else {
+                if (window.cammesToast && labms !== 1) {
+                    window.cammesToast({ kind: 'success', title: 'Scansione completata', body: 'Picco ' + max.toFixed(3) + ' mm a ' + maxg + '&deg; camma.', duration: 5000 });
+                }
             }
             // Riabilita selector modalità a fine scansione
             var sm = document.getElementById('scanMode'); if (sm) sm.disabled = false;
@@ -502,14 +547,93 @@ engineSocket.onmessage = function(event) {
 <script>
 var i = 0;
 function start() {
+    // Legge target ripetizioni dalla UI all'avvio (poi non cambia per la
+    // durata del ciclo completo: l'utente non può cambiarlo mid-sequence
+    // perché disabilitiamo lo scanRepeat).
+    var repSel = document.getElementById('scanRepeat');
+    repeatRunsTarget = repSel ? parseInt(repSel.value, 10) || 1 : 1;
+    repeatRunsDone   = 0;
+    repeatedRuns     = [];
+    if (repSel) repSel.disabled = true;
+    _startSingleRun(/*firstRun=*/true);
+}
+// Calcola statistiche su tutti i run ripetuti accumulati in
+// repeatedRuns[]. Sostituisce pdata corrente con la MEDIA per grado
+// (così il save mantiene un file pulito) e mostra picco + std dev max +
+// coefficiente di variazione massimo come indicatori di ripetibilità.
+function _showRepeatedRunsStats() {
+    var N = repeatedRuns.length;
+    if (N < 2) return;
+    var sumLift = 0, peakStdAtMaxg = 0, maxStd = 0, maxStdDeg = 0, maxCv = 0;
+    var avgLift = new Array(361), stdLift = new Array(361);
+    for (var d = 1; d <= 360; d++) {
+        var sum = 0, count = 0;
+        for (var r = 0; r < N; r++) {
+            var v = repeatedRuns[r][d];
+            if (typeof v === 'number' && !isNaN(v)) { sum += v; count++; }
+        }
+        var mean = count > 0 ? sum / count : 0;
+        var sq = 0;
+        for (var r2 = 0; r2 < N; r2++) {
+            var v2 = repeatedRuns[r2][d];
+            if (typeof v2 === 'number' && !isNaN(v2)) sq += (v2 - mean) * (v2 - mean);
+        }
+        var sd = count > 1 ? Math.sqrt(sq / (count - 1)) : 0;
+        avgLift[d] = mean;
+        stdLift[d] = sd;
+        if (sd > maxStd) { maxStd = sd; maxStdDeg = d; }
+        if (mean > 0.3 && sd / mean * 100 > maxCv) maxCv = sd / mean * 100;
+    }
+
+    // Calcola maxg da media e std al picco
+    var maxAvg = 0, maxAvgDeg = 0;
+    for (var dd = 1; dd <= 360; dd++) {
+        if (avgLift[dd] > maxAvg) { maxAvg = avgLift[dd]; maxAvgDeg = dd; }
+    }
+    peakStdAtMaxg = stdLift[maxAvgDeg] || 0;
+
+    // Sostituisci pdata con la media (per save coerente). Aggiorna anche
+    // il chart e i contatori max/maxg in UI.
+    for (var dd2 = 1; dd2 <= 360; dd2++) {
+        pdata[dd2]   = avgLift[dd2];
+        pdindex[dd2] = dd2;
+    }
+    max = maxAvg; maxg = maxAvgDeg;
+    document.mas.mas.value = " max  " + maxg + " gradi       " + max.toFixed(3) + " (n=" + N + ")";
+
+    if (config && config.data) {
+        config.data.labels.length = 0;
+        config.data.datasets.forEach(function (d) { d.data.length = 0; });
+        for (var dd3 = 1; dd3 <= 360; dd3++) {
+            config.data.labels.push(dd3);
+            config.data.datasets[0].data.push(avgLift[dd3]);
+        }
+        if (window.myLine) try { window.myLine.update(); } catch (e) {}
+    }
+
+    // Toast riepilogo con verdict ripetibilità
+    var verdict, kind;
+    if (maxCv < 1)        { verdict = 'eccellente'; kind = 'success'; }
+    else if (maxCv < 3)   { verdict = 'buona';      kind = 'success'; }
+    else if (maxCv < 7)   { verdict = 'sufficiente'; kind = 'warn'; }
+    else                  { verdict = 'scadente';   kind = 'err'; }
+    if (window.cammesToast) {
+        window.cammesToast({
+            kind: kind, title: N + ' run completati &middot; ripetibilit&agrave; ' + verdict,
+            body: 'Picco medio <b>' + maxAvg.toFixed(3) + ' mm</b> a <b>' + maxAvgDeg +
+                  '&deg;</b> &middot; &sigma; max <b>' + maxStd.toFixed(3) + ' mm</b> @ ' + maxStdDeg +
+                  '&deg; &middot; CV max <b>' + maxCv.toFixed(2) + '%</b>',
+            duration: 9000
+        });
+    }
+}
+
+// Avvia un singolo run di scansione. Usato sia dal primo start() che
+// dall'auto-restart dopo che un run è completato in modalità ripetuta.
+function _startSingleRun(firstRun) {
     var x = "sequenza di misura   iniziata ";
     responsiveVoice.speak(x, "Italian Female", { volume: 3 });
-    // Disabilita selector modalità durante scansione: cambiare modalità mid-scan
-    // farebbe variare currentMode.subStepsPerDeg e corrompere il calcolo di units.
     var sm = document.getElementById('scanMode'); if (sm) sm.disabled = true;
-    // reset COMPLETO stato scansione (incluso il contatore i: senza questo,
-    // se il motore è stato mosso prima, i poteva già essere >= totalSteps
-    // e il loop non avanzava mai)
     i = 0;
     consecutiveNaN = 0;
     subBuffer = {};
@@ -525,7 +649,17 @@ function start() {
     startflag = 1;
     scanEta.start(currentMode.totalSteps);
     if (window.cammesScanProgress) window.cammesScanProgress.set(0, currentMode.totalSteps, currentMode.timeSec);
-    if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Scansione avviata', body: 'Modalit&agrave; ' + currentMode.label + ' &middot; ~' + Math.round(currentMode.timeSec/60) + 'm', duration: 2500 });
+    if (window.cammesToast) {
+        var runLabel = repeatRunsTarget > 1
+            ? 'Run ' + (repeatRunsDone + 1) + '/' + repeatRunsTarget + ' &middot; ' + currentMode.label
+            : 'Modalit&agrave; ' + currentMode.label + ' &middot; ~' + Math.round(currentMode.timeSec/60) + 'm';
+        window.cammesToast({
+            kind: 'info',
+            title: firstRun ? 'Scansione avviata' : 'Prossimo run avviato',
+            body: runLabel,
+            duration: 2500
+        });
+    }
 }
 </script>
 
@@ -538,8 +672,13 @@ function stop() {
     stepflag  = 1;
     startflag = 0;
     labms     = 0;     // annulla anche un eventuale 0 virtuale in corso
-    // Riabilita selector modalità (era disabilitato da start()/ms())
+    // Riabilita selector modalità e ripetizioni
     var sm = document.getElementById('scanMode'); if (sm) sm.disabled = false;
+    var rs = document.getElementById('scanRepeat'); if (rs) rs.disabled = false;
+    // Cancella eventuale sequenza ripetuta in corso
+    repeatRunsTarget = 1;
+    repeatRunsDone = 0;
+    repeatedRuns = [];
     if (scanEta) scanEta.stop();
     if (window.cammesScanProgress) window.cammesScanProgress.reset();
     if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Scansione interrotta', body: 'I dati parziali non sono stati salvati.', duration: 3000 });
