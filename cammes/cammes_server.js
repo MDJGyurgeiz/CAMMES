@@ -47,12 +47,67 @@ var REAL_DIR = process.pkg ? path.dirname(process.execPath) : __dirname;
 var PROVE_DIR = path.join(REAL_DIR, 'prove');
 
 // ============================================================
-// Utility - Log con timestamp
+// Utility - Log strutturato con livelli + colori ANSI
 // ============================================================
 
-function log(tag, msg) {
+// I livelli di log emessi. Per silenziare un canale (es. CMD verboso),
+// imposta in env LOG_LEVEL=info (default) o warn / error / debug.
+var LOG_LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
+var LOG_THRESHOLD = LOG_LEVELS[process.env.LOG_LEVEL] || LOG_LEVELS.info;
+
+// Colori ANSI (no-op se stdout non è TTY)
+var ANSI = process.stdout.isTTY ? {
+    reset: '\x1b[0m', dim: '\x1b[2m',
+    blue:  '\x1b[34m', green: '\x1b[32m',
+    yellow: '\x1b[33m', red:  '\x1b[31m',
+    cyan:  '\x1b[36m'
+} : { reset: '', dim: '', blue: '', green: '', yellow: '', red: '', cyan: '' };
+
+function logAt(level, tag, msg) {
+    if ((LOG_LEVELS[level] || 0) < LOG_THRESHOLD) return;
     var now = new Date().toLocaleTimeString('it-IT');
-    console.log('[' + now + '] [' + tag + '] ' + msg);
+    var colorByTag = {
+        HTTP: ANSI.blue, WS: ANSI.cyan, SERIAL: ANSI.green,
+        CMD:  ANSI.dim,  FILE: ANSI.yellow, API:  ANSI.cyan
+    };
+    var colorByLevel = {
+        debug: ANSI.dim, info: '', warn: ANSI.yellow, error: ANSI.red
+    };
+    var tagColor = colorByTag[tag] || '';
+    var lvlColor = colorByLevel[level] || '';
+    console.log(ANSI.dim + '[' + now + ']' + ANSI.reset +
+                ' ' + tagColor + '[' + tag + ']' + ANSI.reset +
+                ' ' + lvlColor + msg + ANSI.reset);
+}
+
+function log(tag, msg)      { logAt('info',  tag, msg); }
+log.debug = function(t, m)  { logAt('debug', t, m); };
+log.info  = function(t, m)  { logAt('info',  t, m); };
+log.warn  = function(t, m)  { logAt('warn',  t, m); };
+log.error = function(t, m)  { logAt('error', t, m); };
+
+// ============================================================
+// Utility - validazione nome file (whitelist sicura)
+// ============================================================
+
+// Usata sia da save WS che da API GET/DELETE. Whitelist conservativa:
+// solo lettere/numeri/underscore/dash/punto, lunghezza max 120 char,
+// niente '..' anche come substring.
+function isSafeFilename(name) {
+    return typeof name === 'string'
+        && name.length > 0 && name.length <= 120
+        && /^[A-Za-z0-9._-]+$/.test(name)
+        && name.indexOf('..') === -1;
+}
+
+// ============================================================
+// Utility - JSON response standard
+// ============================================================
+
+function sendJson(res, code, obj) {
+    res.setHeader('Cache-Control', 'no-store');
+    res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(obj));
 }
 
 // ============================================================
@@ -129,15 +184,41 @@ var httpServer = http.createServer(function (req, res) {
         return;
     }
 
-    // API: scarica un file misura specifico
+    // API: download (GET) o delete (DELETE) di un file misura specifico
     if (urlPath.indexOf('/api/file/') === 0) {
         var fname = decodeURIComponent(urlPath.substring('/api/file/'.length));
-        if (fname.indexOf('..') !== -1 || fname.indexOf('/') !== -1 || fname.indexOf('\\') !== -1) {
-            res.writeHead(400); res.end('Bad filename'); return;
+        if (!isSafeFilename(fname)) {
+            return sendJson(res, 400, { error: 'Nome file non valido', name: fname });
         }
         var fpath = path.join(PROVE_DIR, fname);
+        var resolved = path.resolve(fpath);
+        if (resolved.indexOf(path.resolve(PROVE_DIR)) !== 0) {
+            return sendJson(res, 403, { error: 'Path traversal rifiutato' });
+        }
+
+        if (req.method === 'DELETE') {
+            fs.unlink(fpath, function (err) {
+                if (err) {
+                    if (err.code === 'ENOENT') return sendJson(res, 404, { error: 'File non trovato', name: fname });
+                    log('API', 'DELETE errore: ' + err.message);
+                    return sendJson(res, 500, { error: 'Errore eliminazione', detail: err.message });
+                }
+                log('API', 'DELETE ok: ' + fname);
+                sendJson(res, 200, { ok: true, deleted: fname });
+            });
+            return;
+        }
+
+        // Default: GET = download
         fs.readFile(fpath, function (err, data) {
-            if (err) { res.writeHead(404); res.end('Not found'); return; }
+            if (err) {
+                if (err.code === 'ENOENT') {
+                    res.writeHead(404, { 'Content-Type': 'text/plain' });
+                    return res.end('Not found');
+                }
+                res.writeHead(500, { 'Content-Type': 'text/plain' });
+                return res.end('Server error');
+            }
             res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
             res.end(data);
         });
@@ -207,12 +288,12 @@ wsServer.on('connection', function (ws) {
         if (serialPort && serialPort.isOpen) {
             serialPort.write(msg, function (err) {
                 if (err) {
-                    log('SERIAL', 'Errore invio: ' + err.message);
+                    log.error('SERIAL', 'Errore invio: ' + err.message);
                 }
             });
-            log('CMD', 'Browser -> Arduino: "' + msg + '"');
+            log.debug('CMD', 'Browser -> Arduino: "' + msg + '"');
         } else {
-            log('CMD', 'Comando ricevuto (no serial): "' + msg + '"');
+            log.debug('CMD', 'Comando ricevuto (no serial): "' + msg + '"');
         }
     });
 
@@ -222,7 +303,7 @@ wsServer.on('connection', function (ws) {
     });
 
     ws.on('error', function (err) {
-        log('WS', 'Errore client: ' + err.message);
+        log.warn('WS', 'Errore client: ' + err.message);
     });
 });
 
@@ -253,14 +334,8 @@ function handleFileSave(msg) {
     var fileName = msg.substring(firstStar + 1, secondStar);
     var fileData = msg.substring(secondStar + 1);
 
-    // SECURITY: valida nome file lato server. Il client sanitizza già
-    // (sav() in alzata/polare), ma un client WS ostile può inviare
-    // qualunque cosa. Whitelist conservativa: solo A-Z a-z 0-9 _ - punti.
-    // Niente '/', '\', '..', ':' (path traversal), niente nullbyte.
-    if (!fileName || fileName.length > 120 ||
-        !/^[A-Za-z0-9._-]+$/.test(fileName) ||
-        fileName.indexOf('..') !== -1) {
-        log('FILE', 'Nome file rifiutato (security): "' + String(fileName).substring(0,40) + '"');
+    if (!isSafeFilename(fileName)) {
+        log.warn('FILE', 'Nome file rifiutato (security): "' + String(fileName).substring(0,40) + '"');
         return;
     }
 
@@ -274,14 +349,14 @@ function handleFileSave(msg) {
     var filePath = path.join(PROVE_DIR, fileName + '.scr');
     var resolved = path.resolve(filePath);
     if (resolved.indexOf(path.resolve(PROVE_DIR)) !== 0) {
-        log('FILE', 'Path traversal tentato, rifiutato: ' + resolved);
+        log.warn('FILE', 'Path traversal tentato, rifiutato: ' + resolved);
         return;
     }
     fs.writeFile(filePath, fileData, function (err) {
         if (err) {
-            log('FILE', 'Errore salvataggio: ' + err.message);
+            log.error('FILE', 'Errore salvataggio: ' + err.message);
         } else {
-            log('FILE', 'Salvato: ' + filePath);
+            log('FILE', 'Salvato: ' + path.basename(filePath));
         }
     });
 }
@@ -393,7 +468,7 @@ function autoDetectSerial() {
             openSerialPort(arduinoPort);
         }
     }).catch(function (err) {
-        log('SERIAL', 'Errore elencando porte: ' + err.message);
+        log.error('SERIAL', 'Errore elencando porte: ' + err.message);
     });
 }
 
@@ -447,7 +522,7 @@ function openSerialPort(comPort) {
         });
 
         serialPort.on('error', function (err) {
-            log('SERIAL', 'Errore: ' + err.message);
+            log.error('SERIAL', 'Errore: ' + err.message);
         });
 
         serialPort.on('close', function () {
@@ -462,7 +537,7 @@ function openSerialPort(comPort) {
         });
 
     } catch (err) {
-        log('SERIAL', 'Errore apertura porta ' + comPort + ': ' + err.message);
+        log.error('SERIAL', 'Errore apertura porta ' + comPort + ': ' + err.message);
     }
 }
 
@@ -521,4 +596,13 @@ log('SERVER', '  CAMMES Server Unificato v1.0.0');
 log('SERVER', '  HTTP:   http://localhost:' + HTTP_PORT);
 log('SERVER', '  WS:     ws://localhost:' + WS_PORT);
 log('SERVER', '  Serial: ' + (SERIAL_COM || 'auto-detect'));
+log('SERVER', '  Log lvl: ' + (process.env.LOG_LEVEL || 'info'));
 log('SERVER', '========================================');
+
+// Global error guards: meglio un log strutturato che un crash silenzioso
+process.on('uncaughtException', function (err) {
+    log.error('CRASH', 'uncaughtException: ' + (err && err.stack || err));
+});
+process.on('unhandledRejection', function (reason) {
+    log.error('CRASH', 'unhandledRejection: ' + (reason && reason.stack || reason));
+});

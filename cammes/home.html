@@ -256,6 +256,62 @@
     }
     .filter-toggle.active { background: var(--accent-2); color: #1a1a0a; border-color: var(--accent-2); }
     .filter-toggle:hover:not(.active) { color: var(--text-primary); border-color: var(--border-strong); }
+
+    /* Delete (cestino) button + confirm modal */
+    .delete-btn {
+        display: inline-flex; align-items: center; gap: 3px;
+        font-family: var(--font-mono); font-size: 11px;
+        padding: 2px 8px; border-radius: var(--r-sm);
+        background: transparent; color: var(--text-muted);
+        border: 1px solid var(--border-strong); cursor: pointer;
+        transition: all var(--t-fast) var(--ease);
+        margin-left: 4px;
+    }
+    .delete-btn:hover { background: var(--danger); color: white; border-color: var(--danger); }
+
+    /* Generic confirm modal (riusabile per delete e altre azioni distruttive) */
+    .confirm-backdrop {
+        position: fixed; inset: 0; z-index: var(--z-modal);
+        background: rgba(7, 9, 13, 0.78);
+        backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        padding: var(--sp-4);
+        opacity: 0; transition: opacity var(--t-base) var(--ease);
+    }
+    .confirm-backdrop.visible { opacity: 1; }
+    .confirm-modal {
+        background: var(--bg-elev-2);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--r-xl);
+        padding: var(--sp-6);
+        max-width: 420px; width: 100%;
+        box-shadow: var(--e-4);
+        transform: scale(0.95); transition: transform var(--t-base) var(--ease-bouncy);
+    }
+    .confirm-backdrop.visible .confirm-modal { transform: scale(1); }
+    .confirm-modal-icon {
+        width: 48px; height: 48px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 50%;
+        background: color-mix(in oklab, var(--danger) 18%, transparent);
+        color: var(--danger);
+        margin: 0 auto var(--sp-3);
+    }
+    .confirm-modal-icon svg { width: 26px; height: 26px; }
+    .confirm-modal-title {
+        font-family: var(--font-display); font-weight: 700; font-size: 18px;
+        text-align: center; color: var(--text-primary);
+        margin-bottom: var(--sp-2);
+    }
+    .confirm-modal-body {
+        font-size: 13px; line-height: 1.5; color: var(--text-secondary);
+        text-align: center; margin-bottom: var(--sp-5);
+        word-break: break-word;
+    }
+    .confirm-modal-body code { font-family: var(--font-mono); color: var(--accent); }
+    .confirm-modal-actions {
+        display: flex; gap: var(--sp-3); justify-content: center;
+    }
     </style>
 </head>
 <body>
@@ -544,14 +600,16 @@ function loadRecents() {
                 var bm = bookmarkSet[f.name];
                 var starChar = bm ? '&#9733;' : '&#9734;';
                 var starTitle = bm ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti';
+                var nameJs = safeName.replace(/'/g, '&#39;');
                 return '<tr class="' + (bm ? 'bookmarked' : '') + '">' +
-                    '<td><button class="star-btn' + (bm ? ' active' : '') + '" title="' + starTitle + '" onclick="toggleBookmark(\'' + safeName.replace(/'/g, '&#39;') + '\', event);">' + starChar + '</button></td>' +
+                    '<td><button class="star-btn' + (bm ? ' active' : '') + '" title="' + starTitle + '" onclick="toggleBookmark(\'' + nameJs + '\', event);">' + starChar + '</button></td>' +
                     '<td><span class="type-pill ' + safeType + '">' + typeLabel + '</span></td>' +
                     '<td><span class="fname">' + safeName + '</span></td>' +
                     '<td class="fsize">' + fmtBytes(f.size) + '</td>' +
                     '<td class="fdate">' + escapeHtml(fmtDate(f.mtime)) + '</td>' +
-                    '<td style="text-align:right;">' +
-                      '<a class="home-action-btn" href="/api/file/' + encodeURIComponent(f.name) + '" target="_blank" download="' + safeName + '" title="Scarica">&darr; Scarica</a>' +
+                    '<td style="text-align:right;white-space:nowrap;">' +
+                      '<a class="home-action-btn" href="/api/file/' + encodeURIComponent(f.name) + '" target="_blank" download="' + safeName + '" title="Scarica">&darr;</a>' +
+                      '<button class="delete-btn" title="Elimina" onclick="confirmDelete(\'' + nameJs + '\');">&times;</button>' +
                     '</td>' +
                     '</tr>';
             }).join('');
@@ -567,6 +625,79 @@ function loadRecents() {
         });
 }
 window.addEventListener('DOMContentLoaded', loadRecents);
+
+// ===== Delete file (con conferma modale) =====
+function confirmDelete(fileName) {
+    var back = document.createElement('div');
+    back.className = 'confirm-backdrop';
+    back.innerHTML =
+        '<div class="confirm-modal">' +
+        '  <div class="confirm-modal-icon">' +
+        '    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '      <polyline points="3 6 5 6 21 6"/>' +
+        '      <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>' +
+        '      <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>' +
+        '    </svg>' +
+        '  </div>' +
+        '  <div class="confirm-modal-title">Elimina file?</div>' +
+        '  <div class="confirm-modal-body">' +
+        '    Stai per eliminare <code>' + escapeHtml(fileName) + '</code>.<br>' +
+        '    L\'operazione &egrave; <b>irreversibile</b>: il file verr&agrave; rimosso dal disco del server.' +
+        '  </div>' +
+        '  <div class="confirm-modal-actions">' +
+        '    <button class="btn btn-secondary" onclick="closeConfirm();">Annulla</button>' +
+        '    <button class="btn btn-danger" id="confirmDeleteBtn">Elimina</button>' +
+        '  </div>' +
+        '</div>';
+    document.body.appendChild(back);
+    window._currentConfirm = back;
+    requestAnimationFrame(function () { back.classList.add('visible'); });
+
+    var btn = back.querySelector('#confirmDeleteBtn');
+    btn.onclick = function () { doDelete(fileName); };
+    back.onclick = function (e) { if (e.target === back) closeConfirm(); };
+    document.addEventListener('keydown', escCloseConfirm);
+}
+function escCloseConfirm(e) { if (e.key === 'Escape') closeConfirm(); }
+function closeConfirm() {
+    var back = window._currentConfirm;
+    if (!back) return;
+    back.classList.remove('visible');
+    document.removeEventListener('keydown', escCloseConfirm);
+    setTimeout(function () {
+        if (back.parentNode) back.parentNode.removeChild(back);
+        window._currentConfirm = null;
+    }, 220);
+}
+function doDelete(fileName) {
+    closeConfirm();
+    fetch('/api/file/' + encodeURIComponent(fileName), { method: 'DELETE' })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+        .then(function (res) {
+            if (res.ok) {
+                // Rimuovi anche dai bookmark se presente
+                var list = loadBookmarks();
+                var i = list.indexOf(fileName);
+                if (i !== -1) { list.splice(i, 1); saveBookmarks(list); }
+                if (window.cammesToast) window.cammesToast({
+                    kind: 'success', title: 'File eliminato', body: fileName, duration: 3000
+                });
+                loadRecents();
+            } else {
+                if (window.cammesToast) window.cammesToast({
+                    kind: 'err', title: 'Errore eliminazione',
+                    body: (res.body && res.body.error) || 'Risposta inattesa dal server', duration: 4000
+                });
+            }
+        })
+        .catch(function (err) {
+            if (window.cammesToast) window.cammesToast({
+                kind: 'err', title: 'Errore di rete', body: err.message, duration: 4000
+            });
+        });
+}
+window.confirmDelete = confirmDelete;
+window.closeConfirm  = closeConfirm;
 </script>
 
 </body>
