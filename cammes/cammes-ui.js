@@ -336,6 +336,139 @@
   }
   window.cammesTooltip = { refresh: refreshTooltips };
 
+  // -------- ONBOARDING WIZARD -------------------------------------------
+  // Modal a step. Mostrato automaticamente al primo accesso (flag in
+  // localStorage). Riapribile manualmente da un bottone "?" globale.
+  const WIZARD_KEY = 'cammes-onboarded-v1';
+  const WIZARD_STEPS = [
+    {
+      title: 'Benvenuto in CAMMES',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+      body: 'Sistema completo di misura, confronto e analisi di alberi a camme.<br><br>L\'hardware ' +
+            '(stepper + comparatore + encoder) scansiona automaticamente il profilo a 360&deg;; ' +
+            'il software calcola durata, LSA, forze inerziali e RPM critico.<br><br>' +
+            'Questa guida mostra il flusso di lavoro tipico. Premi <kbd>?</kbd> in alto a destra per riaprirla.'
+    },
+    {
+      title: '1. Acquisisci il profilo',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>',
+      body: 'Vai su <b>Alzata</b> (cartesiana) o <b>Polare</b> (curva).<br><br>' +
+            '&bull; Seleziona la <b>modalit&agrave; di scansione</b> (Veloce per stradale, Race per camme da pista, ' +
+            'Atomic per studi metrologici).<br>' +
+            '&bull; Premi <b>START</b>: il motore ruota 360&deg; e registra l\'alzata grado per grado.<br>' +
+            '&bull; A fine scansione, scrivi il <b>nome file</b> e premi <b>Salva</b> (auto-suffisso _alz o _pol).'
+    },
+    {
+      title: '2. Zero virtuale (opzionale)',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>',
+      body: 'Il bottone <b>Zero virtuale</b> esegue una scansione, trova il picco di alzata e ' +
+            'ruota il motore di +180&deg; rispetto al picco.<br><br>' +
+            'In questo modo il riferimento angolare &egrave; lo stesso per ogni albero, indipendentemente ' +
+            'da come l\'hai montato fisicamente. Utile per <b>confrontare</b> profili di alberi diversi.'
+    },
+    {
+      title: '3. Confronta + analizza',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>',
+      body: '<b>Confronto</b>: sovrapponi fino a 4 file scansionati (ripetibilit&agrave;, prima/dopo usura, ' +
+            'camme diverse).<br><br>' +
+            '<b>Analisi</b>: importa la coppia <b>asp.</b> + <b>scar.</b>, inserisci parametri reali del motore ' +
+            '(angolo lobo, gioco valvola, RPM, molla, massa eq.) e premi <b>Analizza</b>. ' +
+            'Ottieni durata, LSA, velocit&agrave;/accelerazione, forze, RPM critico, esportabili in CSV/PDF.'
+    },
+    {
+      title: 'Suggerimenti finali',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg>',
+      body: '&bull; Passa il mouse sul <b>?</b> accanto a un parametro per la spiegazione e i <b>valori tipici</b>.<br>' +
+            '&bull; Il <b>tema chiaro/scuro</b> si cambia col bottone sole/luna in header (salvato in localStorage).<br>' +
+            '&bull; I file <code>.scr</code> salvati vanno nella cartella <code>misure/</code> sul server.<br>' +
+            '&bull; Se il sensore d&agrave; <b>NaN</b> per 3 letture consecutive, la scansione si ferma automaticamente.<br><br>' +
+            'Buon lavoro! &#x1F527;'
+    }
+  ];
+
+  function buildWizard() {
+    const back = document.createElement('div');
+    back.className = 'cammes-wizard-backdrop';
+    back.innerHTML =
+      '<div class="cammes-wizard">' +
+      '  <button class="cammes-wizard-close" aria-label="Chiudi">&times;</button>' +
+      '  <div class="cammes-wizard-icon"></div>' +
+      '  <h2 class="cammes-wizard-title"></h2>' +
+      '  <div class="cammes-wizard-body"></div>' +
+      '  <div class="cammes-wizard-dots"></div>' +
+      '  <div class="cammes-wizard-nav">' +
+      '    <button class="btn btn-secondary cammes-wizard-prev">Indietro</button>' +
+      '    <button class="btn btn-accent cammes-wizard-next">Avanti</button>' +
+      '  </div>' +
+      '</div>';
+    document.body.appendChild(back);
+    return back;
+  }
+
+  function showWizard() {
+    let back = document.querySelector('.cammes-wizard-backdrop');
+    if (!back) back = buildWizard();
+
+    const iconEl  = back.querySelector('.cammes-wizard-icon');
+    const titleEl = back.querySelector('.cammes-wizard-title');
+    const bodyEl  = back.querySelector('.cammes-wizard-body');
+    const dotsEl  = back.querySelector('.cammes-wizard-dots');
+    const prevBtn = back.querySelector('.cammes-wizard-prev');
+    const nextBtn = back.querySelector('.cammes-wizard-next');
+    const closeBtn = back.querySelector('.cammes-wizard-close');
+
+    let idx = 0;
+    function render() {
+      const s = WIZARD_STEPS[idx];
+      iconEl.innerHTML = s.icon;
+      titleEl.textContent = s.title;
+      bodyEl.innerHTML = s.body;
+      dotsEl.innerHTML = WIZARD_STEPS.map((_, i) =>
+        '<span class="cammes-wizard-dot' + (i === idx ? ' active' : '') + '"></span>').join('');
+      prevBtn.disabled = idx === 0;
+      nextBtn.textContent = (idx === WIZARD_STEPS.length - 1) ? 'Inizia ✓' : 'Avanti';
+    }
+    function close() {
+      back.classList.remove('visible');
+      try { localStorage.setItem(WIZARD_KEY, '1'); } catch (e) {}
+      setTimeout(() => back.remove(), 220);
+    }
+
+    prevBtn.onclick = () => { if (idx > 0) { idx--; render(); } };
+    nextBtn.onclick = () => {
+      if (idx < WIZARD_STEPS.length - 1) { idx++; render(); }
+      else close();
+    };
+    closeBtn.onclick = close;
+    back.onclick = (e) => { if (e.target === back) close(); };
+    document.addEventListener('keydown', function onKey(e) {
+      if (!document.body.contains(back)) {
+        document.removeEventListener('keydown', onKey);
+        return;
+      }
+      if (e.key === 'Escape') close();
+      else if (e.key === 'ArrowRight') nextBtn.click();
+      else if (e.key === 'ArrowLeft') prevBtn.click();
+    });
+
+    render();
+    requestAnimationFrame(() => back.classList.add('visible'));
+  }
+
+  function showWizardIfFirstTime() {
+    let seen = null;
+    try { seen = localStorage.getItem(WIZARD_KEY); } catch (e) {}
+    if (!seen) {
+      // Delay un attimo per non sovrapporsi all'init del WebSocket
+      setTimeout(showWizard, 600);
+    }
+  }
+
+  function resetWizardFlag() {
+    try { localStorage.removeItem(WIZARD_KEY); } catch (e) {}
+  }
+  window.cammesWizard = { show: showWizard, showIfFirstTime: showWizardIfFirstTime, reset: resetWizardFlag };
+
   // -------- VALIDATION HELPERS ------------------------------------------
   // Marca un input come errato/ok con styling + (opzionale) messaggio toast.
   function markInputError(el, msg) {
@@ -355,7 +488,10 @@
   function init() {
     const btn = document.getElementById('theme-toggle');
     if (btn) btn.addEventListener('click', toggleTheme);
+    const helpBtn = document.getElementById('help-toggle');
+    if (helpBtn) helpBtn.addEventListener('click', showWizard);
     refreshTooltips();
+    showWizardIfFirstTime();
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

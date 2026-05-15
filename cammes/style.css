@@ -1367,10 +1367,163 @@ input.input-error {
   text-align: right;
 }
 
+/* ---------- ONBOARDING WIZARD ------------------------------------------- */
+.cammes-wizard-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: rgba(7, 9, 13, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-4);
+  opacity: 0;
+  transition: opacity var(--t-base) var(--ease);
+}
+.cammes-wizard-backdrop.visible { opacity: 1; }
+.cammes-wizard {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-xl);
+  padding: var(--sp-8) var(--sp-8) var(--sp-6);
+  box-shadow: var(--e-4);
+  transform: scale(0.95) translateY(10px);
+  transition: transform var(--t-base) var(--ease-bouncy);
+}
+.cammes-wizard-backdrop.visible .cammes-wizard {
+  transform: scale(1) translateY(0);
+}
+.cammes-wizard-close {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease);
+}
+.cammes-wizard-close:hover {
+  background: var(--bg-elev-3);
+  color: var(--text-primary);
+  transform: rotate(90deg);
+}
+.cammes-wizard-icon {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-glow), var(--accent-2-glow));
+  color: var(--accent);
+  margin: 0 auto var(--sp-4);
+}
+.cammes-wizard-icon svg { width: 28px; height: 28px; }
+.cammes-wizard-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  text-align: center;
+  color: var(--text-primary);
+  margin-bottom: var(--sp-4);
+  letter-spacing: 0.5px;
+}
+.cammes-wizard-body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  min-height: 120px;
+}
+.cammes-wizard-body b   { color: var(--text-primary); font-weight: 600; }
+.cammes-wizard-body kbd {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg-elev-3);
+  color: var(--accent);
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 1px 0 var(--border-strong);
+}
+.cammes-wizard-body code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg-input);
+  color: var(--accent-2);
+  padding: 1px 5px;
+  border-radius: var(--r-sm);
+}
+.cammes-wizard-dots {
+  display: flex;
+  justify-content: center;
+  gap: var(--sp-2);
+  margin: var(--sp-5) 0 var(--sp-4);
+}
+.cammes-wizard-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  transition: all var(--t-base) var(--ease);
+}
+.cammes-wizard-dot.active {
+  background: var(--accent);
+  width: 24px;
+  border-radius: var(--r-full);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+.cammes-wizard-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.cammes-wizard-nav .btn { min-width: 110px; }
+.cammes-wizard-nav .btn:disabled { opacity: 0.3; pointer-events: none; }
+
+/* Help toggle bottone in header */
+.help-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--bg-elev-3);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  margin-right: var(--sp-2);
+  transition: all var(--t-fast) var(--ease);
+}
+.help-toggle:hover {
+  background: var(--accent);
+  color: #06121b;
+  border-color: var(--accent);
+  transform: scale(1.05);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
 /* ---------- PRINT -------------------------------------------------------- */
 @media print {
   body { background: white; color: black; }
-  .header, .controls-row, .btn, .scan-progress-wrap { display: none; }
+  .header, .controls-row, .btn, .scan-progress-wrap,
+  .cammes-wizard-backdrop, .help-toggle, .theme-toggle { display: none; }
   .card { box-shadow: none; border: 1px solid #ddd; }
 }
 </content>

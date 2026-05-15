@@ -81,6 +81,7 @@
             <a href="analisi.html" class="active">Analisi</a>
         </div>
         <div class="header-spacer"></div>
+        <button id="help-toggle" class="help-toggle" type="button" aria-label="Guida rapida" title="Apri la guida rapida">?</button>
         <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambia tema" title="Cambia tema chiaro/scuro">
             <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
             <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -102,6 +103,19 @@
         <!-- Right: Parameters panel -->
         <div class="card">
             <div class="card-title">Parametri</div>
+
+            <!-- Preset rapido -->
+            <div class="param-row" style="margin-bottom:12px;">
+                <span class="param-label">Preset motore <span class="help-icon" data-tip="<strong>Preset rapido</strong>Carica un set di valori tipici per la classe motore selezionata: tipologia treno valvole, angoli lobo, gioco valvola, RPM tipico, bilanciere, molla, masse. Puoi sempre rifinire ogni singolo campo dopo." tabindex="0">?</span></span>
+                <select id="enginePreset" class="input" style="width:200px;" onchange="applyEnginePreset();">
+                    <option value="custom" selected>Personalizzato</option>
+                    <option value="moto_street">Moto stradale 600 cc</option>
+                    <option value="moto_race">Moto race 1000 cc</option>
+                    <option value="auto_4cyl">Auto 4 cilindri DOHC</option>
+                    <option value="auto_v8">Auto V8 pushrod</option>
+                    <option value="auto_race">Auto race F1/GT</option>
+                </select>
+            </div>
 
             <!-- Intake section -->
             <div class="section-intake">
@@ -735,6 +749,107 @@ function onFollowerTypeChange() {
     document.getElementById('followerHint').style.display = show ? 'block' : 'none';
 }
 
+// Preset rapidi: valori tipici per classe motore. L'utente può sempre
+// rifinire i singoli campi dopo aver caricato un preset. Fonti: manuali
+// di tuning camme (Crower, Erson, MoToOL Tech), schede tecniche OE.
+var ENGINE_PRESETS = {
+    moto_street: {
+        label: 'Moto stradale 600',
+        intakeType: 'bucket_mech', exhaustType: 'bucket_mech',
+        intakeAngle: 108, exhaustAngle: 110,
+        intakeClearance: 0.16, exhaustClearance: 0.22,
+        advance: 0,    rpm: 12000,
+        rockerIntake: 1.0, rockerExhaust: 1.0,
+        followerType: 'bicch', diamBicch: 24.5, rBase: 13.0, rPunt: 1.5,
+        springK: 35, springPreload: 200, massEqIntake: 60, massEqExhaust: 60,
+        durationRef: 1.0, smoothWindow: 5
+    },
+    moto_race: {
+        label: 'Moto race 1000',
+        intakeType: 'finger', exhaustType: 'finger',
+        intakeAngle: 105, exhaustAngle: 107,
+        intakeClearance: 0.18, exhaustClearance: 0.28,
+        advance: 2,    rpm: 14500,
+        rockerIntake: 1.5, rockerExhaust: 1.5,
+        followerType: 'punt', diamBicch: 0, rBase: 15.0, rPunt: 1.5,
+        springK: 75, springPreload: 380, massEqIntake: 45, massEqExhaust: 50,
+        durationRef: 1.0, smoothWindow: 5
+    },
+    auto_4cyl: {
+        label: 'Auto 4 cyl DOHC',
+        intakeType: 'bucket_hyd', exhaustType: 'bucket_hyd',
+        intakeAngle: 112, exhaustAngle: 112,
+        intakeClearance: 0.00, exhaustClearance: 0.00,
+        advance: 0,    rpm: 6500,
+        rockerIntake: 1.0, rockerExhaust: 1.0,
+        followerType: 'bicch', diamBicch: 33.0, rBase: 16.0, rPunt: 1.5,
+        springK: 28, springPreload: 220, massEqIntake: 90, massEqExhaust: 95,
+        durationRef: 1.27, smoothWindow: 5
+    },
+    auto_v8: {
+        label: 'Auto V8 pushrod',
+        intakeType: 'rocker_pushrod', exhaustType: 'rocker_pushrod',
+        intakeAngle: 110, exhaustAngle: 114,
+        intakeClearance: 0.20, exhaustClearance: 0.25,
+        advance: 4,    rpm: 6000,
+        rockerIntake: 1.5, rockerExhaust: 1.5,
+        followerType: 'punt', diamBicch: 0, rBase: 18.0, rPunt: 1.5,
+        springK: 45, springPreload: 350, massEqIntake: 130, massEqExhaust: 140,
+        durationRef: 1.27, smoothWindow: 7
+    },
+    auto_race: {
+        label: 'Auto race F1/GT',
+        intakeType: 'roller', exhaustType: 'roller',
+        intakeAngle: 100, exhaustAngle: 104,
+        intakeClearance: 0.15, exhaustClearance: 0.25,
+        advance: 3,    rpm: 16000,
+        rockerIntake: 1.6, rockerExhaust: 1.6,
+        followerType: 'punt', diamBicch: 0, rBase: 14.0, rPunt: 1.5,
+        springK: 110, springPreload: 500, massEqIntake: 38, massEqExhaust: 42,
+        durationRef: 0.5, smoothWindow: 5
+    }
+};
+
+function applyEnginePreset() {
+    var key = document.getElementById('enginePreset').value;
+    if (key === 'custom' || !ENGINE_PRESETS[key]) return;
+    var p = ENGINE_PRESETS[key];
+    function setSel(id, v) { var e = document.getElementById(id); if (e) e.value = v; }
+    function setVal(id, v) { var e = document.getElementById(id); if (e) e.value = v; }
+    setSel('intakeType',  p.intakeType);
+    setSel('exhaustType', p.exhaustType);
+    setVal('intakeAngle',     p.intakeAngle);
+    setVal('exhaustAngle',    p.exhaustAngle);
+    setVal('intakeClearance', p.intakeClearance);
+    setVal('exhaustClearance', p.exhaustClearance);
+    setVal('advance',          p.advance);
+    setVal('rpmInput',         p.rpm);
+    setVal('rockerIntake',     p.rockerIntake);
+    setVal('rockerExhaust',    p.rockerExhaust);
+    setSel('followerType',     p.followerType);
+    setVal('diamBicch',        p.diamBicch);
+    setVal('rBase',            p.rBase);
+    setVal('rPunt',            p.rPunt);
+    setVal('springK',          p.springK);
+    setVal('springPreload',    p.springPreload);
+    setVal('massEqIntake',     p.massEqIntake);
+    setVal('massEqExhaust',    p.massEqExhaust);
+    setVal('durationRef',      p.durationRef);
+    setSel('smoothWindow',     p.smoothWindow);
+    onFollowerTypeChange();      // mostra/nasconde righe del bicchiere
+    onTypologyChange('intake');  // auto-imposta rocker se tipologia lo richiede
+    onTypologyChange('exhaust');
+    // Reapply rocker dopo onTypologyChange (che potrebbe averlo modificato)
+    setVal('rockerIntake',  p.rockerIntake);
+    setVal('rockerExhaust', p.rockerExhaust);
+    if (window.cammesToast) {
+        window.cammesToast({
+            kind: 'info', title: 'Preset applicato', body: '<b>' + p.label + '</b> &middot; rifinisci i campi per il tuo motore specifico.',
+            duration: 3500
+        });
+    }
+}
+
 function onTypologyChange(side) {
     var typeSel  = document.getElementById(side + 'Type');
     var rockerEl = document.getElementById('rocker' + (side === 'intake' ? 'Intake' : 'Exhaust'));
@@ -1221,7 +1336,12 @@ function smoothArray(arr, windowSize) {
 
 function analyze() {
     if (!intakeLoaded || !exhaustLoaded) {
-        alert('Importare entrambi i file aspirazione e scarico prima di analizzare.');
+        if (window.cammesToast) {
+            window.cammesToast({ kind: 'warn', title: 'File mancanti',
+                body: 'Importa <b>entrambi</b> i file (aspirazione e scarico) prima di analizzare.', duration: 4000 });
+        } else {
+            alert('Importare entrambi i file aspirazione e scarico prima di analizzare.');
+        }
         return;
     }
 
@@ -1431,6 +1551,16 @@ function analyze() {
     };
     document.getElementById('btnExportCSV').disabled = false;
     document.getElementById('btnExportPDF').disabled = false;
+    if (window.cammesToast) {
+        var rpmCritStr = isFinite(forcesIn.rpmCrit) && isFinite(forcesEx.rpmCrit)
+            ? Math.round(Math.min(forcesIn.rpmCrit, forcesEx.rpmCrit)) + ' rpm'
+            : '&#x221e; (sicuro)';
+        window.cammesToast({
+            kind: 'success', title: 'Analisi completata',
+            body: 'LSA <b>' + LSA.toFixed(1) + '&deg;</b> &middot; durata asp. <b>' + durIntake + '&deg;</b> &middot; RPM critico <b>' + rpmCritStr + '</b>',
+            duration: 5500
+        });
+    }
 }
 
 // ========== KINEMATIC CHARTS ==========
@@ -1923,7 +2053,11 @@ function tsForFilename() {
 }
 
 function exportCSV() {
-    if (!lastAnalysis) { alert('Esegui prima l\'analisi.'); return; }
+    if (!lastAnalysis) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Analisi mancante', body: 'Premi <b>Analizza</b> prima di esportare.', duration: 3500 });
+        else alert("Esegui prima l'analisi.");
+        return;
+    }
     var L = lastAnalysis;
     var lines = [];
 
@@ -2016,14 +2150,24 @@ function exportCSV() {
     }
 
     var blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    downloadBlob(blob, 'cammes_analisi_' + tsForFilename() + '.csv');
+    var csvName = 'cammes_analisi_' + tsForFilename() + '.csv';
+    downloadBlob(blob, csvName);
+    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'CSV esportato', body: csvName, duration: 3500 });
 }
 
 // ========== EXPORT PDF ==========
 
 function exportPDF() {
-    if (!lastAnalysis) { alert('Esegui prima l\'analisi.'); return; }
-    if (!window.jspdf || !window.jspdf.jsPDF) { alert('Libreria PDF non caricata.'); return; }
+    if (!lastAnalysis) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Analisi mancante', body: 'Premi <b>Analizza</b> prima di esportare.', duration: 3500 });
+        else alert("Esegui prima l'analisi.");
+        return;
+    }
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Libreria PDF non caricata', body: 'jspdf.umd.min.js non disponibile. Ricarica la pagina.', duration: 5000 });
+        else alert('Libreria PDF non caricata.');
+        return;
+    }
 
     var jsPDF = window.jspdf.jsPDF;
     var doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
@@ -2112,7 +2256,9 @@ function exportPDF() {
     addChartIfPresent(forceChart,            'Forze treno valvole',        cw, 60);
     addChartIfPresent(timingChartInstance,   'Diagramma fasatura',         80, 80);
 
-    doc.save('cammes_report_' + tsForFilename() + '.pdf');
+    var pdfName = 'cammes_report_' + tsForFilename() + '.pdf';
+    doc.save(pdfName);
+    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'PDF esportato', body: pdfName, duration: 3500 });
 }
 
 // ========== RESET ==========
