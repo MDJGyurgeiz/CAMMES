@@ -40,6 +40,22 @@
 //               continuano a funzionare (per visualizzazione live). Risponde "*free"
 //    l          LOCK: riabilita corrente stepper (ENA HIGH) → motore frenato.
 //               Risponde "*lock". Necessario prima di p/q/$/ruota.
+//    uN         pulse width base in microsecondi (50..400). Più alto = più
+//               tempo per il driver di stabilizzare la corrente, meno scatto.
+//                  u50  → veloce, scattoso (originale)
+//                  u120 → consigliato
+//                  u200 → morbido
+//    aN         numero di step in rampa accelerazione/decelerazione (0..32).
+//               0 = no rampa (cambio brusco velocità→0 = jolt che eccita
+//               risonanze). 4-12 = rampa visibile e silenziosa.
+//    gN         "gentleness": extra delay (μs) all'estremo della rampa,
+//               linearmente decrescente verso il centro (0..500). Quanto è
+//               larga la rampa: più alto = partenza/arrivo più lenti.
+//    kS         preset profilo movimento (S=0..3, applica u/a/g insieme):
+//                  k0 → scattoso         (u50  a0  g0)
+//                  k1 → standard         (u80  a4  g50)
+//                  k2 → morbido          (u120 a8  g120)
+//                  k3 → extra-morbido    (u180 a16 g250)
 //
 //  Risposta Arduino dopo movimento:
 //    XX.XX            (alzata in mm)
@@ -98,6 +114,13 @@ uint8_t  cfgStepsPerUnit  = DEFAULT_STEPS_PER_UNIT;  // micropassi per p/q
 uint16_t cfgSettleMs      = 0;   // delay dopo stepperMove() prima di leggere sensore (0..2000)
                                  // smorza vibrazioni meccaniche residue del motore stepper
 
+// Anti-vibrazione: pulse width, rampa accelerazione, extra-delay rampa.
+// Default = comportamento originale (no rampa, pulse 50 μs).
+// Modificabili runtime via comandi 'u', 'a', 'g' o preset 'k0..k3'.
+uint16_t cfgPulseUs        = STEP_PULSE_US;  // 50 default; 50..400
+uint8_t  cfgAccelSteps     = 0;              // 0 = no rampa; 0..32
+uint16_t cfgRampExtraUs    = 0;              // extra delay agli estremi rampa; 0..500
+
 // =============================================================
 //  ISR: sensore Neoteck — fronte FALLING su D2
 // =============================================================
@@ -140,24 +163,55 @@ void encoderAISR() { encoderUpdate(); }              // INT1 (D3 CHANGE)
 ISR(PCINT0_vect)   { encoderUpdate(); }              // PCINT0 (D8 CHANGE)
 
 // =============================================================
-//  Stepper
+//  Stepper — pulse singolo con rampa di accelerazione inline
 // =============================================================
-void stepperPulse() {
-  digitalWrite(PIN_PUL, HIGH);
-  delayMicroseconds(STEP_PULSE_US);
-  digitalWrite(PIN_PUL, LOW);
-  delayMicroseconds(STEP_PULSE_US);
-}
-
+// stepperMove genera 'steps' impulsi PUL spaziati nel tempo secondo un
+// profilo trapezoidale: accelera per cfgAccelSteps, plateau a velocità
+// max (cfgPulseUs base), decelera per cfgAccelSteps. Se steps è troppo
+// piccolo (< 2 * cfgAccelSteps) la rampa diventa triangolare.
+//
+// Effetto pratico: lo "step più lento" agli estremi del movimento ha un
+// delay aggiuntivo di cfgRampExtraUs μs. Lo step centrale usa solo
+// cfgPulseUs. Il jolt iniziale/finale (che eccita le risonanze) sparisce.
 void stepperMove(int16_t units) {
-  // 'units' = unità di scansione (default 1 unità = 1°). Effettivi micropassi = units * cfgStepsPerUnit
   if (units == 0) return;
   digitalWrite(PIN_ENA, HIGH);
   digitalWrite(PIN_DIR, units > 0 ? HIGH : LOW);
   uint16_t steps = (uint16_t)abs(units) * cfgStepsPerUnit;
-  for (uint16_t s = 0; s < steps; s++) stepperPulse();
-  // Settle time: dà tempo alle vibrazioni meccaniche del puntalino di
-  // smorzarsi prima che la prossima readSensorMm() campioni il sensore.
+
+  // Calcola rampa effettiva: max metà del movimento per lato
+  uint16_t rampN = cfgAccelSteps;
+  if (rampN > steps / 2) rampN = steps / 2;
+  uint32_t rampExtra = cfgRampExtraUs;  // promosso a 32-bit per i prodotti
+
+  for (uint16_t s = 0; s < steps; s++) {
+    // Delay extra in funzione della posizione nella rampa
+    uint16_t extraUs = 0;
+    if (rampN > 0) {
+      if (s < rampN) {
+        // Accelerazione: extra da rampExtra (s=0) a 0 (s=rampN-1)
+        extraUs = (uint16_t)((rampExtra * (rampN - s)) / rampN);
+      } else if (s >= steps - rampN) {
+        // Decelerazione: extra da 0 a rampExtra
+        uint16_t inDec = s - (steps - rampN);
+        extraUs = (uint16_t)((rampExtra * (inDec + 1)) / rampN);
+      }
+    }
+    digitalWrite(PIN_PUL, HIGH);
+    delayMicroseconds(cfgPulseUs);
+    digitalWrite(PIN_PUL, LOW);
+    // Tempo "basso" del pulso = base + extra rampa
+    if (extraUs == 0) {
+      delayMicroseconds(cfgPulseUs);
+    } else {
+      delayMicroseconds(cfgPulseUs);
+      // extraUs può essere > 16383 (limite delayMicroseconds), spezzo
+      uint16_t remaining = extraUs;
+      while (remaining > 10000) { delayMicroseconds(10000); remaining -= 10000; }
+      if (remaining) delayMicroseconds(remaining);
+    }
+  }
+  // Settle time: smorza vibrazioni residue prima della lettura sensore.
   if (cfgSettleMs) delay(cfgSettleMs);
 }
 
@@ -269,7 +323,10 @@ void executeCommand() {
     else if (c == '@') {
       Serial.print(F("samp=")); Serial.print(cfgSamples);
       Serial.print(F(" step=")); Serial.print(cfgStepsPerUnit);
-      Serial.print(F(" settle=")); Serial.print(cfgSettleMs); Serial.println(F("ms"));
+      Serial.print(F(" settle=")); Serial.print(cfgSettleMs); Serial.print(F("ms"));
+      Serial.print(F(" pulse=")); Serial.print(cfgPulseUs); Serial.print(F("us"));
+      Serial.print(F(" accel=")); Serial.print(cfgAccelSteps);
+      Serial.print(F(" gentle=")); Serial.print(cfgRampExtraUs); Serial.println(F("us"));
       Serial.println(F("*cfg"));
     }
     else if (c == 'f') {
@@ -297,6 +354,36 @@ void executeCommand() {
     int v = atoi(&cmdBuf[1]);
     if (v >= 0 && v <= 2000) cfgSettleMs = (uint16_t)v;
     Serial.print(F("settle=")); Serial.print(cfgSettleMs); Serial.println(F("ms"));
+    Serial.println(F("*cfg"));
+  } else if (cmdLen >= 2 && cmdBuf[0] == 'u') {
+    // u<N>: pulse width base in μs (50..400)
+    int v = atoi(&cmdBuf[1]);
+    if (v >= 50 && v <= 400) cfgPulseUs = (uint16_t)v;
+    Serial.print(F("pulse=")); Serial.print(cfgPulseUs); Serial.println(F("us"));
+    Serial.println(F("*cfg"));
+  } else if (cmdLen >= 2 && cmdBuf[0] == 'a') {
+    // a<N>: step rampa accel/decel (0..32)
+    int v = atoi(&cmdBuf[1]);
+    if (v >= 0 && v <= 32) cfgAccelSteps = (uint8_t)v;
+    Serial.print(F("accel=")); Serial.println(cfgAccelSteps);
+    Serial.println(F("*cfg"));
+  } else if (cmdLen >= 2 && cmdBuf[0] == 'g') {
+    // g<N>: extra delay rampa in μs (0..500)
+    int v = atoi(&cmdBuf[1]);
+    if (v >= 0 && v <= 500) cfgRampExtraUs = (uint16_t)v;
+    Serial.print(F("gentle=")); Serial.print(cfgRampExtraUs); Serial.println(F("us"));
+    Serial.println(F("*cfg"));
+  } else if (cmdLen >= 2 && cmdBuf[0] == 'k') {
+    // k<S>: preset profilo movimento (0..3)
+    int v = atoi(&cmdBuf[1]);
+    if (v == 0)      { cfgPulseUs = 50;  cfgAccelSteps = 0;  cfgRampExtraUs = 0;   }
+    else if (v == 1) { cfgPulseUs = 80;  cfgAccelSteps = 4;  cfgRampExtraUs = 50;  }
+    else if (v == 2) { cfgPulseUs = 120; cfgAccelSteps = 8;  cfgRampExtraUs = 120; }
+    else if (v == 3) { cfgPulseUs = 180; cfgAccelSteps = 16; cfgRampExtraUs = 250; }
+    Serial.print(F("profile=")); Serial.print(v);
+    Serial.print(F(" pulse=")); Serial.print(cfgPulseUs);
+    Serial.print(F(" accel=")); Serial.print(cfgAccelSteps);
+    Serial.print(F(" gentle=")); Serial.println(cfgRampExtraUs);
     Serial.println(F("*cfg"));
   } else if (cmdLen >= 4 && cmdBuf[0] == '$') {
     // $+NNN o $-NNN

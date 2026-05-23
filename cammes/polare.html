@@ -77,6 +77,18 @@
 
             <div class="separator"></div>
 
+            <div class="controls-group">
+                <span class="toggle-label">Profilo</span>
+                <select id="moveProfile" class="input" style="width:170px;" onchange="onMoveProfileChange();" data-tip="<strong>Profilo movimento stepper</strong>Anti-vibrazione: pi&ugrave; morbido = pi&ugrave; lento ma curva pi&ugrave; pulita.">
+                    <option value="0">Scattoso</option>
+                    <option value="1" selected>Standard</option>
+                    <option value="2">Morbido</option>
+                    <option value="3">Extra-morbido</option>
+                </select>
+            </div>
+
+            <div class="separator"></div>
+
             <form name="mas">
                 <input type="text" name="mas" value=" max" readonly class="max-display" data-tip="<strong>Picco rilevato</strong>Grado camma e raggio polare massimo durante la scansione.">
             </form>
@@ -177,8 +189,24 @@ engineSocket.onopen = function(event) {
     gaugemicrom.value = 0;
     gaugemicrom.draw();
     sendSocket = new WebSocket("ws://localhost:8080");
+    sendSocket.onopen = function () {
+        try {
+            // Invia profilo movimento al firmware all'apertura
+            var moveSel = document.getElementById('moveProfile');
+            if (moveSel) sendSocket.send('k' + (parseInt(moveSel.value, 10) || 1) + '\n');
+        } catch (e) {}
+    };
     msgold = "***";
 };
+function onMoveProfileChange() {
+    var sel = document.getElementById('moveProfile');
+    if (!sel) return;
+    var v = parseInt(sel.value, 10);
+    if (isNaN(v) || v < 0 || v > 3) v = 1;
+    if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1) {
+        try { sendSocket.send('k' + v + '\n'); } catch (e) {}
+    }
+}
 
 engineSocket.onmessage = function(event) {
     msg = event.data;

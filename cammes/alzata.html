@@ -95,6 +95,19 @@
 
             <div class="separator"></div>
 
+            <div class="controls-group">
+                <span class="toggle-label">Profilo</span>
+                <select id="moveProfile" class="input" style="width:170px;" onchange="onMoveProfileChange();" data-tip="<strong>Profilo movimento stepper</strong>Controlla quanto &egrave; morbida la partenza/arrivo di ogni passo. Riduce vibrazioni meccaniche e risonanze del treno motore→albero. Pi&ugrave; morbido = pi&ugrave; lento (50-80% in pi&ugrave;) ma curva pi&ugrave; pulita.">
+                    <option value="0">Scattoso (rapido)</option>
+                    <option value="1" selected>Standard</option>
+                    <option value="2">Morbido</option>
+                    <option value="3">Extra-morbido (silenzioso)</option>
+                </select>
+                <span class="help-icon" data-tip="<strong>Anti-vibrazione</strong><b>Scattoso</b>: comportamento originale, max velocit&agrave;. Vibra a basse RPM.<br><b>Standard</b>: rampa accelerazione 4 step, +60% tempo, vibrazioni dimezzate. Consigliato per acquisizione.<br><b>Morbido</b>: rampa 8 step + pulse 120μs. Per camme delicate o sistemi rigidi che propagano risonanze.<br><b>Extra-morbido</b>: rampa 16 step + pulse 180μs. Per cogliere ogni dettaglio metrologico, sacrifica velocit&agrave;." tabindex="0">?</span>
+            </div>
+
+            <div class="separator"></div>
+
             <form name="mas">
                 <input type="text" name="mas" value=" max" readonly class="max-display" data-tip="<strong>Picco rilevato</strong>Grado camma e alzata mm del punto massimo durante la scansione in corso.">
             </form>
@@ -241,6 +254,18 @@ function onScanModeChange() {
     }
 }
 
+// Profilo movimento (anti-vibrazione): manda 'kN' al firmware che setta
+// pulse width + step rampa + extra delay. Default = standard (k1).
+function onMoveProfileChange() {
+    var sel = document.getElementById('moveProfile');
+    if (!sel) return;
+    var v = parseInt(sel.value, 10);
+    if (isNaN(v) || v < 0 || v > 3) v = 1;
+    if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1) {
+        try { sendSocket.send('k' + v + '\n'); } catch (e) {}
+    }
+}
+
 // Status indicators state
 var lastSensorRx     = 0;   // timestamp ultima misura numerica VALIDA
 var lastSensorAnyRx  = 0;   // timestamp ultima risposta dal firmware (anche NaN)
@@ -309,6 +334,9 @@ engineSocket.onopen = function(event) {
             sendSocket.send('c' + currentMode.samples + '\n');
             sendSocket.send('r' + currentMode.microsteps + '\n');
             sendSocket.send('w' + currentMode.settleMs + '\n');
+            // Invia anche il profilo movimento corrente (default k1=standard)
+            var moveSel = document.getElementById('moveProfile');
+            if (moveSel) sendSocket.send('k' + (parseInt(moveSel.value, 10) || 1) + '\n');
             // Ping immediato sensore + encoder per accendere subito i LED
             // (senza aspettare il prossimo tick di polling).
             setTimeout(function(){
