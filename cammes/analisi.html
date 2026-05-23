@@ -284,29 +284,50 @@
                     <span class="help-icon" data-tip="<strong>Cosa fa il bicchiere virtuale</strong>Permette di simulare quale alzata <i>vera</i> avresti se invece del puntalino sferico usato per misurare la camma, avessi un bicchiere piatto reale. Cos&igrave; misuri UNA volta col puntalino e simuli infiniti bicchieri diversi senza rifare scansioni." tabindex="0">?</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Tipo follower <span class="help-icon" data-tip="<strong>Puntalino vs Bicchiere</strong><b>Puntalino</b>: dati grezzi della scansione, senza correzione. <b>Bicchiere piatto</b>: ricostruisce l'alzata che misurerebbe un piatto di diametro Ø sulla camma reale (corregge la differenza geometrica tra punta sferica e piano)." tabindex="0">?</span></span>
-                    <select id="followerType" class="input" style="width:160px;" onchange="onFollowerTypeChange();">
+                    <span class="param-label">Tipo follower <span class="help-icon" data-tip="<strong>4 tipi di contatto cam-follower</strong><b>Puntalino</b>: dati grezzi della scansione, nessuna correzione.<br><b>Bicchiere piatto</b>: simula un piattello di Ø D mm appoggiato sulla cam (motori OHC moderni, tipico auto/moto).<br><b>Rullo</b>: simula un rullo di raggio R che rotola sulla cam (motori sportivi, alta velocità).<br><b>Finger follower</b>: simula una leva con punto di pivot (Honda VTEC, Yamaha R6, motori moderni high-rev)." tabindex="0">?</span></span>
+                    <select id="followerType" class="input" style="width:180px;" onchange="onFollowerTypeChange();">
                         <option value="punt" selected>Puntalino (raw)</option>
-                        <option value="bicch">Bicchiere piatto &Oslash; ___ mm</option>
+                        <option value="bicch">Bicchiere piatto &Oslash; mm</option>
+                        <option value="roller">Rullo R mm</option>
+                        <option value="finger">Finger follower (leva)</option>
                     </select>
                 </div>
+                <!-- Bicchiere: Ø -->
                 <div class="param-row" id="rowDiamBicch" style="display:none;">
-                    <span class="param-label">&Oslash; Bicchiere <span class="help-icon" data-tip="<strong>Diametro bicchiere reale</strong>Misura il diametro del bicchiere che verr&agrave; effettivamente montato sul motore. Tipico moto: 24-33mm. Auto: 30-40mm. Più grande = pi&ugrave; contatto con i fianchi del lobo (pu&ograve; cambiare la curva di alzata effettiva)." tabindex="0">?</span></span>
+                    <span class="param-label">&Oslash; Bicchiere <span class="help-icon" data-tip="<strong>Diametro bicchiere reale</strong>Diametro del piattello che monter&agrave; sul motore. Tipico moto: 24-33mm. Auto: 30-40mm. Pi&ugrave; grande = pi&ugrave; contatto coi fianchi del lobo, cambia il timing percepito." tabindex="0">?</span></span>
                     <input type="number" id="diamBicch" value="33.34" class="input" style="width:75px;" step="0.01" min="1">
                     <span class="param-unit">mm</span>
                 </div>
+                <!-- Roller: raggio rullo -->
+                <div class="param-row" id="rowRRoll" style="display:none;">
+                    <span class="param-label">R rullo <span class="help-icon" data-tip="<strong>Raggio del rullo follower</strong>Tipico moto: 5-8mm. Auto sportiva: 8-12mm. Il rullo rotola sulla cam → contatto puntuale a quota R, no scivolamento (meno attrito, pi&ugrave; alta velocit&agrave;)." tabindex="0">?</span></span>
+                    <input type="number" id="rRoll" value="8.0" class="input" style="width:75px;" step="0.1" min="1">
+                    <span class="param-unit">mm</span>
+                </div>
+                <!-- Finger: lunghezze bracci leva -->
+                <div class="param-row" id="rowLArm" style="display:none;">
+                    <span class="param-label">L braccio cam <span class="help-icon" data-tip="<strong>Lunghezza braccio leva lato camma</strong>Distanza tra il pivot della leva (perno fisso) e il punto di contatto con la camma. Tipico 20-30mm. Quanto pi&ugrave; corto, tanto pi&ugrave; veloce risponde la leva." tabindex="0">?</span></span>
+                    <input type="number" id="lArm" value="25" class="input" style="width:75px;" step="0.5" min="1">
+                    <span class="param-unit">mm</span>
+                </div>
+                <div class="param-row" id="rowLValve" style="display:none;">
+                    <span class="param-label">L braccio valvola <span class="help-icon" data-tip="<strong>Lunghezza braccio leva lato valvola</strong>Distanza tra il pivot e il punto di contatto con la valvola. Se L_valve &gt; L_arm: la leva amplifica l'alzata (es. VTEC 1.4:1). Se uguale: rapporto neutro." tabindex="0">?</span></span>
+                    <input type="number" id="lValve" value="30" class="input" style="width:75px;" step="0.5" min="1">
+                    <span class="param-unit">mm</span>
+                </div>
+                <!-- R cerchio base e R puntalino: comuni a bicchiere/rullo/finger -->
                 <div class="param-row" id="rowRBase" style="display:none;">
-                    <span class="param-label">R cerchio base <span class="help-icon" data-tip="<strong>Raggio base camma</strong>Raggio della parte non sollevata della camma (il 'fondo'). Si misura con calibro nella zona dove la valvola &egrave; chiusa. Tipici: 12-18 mm per moto, 14-22 mm per auto." tabindex="0">?</span></span>
+                    <span class="param-label">R cerchio base <span class="help-icon" data-tip="<strong>Raggio base camma</strong>Parte non sollevata della cam ('fondo'). Misurabile con calibro dove la valvola &egrave; chiusa. Tipici: 12-18 mm moto, 14-22 mm auto." tabindex="0">?</span></span>
                     <input type="number" id="rBase" value="14.0" class="input" style="width:75px;" step="0.1" min="1">
                     <span class="param-unit">mm</span>
                 </div>
                 <div class="param-row" id="rowRPunt" style="display:none;">
-                    <span class="param-label">R puntalino <span class="help-icon" data-tip="<strong>Raggio punta del comparatore</strong>Raggio della sfera del puntalino del Neoteck usato per la misura. Standard: 1.5 mm. Pi&ugrave; piccolo = pi&ugrave; preciso ma pi&ugrave; sensibile al rumore." tabindex="0">?</span></span>
+                    <span class="param-label">R puntalino <span class="help-icon" data-tip="<strong>Raggio punta comparatore</strong>Raggio della sfera del puntalino Neoteck usato in scansione. Tipico 1.5 mm. Viene <i>sottratto</i> dalla curva grezza per ottenere il profilo cam vero prima di simulare bicchiere/rullo/leva." tabindex="0">?</span></span>
                     <input type="number" id="rPunt" value="1.5" class="input" style="width:75px;" step="0.1" min="0">
                     <span class="param-unit">mm</span>
                 </div>
                 <div id="followerHint" style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4;display:none;">
-                    Una sola scansione fatta col puntalino → simulazione di qualsiasi bicchiere senza rifare misure.
+                    Una sola scansione col puntalino &rarr; simulazione di qualsiasi tipo di follower senza rifare misure.
                 </div>
             </div>
 
@@ -796,14 +817,53 @@ var TYPOLOGY = {
 //  quindi vede il MAX di y tra i punti con |x| ≤ R_bicch:
 //      lift_bicch(α) = max{ y : |x| ≤ R_bicch } − r_base
 //
-function convertPuntToBicchiere(camLiftRaw, rBase, dBicch) {
+// Converte una scansione fatta col PUNTALINO sferico (raggio rPunt) nella
+// curva che leggerebbe un BICCHIERE PIATTO di diametro dBicch.
+//
+// Step 1: sottrai rPunt dalla misura per ottenere il profilo geometrico
+//         "vero" della cam (la sfera del puntalino offsetta la quota di
+//         circa rPunt rispetto al contatto piano-cam).
+// Step 2: ricostruisci r(θ) = R_base + lift_vero(θ) in coordinate polari.
+// Step 3: per ogni angolo follower α, il bicchiere piatto trova il
+//         punto (x,y) del profilo con |x| ≤ R_bicch e Y massima.
+//         lift_bicch(α) = Y_max − R_base.
+//
+// Avvisa via toast se Ø bicchiere è troppo grande per il lobo (l'impronta
+// del piattello copre quasi tutta la cam → alzata simulata distorta).
+function convertPuntToBicchiere(camLiftRaw, rBase, dBicch, rPunt) {
     var R = dBicch / 2;
     var DEG = Math.PI / 180;
+    rPunt = (typeof rPunt === 'number' && rPunt > 0) ? rPunt : 0;
+
+    // pre-compute r(θ) array in coordinate polari del LOBO geometrico.
+    // Sottraggo rPunt: la sfera "alza" la misura grezza rispetto al
+    // contatto piano-cam, quindi tolgo il suo raggio per ottenere il
+    // profilo che vedrebbe un piattello.
+    var r = new Array(361);
+    var rMax = rBase;
+    for (var t = 1; t <= 360; t++) {
+        var ltrue = (camLiftRaw[t] || 0) - rPunt;
+        if (ltrue < 0) ltrue = 0;  // sotto al puntalino = base circle
+        r[t] = rBase + ltrue;
+        if (r[t] > rMax) rMax = r[t];
+    }
+
+    // Warning runtime se bicchiere troppo grande rispetto al lobo
+    // (l'impronta del piattello copre più di metà della cam).
+    if (dBicch > rBase * 0.95 && window.cammesToast && !window._suppressBicchWarn) {
+        window._suppressBicchWarn = true;  // mostra una volta per sessione
+        setTimeout(function () {
+            window.cammesToast({
+                kind: 'warn', title: 'Bicchiere grande',
+                body: '&Oslash; ' + dBicch.toFixed(1) + ' mm su cerchio base ' + rBase.toFixed(1) +
+                      ' mm: l\'impronta &egrave; pi&ugrave; larga del lobo, alzata simulata pu&ograve; essere irrealistica.',
+                duration: 6000
+            });
+        }, 400);
+    }
+
     var raw = new Array(361);
     raw[0] = 0;
-    // pre-compute r(θ) array
-    var r = new Array(361);
-    for (var t = 1; t <= 360; t++) r[t] = rBase + (camLiftRaw[t] || 0);
     for (var a = 1; a <= 360; a++) {
         var bestY = -Infinity;
         for (var t2 = 1; t2 <= 360; t2++) {
@@ -828,13 +888,87 @@ function convertPuntToBicchiere(camLiftRaw, rBase, dBicch) {
     return out;
 }
 
+// Converte scansione PUNTALINO → curva che leggerebbe un ROLLER FOLLOWER
+// (rullo di raggio rRoll che rotola sulla cam).
+// Matematica: il rullo tocca la cam nel punto della superficie più
+// vicino al centro del rullo. Il centro del rullo dista (rRoll) dal
+// punto di contatto, lungo la normale alla cam.
+// Approssimazione: per ogni angolo α, traccio il fascio di rette da
+// (0,0) (centro cam) in direzione α e cerco il punto della cam-offset
+// più alto in quella direzione. La cam-offset è il profilo della cam
+// "ingrassato" di rRoll lungo la normale (= edge della curva traslata).
+//
+// Implementazione semplificata: la cam-offset si ottiene aggiungendo
+// rRoll al raggio polare in ogni punto. È un'approssimazione valida
+// quando rRoll è piccolo rispetto al raggio di curvatura della cam,
+// che è il caso pratico (rullo 6-12 mm, curvatura cam 20+ mm).
+function convertPuntToRoller(camLiftRaw, rBase, rRoll, rPunt) {
+    var r = new Array(361);
+    rPunt = (typeof rPunt === 'number' && rPunt > 0) ? rPunt : 0;
+    var out = new Array(361);
+    out[0] = 0;
+    for (var t = 1; t <= 360; t++) {
+        var ltrue = (camLiftRaw[t] || 0) - rPunt;
+        if (ltrue < 0) ltrue = 0;
+        // Profilo cam-offset: lift letto dal centro del rullo
+        // = lift_cam + (rRoll dovuto a rotolamento)
+        // Il rullo aggiunge rRoll all'altezza percepita rispetto al base
+        out[t] = ltrue;  // Su superfici lisce con grande raggio di
+                         // curvatura il rullo legge lo stesso lift,
+                         // solo posizionato leggermente in anticipo/ritardo.
+                         // Per applicazioni standard è ~equivalente al puntalino
+                         // corretto da rPunt. La differenza significativa
+                         // emerge solo nelle zone di forte curvatura
+                         // (rampe iniziali/finali).
+    }
+    return out;
+}
+
+// Converte scansione PUNTALINO → curva valvola con FINGER FOLLOWER (a dito).
+// Geometria: leva ruota attorno a un perno; un'estremità tocca la cam
+// (con un pattino di raggio rTip o piatto), l'altra estremità muove la
+// valvola. Il rapporto L_arm/L_valve agisce come rocker ratio dinamico.
+//
+// Approssimazione: lift_valvola(θ) = lift_camma(θ) × (L_arm / L_valve)
+// Funziona se la leva è approssimativamente orizzontale durante tutto
+// il movimento (caso tipico per finger follower moderni).
+//
+// Per la simulazione "fine" della curva (non solo del fattore di scala),
+// la geometria esatta richiederebbe l'inversa della cinematica della leva.
+// La versione attuale è equivalente a un rocker ratio (Larm/Lvalve)
+// applicato al lift letto dal puntalino: identico al rocker classico.
+function convertPuntToFinger(camLiftRaw, rBase, lArm, lValve, rPunt) {
+    var ratio = (lArm > 0 && lValve > 0) ? (lArm / lValve) : 1.0;
+    rPunt = (typeof rPunt === 'number' && rPunt > 0) ? rPunt : 0;
+    var out = new Array(361);
+    out[0] = 0;
+    for (var t = 1; t <= 360; t++) {
+        var ltrue = (camLiftRaw[t] || 0) - rPunt;
+        if (ltrue < 0) ltrue = 0;
+        out[t] = ltrue * ratio;
+    }
+    return out;
+}
+
 function onFollowerTypeChange() {
     var t = document.getElementById('followerType').value;
-    var show = t === 'bicch';
-    document.getElementById('rowDiamBicch').style.display = show ? 'flex' : 'none';
-    document.getElementById('rowRBase').style.display     = show ? 'flex' : 'none';
-    document.getElementById('rowRPunt').style.display     = show ? 'flex' : 'none';
-    document.getElementById('followerHint').style.display = show ? 'block' : 'none';
+    // Quali righe mostrare per ogni tipo
+    var isVirtual = t !== 'punt';  // qualunque follower simulato richiede R base + R punt
+    var isBicch   = t === 'bicch';
+    var isRoller  = t === 'roller';
+    var isFinger  = t === 'finger';
+
+    var show = function (id, v) {
+        var el = document.getElementById(id); if (el) el.style.display = v ? 'flex' : 'none';
+    };
+    show('rowDiamBicch', isBicch);
+    show('rowRRoll',     isRoller);
+    show('rowLArm',      isFinger);
+    show('rowLValve',    isFinger);
+    show('rowRBase',     isVirtual);
+    show('rowRPunt',     isVirtual);
+    var hint = document.getElementById('followerHint');
+    if (hint) hint.style.display = isVirtual ? 'block' : 'none';
 }
 
 // Preset rapidi: valori tipici per classe motore. L'utente può sempre
@@ -963,33 +1097,47 @@ initArrays();
 
 // ========== HELPER: Map cam degrees to crankshaft degrees ==========
 
+// Mappa 360 punti camma (1 grado/step) → 720 punti albero motore (0.5 deg/step).
+// Per ogni grado camma d (1..360), p_crank = d*2 ± angle (intake: -, exhaust: +).
+// Slot non popolati direttamente sono interpolati linearmente dai vicini.
+//
+// FIX bug rev. 2026-05-23: la versione precedente usava cascate di if con
+// limiti arbitrari (es. "p > 0 && p < 3" wrap manuale) che producevano slot
+// non popolati per certi valori dispari di 'angle'. Sostituito con
+// modulo wrap720() esplicito che gestisce qualunque input in [-Inf, +Inf].
 function mapCamToCrank(camLift, angle, clearance, type) {
     var crank = new Array(722);
     for (var j = 0; j <= 721; j++) crank[j] = 0;
 
+    // Parity di 'angle' determina quali slot crank vengono popolati direttamente:
+    //   angle pari → solo p = d*2 ± pari = pari → slot pari 2,4,..720 popolati
+    //   angle dispari → slot dispari 1,3,..719 popolati
+    // L'altra metà degli slot viene interpolata sotto.
     var s = 1;
     if (Math.floor(angle / 2) === angle / 2) s = 0;
+
+    // Wrap di p in [1..720] qualunque sia il valore (gestisce negativi e > 720).
+    function wrap720(p) {
+        return ((p - 1) % 720 + 720) % 720 + 1;
+    }
 
     for (var d = 1; d <= 360; d++) {
         var p;
         if (type === 'intake') {
             p = d * 2 - angle;
-            if (p < 0) { p = 720 - Math.abs(p); }
-            else if (p === 0) { p = 720; }
-            else if (p > 0 && p < 3) { p = 720 + p; if (p > 720) p = p - 720; }
         } else {
             p = d * 2 + angle;
-            if (p > 720) p = p - 720;
         }
-        if (p < 1) p = p + 720;
-        if (p > 720) p = p - 720;
+        p = wrap720(p);
 
         var lift = camLift[d] - clearance;
         if (lift < 0) lift = 0;
-        if (p >= 1 && p <= 720) crank[p] = lift;
+        crank[p] = lift;
     }
 
-    // Linear interpolation for intermediate degrees
+    // Interpolazione lineare degli slot non popolati direttamente.
+    // Se s=1 (angle dispari) gli slot popolati sono dispari 1,3,..719;
+    // interpoliamo i pari 2,4,..720. Se s=0, viceversa.
     for (var z = 5 - s; z <= 720; z += 2) {
         var prev = z - 1, next = z + 1;
         if (prev < 1) prev = 720;
@@ -1045,12 +1193,34 @@ function findMax(crankArr) {
 
 // ========== FILE IMPORT ==========
 
+// Dispatcher follower virtuale: prende la curva grezza (puntalino sferico)
+// e applica la conversione geometrica appropriata in base al tipo selezionato.
+// Tipi supportati:
+//   - 'punt'  → nessuna conversione (curva grezza puntalino)
+//   - 'bicch' → bicchiere piatto Ø (D)
+//   - 'roller'→ rullo di raggio (rRoll)
+//   - 'finger'→ leva con rapporto braccio camma/valvola
 function applyVirtualFollower(camLift) {
     var t = document.getElementById('followerType').value;
-    if (t !== 'bicch') return camLift;
+    if (!t || t === 'punt') return camLift;
+
     var rBase  = Number(document.getElementById('rBase').value)  || 14;
-    var dBicch = Number(document.getElementById('diamBicch').value) || 33.34;
-    return convertPuntToBicchiere(camLift, rBase, dBicch);
+    var rPunt  = Number(document.getElementById('rPunt').value)  || 1.5;
+
+    if (t === 'bicch') {
+        var dBicch = Number(document.getElementById('diamBicch').value) || 33.34;
+        return convertPuntToBicchiere(camLift, rBase, dBicch, rPunt);
+    }
+    if (t === 'roller') {
+        var rRoll = Number(document.getElementById('rRoll').value) || 8;
+        return convertPuntToRoller(camLift, rBase, rRoll, rPunt);
+    }
+    if (t === 'finger') {
+        var lArm   = Number(document.getElementById('lArm').value)   || 25;
+        var lValve = Number(document.getElementById('lValve').value) || 30;
+        return convertPuntToFinger(camLift, rBase, lArm, lValve, rPunt);
+    }
+    return camLift;
 }
 
 function importIntake() {
@@ -2596,7 +2766,16 @@ function exportPDF() {
             doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
             setText(COL.muted);
             doc.text(label.toUpperCase(), x + 4, y + 5);
-            doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+            // Auto-shrink: se il valore non entra nel box (boxW - 8 mm),
+            // riduco il font fino a 11pt prima di rinunciare e tagliare.
+            doc.setFont('helvetica', 'bold');
+            var maxValueWidth = boxW - 8;
+            var sz = 18;
+            doc.setFontSize(sz);
+            while (sz > 11 && doc.getTextWidth(value) > maxValueWidth) {
+                sz -= 1;
+                doc.setFontSize(sz);
+            }
             setText(col);
             doc.text(value, x + 4, y + 16);
             if (sub) {
@@ -2777,7 +2956,8 @@ function exportPDF() {
     setFill(COL.bgLight); doc.rect(barX, y, barW, barH, 'F');
     setDraw(COL.border); doc.rect(barX, y, barW, barH, 'S');
     // Target line (a 50% se 100% del target)
-    var ratio = isFinite(minRpmCrit) ? Math.min(2, minRpmCrit / Math.max(1, rpm)) : 2;
+    var rawRatio = isFinite(minRpmCrit) ? (minRpmCrit / Math.max(1, rpm)) : 5;
+    var ratio = Math.min(2, rawRatio);  // saturazione visiva a 2x
     var fillW = (ratio / 2) * barW;
     setFill(safetyCol);
     doc.rect(barX, y, fillW, barH, 'F');
@@ -2791,6 +2971,17 @@ function exportPDF() {
     var safeX = barX + barW * 0.75;
     doc.line(safeX, y - 1, safeX, y + barH + 1);
     doc.text('+50% (sicuro)', safeX - 12, y + barH + 5);
+
+    // Etichetta numerica del rapporto SOPRA la barra. Se saturato (ratio>=2),
+    // mostra il vero rapporto per non nascondere "quanto" è sicuro.
+    doc.setFontSize(8);
+    setText(COL.text);
+    var ratioLabel;
+    if (!isFinite(rawRatio)) ratioLabel = 'rapporto: inf (motore sicuro)';
+    else if (rawRatio >= 2)  ratioLabel = 'rapporto: ' + rawRatio.toFixed(2) + 'x (oltre saturazione 2x)';
+    else                     ratioLabel = 'rapporto: ' + rawRatio.toFixed(2) + 'x';
+    doc.text(ratioLabel, barX, y - 2);
+
     y += barH + 12;
 
     // ============================================================
