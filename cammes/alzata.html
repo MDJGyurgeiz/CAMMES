@@ -134,9 +134,16 @@
 
             <div class="separator"></div>
 
-            <button class="btn btn-secondary" onclick="ms();" data-tip="<strong>Zero virtuale</strong>Esegue una scansione completa, trova il picco di alzata e ruota il motore di +180&deg; rispetto al picco. Cos&igrave; il punto di riferimento &egrave; identico per ogni albero misurato, indipendentemente da come l'hai montato. Tempo: pari a una scansione completa nella modalit&agrave; selezionata.">
+            <button class="btn btn-secondary" id="msBtn" onclick="ms();" data-tip="<strong>Zero virtuale</strong>Esegue una scansione completa, trova il picco di alzata e ruota il motore di +180&deg; rispetto al picco. Cos&igrave; il punto di riferimento &egrave; identico per ogni albero misurato, indipendentemente da come l'hai montato. Tempo: pari a una scansione completa nella modalit&agrave; selezionata.">
                 &#9678; Zero virtuale
             </button>
+
+            <div class="separator"></div>
+
+            <button class="btn btn-secondary" id="freeBtn" onclick="toggleMotorFree();" data-tip="<strong>Sblocca motore</strong>Disattiva la corrente dello stepper: l'albero diventa libero e pu&ograve; essere ruotato a mano. Encoder e comparatore continuano a leggere LIVE, cos&igrave; vedi posizione angolare e alzata in tempo reale mentre giri. Utile per ispezione manuale o posizionamento esatto. Premi di nuovo per riattivare il motore prima di scansionare.">
+                &#128275; Sblocca motore
+            </button>
+            <span id="motorFreeBadge" class="motor-free-badge" style="display:none;" title="Motore disattivato: girare l'albero manualmente">&#9679; MOTORE LIBERO</span>
 
             <div class="separator"></div>
 
@@ -359,6 +366,15 @@ engineSocket.onmessage = function(event) {
     }
     if (msg.indexOf('encoder=') >= 0 || msg === '*pos') {
         lastEncoderRx = Date.now();
+        // Durante free-spin (motore sbloccato) mostra il grado encoder
+        // LIVE nel display imp2 (sostituisce il contatore di scansione
+        // che non avanza più). Format atteso: "encoder=N deg=XX.XX"
+        if (motorFree) {
+            var mDeg = msg.match(/deg=(-?\d+(\.\d+)?)/);
+            if (mDeg) {
+                document.imp2.imp2.value = '  enc ' + parseFloat(mDeg[1]).toFixed(2) + '°';
+            }
+        }
     }
 
     if (isNumericMeasure) {
@@ -897,6 +913,98 @@ function ms() {
 </script>
 
 <script>
+// ===== Motore libero (free-spin) =====
+// Quando attivato: invia 'f' al firmware (PIN_ENA = LOW), il motore
+// è senza corrente e può essere ruotato a mano. Encoder + sensore
+// continuano a funzionare con polling accelerato per visualizzazione
+// LIVE durante la rotazione manuale. Bottoni di movimento disabilitati.
+var motorFree = false;
+var pollFreeSensorId = null;
+var pollFreeEncoderId = null;
+
+function toggleMotorFree() {
+    motorFree = !motorFree;
+    var btn   = document.getElementById('freeBtn');
+    var badge = document.getElementById('motorFreeBadge');
+    if (motorFree) {
+        // SBLOCCA
+        try { sendSocket.send('f\n'); } catch (e) {}
+        if (btn)   btn.innerHTML = '&#128274; Blocca motore';
+        if (btn)   btn.classList.add('btn-warn');
+        if (badge) badge.style.display = 'inline-flex';
+        _setMotionUiDisabled(true);
+
+        // Stop polling normale (5s/200ms) e attivo polling LIVE (100ms/100ms)
+        try { clearInterval(pollEncoderId); } catch (e) {}
+        try { clearInterval(pollSensorId);  } catch (e) {}
+        pollFreeEncoderId = setInterval(function () {
+            if (sendSocket && sendSocket.readyState === 1)
+                try { sendSocket.send('?'); } catch (e) {}
+        }, 200);
+        pollFreeSensorId = setInterval(function () {
+            if (sendSocket && sendSocket.readyState === 1)
+                try { sendSocket.send('m'); } catch (e) {}
+        }, 100);
+
+        if (window.cammesToast) window.cammesToast({
+            kind: 'info', title: 'Motore sbloccato',
+            body: 'Puoi ruotare l\'albero a mano. Encoder e comparatore leggono live.',
+            duration: 3500
+        });
+    } else {
+        // BLOCCA
+        try { sendSocket.send('l\n'); } catch (e) {}
+        if (btn)   btn.innerHTML = '&#128275; Sblocca motore';
+        if (btn)   btn.classList.remove('btn-warn');
+        if (badge) badge.style.display = 'none';
+        _setMotionUiDisabled(false);
+
+        // Stop polling LIVE e riavvio polling normale
+        try { clearInterval(pollFreeEncoderId); } catch (e) {}
+        try { clearInterval(pollFreeSensorId);  } catch (e) {}
+        pollFreeEncoderId = null;
+        pollFreeSensorId  = null;
+        pollEncoderId = setInterval(function () {
+            if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1
+                && (typeof startflag === 'undefined' || startflag !== 1)) {
+                try { sendSocket.send('?'); } catch (e) {}
+            }
+        }, 5000);
+        pollSensorId = setInterval(function () {
+            if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1
+                && (typeof startflag === 'undefined' || startflag !== 1)) {
+                try { sendSocket.send('m'); } catch (e) {}
+            }
+        }, 200);
+
+        if (window.cammesToast) window.cammesToast({
+            kind: 'success', title: 'Motore bloccato',
+            body: 'Stepper in tenuta. Puoi avviare scansioni e rotazioni.',
+            duration: 2000
+        });
+    }
+}
+
+// Disabilita/abilita bottoni che muoverebbero il motore (Start, Ruota, +/-, 0V).
+// Quando motorFree=true, qualsiasi pulso PUL sarebbe ignorato dal driver e
+// scollazerebbe il contatore di scansione.
+function _setMotionUiDisabled(disabled) {
+    var ids = ['cf', 'msBtn'];
+    ids.forEach(function (id) {
+        var el = document.getElementById(id); if (el) el.disabled = disabled;
+    });
+    // Start button (no id) - cerco per testo
+    Array.prototype.forEach.call(document.querySelectorAll('button.btn-success'), function (b) {
+        if (/START/i.test(b.textContent)) b.disabled = disabled;
+    });
+    // +/- buttons
+    Array.prototype.forEach.call(document.querySelectorAll('.btn-secondary.btn-sm'), function (b) {
+        var t = b.textContent.trim();
+        if (t === '−' || t === '-' || t === '+' || t === '−') b.disabled = disabled;
+    });
+}
+window.toggleMotorFree = toggleMotorFree;
+
 var rot = 0;
 var rsign = 1;
 function rlb() {

@@ -116,6 +116,13 @@
 
             <div class="separator"></div>
 
+            <button class="btn btn-secondary" id="freeBtn" onclick="toggleMotorFree();" data-tip="<strong>Sblocca motore</strong>Disattiva la corrente dello stepper: l'albero diventa libero e pu&ograve; essere ruotato a mano. Encoder e comparatore continuano a leggere LIVE in tempo reale mentre giri.">
+                &#128275; Sblocca motore
+            </button>
+            <span id="motorFreeBadge" class="motor-free-badge" style="display:none;" title="Motore disattivato">&#9679; MOTORE LIBERO</span>
+
+            <div class="separator"></div>
+
             <div class="toggle-group">
                 <label class="switch" data-tip="<strong>Senso di rotazione</strong>Inverte il senso del motore.">
                     <input type="checkbox" onchange="rlb();">
@@ -175,6 +182,12 @@ engineSocket.onopen = function(event) {
 
 engineSocket.onmessage = function(event) {
     msg = event.data;
+
+    // Durante free-spin mostra grado encoder LIVE nel display
+    if (msg.indexOf('encoder=') >= 0 && motorFree) {
+        var mDeg = msg.match(/deg=(-?\d+(\.\d+)?)/);
+        if (mDeg) document.imp2.imp2.value = '  enc ' + parseFloat(mDeg[1]).toFixed(2) + '°';
+    }
 
     if (msg.substring(0, 1) != "*") {
         if (Number(msg) < 10) { msg2 = "0" + msg; }
@@ -472,6 +485,69 @@ function m1() {
 <script>
 var rot = 0;
 var rsign = 1;
+// ===== Motore libero (free-spin) =====
+// Manda 'f' al firmware (ENA LOW = motore libero) e attiva polling
+// LIVE encoder + sensore a 100 ms così l'utente vede angolo + alzata
+// in tempo reale mentre ruota a mano. Bottoni Start/Ruota disabilitati.
+var motorFree = false;
+var pollFreeSensorId = null;
+var pollFreeEncoderId = null;
+
+function toggleMotorFree() {
+    motorFree = !motorFree;
+    var btn   = document.getElementById('freeBtn');
+    var badge = document.getElementById('motorFreeBadge');
+    if (motorFree) {
+        try { sendSocket.send('f\n'); } catch (e) {}
+        if (btn)   btn.innerHTML = '&#128274; Blocca motore';
+        if (btn)   btn.classList.add('btn-warn');
+        if (badge) badge.style.display = 'inline-flex';
+        _setMotionUiDisabled(true);
+        pollFreeEncoderId = setInterval(function () {
+            if (sendSocket && sendSocket.readyState === 1)
+                try { sendSocket.send('?'); } catch (e) {}
+        }, 200);
+        pollFreeSensorId = setInterval(function () {
+            if (sendSocket && sendSocket.readyState === 1)
+                try { sendSocket.send('m'); } catch (e) {}
+        }, 100);
+        if (window.cammesToast) window.cammesToast({
+            kind: 'info', title: 'Motore sbloccato',
+            body: 'Puoi ruotare l\'albero a mano. Encoder e comparatore leggono live.',
+            duration: 3500
+        });
+    } else {
+        try { sendSocket.send('l\n'); } catch (e) {}
+        if (btn)   btn.innerHTML = '&#128275; Sblocca motore';
+        if (btn)   btn.classList.remove('btn-warn');
+        if (badge) badge.style.display = 'none';
+        _setMotionUiDisabled(false);
+        try { clearInterval(pollFreeEncoderId); } catch (e) {}
+        try { clearInterval(pollFreeSensorId);  } catch (e) {}
+        pollFreeEncoderId = null;
+        pollFreeSensorId  = null;
+        if (window.cammesToast) window.cammesToast({
+            kind: 'success', title: 'Motore bloccato',
+            body: 'Stepper in tenuta. Puoi avviare scansioni e rotazioni.',
+            duration: 2000
+        });
+    }
+}
+function _setMotionUiDisabled(disabled) {
+    var ids = ['cf'];
+    ids.forEach(function (id) {
+        var el = document.getElementById(id); if (el) el.disabled = disabled;
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('button.btn-success'), function (b) {
+        if (/START/i.test(b.textContent)) b.disabled = disabled;
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.btn-secondary.btn-sm'), function (b) {
+        var t = b.textContent.trim();
+        if (t === '−' || t === '-' || t === '+') b.disabled = disabled;
+    });
+}
+window.toggleMotorFree = toggleMotorFree;
+
 function rlb() {
     rot = rot + 1;
     if (rot == 2) { rot = 0; }

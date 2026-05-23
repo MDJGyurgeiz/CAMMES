@@ -35,6 +35,11 @@
 //                  w50  → 50 ms (smorza vibrazioni leggere)
 //                  w200 → 200 ms (smorza vibrazioni gravi, scansione lenta)
 //    @          stampa configurazione corrente "samp=N step=NN settle=Mms*cfg"
+//    f          FREE: disabilita corrente stepper (ENA LOW) → motore libero,
+//               l'utente può ruotare l'albero a mano. Encoder + sensore
+//               continuano a funzionare (per visualizzazione live). Risponde "*free"
+//    l          LOCK: riabilita corrente stepper (ENA HIGH) → motore frenato.
+//               Risponde "*lock". Necessario prima di p/q/$/ruota.
 //
 //  Risposta Arduino dopo movimento:
 //    XX.XX            (alzata in mm)
@@ -267,6 +272,17 @@ void executeCommand() {
       Serial.print(F(" settle=")); Serial.print(cfgSettleMs); Serial.println(F("ms"));
       Serial.println(F("*cfg"));
     }
+    else if (c == 'f') {
+      // FREE: rilascia corrente stepper. L'utente può ruotare l'albero
+      // a mano; l'encoder continua a contare in tempo reale.
+      digitalWrite(PIN_ENA, LOW);
+      Serial.println(F("*free"));
+    }
+    else if (c == 'l') {
+      // LOCK: riabilita corrente stepper (torna in tenuta).
+      digitalWrite(PIN_ENA, HIGH);
+      Serial.println(F("*lock"));
+    }
   } else if (cmdLen >= 2 && cmdBuf[0] == 'c') {
     int v = atoi(&cmdBuf[1]);
     if (v >= 1 && v <= 9) cfgSamples = (uint8_t)v;
@@ -339,7 +355,7 @@ void loop() {
     } else if (cmdLen < sizeof(cmdBuf) - 1) {
       cmdBuf[cmdLen++] = c;
       // comandi a singolo carattere si eseguono immediatamente
-      if (cmdLen == 1 && (c == 'p' || c == 'q' || c == 'm' || c == 'd' || c == '?' || c == '!' || c == '@')) {
+      if (cmdLen == 1 && (c == 'p' || c == 'q' || c == 'm' || c == 'd' || c == '?' || c == '!' || c == '@' || c == 'f' || c == 'l')) {
         executeCommand();
       }
     } else {
