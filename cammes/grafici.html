@@ -44,13 +44,18 @@
 
         <!-- Left: Line chart -->
         <div class="card chart-card">
-            <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                 <span>Confronto profili (fino a 4 alberi)</span>
-                <span style="display:inline-flex;gap:6px;">
-                    <button id="replayBtn" class="btn btn-secondary btn-sm" onclick="replayAnimation();" data-tip="<strong>Replay animazione</strong>Ridipinge le curve caricate da 0&deg; a 360&deg; in 4 secondi. Utile per visualizzare l'apertura/chiusura della valvola.">&#9658; Replay</button>
+                <span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                    <select id="viewMode" class="input" style="width:auto;font-size:12px;padding:4px 8px;" onchange="switchViewMode();" data-tip="<strong>Modalit&agrave; vista</strong><b>Sovrapposto</b>: tutte le curve sovrapposte (come ora).<br><b>Differenza</b>: con 2+ file, calcola (file N − file 1) per ogni grado. Curva positiva = file pi&ugrave; alto del baseline. Mostra stats max/media/RMSE in fondo.">
+                        <option value="overlay" selected>Sovrapposto</option>
+                        <option value="diff">Differenza vs file 1</option>
+                    </select>
+                    <button id="replayBtn" class="btn btn-secondary btn-sm" onclick="replayAnimation();" data-tip="<strong>Replay animazione</strong>Ridipinge le curve caricate da 0&deg; a 360&deg; in 4 secondi.">&#9658; Replay</button>
                     <button id="replayStopBtn" class="btn btn-secondary btn-sm" onclick="stopReplay();" style="display:none;">&#10074;&#10074; Stop</button>
                 </span>
             </div>
+            <div id="diffStats" class="diff-stats" style="display:none;"></div>
             <canvas id="canvas"></canvas>
         </div>
 
@@ -634,6 +639,114 @@ function stopReplay() {
 
 window.replayAnimation = replayAnimation;
 window.stopReplay = stopReplay;
+
+// ===== Modalità vista: Sovrapposto vs Differenza =====
+// Sovrapposto: mostra le curve come sono caricate (default).
+// Differenza: con N >= 2 file caricati, baseline = file 1, calcola
+// delta = file_k - file_1 per ogni grado, mostra delta + stats.
+
+var _viewBackup = null;   // backup dei data originali quando entriamo in diff
+
+function switchViewMode() {
+    var mode = document.getElementById('viewMode').value;
+    if (mode === 'diff') showDiffView();
+    else showOverlayView();
+}
+
+function showOverlayView() {
+    // Ripristina i data originali dal backup, se presente
+    if (_viewBackup) {
+        lineChartData.datasets.forEach(function (d, i) {
+            if (_viewBackup[i]) d.data = _viewBackup[i].slice();
+            // Ripristina anche borderColor originale
+            if (_viewBackup[i + '_color']) d.borderColor = _viewBackup[i + '_color'];
+        });
+        _viewBackup = null;
+    }
+    var stats = document.getElementById('diffStats');
+    if (stats) stats.style.display = 'none';
+    if (window.myLine) window.myLine.update('none');
+}
+
+function showDiffView() {
+    // Trova i dataset con dati
+    var loaded = [];
+    lineChartData.datasets.forEach(function (d, i) {
+        if (d.data && d.data.length > 0) loaded.push({ ds: d, idx: i });
+    });
+    if (loaded.length < 2) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'warn', title: 'Servono almeno 2 file',
+            body: 'Carica un secondo file (anche dalla pagina Home → Apri in Confronto) per vedere la differenza.',
+            duration: 4000
+        });
+        // Torna a overlay
+        document.getElementById('viewMode').value = 'overlay';
+        return;
+    }
+    // Backup data originali
+    _viewBackup = {};
+    loaded.forEach(function (e) {
+        _viewBackup[e.idx] = e.ds.data.slice();
+        _viewBackup[e.idx + '_color'] = e.ds.borderColor;
+    });
+
+    var baseline = loaded[0].ds.data;
+    // Statistiche aggregate su tutti i delta
+    var allMaxAbs = 0, allSumAbs = 0, allSumSq = 0, allCount = 0;
+
+    // Trasforma ogni dataset dopo il primo in delta
+    for (var k = 1; k < loaded.length; k++) {
+        var ds = loaded[k].ds;
+        var orig = ds.data;
+        var delta = [];
+        for (var i = 0; i < Math.min(orig.length, baseline.length); i++) {
+            var a = Number(orig[i]);
+            var b = Number(baseline[i]);
+            if (!isFinite(a) || !isFinite(b)) { delta.push(null); continue; }
+            var d = a - b;
+            delta.push(d);
+            var ad = Math.abs(d);
+            if (ad > allMaxAbs) allMaxAbs = ad;
+            allSumAbs += ad; allSumSq += d * d; allCount++;
+        }
+        ds.data = delta;
+    }
+    // Baseline rimane visibile ma a 0 (è la sua differenza con sé stessa)
+    loaded[0].ds.data = baseline.map(function () { return 0; });
+
+    if (window.myLine) {
+        // Aggiungi linea zero come riferimento (cambia label baseline)
+        window.myLine.update('none');
+    }
+
+    // Stats
+    var meanAbs = allCount > 0 ? allSumAbs / allCount : 0;
+    var rmse    = allCount > 0 ? Math.sqrt(allSumSq / allCount) : 0;
+    var maxClass  = allMaxAbs > 0.5 ? 'bad'  : (allMaxAbs > 0.1 ? 'warn' : '');
+    var meanClass = meanAbs   > 0.2 ? 'bad'  : (meanAbs   > 0.05 ? 'warn' : '');
+    var rmseClass = rmse      > 0.3 ? 'bad'  : (rmse      > 0.1 ? 'warn' : '');
+    var stats = document.getElementById('diffStats');
+    if (stats) {
+        stats.innerHTML =
+            '<div class="diff-stat"><div class="diff-stat-label">|Delta| max</div>' +
+            '  <div class="diff-stat-value ' + maxClass + '">' + allMaxAbs.toFixed(3) + ' mm</div></div>' +
+            '<div class="diff-stat"><div class="diff-stat-label">|Delta| medio</div>' +
+            '  <div class="diff-stat-value ' + meanClass + '">' + meanAbs.toFixed(3) + ' mm</div></div>' +
+            '<div class="diff-stat"><div class="diff-stat-label">RMSE</div>' +
+            '  <div class="diff-stat-value ' + rmseClass + '">' + rmse.toFixed(3) + ' mm</div></div>' +
+            '<div class="diff-stat"><div class="diff-stat-label">Confronti</div>' +
+            '  <div class="diff-stat-value">' + (loaded.length - 1) + ' vs baseline</div></div>';
+        stats.style.display = '';
+    }
+
+    if (window.cammesToast) window.cammesToast({
+        kind: 'info', title: 'Vista differenza attiva',
+        body: 'Baseline: <b>' + loaded[0].ds.label + '</b>. Le altre curve mostrano lo scarto punto per punto.',
+        duration: 4000
+    });
+}
+window.switchViewMode = switchViewMode;
 </script>
 
 </body>

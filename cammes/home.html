@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="cammes-ui.js"></script>
     <script src="lib/chart.umd.min.js"></script>
+    <script src="jspdf.umd.min.js"></script>
     <style>
     .home-hero {
         display: grid;
@@ -1616,6 +1617,7 @@ function _renderQuickView(fileName, fileType, text) {
     }
 
     var safeName = escapeHtml(fileName);
+    var safeType = escapeHtml(fileType || '');
     var nameJs = safeName.replace(/'/g, '&#39;');
 
     // Tag badges nel modal
@@ -1641,6 +1643,7 @@ function _renderQuickView(fileName, fileType, text) {
         '<div class="quickview-chart-wrap"><canvas id="quickviewCanvas"></canvas></div>' +
         '<div class="quickview-actions">' +
         '  <a class="btn btn-secondary" href="/api/file/' + encodeURIComponent(fileName) + '" download="' + safeName + '">&darr; Scarica</a>' +
+        '  <button class="btn btn-secondary" onclick="exportSinglePDF(\'' + nameJs + '\', \'' + safeType + '\');" title="Esporta scheda tecnica PDF di questo file">&#128196; Scheda PDF</button>' +
         '  <a class="btn btn-accent" href="grafici.html?files=' + encodeURIComponent(fileName) + '" title="Apri pagina Confronto con questo file già caricato">Apri in Confronto</a>' +
         '  <button class="btn btn-secondary" onclick="closeQuickView();">Chiudi</button>' +
         '</div>';
@@ -2197,6 +2200,153 @@ function importMetadataFile(ev) {
 }
 window.exportMetadata = exportMetadata;
 window.importMetadataFile = importMetadataFile;
+
+// ===== Scheda tecnica PDF camma singola (1 pagina) =====
+// Genera PDF compatto con header, stats principali, grafico inline,
+// tag/bookmark, timestamp. Riusa il chart già caricato nel Quick View
+// (toBase64Image) — funziona solo se il modal è aperto.
+function exportSinglePDF(fileName, fileType) {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'err', title: 'Libreria PDF non caricata',
+            body: 'jspdf.umd.min.js non disponibile. Ricarica la pagina.',
+            duration: 5000
+        });
+        return;
+    }
+    if (!_quickViewChart) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'warn', title: 'Grafico non pronto',
+            body: 'Attendi che il grafico sia disegnato e riprova.',
+            duration: 3000
+        });
+        return;
+    }
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    var pageW = doc.internal.pageSize.getWidth();
+    var pageH = doc.internal.pageSize.getHeight();
+    var margin = 14;
+
+    // Header
+    doc.setFillColor(22, 28, 40); doc.rect(0, 0, pageW, 36, 'F');
+    doc.setFillColor(0, 212, 255); doc.rect(0, 36, pageW, 2, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(22);
+    doc.setTextColor(255, 255, 255);
+    doc.text('CAMMES', margin, 18);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    doc.setTextColor(0, 212, 255);
+    doc.text('Scheda tecnica camma', margin, 25);
+    doc.setFontSize(8);
+    doc.setTextColor(180, 195, 215);
+    doc.text(new Date().toLocaleString('it-IT'), margin, 30);
+
+    // Recupera dati dal chart corrente
+    var ds = _quickViewChart.data.datasets[0];
+    var data = ds.data || [];
+    var labels = _quickViewChart.data.labels || [];
+    var maxVal = -Infinity, maxIdx = 0;
+    for (var i = 0; i < data.length; i++) {
+        var v = Number(data[i]);
+        if (isFinite(v) && v > maxVal) { maxVal = v; maxIdx = i; }
+    }
+    var maxDeg = labels[maxIdx];
+
+    // Nome file
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+    doc.setTextColor(40, 46, 60);
+    doc.text(fileName, margin, 48);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    doc.setTextColor(120, 130, 145);
+    doc.text(fileType === 'pol' ? 'Profilo polare' : 'Profilo alzata cartesiano', margin, 54);
+
+    // KPI box
+    var y = 62;
+    var boxW = (pageW - 2 * margin - 6) / 3;
+    function kpiBox(x, label, value, sub, col) {
+        doc.setFillColor(245, 247, 251); doc.roundedRect(x, y, boxW, 22, 2, 2, 'F');
+        doc.setDrawColor(col[0], col[1], col[2]); doc.setLineWidth(0.6);
+        doc.line(x, y, x, y + 22); doc.setLineWidth(0.2);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+        doc.setTextColor(120, 130, 145);
+        doc.text(label.toUpperCase(), x + 4, y + 5);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+        doc.setTextColor(col[0], col[1], col[2]);
+        doc.text(value, x + 4, y + 14);
+        if (sub) {
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+            doc.setTextColor(120, 130, 145);
+            doc.text(sub, x + 4, y + 19);
+        }
+    }
+    kpiBox(margin,                'N. punti',            data.length + '',
+           'campioni grado camma', [0, 212, 255]);
+    kpiBox(margin + boxW + 3,     fileType === 'pol' ? 'Max raggio' : 'Max alzata',
+           (isFinite(maxVal) ? maxVal.toFixed(3) : '-') + ' mm',
+           'picco rilevato',       [255, 184, 32]);
+    kpiBox(margin + 2*(boxW+3),   'Grado picco', maxDeg + ' deg',
+           'posizione max',        [177, 76, 255]);
+    y += 30;
+
+    // Tag (se presenti)
+    var fileTags = (typeof getTagsForFile === 'function') ? getTagsForFile(fileName) : [];
+    if (fileTags.length > 0) {
+        doc.setFillColor(22, 28, 40); doc.rect(margin, y - 1, 1.5, 5, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+        doc.setTextColor(40, 46, 60);
+        doc.text('Tag', margin + 4, y + 3); y += 7;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+        doc.setTextColor(80, 90, 110);
+        doc.text(fileTags.join('  ·  '), margin, y);
+        y += 7;
+    }
+
+    // Grafico
+    doc.setFillColor(0, 212, 255); doc.rect(margin, y - 1, 1.5, 5, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+    doc.setTextColor(40, 46, 60);
+    doc.text(fileType === 'pol' ? 'Profilo polare 360 deg' : 'Profilo alzata 360 deg', margin + 4, y + 3);
+    y += 6;
+    try {
+        var img = _quickViewChart.toBase64Image('image/png', 1);
+        var imgW = pageW - 2 * margin;
+        var imgH = fileType === 'pol' ? 110 : 80;
+        doc.addImage(img, 'PNG', margin, y, imgW, imgH);
+        y += imgH + 6;
+    } catch (e) {
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(9);
+        doc.text('(grafico non disponibile)', margin, y);
+        y += 5;
+    }
+
+    // Bookmark indicator
+    var isBM = (typeof isBookmarked === 'function') ? isBookmarked(fileName) : false;
+    if (isBM) {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+        doc.setTextColor(255, 184, 32);
+        doc.text('* File contrassegnato tra i preferiti', margin, y);
+        y += 5;
+    }
+
+    // Footer
+    var fy = pageH - 8;
+    doc.setDrawColor(200, 208, 220); doc.setLineWidth(0.2);
+    doc.line(margin, fy - 3, pageW - margin, fy - 3);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+    doc.setTextColor(120, 130, 145);
+    doc.text('CAMMES - Scheda tecnica camma singola', margin, fy);
+    var ts = new Date().toLocaleString('it-IT');
+    doc.text(ts, pageW - margin - doc.getTextWidth(ts), fy);
+
+    var pdfName = 'scheda_' + fileName.replace(/\.(scr|txt|csv)$/i, '') + '_' +
+                  new Date().toISOString().substring(0, 10) + '.pdf';
+    doc.save(pdfName);
+    if (window.cammesToast) window.cammesToast({
+        kind: 'success', title: 'Scheda PDF esportata',
+        body: pdfName, duration: 4000
+    });
+}
+window.exportSinglePDF = exportSinglePDF;
 </script>
 
 </body>
