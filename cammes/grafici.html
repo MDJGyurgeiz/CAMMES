@@ -452,6 +452,87 @@ function update2() {
 }
 </script>
 
+<!-- URL loader: ?files=nome1.scr,nome2.scr precarica i file dalla Home.
+     Si attende che il chart Chart.js sia pronto (window.myLine), poi
+     fetch e popola i dataset sequenzialmente imitando loadFile(). -->
+<script>
+function _loadAlzFromText(text, originalName) {
+    // Simula la logica di showResult() ma su testo già fetchato
+    if (typeof index === 'undefined') return;
+    if (index >= 4) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'warn', title: 'Massimo 4 file',
+            body: 'Limite Confronto raggiunto. Reset per caricarne altri.',
+            duration: 3000
+        });
+        return;
+    }
+    index = index + 1;
+    var lines = text.split(/\r?\n/);
+    var localVmax = 0, localGmax = 0, localVmax1 = '0';
+    for (var i = 1; i <= 361 && i < lines.length; i++) {
+        var parts = lines[i].split(',');
+        if (parts.length < 2) continue;
+        valori[i] = parts[1];
+        if (Number(parts[1]) > localVmax) {
+            localVmax1 = parts[1];
+            localVmax = Number(parts[1]);
+            localGmax = i;
+        }
+    }
+    // Etichetta = nome file senza .scr / _alz finale
+    var label = originalName.replace(/\.(scr|txt|csv)$/i, '').replace(/_alz$/i, '');
+    var vparts = String(localVmax1).split('.');
+    var vfmt = vparts[0] + '.' + ((vparts[1] || '00') + '00').substring(0, 2);
+    var ids = ['g1', 'g2', 'g3', 'g4'];
+    var prefix = ids[index - 1];
+    document.getElementById(prefix + 'g').innerHTML = localGmax;
+    document.getElementById(prefix + 'v').innerHTML = vfmt;
+    document.getElementById('lb' + index).innerHTML = label;
+    update();
+    if (window.cammesToast) window.cammesToast({
+        kind: 'success', title: 'File caricato', body: label, duration: 2000
+    });
+}
+
+function _loadFromUrlIfNeeded() {
+    var params = new URLSearchParams(location.search);
+    var filesParam = params.get('files');
+    if (!filesParam) return;
+    var names = filesParam.split(',')
+                          .map(function (s) { return s.trim(); })
+                          .filter(Boolean)
+                          .slice(0, 4);
+    if (names.length === 0) return;
+
+    function tryStart(attempts) {
+        if (!window.myLine || typeof valori === 'undefined') {
+            if (attempts <= 0) return;
+            return setTimeout(function () { tryStart(attempts - 1); }, 50);
+        }
+        names.forEach(function (name, idx) {
+            // Stagger leggero per evitare race condition su `index` variabile
+            setTimeout(function () {
+                fetch('/api/file/' + encodeURIComponent(name), { cache: 'no-store' })
+                    .then(function (r) {
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        return r.text();
+                    })
+                    .then(function (text) { _loadAlzFromText(text, name); })
+                    .catch(function (err) {
+                        if (window.cammesToast) window.cammesToast({
+                            kind: 'err', title: 'Errore caricamento',
+                            body: name + ': ' + err.message, duration: 4000
+                        });
+                    });
+            }, idx * 250);
+        });
+    }
+    tryStart(40);  // ~2 sec max attesa per chart pronto
+}
+window.addEventListener('DOMContentLoaded', _loadFromUrlIfNeeded);
+</script>
+
 <!-- Replay animazione: ridipinge le 4 linee da 0 a 360 gradi in 4 sec.
      Salva una copia originale dei dataset, anima troncando progressivamente
      e a fine animazione ripristina. Cancellabile via stopReplay(). -->

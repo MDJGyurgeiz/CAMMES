@@ -621,11 +621,12 @@
     <div class="card">
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
             <span>Misurazioni</span>
-            <span style="display:inline-flex;align-items:center;gap:8px;">
+            <span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;">
                 <label class="filter-toggle" id="filterBookmarkedLabel" onclick="toggleBookmarkFilter();">
                     <input type="checkbox" id="filterBookmarked" style="display:none;">
                     <span id="filterBookmarkedIcon">&#9734;</span> Solo preferiti
                 </label>
+                <button class="home-action-btn" onclick="applyAutoTagAll();" title="Suggerisce tag in base al nome (ducati, race, v8, ecc.)" data-tip="<strong>Auto-tag</strong>Scansiona i nomi dei file e applica tag automatici se riconosce brand (Ducati, Honda, Yamaha&hellip;), tipologia (race, stradale, test-bench), configurazione motore (V8, V6, inline-4). Non sovrascrive tag esistenti, solo aggiunge.">&#128269; Auto-tag</button>
                 <button class="home-action-btn" onclick="loadRecents();" title="Ricarica lista">&#8634; Aggiorna</button>
             </span>
         </div>
@@ -755,6 +756,103 @@ function getAllTagsWithCount() {
 }
 
 var selectedTagFilters = [];  // Array di tag selezionati (AND filter)
+
+// Pattern → tag automatici dal nome file. Match case-insensitive.
+// L'ordine non importa: tutti i pattern che matchano applicano i tag.
+// Nota: usiamo `\b` solo all'inizio dei pattern e match non-greedy
+// per consentire substring tipo "fiat_fca" (l'underscore è word char
+// e bloccherebbe `\b` finale, quindi è omesso).
+var AUTO_TAG_PATTERNS = [
+    // Brand moto
+    { re: /\bduc(ati)?|^duc/i,                         tags: ['ducati'] },
+    { re: /\bhonda|\bcb[\d]+|\bcbr[\d]*/i,             tags: ['honda'] },
+    { re: /\byam(aha)?|\br[1-9](?![a-z])|\bfz[\d]*|\bmt[\d]*|\byzf/i, tags: ['yamaha'] },
+    { re: /\bkaw(asaki)?|\bzx[\d]*|\bninja/i,          tags: ['kawasaki'] },
+    { re: /\bbmw|\bs1000/i,                            tags: ['bmw'] },
+    { re: /\baprilia|\brsv[\d]*/i,                     tags: ['aprilia'] },
+    { re: /\bktm|\bduke/i,                             tags: ['ktm'] },
+    // Brand auto
+    { re: /\bfiat|\bfca/i,                             tags: ['fiat'] },
+    { re: /\brenault|\bclio|\bmegane/i,                tags: ['renault'] },
+    { re: /\bpeugeot|\bcitr/i,                         tags: ['peugeot'] },
+    { re: /\balfa/i,                                   tags: ['alfa-romeo'] },
+    { re: /\bporsche|\b911(?![\d])/i,                  tags: ['porsche'] },
+    { re: /\bferrari/i,                                tags: ['ferrari'] },
+    { re: /\b(305|306)(?![\d])/i,                      tags: ['peugeot-30x'] },
+    // Configurazione cilindri
+    { re: /\bv8\b/i,                                   tags: ['v8'] },
+    { re: /\bv6\b/i,                                   tags: ['v6'] },
+    { re: /\bv4\b/i,                                   tags: ['v4'] },
+    { re: /\bv2\b|\btwin\b|\bbicilindrico\b/i,         tags: ['v-twin'] },
+    { re: /\bi4\b|\binline[\s-]?4\b|\b4cyl\b/i,        tags: ['inline-4'] },
+    { re: /\bdiesel\b/i,                               tags: ['diesel'] },
+    // Tipologia uso
+    { re: /\brace\b|\brac\b|\bcompet/i,                tags: ['race'] },
+    { re: /\bstrad(a|al|ale)?\b/i,                     tags: ['stradale'] },
+    { re: /\btest[\s-]?bench\b|\bbanco\b|\bprov\b/i,   tags: ['test-bench'] },
+    { re: /\busato\b|\busura\b|\bused\b|\bworn\b/i,    tags: ['usato'] },
+    // Stato temporale
+    { re: /\bprima\b|\bpre[\s_-]/i,                    tags: ['prima'] },
+    { re: /\bdopo\b|\bpost[\s_-]|\bafter\b/i,          tags: ['dopo'] },
+    // Numero serie / lotti
+    { re: /\b(\d{2,4})cc\b/i,                          tags: ['cc-detected'] },
+    // Lato valvola (utile per analisi A vs B)
+    { re: /_asp(_|\.|$)|aspiraz/i,                     tags: ['aspirazione'] },
+    { re: /_sc(_|\.|$)|_scar(_|\.|$)|scarico/i,        tags: ['scarico'] }
+];
+
+// Calcola tag automatici per un nome file. Ritorna array (può essere vuoto).
+function autoTagFile(name) {
+    var found = [];
+    AUTO_TAG_PATTERNS.forEach(function (p) {
+        if (p.re.test(name)) {
+            p.tags.forEach(function (t) { if (found.indexOf(t) === -1) found.push(t); });
+        }
+    });
+    return found;
+}
+
+// Applica auto-tag a TUTTI i file in _cachedFiles. Non sovrascrive tag
+// esistenti (solo aggiunge). Mostra riepilogo finale via toast.
+function applyAutoTagAll() {
+    var files = _cachedFiles || [];
+    if (files.length === 0) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'warn', title: 'Nessun file', body: 'Nessun file da analizzare.', duration: 2500
+        });
+        return;
+    }
+    var nFilesTagged = 0, nTagsAdded = 0;
+    files.forEach(function (f) {
+        var suggested = autoTagFile(f.name);
+        if (suggested.length === 0) return;
+        var current = getTagsForFile(f.name);
+        var beforeLen = current.length;
+        addTagsToFile(f.name, suggested);
+        var afterLen = getTagsForFile(f.name).length;
+        if (afterLen > beforeLen) {
+            nFilesTagged++;
+            nTagsAdded += (afterLen - beforeLen);
+        }
+    });
+    renderRecentsTable();
+    if (window.cammesToast) {
+        if (nTagsAdded === 0) {
+            window.cammesToast({
+                kind: 'info', title: 'Auto-tag completato',
+                body: 'Nessun nuovo tag da suggerire (tutti i file già taggati o pattern non riconosciuti).',
+                duration: 3500
+            });
+        } else {
+            window.cammesToast({
+                kind: 'success', title: 'Auto-tag applicato',
+                body: '<b>' + nTagsAdded + '</b> tag aggiunti su <b>' + nFilesTagged + '</b> file. Modifica manualmente cliccando il <code>+</code> sotto un nome.',
+                duration: 5000
+            });
+        }
+    }
+}
+window.applyAutoTagAll = applyAutoTagAll;
 
 function promptAddTags(fileName, ev) {
     if (ev) { ev.preventDefault(); ev.stopPropagation(); }
@@ -1315,7 +1413,7 @@ function _renderQuickView(fileName, fileType, text) {
         '<div class="quickview-chart-wrap"><canvas id="quickviewCanvas"></canvas></div>' +
         '<div class="quickview-actions">' +
         '  <a class="btn btn-secondary" href="/api/file/' + encodeURIComponent(fileName) + '" download="' + safeName + '">&darr; Scarica</a>' +
-        '  <a class="btn btn-accent" href="grafici.html" title="Apri pagina Confronto per caricare manualmente">Apri Confronto</a>' +
+        '  <a class="btn btn-accent" href="grafici.html?files=' + encodeURIComponent(fileName) + '" title="Apri pagina Confronto con questo file già caricato">Apri in Confronto</a>' +
         '  <button class="btn btn-secondary" onclick="closeQuickView();">Chiudi</button>' +
         '</div>';
 
