@@ -485,6 +485,67 @@
         font-size: 9px; opacity: 0.7; margin-left: 2px;
     }
 
+    /* Concerto col motore - tile delle canzoni */
+    .concert-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: var(--sp-3);
+        margin: var(--sp-3) 0 var(--sp-4);
+    }
+    .concert-tile {
+        display: flex; flex-direction: column; gap: var(--sp-2);
+        padding: var(--sp-4);
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        border-radius: var(--r-md);
+        cursor: pointer;
+        transition: all var(--t-base) var(--ease);
+        text-align: center;
+    }
+    .concert-tile:hover {
+        transform: translateY(-3px);
+        border-color: var(--tile-color, var(--accent));
+        box-shadow: 0 4px 16px color-mix(in oklab, var(--tile-color, var(--accent)) 30%, transparent);
+    }
+    .concert-tile.playing {
+        border-color: var(--tile-color, var(--accent));
+        background: color-mix(in oklab, var(--tile-color, var(--accent)) 15%, var(--bg-input));
+    }
+    .concert-tile-emoji {
+        font-size: 32px; line-height: 1;
+    }
+    .concert-tile-title {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text-primary);
+        line-height: 1.3;
+    }
+    .concert-tile-sub {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+    }
+    .concert-now-playing {
+        text-align: center;
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--text-muted);
+        min-height: 22px;
+        margin: var(--sp-2) 0;
+    }
+    .concert-now-playing b { color: var(--accent-3); font-size: 15px; }
+    .concert-disconnect-warn {
+        text-align: center; font-size: 12px; color: var(--danger);
+        margin-bottom: var(--sp-3); padding: var(--sp-2);
+        background: color-mix(in oklab, var(--danger) 10%, transparent);
+        border: 1px solid var(--danger);
+        border-radius: var(--r-md);
+        display: none;
+    }
+
     /* Quick view modal (anteprima file via grafico inline) */
     .quickview-backdrop {
         position: fixed; inset: 0; z-index: var(--z-modal);
@@ -675,6 +736,7 @@
                 </label>
                 <button class="home-action-btn" onclick="applyAutoTagAll();" title="Suggerisce tag in base al nome (ducati, race, v8, ecc.)" data-tip="<strong>Auto-tag</strong>Scansiona i nomi dei file e applica tag automatici se riconosce brand (Ducati, Honda, Yamaha&hellip;), tipologia (race, stradale, test-bench), configurazione motore (V8, V6, inline-4). Non sovrascrive tag esistenti, solo aggiunge.">&#128269; Auto-tag</button>
                 <button class="home-action-btn" onclick="openBookmarksInCompare();" title="Apre Confronto coi primi 4 file alzata fra i preferiti">&#9733; Confronta preferiti</button>
+                <button class="home-action-btn" onclick="openHomeConcert();" title="Fai cantare il motore stepper con brani famosi" data-tip="<strong>Concerto col motore</strong>Lo stepper esegue brani modulando la frequenza dei pulsi. 4 brani curati: Inno di Mameli, Per Elisa, Tetris, Vivaldi Primavera.">&#127932; Concerto motore</button>
                 <button class="home-action-btn" onclick="loadRecents();" title="Ricarica lista">&#8634; Aggiorna</button>
             </span>
         </div>
@@ -1602,6 +1664,254 @@ function _refreshQuickViewTags(fileName) {
 window.openQuickView  = openQuickView;
 window.closeQuickView = closeQuickView;
 window._refreshQuickViewTags = _refreshQuickViewTags;
+
+// ===== 🎼 CONCERTO COL MOTORE (Home) =====
+// Lazy: la WebSocket si apre solo quando si apre il modal, si chiude
+// quando il modal si chiude. Le partiture sono curate da Claude per
+// essere riconoscibili e suonabili dallo stepper (range 130-1000 Hz).
+
+var NOTE_HZ = {
+    'C3': 130.81, 'D3': 146.83, 'E3': 164.81, 'F3': 174.61, 'G3': 196.00, 'A3': 220.00, 'B3': 246.94,
+    'C4': 261.63, 'D4': 293.66, 'E4': 329.63, 'F4': 349.23, 'G4': 392.00, 'A4': 440.00, 'B4': 493.88,
+    'C5': 523.25, 'D5': 587.33, 'E5': 659.25, 'F5': 698.46, 'G5': 783.99, 'A5': 880.00, 'B5': 987.77,
+    'C#4': 277.18, 'D#4': 311.13, 'F#4': 369.99, 'G#4': 415.30, 'A#4': 466.16,
+    'C#5': 554.37, 'D#5': 622.25, 'F#5': 739.99, 'G#5': 830.61, 'A#5': 932.33,
+    'G#3': 207.65, 'A#3': 233.08,
+    '_': 0  // pausa
+};
+
+// 4 brani curati. Tutti in Do maggiore (trasportati se serve) per rimanere
+// nel range 130-700 Hz dove il motore canta bene senza saltare passi.
+var HOME_SONGS = {
+    mameli: {
+        title: "Inno di Mameli",
+        emoji: "🇮🇹",
+        sub: "Inno italiano",
+        color: "#2d8a3e",  // verde bandiera
+        baseMs: 380,
+        notes: [
+            // "Fratelli d'Italia"
+            ['C4',1],['C4',1],['E4',1],['C4',1],['C4',1],['A3',1],['F3',1.5],
+            ['_',0.3],
+            // "L'Italia s'è desta"
+            ['G3',1],['G3',1],['B3',1],['A3',1],['G3',1],['E3',1],['F3',1.5],
+            ['_',0.3],
+            // "Dell'elmo di Scipio"
+            ['B3',1],['B3',1],['D4',1],['B3',1],['B3',1],['G3',1],['E3',1.5],
+            ['_',0.3],
+            // "s'è cinta la testa"
+            ['A3',1],['A3',1],['C4',1],['B3',1],['A3',1],['F3',1],['G3',1.5],
+            ['_',0.5],
+            // RITORNELLO "Stringiamci a coorte" (la parte più famosa)
+            ['C4',1],['C4',1],['C4',1],['C4',1],['D4',1],['C4',1],['B3',1],['A3',1],
+            // "siam pronti alla morte"
+            ['A3',1],['A3',1],['A3',1],['A3',1],['B3',1],['A3',1],['G3',1],['F3',1.5],
+            ['_',0.3],
+            // "Stringiamci a coorte" (ripetuto)
+            ['C4',1],['C4',1],['C4',1],['C4',1],['D4',1],['C4',1],['B3',1],['A3',1],
+            // "L'Italia chiamò! SI!"
+            ['G3',1],['A3',1],['B3',1],['C4',1],['D4',1.5],['C4',2.5]
+        ]
+    },
+    per_elisa: {
+        title: "Per Elisa",
+        emoji: "🎹",
+        sub: "Beethoven",
+        color: "#b14cff",
+        baseMs: 250,
+        notes: [
+            ['E4',1],['D#4',1],['E4',1],['D#4',1],['E4',1],['B3',1],['D4',1],['C4',1],['A3',2],
+            ['_',0.5],
+            ['C4',1],['E4',1],['A3',1],['B3',2],
+            ['_',0.5],
+            ['E4',1],['G#3',1],['B3',1],['C4',2],
+            ['_',0.5],
+            ['E4',1],['D#4',1],['E4',1],['D#4',1],['E4',1],['B3',1],['D4',1],['C4',1],['A3',2],
+            ['_',0.5],
+            ['C4',1],['E4',1],['A3',1],['B3',2],
+            ['_',0.5],
+            ['E4',1],['C4',1],['B3',1],['A3',3]
+        ]
+    },
+    tetris: {
+        title: "Tetris",
+        emoji: "🎮",
+        sub: "Korobeiniki",
+        color: "#ff5252",
+        baseMs: 200,
+        notes: [
+            ['E4',2],['B3',1],['C4',1],['D4',2],['C4',1],['B3',1],
+            ['A3',2],['A3',1],['C4',1],['E4',2],['D4',1],['C4',1],
+            ['B3',2],['B3',1],['C4',1],['D4',2],['E4',2],
+            ['C4',2],['A3',2],['A3',3],['_',1],
+            ['D4',2],['F4',1],['A4',2],['G4',1],['F4',1],
+            ['E4',3],['C4',1],['E4',2],['D4',1],['C4',1],
+            ['B3',2],['B3',1],['C4',1],['D4',2],['E4',2],
+            ['C4',2],['A3',2],['A3',3]
+        ]
+    },
+    primavera: {
+        title: "La Primavera",
+        emoji: "🌸",
+        sub: "Vivaldi",
+        color: "#ffb820",
+        baseMs: 280,
+        notes: [
+            // Tema iniziale famoso
+            ['E5',1],['E5',1],['E5',1],['D5',0.5],['C5',0.5],['B4',1],['A4',1],
+            ['G4',1],['A4',1],['B4',1],['C5',1],['D5',1.5],['C5',0.5],
+            ['B4',2],['_',0.5],
+            ['E5',1],['E5',1],['E5',1],['D5',0.5],['C5',0.5],['B4',1],['A4',1],
+            ['G4',1],['A4',1],['B4',1],['C5',1],['D5',1.5],['C5',0.5],
+            ['B4',2],['_',0.5],
+            // Variazione discendente
+            ['G4',1],['G4',1],['B4',1],['A4',0.5],['G4',0.5],['F#4',1],['E4',1],
+            ['D4',1],['E4',1],['F#4',1],['G4',1.5],['F#4',0.5],['E4',2]
+        ]
+    }
+};
+
+var concertWs = null;
+var concertPlaying = false;
+var concertCancelToken = 0;
+var concertCurrentSongKey = null;
+
+function openHomeConcert() {
+    if (document.getElementById('concertModal')) return;
+    var back = document.createElement('div');
+    back.id = 'concertModal';
+    back.className = 'confirm-backdrop visible';
+
+    var tiles = Object.keys(HOME_SONGS).map(function (key) {
+        var s = HOME_SONGS[key];
+        return '<div class="concert-tile" data-song="' + key + '" style="--tile-color:' + s.color + ';" onclick="playHomeSong(\'' + key + '\');">' +
+               '  <div class="concert-tile-emoji">' + s.emoji + '</div>' +
+               '  <div class="concert-tile-title">' + s.title + '</div>' +
+               '  <div class="concert-tile-sub">' + s.sub + '</div>' +
+               '</div>';
+    }).join('');
+
+    back.innerHTML =
+        '<div class="confirm-modal" style="max-width:620px;">' +
+        '  <div class="confirm-modal-icon" style="background:color-mix(in oklab, var(--accent-3) 18%, transparent);color:var(--accent-3);">' +
+        '    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '      <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>' +
+        '    </svg>' +
+        '  </div>' +
+        '  <div class="confirm-modal-title">Concerto col motore</div>' +
+        '  <div class="confirm-modal-body">' +
+        '    Lo stepper esegue brani modulando la frequenza dei pulsi PUL.<br>' +
+        '    Scegli un brano e ascolta il motore suonarlo. <b>Tieni d\'occhio l\'albero</b> &mdash; alterna direzione automaticamente per non scappare.' +
+        '  </div>' +
+        '  <div id="concertWarn" class="concert-disconnect-warn">Server offline o motore non connesso.</div>' +
+        '  <div class="concert-grid">' + tiles + '</div>' +
+        '  <div class="concert-now-playing" id="concertNowPlaying">&nbsp;</div>' +
+        '  <div class="confirm-modal-actions">' +
+        '    <button class="btn btn-secondary" onclick="closeHomeConcert();">Chiudi</button>' +
+        '    <button class="btn btn-danger" id="concertStopBtn" onclick="stopHomeConcert();" style="display:none;">&#9632; Stop</button>' +
+        '  </div>' +
+        '</div>';
+    document.body.appendChild(back);
+    back.onclick = function (e) { if (e.target === back) closeHomeConcert(); };
+    document.addEventListener('keydown', _concertEsc);
+
+    // Apre la WebSocket (lazy) verso il server CAMMES
+    try {
+        concertWs = new WebSocket('ws://localhost:8080');
+        concertWs.onerror = function () {
+            var w = document.getElementById('concertWarn'); if (w) w.style.display = 'block';
+        };
+        concertWs.onclose = function () {
+            concertWs = null;
+        };
+    } catch (e) {
+        var w = document.getElementById('concertWarn'); if (w) w.style.display = 'block';
+    }
+}
+function _concertEsc(e) { if (e.key === 'Escape') closeHomeConcert(); }
+function closeHomeConcert() {
+    stopHomeConcert();
+    var m = document.getElementById('concertModal');
+    if (m) m.remove();
+    document.removeEventListener('keydown', _concertEsc);
+    if (concertWs) { try { concertWs.close(); } catch (e) {} concertWs = null; }
+}
+function stopHomeConcert() {
+    concertPlaying = false;
+    concertCancelToken++;
+    var stopBtn = document.getElementById('concertStopBtn');
+    if (stopBtn) stopBtn.style.display = 'none';
+    var np = document.getElementById('concertNowPlaying');
+    if (np) np.innerHTML = '&nbsp;';
+    // Rimuovi class "playing" da tutte le tile
+    Array.prototype.forEach.call(document.querySelectorAll('.concert-tile'), function (t) {
+        t.classList.remove('playing');
+    });
+    concertCurrentSongKey = null;
+}
+
+function _sleepC(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+async function playHomeSong(key) {
+    var song = HOME_SONGS[key];
+    if (!song) return;
+    if (!concertWs || concertWs.readyState !== 1) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'err', title: 'Server non connesso',
+            body: 'WebSocket verso il motore non disponibile. Verifica che cammes_server.js sia in esecuzione.',
+            duration: 4000
+        });
+        return;
+    }
+    // Stop precedente brano
+    if (concertPlaying) {
+        stopHomeConcert();
+        await _sleepC(200);
+    }
+    concertPlaying = true;
+    var myToken = ++concertCancelToken;
+    concertCurrentSongKey = key;
+
+    // UI: marca tile attiva + mostra stop
+    Array.prototype.forEach.call(document.querySelectorAll('.concert-tile'), function (t) {
+        t.classList.toggle('playing', t.getAttribute('data-song') === key);
+    });
+    var stopBtn = document.getElementById('concertStopBtn');
+    if (stopBtn) stopBtn.style.display = '';
+
+    var np = document.getElementById('concertNowPlaying');
+    var dirSign = '+';
+    for (var i = 0; i < song.notes.length; i++) {
+        if (myToken !== concertCancelToken || !concertPlaying) break;
+        var noteName = song.notes[i][0];
+        var durMul   = song.notes[i][1];
+        var noteMs   = Math.round(song.baseMs * durMul * 0.9);
+        var gapMs    = Math.max(15, Math.round(song.baseMs * durMul * 0.1));
+        var freq     = NOTE_HZ[noteName] || 0;
+        if (np) {
+            if (freq > 0) np.innerHTML = '<b>' + noteName + '</b> &middot; ' + freq.toFixed(0) + ' Hz &middot; ' + noteMs + ' ms';
+            else np.innerHTML = '<span style="opacity:0.5;">— pausa —</span>';
+        }
+        if (freq > 0) {
+            try { concertWs.send('t' + Math.round(freq) + ':' + noteMs + ':' + dirSign + '\n'); } catch (e) {}
+        }
+        await _sleepC(noteMs + gapMs);
+        // Alterna direzione ogni 6 note per non scappare troppo
+        if (i % 6 === 5) dirSign = (dirSign === '+' ? '-' : '+');
+    }
+    if (concertPlaying && myToken === concertCancelToken) {
+        // Brano completato naturalmente
+        if (window.cammesToast) window.cammesToast({
+            kind: 'success', title: 'Brano terminato', body: song.title, duration: 2500
+        });
+        stopHomeConcert();
+    }
+}
+
+window.openHomeConcert  = openHomeConcert;
+window.closeHomeConcert = closeHomeConcert;
+window.playHomeSong     = playHomeSong;
+window.stopHomeConcert  = stopHomeConcert;
 </script>
 
 </body>
