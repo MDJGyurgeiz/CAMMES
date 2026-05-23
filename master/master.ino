@@ -56,6 +56,14 @@
 //                  k1 → standard         (u80  a4  g50)
 //                  k2 → morbido          (u120 a8  g120)
 //                  k3 → extra-morbido    (u180 a16 g250)
+//    tF:D:S     TONE — fa cantare il motore come "musical stepper":
+//               F = frequenza in Hz (60..2000), D = durata in ms
+//               (10..5000), S = direzione '+' o '-'. Il driver
+//               emette F impulsi/sec per D ms = D*F/1000 step totali.
+//               La frequenza modula la risonanza meccanica del motore
+//               percepita come una nota musicale. Risponde "*tend".
+//               Imposta automaticamente PUL = 1/F * 1e6 / 2 μs
+//               (50% duty), bypassa cfgPulseUs/cfgAccelSteps.
 //
 //  Risposta Arduino dopo movimento:
 //    XX.XX            (alzata in mm)
@@ -385,6 +393,41 @@ void executeCommand() {
     Serial.print(F(" accel=")); Serial.print(cfgAccelSteps);
     Serial.print(F(" gentle=")); Serial.println(cfgRampExtraUs);
     Serial.println(F("*cfg"));
+  } else if (cmdLen >= 5 && cmdBuf[0] == 't' && (cmdBuf[1] >= '0' && cmdBuf[1] <= '9')) {
+    // tFFFF:DDDD:S (es. "t440:500:+") = suona FFFF Hz per DDDD ms in direzione S
+    // Parser semplice: divide su ':'
+    char *p1 = strchr(&cmdBuf[1], ':');
+    if (p1) {
+      *p1 = '\0';
+      char *p2 = strchr(p1 + 1, ':');
+      if (p2) *p2 = '\0';
+      int freq = atoi(&cmdBuf[1]);
+      int dur  = atoi(p1 + 1);
+      char sign = p2 ? *(p2 + 1) : '+';
+      if (freq >= 60 && freq <= 2000 && dur >= 10 && dur <= 5000) {
+        digitalWrite(PIN_ENA, HIGH);
+        digitalWrite(PIN_DIR, (sign == '-') ? LOW : HIGH);
+        // Mezzo periodo in μs: 1.000.000 / (2 * F)
+        uint32_t halfPeriodUs = 500000UL / (uint32_t)freq;
+        // Step totali = freq * dur / 1000
+        uint32_t totalSteps   = ((uint32_t)freq * (uint32_t)dur) / 1000UL;
+        // Loop di pulsi a frequenza costante
+        for (uint32_t s = 0; s < totalSteps; s++) {
+          digitalWrite(PIN_PUL, HIGH);
+          // delayMicroseconds limit ~16383; spezzo se serve
+          uint32_t h = halfPeriodUs;
+          while (h > 10000) { delayMicroseconds(10000); h -= 10000; }
+          if (h) delayMicroseconds(h);
+          digitalWrite(PIN_PUL, LOW);
+          h = halfPeriodUs;
+          while (h > 10000) { delayMicroseconds(10000); h -= 10000; }
+          if (h) delayMicroseconds(h);
+        }
+      }
+      // Drain buffer (potrebbero essere arrivati altri comandi)
+      while (Serial.available() > 0) Serial.read();
+      Serial.println(F("*tend"));
+    }
   } else if (cmdLen >= 4 && cmdBuf[0] == '$') {
     // $+NNN o $-NNN
     int sign  = (cmdBuf[1] == '+') ? +1 : -1;
