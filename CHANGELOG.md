@@ -282,9 +282,108 @@ CAMMES_DIST/
 - [x] ~~**Fase B**: unificare master.ino + micrometro_SPI.ino su singolo Arduino Uno~~ (completato sessione 5)
 - [x] ~~**Fase B**: terminatore comando UART (\n)~~ (completato sessione 5)
 - [x] ~~**Fase B**: sostituire String Arduino con char[]~~ (completato sessione 5)
-- [ ] **Fase C**: indicatore connessione WebSocket nell'UI
-- [ ] **Fase C**: export CSV dal browser
-- [ ] **Fase C**: barra progresso scansione 360°
+- [x] ~~**Fase C**: indicatore connessione WebSocket nell'UI~~ (LED status sessione 6)
+- [x] ~~**Fase C**: export CSV dal browser~~ (sessione 6, anche PDF report ricco)
+- [x] ~~**Fase C**: barra progresso scansione 360°~~ (sessione 6, con ETA)
 - [ ] **Fase C**: bump versionCode/versionName Android
-- [ ] **Fase D**: aprire issue GitHub per ogni TODO; aggiungere ESLint; tag v1.0.0
-- [ ] Ottimizzazione timing motore (delay 900 ms → detection misura stabile)
+- [ ] **Fase D**: aprire issue GitHub per ogni TODO; aggiungere ESLint
+- [x] ~~Ottimizzazione timing motore~~ (sessione 6, rampa accelerazione + 4 profili)
+
+---
+
+## Sessione 6 — 2026-05-15 / 2026-05-23 — Restyling completo + race-grade
+### Tag: **v2.0.0-race-grade**
+
+Sessione di refactor profondo e nuove feature avanzate. 35+ commit raggruppabili in 7 grandi aree.
+
+### A. Design system + restyling UI (commit `757db2e` → `20810e8`)
+- **Design tokens** completi in `style.css` (~1430 righe): spacing scale, radius, motion, elevation, z-index
+- **Theme dark + light** con toggle persistente in localStorage
+- **Font locali** offline-safe: Inter, Rajdhani, JetBrains Mono in `cammes/fonts/`
+- **Gauge SVG** moderno (sostituisce gauge.min.js 2014): arco progressivo theme-aware
+- **Progress bar scansione** con ETA dinamico
+- **53 tooltip ricchi** + 25 help icons sui parametri tecnici
+- **5 pagine** uniformate: home, alzata, polare, grafici→Confronto, analisi
+- **Wizard onboarding** 5 step al primo avvio
+- **Animazioni** card stagger entry, rispetta prefers-reduced-motion
+
+### B. Chart.js v2 → v4.4.4 (commit `bbb0ef0`)
+- Migrazione 12 chart (line, polarArea, doughnut)
+- Plugin zoom 0.7.7 → 2.0.1
+- Bundle: 530 KB → 235 KB (-55%)
+- Chart theme-aware (event 'cammes:theme:change')
+
+### C. Dashboard Home + gestione archivio (commit `8dcc2bf` → `c8abb65`, `6cf9381`, `a7923da`, `9a5b8b0`, `39f72a8`, `d5fdb17`, `93f5905`)
+- Pagina **home.html** come landing
+- API server: `/api/files`, `/api/file/:name` GET+DELETE
+- Search + chip filtri tipo/data/bookmark
+- Activity bar chart 14 giorni
+- **Tag system** + 21 pattern auto-tag (brand, cilindri, uso, lato valvola)
+- **Quick View modal** con grafico inline + 3 azioni
+- **Scheda PDF camma singola** (1 pagina A4)
+- **Backup/Restore JSON** metadati (tag, bookmark, posizioni, prefs)
+- **"Confronta preferiti"** apre Confronto con top 4 bookmarks
+- **Vista differenza** in Confronto: delta + stats max/media/RMSE
+
+### D. Analisi: cinematica + forze + compliance race-grade (commit `0b7cc2d` → `435d020`)
+- 5 preset motori (moto stradale/race, auto 4cyl/V8/F1)
+- Mappa cam→crank con `wrap720()` corretto (bug fix)
+- Risultati: durata totale + @ ref, LSA, centri lobi, overlap, asimmetria, area
+- Cinematica: velocità/accelerazione/jerk derivata centrale + Savitzky-Golay
+- Forze + RPM critico statico
+- **Live tuning** RPM/k/F₀/massa con chart aggiornato real-time
+- **A vs B confronto** 12 metriche delta + 4 chip riepilogo
+- **PDF report ricco** 4-7 pagine: cover branded, banner sicurezza, tabella zebra, barra margine RPM
+
+#### Follower virtuali (4 tipi)
+- Puntalino raw (default)
+- Bicchiere piatto Ø D + sottrazione rPunt
+- Roller R
+- Finger follower esatto con tilt iniziale (cinematica asin/sin)
+
+#### Compliance treno valvole RK4 (RACE-GRADE)
+- Solver Runge-Kutta 4° ordine: `m·ẍ + c·ẋ + k·(x-x_cam) + F_spring + F0 = 0`
+- Sub-step automatico per stabilità a 16000+ rpm
+- `detectValveFloat`: misura max gap cam-valvola dinamico
+- Toast: <0.1 OK / 0.1-0.5 warn / >0.5 ERR
+- Cattura valve float "vero" invisibile al calcolo statico
+
+### E. Firmware Arduino race-grade (commit `9d8a76a` → `531b03d`)
+- Comandi `f`/`l` (free/lock motore)
+- Rampa accelerazione trapezoidale configurabile
+- Preset profilo movimento `k0..k3` anti-vibrazione
+- Comando tone `tF:D:S[:V]` con duty cycle (volume)
+- Reset encoder + bookmark angolari salvati
+- 6.5 KB → 8.0 KB (24% spazio ATmega328P)
+
+### F. UI motoristica avanzata (commit `b3eeb41`, `fe3fb07`, `7c39cce`)
+- **Scansione ripetuta** N volte → media + dev std + verdict ripetibilità
+- **Sblocca motore** con polling LIVE + display encoder
+- **Live trace** chart durante free-spin (disegna la cam a mano)
+- **Concerto col motore**: modal Home con 8 brani (Inno di Mameli per primo) + composer custom + slider volume
+
+### G. Code quality + audit (commit `f5b901b`, `0f96bad`, `103f9ab`)
+- Audit indipendente da subagent: 4 critici + 9 medi/minori
+- Fix: path traversal WS, dead code grafici, XSS home, durate offset, replay watchdog, mapCamToCrank, rPunt nel bicchiere
+- Test integrale 30 min: tutti 8 test passati
+
+### Statistiche sessione
+- **35+ commit** su `main`
+- **~6000 righe modificate** (35 file)
+- **8 brani musicali** curati (Inno di Mameli per primo)
+- **3 versioni firmware** flashate sull'Arduino reale via arduino-cli
+- **Hardware test reale Clio 1.8**: alzata 8.6 mm @ 179° camma
+
+### Stato corrente del progetto
+- ✅ **Production-ready**: 5 pagine + firmware + server, 0 issue critici
+- ✅ **Race-grade**: compliance dinamica RK4 per camme da corsa
+- ✅ **Offline-safe**: tutte le librerie in `cammes/lib/`
+- ✅ **Tema dark/light** persistente
+- ✅ **Firmware** Arduino flashato con anti-vibrazione + free-spin + tone
+
+### Da fare nelle prossime sessioni
+- [ ] Grafico "Valvola reale vs cam" inline quando compliance ON
+- [ ] Sweep RPM: trova RPM critico dinamico iterando
+- [ ] Optimizer molla: suggerisce k/F₀ minimi per float < soglia
+- [ ] Modello compliance 2-DOF (catena cam→bilancere→valvola)
+- [ ] Test compliance su camma race reale + confronto regime massimo
