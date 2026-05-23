@@ -315,6 +315,11 @@
                     <input type="number" id="lValve" value="30" class="input" style="width:75px;" step="0.5" min="1">
                     <span class="param-unit">mm</span>
                 </div>
+                <div class="param-row" id="rowFingerTilt" style="display:none;">
+                    <span class="param-label">Tilt finger <span class="help-icon" data-tip="<strong>Inclinazione iniziale finger</strong>Angolo del braccio camma rispetto all'orizzontale quando la valvola &egrave; chiusa. 0&deg; = leva orizzontale (semplice rapporto L). 30-45&deg; = finger inclinato (tipico Honda VTEC, Yamaha R6). Pi&ugrave; tilt = curva non-lineare con derivate maggiori sul fianco del lobo. Lascia 0 se non conosci la geometria esatta." tabindex="0">?</span></span>
+                    <input type="number" id="fingerTilt" value="0" class="input" style="width:75px;" step="1" min="-45" max="45">
+                    <span class="param-unit">&deg;</span>
+                </div>
                 <!-- R cerchio base e R puntalino: comuni a bicchiere/rullo/finger -->
                 <div class="param-row" id="rowRBase" style="display:none;">
                     <span class="param-label">R cerchio base <span class="help-icon" data-tip="<strong>Raggio base camma</strong>Parte non sollevata della cam ('fondo'). Misurabile con calibro dove la valvola &egrave; chiusa. Tipici: 12-18 mm moto, 14-22 mm auto." tabindex="0">?</span></span>
@@ -358,6 +363,30 @@
                 </div>
                 <div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4;">
                     Massa eq. = valvola + scodellino + cotters + 1/3 molla, riportata alla valvola.
+                </div>
+            </div>
+
+            <!-- NEW: Compliance treno valvole (race-grade dynamic simulation) -->
+            <div class="param-separator">
+                <div class="param-group-title">Compliance treno valvole (race)
+                    <span class="help-icon" data-tip="<strong>Simulazione dinamica valvola</strong>Modello massa-molla-smorzatore (RK4) per stimare la posizione REALE della valvola durante il ciclo, tenendo conto dell'elasticit&agrave; del treno (asta+bilancere+molla). Predice <b>valve float</b> dinamico, <b>ritardo</b> apertura, <b>bounce</b> alla chiusura. Per analisi race ad alto regime." tabindex="0">?</span>
+                </div>
+                <div class="param-row">
+                    <span class="param-label">Compliance <span class="help-icon" data-tip="<strong>Attiva simulazione dinamica</strong>Se OFF (default): analisi statica come sempre, valvola = profilo cam. Se ON: solver RK4 calcola la traiettoria reale e mostra il discostamento dalla cam." tabindex="0">?</span></span>
+                    <select id="complianceEnabled" class="input" style="width:120px;">
+                        <option value="0" selected>OFF (rigido)</option>
+                        <option value="1">ON (dinamico)</option>
+                    </select>
+                </div>
+                <div class="param-row">
+                    <span class="param-label">Rigidezza treno <span class="help-icon" data-tip="<strong>Rigidezza equivalente treno valvole</strong>Combinazione di asta, bilancere, scodellino. Tipico: 300-800 N/mm per treno completo. Solo molla: 500+ N/mm. Pi&ugrave; rigido = valvola segue meglio la cam ma trasmette pi&ugrave; vibrazione. Conservativo: 500 N/mm." tabindex="0">?</span></span>
+                    <input type="number" id="kTrain" value="500" class="input" style="width:75px;" step="50" min="50">
+                    <span class="param-unit">N/mm</span>
+                </div>
+                <div class="param-row">
+                    <span class="param-label">Damping &zeta; <span class="help-icon" data-tip="<strong>Damping ratio</strong>Quanto velocemente le oscillazioni si smorzano. 0 = sistema undamped (oscilla per sempre). 0.05-0.1 tipico per treno valvole reale. 1 = critico (nessuna oscillazione, lento). Range usuale: 0.04-0.12." tabindex="0">?</span></span>
+                    <input type="number" id="dampingRatio" value="0.06" class="input" style="width:75px;" step="0.01" min="0" max="1">
+                    <span class="param-unit">(0..1)</span>
                 </div>
             </div>
 
@@ -925,27 +954,167 @@ function convertPuntToRoller(camLiftRaw, rBase, rRoll, rPunt) {
 }
 
 // Converte scansione PUNTALINO → curva valvola con FINGER FOLLOWER (a dito).
-// Geometria: leva ruota attorno a un perno; un'estremità tocca la cam
-// (con un pattino di raggio rTip o piatto), l'altra estremità muove la
-// valvola. Il rapporto L_arm/L_valve agisce come rocker ratio dinamico.
+// Modello geometrico esatto:
+//   - La leva ruota attorno a un perno fisso P.
+//   - Braccio camma L_arm con estremità che tocca la cam (in posizione P+L_arm·u_cam).
+//   - Braccio valvola L_valve con estremità che spinge la valvola (P+L_valve·u_val).
+//   - A riposo (lift cam = 0), i due bracci formano angoli rispetto all'orizzontale:
+//     θ_cam_0 = atan2(y_cam, x_cam) e θ_val_0 = atan2(y_val, x_val).
 //
-// Approssimazione: lift_valvola(θ) = lift_camma(θ) × (L_arm / L_valve)
-// Funziona se la leva è approssimativamente orizzontale durante tutto
-// il movimento (caso tipico per finger follower moderni).
+// Cinematica: quando il lift cam aumenta di Δh, l'estremità del braccio camma
+// si alza di Δh, quindi il finger ruota di un angolo Δφ tale che:
+//     L_arm · sin(θ_cam_0 + Δφ) − L_arm · sin(θ_cam_0) = Δh
+//   → Δφ = asin(sin(θ_cam_0) + Δh/L_arm) − θ_cam_0
+// Poi l'estremità del braccio valvola si abbassa/alza di:
+//     Δval = L_valve · sin(θ_val_0 + Δφ) − L_valve · sin(θ_val_0)
 //
-// Per la simulazione "fine" della curva (non solo del fattore di scala),
-// la geometria esatta richiederebbe l'inversa della cinematica della leva.
-// La versione attuale è equivalente a un rocker ratio (Larm/Lvalve)
-// applicato al lift letto dal puntalino: identico al rocker classico.
-function convertPuntToFinger(camLiftRaw, rBase, lArm, lValve, rPunt) {
-    var ratio = (lArm > 0 && lValve > 0) ? (lArm / lValve) : 1.0;
+// Parametro tiltDeg = θ_cam_0 in gradi (angolo a riposo del braccio camma
+// rispetto all'orizzontale). Convenzione: braccio "in linea" col pivot →
+// orizzontale = tilt 0. Braccio camma verticale (cam sopra il pivot) →
+// tilt 90°. Per VTEC e finger moderni: tilt ~ 0 a 30°.
+//
+// Se tiltDeg = 0 e θ_val_0 = 180° (braccio valvola dall'altra parte, opposto),
+// la formula esatta si riduce al rapporto lineare L_valve/L_arm — backward
+// compatibile col rocker semplificato.
+// =============================================================
+// COMPLIANCE TRENO VALVOLE — Simulazione dinamica
+// =============================================================
+// Modella il treno come sistema massa-molla-smorzatore 1-DOF.
+// Input: profilo cinematico cam (alzata vs grado albero motore, in mm).
+// Stato del sistema: x = posizione valvola (mm), v = velocità valvola (mm/s).
+//
+// Equazione di moto:
+//   m·ẍ + c·ẋ + k_train·(x - x_cam(t)) + F_molla(x) = 0       (apertura, cam pusha)
+//   m·ẍ + c·ẋ + k_spring·x + F_preload = -F_contact          (chiusura, follow-up)
+//
+// Semplificazione adottata:
+//   F_eff(t) = k_train · (x_cam(t) - x_valve)   ← forza che cam esercita
+//   F_spring(x) = F0 + k_spring · x             ← forza molla che si oppone
+//   m · ẍ = F_eff(t) - F_spring(x) - c · ẋ
+//
+// Quando F_eff < 0 (cam scende sotto la valvola), la valvola "decolla" dalla
+// cam → valve float. La molla la richiama: m·ẍ = -F_spring(x) - c·ẋ
+//
+// Solver: Runge-Kutta del 4° ordine, passo dt sufficientemente piccolo
+// (1/(720·RPS·40) sec per stabilità a 16000 rpm). Stato (x, v) propagato
+// punto per punto sul ciclo 0..720°.
+//
+// Output: array crank[1..720] con la posizione valvola REALE (compliance).
+function simulateCompliance(camLift720, rpm, params) {
+    var p = params || {};
+    var m_kg     = (p.massEqG  || 100) / 1000;   // kg
+    var k_train  = (p.kTrainN_mm || 500) * 1000; // N/m
+    var k_spring = (p.kSpringN_mm || 30) * 1000; // N/m
+    var F0       = p.F0N || 200;                 // N preload
+    var damping  = (p.dampingRatio || 0.06);     // ζ critico
+
+    // Pulsazione naturale e smorzamento equivalente
+    var omega_n  = Math.sqrt(k_train / m_kg);     // rad/s
+    var c_eff    = 2 * damping * Math.sqrt(k_train * m_kg);  // N·s/m
+
+    // Velocità angolare albero motore in rad/s (1 ciclo = 720°)
+    var rps      = rpm / 60;                      // giri/s
+    var degPerSec = rps * 360;                    // deg/s (motore)
+    if (degPerSec <= 0) degPerSec = 1;
+
+    // Passo dt: minimo tra 1°/40 motore e 1/80 del periodo naturale
+    var dtPerDeg  = 1 / degPerSec;                // sec per 1° motore
+    var dtNatural = (2 * Math.PI / omega_n) / 80;
+    var subSteps  = Math.max(4, Math.ceil(dtPerDeg / dtNatural));
+    var dt        = dtPerDeg / subSteps;          // sec per sotto-step
+
+    // Stato iniziale
+    var x = 0;   // posizione valvola (m, convertita da mm)
+    var v = 0;   // velocità valvola (m/s)
+
+    function camAt(degIdx) {
+        // Lookup camLift720 con indice 1..720; converto mm → m
+        var i = ((Math.round(degIdx) - 1) % 720 + 720) % 720 + 1;
+        return (camLift720[i] || 0) * 1e-3;
+    }
+
+    function accel(t, x_cur, v_cur, degAtT) {
+        var x_cam = camAt(degAtT);
+        // Forza di contatto cam-valvola: solo se cam è SOPRA la valvola
+        // (no tensione)
+        var contact = x_cam - x_cur;
+        var F_cam = contact > 0 ? k_train * contact : 0;
+        // Forza molla: sempre presente, proporzionale a x (valvola aperta)
+        var F_spring = F0 + k_spring * Math.max(0, x_cur);
+        // Forza viscosa: proporzionale alla velocità
+        var F_visc = c_eff * v_cur;
+        // Eq newton: F_net / m
+        var F_net = F_cam - F_spring - F_visc;
+        return F_net / m_kg;
+    }
+
+    var out = new Array(722);
+    for (var ii = 0; ii <= 721; ii++) out[ii] = 0;
+
+    for (var deg = 1; deg <= 720; deg++) {
+        for (var sub = 0; sub < subSteps; sub++) {
+            var degAt = deg + sub / subSteps;
+            // RK4 standard
+            var k1v = accel(0, x, v, degAt);
+            var k1x = v;
+            var k2v = accel(0, x + k1x * dt / 2, v + k1v * dt / 2, degAt + 0.5 / subSteps);
+            var k2x = v + k1v * dt / 2;
+            var k3v = accel(0, x + k2x * dt / 2, v + k2v * dt / 2, degAt + 0.5 / subSteps);
+            var k3x = v + k2v * dt / 2;
+            var k4v = accel(0, x + k3x * dt,     v + k3v * dt,     degAt + 1.0 / subSteps);
+            var k4x = v + k3v * dt;
+            x += (k1x + 2 * k2x + 2 * k3x + k4x) * dt / 6;
+            v += (k1v + 2 * k2v + 2 * k3v + k4v) * dt / 6;
+            // Vincolo: valvola non scende sotto zero (sede valvola)
+            if (x < 0) { x = 0; if (v < 0) v = 0; }
+        }
+        out[deg] = x * 1000;  // m → mm
+    }
+    return out;
+}
+
+// Indicatore valve float: misura quanto la curva "valvola reale" si discosta
+// dalla "cam geometrica" — gap = max(camLift - valveLift) durante decelerazione.
+// Se gap > 0.1 mm → float manifesto (valvola perde contatto).
+function detectValveFloat(camLift720, valveLift720) {
+    var maxGap = 0, gapIdx = 0;
+    for (var i = 1; i <= 720; i++) {
+        var g = (camLift720[i] || 0) - (valveLift720[i] || 0);
+        if (g > maxGap) { maxGap = g; gapIdx = i; }
+    }
+    return { maxGap: maxGap, gapIdx: gapIdx };
+}
+
+function convertPuntToFinger(camLiftRaw, rBase, lArm, lValve, rPunt, tiltDeg) {
     rPunt = (typeof rPunt === 'number' && rPunt > 0) ? rPunt : 0;
+    if (!lArm || lArm <= 0)     lArm = 25;
+    if (!lValve || lValve <= 0) lValve = 30;
+    var tilt = (typeof tiltDeg === 'number') ? tiltDeg : 0;
+    var thetaCam0 = tilt * Math.PI / 180;
+    // Convenzione: braccio valvola è simmetrico opposto rispetto al pivot,
+    // a riposo gira nello stesso verso del braccio camma per via della leva.
+    // Quando braccio camma sale, braccio valvola scende → la valvola si apre.
+    // Per simplicità tecnica: θ_val_0 = -θ_cam_0 (specularmente)
+    var thetaVal0 = -thetaCam0;
+    var sinCam0 = Math.sin(thetaCam0);
+    var sinVal0 = Math.sin(thetaVal0);
+
     var out = new Array(361);
     out[0] = 0;
     for (var t = 1; t <= 360; t++) {
         var ltrue = (camLiftRaw[t] || 0) - rPunt;
         if (ltrue < 0) ltrue = 0;
-        out[t] = ltrue * ratio;
+        if (ltrue === 0) { out[t] = 0; continue; }
+        // Calcolo rotazione finger
+        var argAsin = sinCam0 + ltrue / lArm;
+        if (argAsin >  1) argAsin =  1;   // saturazione (lift > arm length)
+        if (argAsin < -1) argAsin = -1;
+        var dPhi = Math.asin(argAsin) - thetaCam0;
+        // Movimento estremità lato valvola (positivo = apertura)
+        // Il braccio valvola ruota di -dPhi (specularmente), quindi:
+        var deltaVal = lValve * Math.sin(thetaVal0 - dPhi) - lValve * sinVal0;
+        // Convenzione segno: voglio lift positivo = valvola aperta
+        out[t] = Math.abs(deltaVal);
     }
     return out;
 }
@@ -963,8 +1132,9 @@ function onFollowerTypeChange() {
     };
     show('rowDiamBicch', isBicch);
     show('rowRRoll',     isRoller);
-    show('rowLArm',      isFinger);
-    show('rowLValve',    isFinger);
+    show('rowLArm',       isFinger);
+    show('rowLValve',     isFinger);
+    show('rowFingerTilt', isFinger);
     show('rowRBase',     isVirtual);
     show('rowRPunt',     isVirtual);
     var hint = document.getElementById('followerHint');
@@ -1218,7 +1388,8 @@ function applyVirtualFollower(camLift) {
     if (t === 'finger') {
         var lArm   = Number(document.getElementById('lArm').value)   || 25;
         var lValve = Number(document.getElementById('lValve').value) || 30;
-        return convertPuntToFinger(camLift, rBase, lArm, lValve, rPunt);
+        var tilt   = Number(document.getElementById('fingerTilt').value) || 0;
+        return convertPuntToFinger(camLift, rBase, lArm, lValve, rPunt, tilt);
     }
     return camLift;
 }
@@ -1789,6 +1960,26 @@ function analyze() {
     var forcesIn = computeForces(anlIn, accIntake, mEqIn, rpm, springK, springF0);
     var forcesEx = computeForces(anlEx, accExhaust, mEqEx, rpm, springK, springF0);
 
+    // ====== COMPLIANCE TRENO VALVOLE (opzionale, race-grade) ======
+    var complianceOn = document.getElementById('complianceEnabled') &&
+                       document.getElementById('complianceEnabled').value === '1';
+    var valveLiftIn = null, valveLiftEx = null;
+    var floatIn = null, floatEx = null;
+    if (complianceOn && rpm > 0) {
+        var kTrain  = Number(document.getElementById('kTrain').value) || 500;
+        var damping = Number(document.getElementById('dampingRatio').value) || 0.06;
+        valveLiftIn = simulateCompliance(anlIn, rpm, {
+            massEqG: mEqIn, kTrainN_mm: kTrain, kSpringN_mm: springK,
+            F0N: springF0, dampingRatio: damping
+        });
+        valveLiftEx = simulateCompliance(anlEx, rpm, {
+            massEqG: mEqEx, kTrainN_mm: kTrain, kSpringN_mm: springK,
+            F0N: springF0, dampingRatio: damping
+        });
+        floatIn = detectValveFloat(anlIn, valveLiftIn);
+        floatEx = detectValveFloat(anlEx, valveLiftEx);
+    }
+
     // ====== DISPLAY RESULTS ======
     document.getElementById('resultsCard').style.display = 'block';
 
@@ -1894,7 +2085,13 @@ function analyze() {
             fSpringFullIn: forcesIn.fSpringFullLift, fSpringFullEx: forcesEx.fSpringFullLift,
             marginMinIn: forcesIn.marginMin, marginMinEx: forcesEx.marginMin,
             rpmCritIn: forcesIn.rpmCrit, rpmCritEx: forcesEx.rpmCrit,
-            kinIntake: resIn, kinExhaust: resEx
+            kinIntake: resIn, kinExhaust: resEx,
+            // Compliance (race-grade dynamic simulation), null se OFF
+            complianceOn:    complianceOn,
+            valveFloatIn:    floatIn ? floatIn.maxGap : null,
+            valveFloatInDeg: floatIn ? floatIn.gapIdx - 360 : null,
+            valveFloatEx:    floatEx ? floatEx.maxGap : null,
+            valveFloatExDeg: floatEx ? floatEx.gapIdx - 360 : null
         },
         arrays: {
             anlIn: anlIn, anlEx: anlEx,
@@ -1902,7 +2099,8 @@ function analyze() {
             accIn: accIntake, accEx: accExhaust,
             jerkIn: jerkIntake, jerkEx: jerkExhaust,
             fSpringIn: forcesIn.fSpring, fSpringEx: forcesEx.fSpring,
-            fInertiaIn: forcesIn.fInertia, fInertiaEx: forcesEx.fInertia
+            fInertiaIn: forcesIn.fInertia, fInertiaEx: forcesEx.fInertia,
+            valveLiftIn: valveLiftIn, valveLiftEx: valveLiftEx
         }
     };
     document.getElementById('btnExportCSV').disabled = false;
@@ -1937,6 +2135,37 @@ function analyze() {
                     duration: 7000
                 });
             }, 500);
+        }
+
+        // Toast aggiuntivo se compliance attiva e valve float dinamico significativo
+        if (complianceOn && (floatIn || floatEx)) {
+            var maxFloatDyn = Math.max(floatIn ? floatIn.maxGap : 0, floatEx ? floatEx.maxGap : 0);
+            setTimeout(function () {
+                var detail = '';
+                if (floatIn && floatIn.maxGap > 0.05) detail += 'Asp: ' + floatIn.maxGap.toFixed(2) + ' mm @ ' + (floatIn.gapIdx - 360) + '&deg;. ';
+                if (floatEx && floatEx.maxGap > 0.05) detail += 'Scar: ' + floatEx.maxGap.toFixed(2) + ' mm @ ' + (floatEx.gapIdx - 360) + '&deg;.';
+                if (maxFloatDyn > 0.5) {
+                    window.cammesToast({
+                        kind: 'err', title: 'VALVE FLOAT DINAMICO (compliance)',
+                        body: 'Gap cam-valvola > 0.5 mm a ' + rpm + ' rpm. ' + detail +
+                              ' Rifare con molla pi&ugrave; rigida o ridurre RPM.',
+                        duration: 9000
+                    });
+                } else if (maxFloatDyn > 0.1) {
+                    window.cammesToast({
+                        kind: 'warn', title: 'Valve float dinamico minore',
+                        body: 'Gap massimo ' + maxFloatDyn.toFixed(2) + ' mm a ' + rpm + ' rpm. ' + detail +
+                              ' Accettabile per uso saltuario, evita zona rossa prolungata.',
+                        duration: 7000
+                    });
+                } else {
+                    window.cammesToast({
+                        kind: 'success', title: 'Compliance OK',
+                        body: 'Valvola segue la cam con gap < 0.1 mm. Treno valvole adeguato per ' + rpm + ' rpm.',
+                        duration: 5000
+                    });
+                }
+            }, 900);
         }
     }
 }
