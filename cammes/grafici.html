@@ -540,6 +540,7 @@ window.addEventListener('DOMContentLoaded', _loadFromUrlIfNeeded);
 var _replayRaf = null;
 var _replayCancelled = false;
 var _replayBackup = null;
+var _replaySafetyTimer = null;  // Watchdog: forza stop se rAF è sospeso (tab in background)
 
 function replayAnimation() {
     if (!window.myLine || !lineChartData || !lineChartData.datasets) return;
@@ -564,6 +565,17 @@ function replayAnimation() {
 
     var DURATION = 4000;   // ms totali per arrivare a 360°
     var startTs = null;
+
+    // Watchdog: se dopo DURATION + 2s il replay non è ancora terminato
+    // (es. requestAnimationFrame sospeso perché tab in background),
+    // forza la chiusura ordinata. Evita stati zombie del bottone Stop.
+    if (_replaySafetyTimer) clearTimeout(_replaySafetyTimer);
+    _replaySafetyTimer = setTimeout(function () {
+        if (_replayBackup) {  // se ancora attivo
+            _restoreFromBackup();
+            window.myLine.options.animation = origAnim;
+        }
+    }, DURATION + 2000);
     // Disabilita animazione di Chart.js durante il replay (le abbiamo già)
     var origAnim = window.myLine.options.animation;
     window.myLine.options.animation = { duration: 0 };
@@ -608,6 +620,7 @@ function _restoreFromBackup() {
     _replayBackup = null;
     document.getElementById('replayBtn').style.display = '';
     document.getElementById('replayStopBtn').style.display = 'none';
+    if (_replaySafetyTimer) { clearTimeout(_replaySafetyTimer); _replaySafetyTimer = null; }
 }
 
 function stopReplay() {

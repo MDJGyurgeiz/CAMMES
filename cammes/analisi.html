@@ -1551,11 +1551,17 @@ function analyze() {
     var mxIn = findMax(anlIn);
     var mxEx = findMax(anlEx);
 
-    // Duration: count degrees where lift > 0
+    // Duration: count degrees where lift > soglia (offset-resistant).
+    // BUG FIX: la condizione `> 0` contava tutti i 720° se il comparatore
+    // aveva offset residuo (curva non torna mai a zero esatto). Soglia
+    // adattiva: max(0.05 mm, 1% del picco) — sotto questo valore la
+    // valvola è di fatto chiusa anche se il comparatore legge offset.
+    var durThreshIn = Math.max(0.05, mxIn.lift * 0.01);
+    var durThreshEx = Math.max(0.05, mxEx.lift * 0.01);
     var durIntake = 0, durExhaust = 0;
     for (var i = 1; i <= 720; i++) {
-        if (anlIn[i] > 0) durIntake++;
-        if (anlEx[i] > 0) durExhaust++;
+        if (anlIn[i] > durThreshIn) durIntake++;
+        if (anlEx[i] > durThreshEx) durExhaust++;
     }
 
     // Duration at reference height
