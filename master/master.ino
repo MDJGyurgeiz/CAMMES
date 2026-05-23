@@ -56,14 +56,17 @@
 //                  k1 → standard         (u80  a4  g50)
 //                  k2 → morbido          (u120 a8  g120)
 //                  k3 → extra-morbido    (u180 a16 g250)
-//    tF:D:S     TONE — fa cantare il motore come "musical stepper":
-//               F = frequenza in Hz (60..2000), D = durata in ms
-//               (10..5000), S = direzione '+' o '-'. Il driver
-//               emette F impulsi/sec per D ms = D*F/1000 step totali.
-//               La frequenza modula la risonanza meccanica del motore
-//               percepita come una nota musicale. Risponde "*tend".
-//               Imposta automaticamente PUL = 1/F * 1e6 / 2 μs
-//               (50% duty), bypassa cfgPulseUs/cfgAccelSteps.
+//    tF:D:S[:V] TONE — fa cantare il motore come "musical stepper":
+//               F = frequenza in Hz (60..2000)
+//               D = durata in ms (10..5000)
+//               S = direzione '+' o '-'
+//               V = duty cycle % (10..90, default 50) — controlla il
+//                   VOLUME: più alto = più tempo HIGH per ciclo = più
+//                   energia trasferita al motore = più vibrazione
+//                   meccanica = più suono. 50% = neutro, 80% = forte,
+//                   90% = MASSIMO (rischio scaldata driver).
+//               Il driver emette F impulsi/sec per D ms = D*F/1000
+//               step totali. Risponde "*tend". Bypassa cfgPulseUs/cfgAccel.
 //
 //  Risposta Arduino dopo movimento:
 //    XX.XX            (alzata in mm)
@@ -394,37 +397,46 @@ void executeCommand() {
     Serial.print(F(" gentle=")); Serial.println(cfgRampExtraUs);
     Serial.println(F("*cfg"));
   } else if (cmdLen >= 5 && cmdBuf[0] == 't' && (cmdBuf[1] >= '0' && cmdBuf[1] <= '9')) {
-    // tFFFF:DDDD:S (es. "t440:500:+") = suona FFFF Hz per DDDD ms in direzione S
-    // Parser semplice: divide su ':'
+    // tFFFF:DDDD:S[:VV] (es. "t440:500:+:75") = suona FFFF Hz per DDDD ms
+    // in direzione S, con duty cycle VV% (default 50, controlla il volume)
     char *p1 = strchr(&cmdBuf[1], ':');
     if (p1) {
       *p1 = '\0';
       char *p2 = strchr(p1 + 1, ':');
-      if (p2) *p2 = '\0';
+      char *p3 = NULL;
+      if (p2) {
+        *p2 = '\0';
+        p3 = strchr(p2 + 1, ':');
+        if (p3) *p3 = '\0';
+      }
       int freq = atoi(&cmdBuf[1]);
       int dur  = atoi(p1 + 1);
       char sign = p2 ? *(p2 + 1) : '+';
+      int duty = p3 ? atoi(p3 + 1) : 50;
+      if (duty < 10) duty = 10;
+      if (duty > 90) duty = 90;
       if (freq >= 60 && freq <= 2000 && dur >= 10 && dur <= 5000) {
         digitalWrite(PIN_ENA, HIGH);
         digitalWrite(PIN_DIR, (sign == '-') ? LOW : HIGH);
-        // Mezzo periodo in μs: 1.000.000 / (2 * F)
-        uint32_t halfPeriodUs = 500000UL / (uint32_t)freq;
+        // Periodo totale in μs e suddivisione HIGH/LOW secondo duty.
+        // periodo = 1e6/freq; tHIGH = periodo * duty/100; tLOW = resto
+        uint32_t periodUs = 1000000UL / (uint32_t)freq;
+        uint32_t highUs   = (periodUs * (uint32_t)duty) / 100UL;
+        if (highUs < 5) highUs = 5;  // min 5μs HIGH per il driver
+        uint32_t lowUs    = periodUs > highUs ? periodUs - highUs : 5;
         // Step totali = freq * dur / 1000
-        uint32_t totalSteps   = ((uint32_t)freq * (uint32_t)dur) / 1000UL;
-        // Loop di pulsi a frequenza costante
+        uint32_t totalSteps = ((uint32_t)freq * (uint32_t)dur) / 1000UL;
         for (uint32_t s = 0; s < totalSteps; s++) {
           digitalWrite(PIN_PUL, HIGH);
-          // delayMicroseconds limit ~16383; spezzo se serve
-          uint32_t h = halfPeriodUs;
+          uint32_t h = highUs;
           while (h > 10000) { delayMicroseconds(10000); h -= 10000; }
           if (h) delayMicroseconds(h);
           digitalWrite(PIN_PUL, LOW);
-          h = halfPeriodUs;
+          h = lowUs;
           while (h > 10000) { delayMicroseconds(10000); h -= 10000; }
           if (h) delayMicroseconds(h);
         }
       }
-      // Drain buffer (potrebbero essere arrivati altri comandi)
       while (Serial.available() > 0) Serial.read();
       Serial.println(F("*tend"));
     }

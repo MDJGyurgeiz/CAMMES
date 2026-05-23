@@ -545,6 +545,52 @@
         border-radius: var(--r-md);
         display: none;
     }
+    .concert-volume {
+        display: flex; align-items: center; gap: var(--sp-3);
+        margin: var(--sp-3) 0;
+        padding: var(--sp-2) var(--sp-3);
+        background: var(--bg-input);
+        border-radius: var(--r-md);
+        border: 1px solid var(--border);
+    }
+    .concert-volume-label {
+        font-family: var(--font-display);
+        font-size: 11px; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 1.5px;
+        color: var(--text-muted);
+        min-width: 80px;
+    }
+    .concert-volume-slider {
+        flex: 1; height: 6px;
+        -webkit-appearance: none; appearance: none;
+        background: linear-gradient(90deg, var(--accent-3) 0%, var(--accent-2) 50%, var(--danger) 100%);
+        border-radius: var(--r-full);
+        outline: none;
+    }
+    .concert-volume-slider::-webkit-slider-thumb {
+        -webkit-appearance: none; appearance: none;
+        width: 16px; height: 16px; border-radius: 50%;
+        background: var(--text-primary);
+        border: 2px solid var(--bg-elev-2);
+        cursor: pointer;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+    .concert-volume-slider::-moz-range-thumb {
+        width: 16px; height: 16px; border-radius: 50%;
+        background: var(--text-primary); border: 2px solid var(--bg-elev-2);
+        cursor: pointer;
+    }
+    .concert-volume-value {
+        font-family: var(--font-mono); font-size: 14px; font-weight: 700;
+        color: var(--accent-2);
+        min-width: 45px; text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+    .concert-volume-hint {
+        font-size: 11px; color: var(--text-muted);
+        text-align: center; margin-top: var(--sp-2);
+        font-style: italic;
+    }
 
     /* Quick view modal (anteprima file via grafico inline) */
     .quickview-backdrop {
@@ -1775,6 +1821,22 @@ var concertWs = null;
 var concertPlaying = false;
 var concertCancelToken = 0;
 var concertCurrentSongKey = null;
+var CONCERT_VOL_KEY = 'cammes-concert-volume';
+var concertVolume = 70;  // duty% (50..90), default 70 = già più forte di neutro
+try {
+    var stored = parseInt(localStorage.getItem(CONCERT_VOL_KEY), 10);
+    if (stored >= 50 && stored <= 90) concertVolume = stored;
+} catch (e) {}
+
+function onConcertVolumeChange() {
+    var slider = document.getElementById('concertVolume');
+    if (!slider) return;
+    concertVolume = parseInt(slider.value, 10);
+    var label = document.getElementById('concertVolumeVal');
+    if (label) label.textContent = concertVolume + '%';
+    try { localStorage.setItem(CONCERT_VOL_KEY, String(concertVolume)); } catch (e) {}
+}
+window.onConcertVolumeChange = onConcertVolumeChange;
 
 function openHomeConcert() {
     if (document.getElementById('concertModal')) return;
@@ -1805,6 +1867,12 @@ function openHomeConcert() {
         '  </div>' +
         '  <div id="concertWarn" class="concert-disconnect-warn">Server offline o motore non connesso.</div>' +
         '  <div class="concert-grid">' + tiles + '</div>' +
+        '  <div class="concert-volume">' +
+        '    <span class="concert-volume-label">&#128266; Volume</span>' +
+        '    <input type="range" min="50" max="90" step="5" id="concertVolume" class="concert-volume-slider" oninput="onConcertVolumeChange();">' +
+        '    <span class="concert-volume-value" id="concertVolumeVal">70%</span>' +
+        '  </div>' +
+        '  <div class="concert-volume-hint">Pi&ugrave; alto = pi&ugrave; vibrazione meccanica (e suono). Oltre 80% scalda il driver: usare a brevi raffiche.</div>' +
         '  <div class="concert-now-playing" id="concertNowPlaying">&nbsp;</div>' +
         '  <div class="confirm-modal-actions">' +
         '    <button class="btn btn-secondary" onclick="closeHomeConcert();">Chiudi</button>' +
@@ -1814,6 +1882,12 @@ function openHomeConcert() {
     document.body.appendChild(back);
     back.onclick = function (e) { if (e.target === back) closeHomeConcert(); };
     document.addEventListener('keydown', _concertEsc);
+
+    // Inizializza slider volume col valore salvato
+    var slider = document.getElementById('concertVolume');
+    var label  = document.getElementById('concertVolumeVal');
+    if (slider) slider.value = String(concertVolume);
+    if (label)  label.textContent = concertVolume + '%';
 
     // Apre la WebSocket (lazy) verso il server CAMMES
     try {
@@ -1893,7 +1967,7 @@ async function playHomeSong(key) {
             else np.innerHTML = '<span style="opacity:0.5;">— pausa —</span>';
         }
         if (freq > 0) {
-            try { concertWs.send('t' + Math.round(freq) + ':' + noteMs + ':' + dirSign + '\n'); } catch (e) {}
+            try { concertWs.send('t' + Math.round(freq) + ':' + noteMs + ':' + dirSign + ':' + concertVolume + '\n'); } catch (e) {}
         }
         await _sleepC(noteMs + gapMs);
         // Alterna direzione ogni 6 note per non scappare troppo
