@@ -381,6 +381,71 @@
         color: var(--accent); text-decoration: underline;
     }
 
+    /* Tag badge sui file */
+    .file-tags {
+        display: inline-flex; flex-wrap: wrap; gap: 4px;
+        margin-top: 3px; vertical-align: middle;
+    }
+    .tag-badge {
+        display: inline-flex; align-items: center;
+        font-family: var(--font-mono); font-size: 10px;
+        padding: 1px 7px 1px 8px;
+        border-radius: var(--r-full);
+        background: var(--bg-input); color: var(--text-secondary);
+        border: 1px solid var(--border);
+        cursor: pointer; user-select: none;
+        transition: all var(--t-fast) var(--ease);
+    }
+    .tag-badge:hover {
+        background: var(--danger); color: white; border-color: var(--danger);
+    }
+    .tag-badge::after {
+        content: '×'; margin-left: 4px; opacity: 0; font-weight: bold;
+        transition: opacity var(--t-fast) var(--ease);
+    }
+    .tag-badge:hover::after { opacity: 1; }
+    .tag-add-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+        width: 18px; height: 18px;
+        border-radius: 50%;
+        background: transparent; color: var(--text-muted);
+        border: 1px dashed var(--border-strong); cursor: pointer;
+        transition: all var(--t-fast) var(--ease);
+        line-height: 1;
+    }
+    .tag-add-btn:hover {
+        background: var(--accent); color: #06121b; border-color: var(--accent);
+        border-style: solid; transform: scale(1.1);
+    }
+
+    /* Filtri tag (chip dinamici sotto i filtri tipo/date) */
+    .tag-filter-row {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+        margin-top: var(--sp-2); padding-top: var(--sp-2);
+        border-top: 1px dashed var(--border);
+    }
+    .tag-filter-label {
+        font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px;
+        color: var(--text-muted); font-family: var(--font-display);
+        margin-right: 4px;
+    }
+    .tag-filter-chip {
+        display: inline-flex; align-items: center; gap: 4px;
+        font-family: var(--font-mono); font-size: 11px;
+        padding: 3px 9px; border-radius: var(--r-full);
+        background: var(--bg-input); color: var(--text-secondary);
+        border: 1px solid var(--border); cursor: pointer;
+        transition: all var(--t-fast) var(--ease);
+    }
+    .tag-filter-chip:hover { color: var(--text-primary); border-color: var(--border-strong); }
+    .tag-filter-chip.active {
+        background: var(--accent-3); color: white; border-color: var(--accent-3);
+    }
+    .tag-filter-count {
+        font-size: 9px; opacity: 0.7; margin-left: 2px;
+    }
+
     /* Quick view modal (anteprima file via grafico inline) */
     .quickview-backdrop {
         position: fixed; inset: 0; z-index: var(--z-modal);
@@ -587,6 +652,9 @@
             <span class="recents-count" id="recentsCount"></span>
         </div>
 
+        <!-- Filtri tag dinamici (popolati da renderTagFilters) -->
+        <div id="tagFiltersRow" class="tag-filter-row" style="display:none;"></div>
+
         <div id="recentsWrap">
             <div class="home-recents-empty">Caricamento&hellip;</div>
         </div>
@@ -637,6 +705,129 @@ function toggleBookmarkFilter() {
     }
     renderRecentsTable();
 }
+
+// ===== Tag/etichette sui file (persistente in localStorage) =====
+// Struttura: { fileName: ["race", "stradale", ...] }
+// Tag normalizzati: lowercase, trim, no spazi multipli, max 20 char.
+var TAGS_KEY = 'cammes-tags-v1';
+function loadAllTags() {
+    try { return JSON.parse(localStorage.getItem(TAGS_KEY)) || {}; } catch (e) { return {}; }
+}
+function saveAllTags(obj) {
+    try { localStorage.setItem(TAGS_KEY, JSON.stringify(obj)); } catch (e) {}
+}
+function getTagsForFile(name) {
+    var all = loadAllTags();
+    return Array.isArray(all[name]) ? all[name] : [];
+}
+function normalizeTag(t) {
+    return String(t || '').toLowerCase().trim().replace(/\s+/g, '-').substring(0, 20);
+}
+function addTagsToFile(name, tagsArr) {
+    var all = loadAllTags();
+    var current = Array.isArray(all[name]) ? all[name] : [];
+    tagsArr.forEach(function (t) {
+        var nt = normalizeTag(t);
+        if (nt && current.indexOf(nt) === -1) current.push(nt);
+    });
+    all[name] = current;
+    saveAllTags(all);
+}
+function removeTagFromFile(name, tag) {
+    var all = loadAllTags();
+    var arr = all[name] || [];
+    var i = arr.indexOf(tag);
+    if (i !== -1) arr.splice(i, 1);
+    if (arr.length === 0) delete all[name];
+    else all[name] = arr;
+    saveAllTags(all);
+}
+// Ritorna mappa { tag: count } su tutti i file che hanno almeno un tag.
+function getAllTagsWithCount() {
+    var all = loadAllTags();
+    var counts = {};
+    Object.keys(all).forEach(function (fname) {
+        (all[fname] || []).forEach(function (t) {
+            counts[t] = (counts[t] || 0) + 1;
+        });
+    });
+    return counts;
+}
+
+var selectedTagFilters = [];  // Array di tag selezionati (AND filter)
+
+function promptAddTags(fileName, ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    var current = getTagsForFile(fileName).join(', ');
+    var raw = prompt(
+        'Tag per "' + fileName + '"\n' +
+        '(separati da virgola, max 20 caratteri ciascuno):',
+        current
+    );
+    if (raw === null) return;
+    // Sostituisce completamente i tag del file
+    var newTags = raw.split(',').map(function (t) { return normalizeTag(t); })
+                     .filter(function (t) { return t.length > 0; });
+    var all = loadAllTags();
+    if (newTags.length === 0) delete all[fileName];
+    else all[fileName] = newTags;
+    saveAllTags(all);
+    if (window.cammesToast) window.cammesToast({
+        kind: 'success', title: 'Tag aggiornati',
+        body: newTags.length === 0 ? 'Tutti i tag rimossi.' : newTags.join(', '),
+        duration: 2500
+    });
+    renderRecentsTable();
+}
+
+function clickRemoveTag(fileName, tag, ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    removeTagFromFile(fileName, tag);
+    renderRecentsTable();
+}
+
+function toggleTagFilter(tag) {
+    var i = selectedTagFilters.indexOf(tag);
+    if (i === -1) selectedTagFilters.push(tag);
+    else selectedTagFilters.splice(i, 1);
+    renderRecentsTable();
+}
+
+// Render dei chip filtro tag in cima alla tabella. Mostra solo tag
+// esistenti in almeno un file.
+function renderTagFilters() {
+    var counts = getAllTagsWithCount();
+    var tags = Object.keys(counts).sort();
+    var row = document.getElementById('tagFiltersRow');
+    if (!row) return;
+    if (tags.length === 0) {
+        row.style.display = 'none';
+        row.innerHTML = '';
+        return;
+    }
+    row.style.display = '';
+    var html = '<span class="tag-filter-label">Tag:</span>';
+    tags.forEach(function (t) {
+        var active = selectedTagFilters.indexOf(t) !== -1 ? 'active' : '';
+        html += '<button class="tag-filter-chip ' + active +
+                '" onclick="toggleTagFilter(\'' + t + '\');" type="button">' +
+                t + '<span class="tag-filter-count">' + counts[t] + '</span></button>';
+    });
+    if (selectedTagFilters.length > 0) {
+        html += '<button class="tag-filter-chip" onclick="clearTagFilters();" ' +
+                'type="button" style="background:transparent;border-style:dashed;">' +
+                '× azzera</button>';
+    }
+    row.innerHTML = html;
+}
+function clearTagFilters() {
+    selectedTagFilters = [];
+    renderRecentsTable();
+}
+window.promptAddTags = promptAddTags;
+window.clickRemoveTag = clickRemoveTag;
+window.toggleTagFilter = toggleTagFilter;
+window.clearTagFilters = clearTagFilters;
 
 // ===== Stato filtri (search + tipo + intervallo date) =====
 // Cache dell'ultima risposta /api/files, così i filtri non rifanno
@@ -805,13 +996,21 @@ function renderRecentsTable() {
     } else if (dateFilter === 'week')  { dateThreshold = now - 7  * 86400000; }
     else if (dateFilter === 'month')   { dateThreshold = now - 30 * 86400000; }
 
+    var allTags = loadAllTags();
     var filtered = files.filter(function (f) {
         if (filterOnlyBookmarks && !bookmarkSet[f.name]) return false;
         if (typeFilter !== 'all' && f.type !== typeFilter) return false;
         if (dateThreshold > 0 && f.mtime < dateThreshold) return false;
         if (searchQuery && f.name.toLowerCase().indexOf(searchQuery) === -1) return false;
+        if (selectedTagFilters.length > 0) {
+            var fileTags = allTags[f.name] || [];
+            for (var k = 0; k < selectedTagFilters.length; k++) {
+                if (fileTags.indexOf(selectedTagFilters[k]) === -1) return false;
+            }
+        }
         return true;
     });
+    renderTagFilters();
     filtered.sort(function (a, b) {
         var aMark = bookmarkSet[a.name] ? 1 : 0;
         var bMark = bookmarkSet[b.name] ? 1 : 0;
@@ -856,10 +1055,22 @@ function renderRecentsTable() {
         var starChar = bm ? '&#9733;' : '&#9734;';
         var starTitle = bm ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti';
         var nameJs = safeName.replace(/'/g, '&#39;');
+        // Tag badges sotto il nome file
+        var fileTags = allTags[f.name] || [];
+        var tagsHtml = '<div class="file-tags">';
+        fileTags.forEach(function (t) {
+            var safeTag = escapeHtml(t);
+            tagsHtml += '<span class="tag-badge" title="Click per rimuovere il tag" onclick="clickRemoveTag(\'' + nameJs + '\', \'' + safeTag + '\', event);">' + safeTag + '</span>';
+        });
+        tagsHtml += '<button class="tag-add-btn" title="Aggiungi/modifica tag" onclick="promptAddTags(\'' + nameJs + '\', event);">+</button>';
+        tagsHtml += '</div>';
         return '<tr class="' + (bm ? 'bookmarked' : '') + '">' +
             '<td><button class="star-btn' + (bm ? ' active' : '') + '" title="' + starTitle + '" onclick="toggleBookmark(\'' + nameJs + '\', event);">' + starChar + '</button></td>' +
             '<td><span class="type-pill ' + safeType + '">' + typeLabel + '</span></td>' +
-            '<td><span class="fname" title="Click per anteprima" onclick="openQuickView(\'' + nameJs + '\', \'' + safeType + '\');">' + safeName + '</span></td>' +
+            '<td>' +
+              '<span class="fname" title="Click per anteprima" onclick="openQuickView(\'' + nameJs + '\', \'' + safeType + '\');">' + safeName + '</span>' +
+              tagsHtml +
+            '</td>' +
             '<td class="fsize">' + fmtBytes(f.size) + '</td>' +
             '<td class="fdate">' + escapeHtml(fmtDate(f.mtime)) + '</td>' +
             '<td style="text-align:right;white-space:nowrap;">' +
@@ -1079,7 +1290,23 @@ function _renderQuickView(fileName, fileType, text) {
     }
 
     var safeName = escapeHtml(fileName);
+    var nameJs = safeName.replace(/'/g, '&#39;');
+
+    // Tag badges nel modal
+    var fileTags = getTagsForFile(fileName);
+    var tagsHtml = '<div class="file-tags" id="qvTagsRow">';
+    fileTags.forEach(function (t) {
+        var safeTag = escapeHtml(t);
+        tagsHtml += '<span class="tag-badge" title="Rimuovi" onclick="clickRemoveTag(\'' + nameJs + '\', \'' + safeTag + '\', event); _refreshQuickViewTags(\'' + nameJs + '\');">' + safeTag + '</span>';
+    });
+    tagsHtml += '<button class="tag-add-btn" title="Aggiungi/modifica tag" onclick="promptAddTags(\'' + nameJs + '\', event); _refreshQuickViewTags(\'' + nameJs + '\');">+</button>';
+    tagsHtml += '</div>';
+
     body.innerHTML =
+        '<div style="margin-bottom: var(--sp-3);">' +
+        '  <div class="quickview-stat-label">Tag</div>' +
+        tagsHtml +
+        '</div>' +
         '<div class="quickview-stats">' +
         '  <div class="quickview-stat"><div class="quickview-stat-label">N. punti</div><div class="quickview-stat-value">' + parsed.count + '</div></div>' +
         '  <div class="quickview-stat"><div class="quickview-stat-label">Max ' + (fileType === 'pol' ? 'raggio' : 'alzata') + '</div><div class="quickview-stat-value">' + parsed.max.lift.toFixed(3) + ' mm</div></div>' +
@@ -1141,8 +1368,25 @@ function closeQuickView() {
         window._currentQuickView = null;
     }, 220);
 }
+// Rinfresca la riga tag nel modal Quick View senza ricaricare il file.
+// Chiamato dopo promptAddTags / clickRemoveTag dal contesto del modal.
+function _refreshQuickViewTags(fileName) {
+    var row = document.getElementById('qvTagsRow');
+    if (!row) return;
+    var fileTags = getTagsForFile(fileName);
+    var safeNameJs = fileName.replace(/'/g, '&#39;');
+    var html = '';
+    fileTags.forEach(function (t) {
+        var safeTag = escapeHtml(t);
+        html += '<span class="tag-badge" title="Rimuovi" onclick="clickRemoveTag(\'' + safeNameJs + '\', \'' + safeTag + '\', event); _refreshQuickViewTags(\'' + safeNameJs + '\');">' + safeTag + '</span>';
+    });
+    html += '<button class="tag-add-btn" title="Aggiungi/modifica tag" onclick="promptAddTags(\'' + safeNameJs + '\', event); _refreshQuickViewTags(\'' + safeNameJs + '\');">+</button>';
+    row.innerHTML = html;
+}
+
 window.openQuickView  = openQuickView;
 window.closeQuickView = closeQuickView;
+window._refreshQuickViewTags = _refreshQuickViewTags;
 </script>
 
 </body>
