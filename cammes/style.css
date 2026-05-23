@@ -1410,6 +1410,56 @@ input.input-error {
   .btn:hover { transition: none !important; }
 }
 
+/* ---------- POSIZIONI SALVATE (bookmarks angolari) ---------------------- */
+.saved-positions {
+  display: inline-flex; flex-wrap: wrap; gap: 4px;
+  margin-left: var(--sp-2); vertical-align: middle;
+}
+.saved-pos-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--font-mono); font-size: 11px;
+  padding: 2px 8px; border-radius: var(--r-full);
+  background: var(--bg-input);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease);
+}
+.saved-pos-chip:hover {
+  background: var(--accent); color: #06121b; border-color: var(--accent);
+}
+.saved-pos-chip-delete {
+  font-size: 12px; opacity: 0.5; margin-left: 2px;
+  transition: opacity var(--t-fast) var(--ease);
+}
+.saved-pos-chip:hover .saved-pos-chip-delete { opacity: 1; color: var(--danger); }
+
+/* ---------- LIVE TRACE CHART durante free-spin -------------------------- */
+.live-trace-wrap {
+  margin-top: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  display: none;
+}
+.live-trace-wrap.active { display: block; }
+.live-trace-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: var(--sp-2);
+}
+.live-trace-title {
+  font-family: var(--font-display); font-weight: 600; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 1.5px;
+  color: var(--text-muted);
+}
+.live-trace-count {
+  font-family: var(--font-mono); font-size: 11px; color: var(--accent-2);
+}
+.live-trace-canvas-wrap {
+  height: 220px;
+}
+
 /* ---------- MOTOR FREE BADGE + BTN-WARN VARIANT ------------------------- */
 .motor-free-badge {
   display: inline-flex; align-items: center; gap: 6px;

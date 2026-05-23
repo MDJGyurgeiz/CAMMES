@@ -783,6 +783,9 @@
                 <button class="home-action-btn" onclick="applyAutoTagAll();" title="Suggerisce tag in base al nome (ducati, race, v8, ecc.)" data-tip="<strong>Auto-tag</strong>Scansiona i nomi dei file e applica tag automatici se riconosce brand (Ducati, Honda, Yamaha&hellip;), tipologia (race, stradale, test-bench), configurazione motore (V8, V6, inline-4). Non sovrascrive tag esistenti, solo aggiunge.">&#128269; Auto-tag</button>
                 <button class="home-action-btn" onclick="openBookmarksInCompare();" title="Apre Confronto coi primi 4 file alzata fra i preferiti">&#9733; Confronta preferiti</button>
                 <button class="home-action-btn" onclick="openHomeConcert();" title="Fai cantare il motore stepper con brani famosi" data-tip="<strong>Concerto col motore</strong>Lo stepper esegue brani modulando la frequenza dei pulsi. 4 brani curati: Inno di Mameli, Per Elisa, Tetris, Vivaldi Primavera.">&#127932; Concerto motore</button>
+                <button class="home-action-btn" onclick="exportMetadata();" title="Scarica un backup JSON dei tuoi tag, bookmark e posizioni salvate" data-tip="<strong>Export metadati</strong>Scarica un file JSON con tutti i tuoi tag, bookmark, posizioni salvate e impostazioni preferenze. Utile per backup periodico o spostare le tue etichette su un altro PC. NON contiene i file .scr (quelli copia la cartella prove/).">&#128190; Export</button>
+                <button class="home-action-btn" onclick="document.getElementById('importMetaInput').click();" title="Ripristina tag/bookmark da un file JSON" data-tip="<strong>Import metadati</strong>Carica un file JSON di backup esportato precedentemente. Ripristina tag, bookmark e posizioni salvate (sovrascrive quelli correnti).">&#128229; Import</button>
+                <input type="file" id="importMetaInput" accept=".json,application/json" style="display:none;" onchange="importMetadataFile(event);">
                 <button class="home-action-btn" onclick="loadRecents();" title="Ricarica lista">&#8634; Aggiorna</button>
             </span>
         </div>
@@ -2102,6 +2105,98 @@ window.openHomeConcert  = openHomeConcert;
 window.closeHomeConcert = closeHomeConcert;
 window.playHomeSong     = playHomeSong;
 window.stopHomeConcert  = stopHomeConcert;
+
+// ===== Backup/Restore metadati =====
+// Esporta i contenuti di localStorage (tag, bookmark, posizioni, prefs)
+// come file JSON unico. Restore inverso: legge un JSON e li ripristina.
+// Non tocca i file .scr — per quelli si fa backup manuale della cartella prove/.
+function exportMetadata() {
+    var data = {
+        cammes_backup_version: 1,
+        exported_at: new Date().toISOString(),
+        host: location.host,
+        // Chiavi note di localStorage gestite dall'app
+        tags:          JSON.parse(localStorage.getItem('cammes-tags-v1')      || '{}'),
+        bookmarks:     JSON.parse(localStorage.getItem('cammes-bookmarks-v1') || '[]'),
+        savedPositions: JSON.parse(localStorage.getItem('cammes-saved-positions') || '[]'),
+        preferences: {
+            theme:           localStorage.getItem('cammes-theme')           || 'dark',
+            onboarded:       localStorage.getItem('cammes-onboarded-v1')    || null,
+            concertVolume:   localStorage.getItem('cammes-concert-volume')  || null,
+            concertCustom:   localStorage.getItem('cammes-concert-custom')  || null
+        }
+    };
+    var nFiles = (_cachedFiles || []).length;
+    var stats = {
+        tagsCount:           Object.keys(data.tags).length,
+        bookmarksCount:      data.bookmarks.length,
+        savedPositionsCount: data.savedPositions.length,
+        filesInArchive:      nFiles
+    };
+    data.stats_at_export = stats;
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var ts = new Date().toISOString().substring(0, 16).replace(/[T:]/g, '-');
+    var fname = 'cammes-backup-' + ts + '.json';
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 200);
+    if (window.cammesToast) window.cammesToast({
+        kind: 'success', title: 'Backup esportato',
+        body: fname + ' &middot; ' + stats.tagsCount + ' file taggati, ' +
+              stats.bookmarksCount + ' preferiti, ' + stats.savedPositionsCount + ' posizioni',
+        duration: 5000
+    });
+}
+
+function importMetadataFile(ev) {
+    var input = ev.target;
+    if (!input.files || input.files.length === 0) return;
+    var file = input.files[0];
+    var reader = new FileReader();
+    reader.onload = function (e) {
+        try {
+            var data = JSON.parse(e.target.result);
+            if (!data.cammes_backup_version) throw new Error('Non sembra un file di backup CAMMES');
+            // Conferma sovrascrittura
+            var msg = 'Stai per ripristinare:\n' +
+                      '• ' + Object.keys(data.tags || {}).length + ' file taggati\n' +
+                      '• ' + (data.bookmarks || []).length + ' preferiti\n' +
+                      '• ' + (data.savedPositions || []).length + ' posizioni salvate\n' +
+                      '• preferenze (tema, wizard, volume concerto...)\n\n' +
+                      'Sovrascrivi i metadati correnti?';
+            if (!confirm(msg)) { input.value = ''; return; }
+
+            if (data.tags) localStorage.setItem('cammes-tags-v1', JSON.stringify(data.tags));
+            if (data.bookmarks) localStorage.setItem('cammes-bookmarks-v1', JSON.stringify(data.bookmarks));
+            if (data.savedPositions) localStorage.setItem('cammes-saved-positions', JSON.stringify(data.savedPositions));
+            if (data.preferences) {
+                var p = data.preferences;
+                if (p.theme)         localStorage.setItem('cammes-theme', p.theme);
+                if (p.onboarded)     localStorage.setItem('cammes-onboarded-v1', p.onboarded);
+                if (p.concertVolume) localStorage.setItem('cammes-concert-volume', p.concertVolume);
+                if (p.concertCustom) localStorage.setItem('cammes-concert-custom', p.concertCustom);
+                if (p.theme) document.documentElement.setAttribute('data-theme', p.theme);
+            }
+            input.value = '';
+            if (window.cammesToast) window.cammesToast({
+                kind: 'success', title: 'Metadati ripristinati',
+                body: 'Aggiornamento UI in corso&hellip;', duration: 2500
+            });
+            // Aggiorna la UI senza reload completo
+            setTimeout(function () { loadRecents(); }, 300);
+        } catch (err) {
+            if (window.cammesToast) window.cammesToast({
+                kind: 'err', title: 'Errore lettura backup', body: err.message, duration: 5000
+            });
+            input.value = '';
+        }
+    };
+    reader.readAsText(file);
+}
+window.exportMetadata = exportMetadata;
+window.importMetadataFile = importMetadataFile;
 </script>
 
 </body>

@@ -134,6 +134,18 @@
         </div>
     </div>
 
+    <!-- Live trace durante free-spin (auto-hide se motore loccato) -->
+    <div id="liveTraceWrap" class="live-trace-wrap">
+        <div class="live-trace-header">
+            <span class="live-trace-title">&#127922; Traccia LIVE &mdash; ruota a mano per disegnare la camma</span>
+            <span>
+                <span class="live-trace-count" id="liveTraceCount">0 punti</span>
+                <button class="btn btn-secondary btn-sm" style="margin-left:8px;" onclick="clearLiveTrace();" title="Pulisci traccia">&times; Pulisci</button>
+            </span>
+        </div>
+        <div class="live-trace-canvas-wrap"><canvas id="liveTraceCanvas"></canvas></div>
+    </div>
+
     <!-- Manual rotation -->
     <div class="card">
         <div class="card-title">Rotazione manuale e zero</div>
@@ -157,6 +169,16 @@
                 &#128275; Sblocca motore
             </button>
             <span id="motorFreeBadge" class="motor-free-badge" style="display:none;" title="Motore disattivato: girare l'albero manualmente">&#9679; MOTORE LIBERO</span>
+
+            <button class="btn btn-secondary btn-sm" onclick="resetEncoder();" data-tip="<strong>Reset encoder zero</strong>Imposta la posizione angolare corrente come 0&deg;. Tutti gli sfasamenti futuri saranno relativi a questo punto. Utile per definire uno <i>zero meccanico</i> di riferimento (es. base circle, PMS).">
+                &#8634; Reset zero
+            </button>
+
+            <button class="btn btn-secondary btn-sm" onclick="savePositionMark();" data-tip="<strong>Salva posizione corrente</strong>Memorizza la posizione angolare attuale dell'encoder come bookmark riferimento con un nome (es. 'pms1', 'picco-asp', 'base-circle'). Le posizioni salvate sono mostrate sotto e cliccabili per ricordare velocemente.">
+                &#128205; Salva pos
+            </button>
+
+            <span id="savedPositions" class="saved-positions"></span>
 
             <div class="separator"></div>
 
@@ -414,6 +436,10 @@ engineSocket.onmessage = function(event) {
             document.cpot.cpot.value = " " + msg2;
             gaugemicrom.value = msg;
             gaugemicrom.draw();
+            // Live trace: durante free-spin, accumula punti (deg→mm)
+            if (motorFree && typeof liveTraceAddPoint === 'function') {
+                liveTraceAddPoint(msg);
+            }
         } else {
             msg = "0.00";
             document.cpot.cpot.value = "NO SENSORE";
@@ -974,10 +1000,12 @@ function toggleMotorFree() {
                 try { sendSocket.send('m'); } catch (e) {}
         }, 100);
 
+        showLiveTrace(true);
+
         if (window.cammesToast) window.cammesToast({
             kind: 'info', title: 'Motore sbloccato',
-            body: 'Puoi ruotare l\'albero a mano. Encoder e comparatore leggono live.',
-            duration: 3500
+            body: 'Puoi ruotare l\'albero a mano. Encoder e comparatore leggono live. La curva si forma sotto al grafico!',
+            duration: 4000
         });
     } else {
         // BLOCCA
@@ -1032,6 +1060,204 @@ function _setMotionUiDisabled(disabled) {
     });
 }
 window.toggleMotorFree = toggleMotorFree;
+
+// ===== Reset encoder + posizioni salvate (zero meccanico) =====
+function resetEncoder() {
+    if (!sendSocket || sendSocket.readyState !== 1) return;
+    try { sendSocket.send('!'); } catch (e) {}
+    if (window.cammesToast) window.cammesToast({
+        kind: 'success', title: 'Encoder azzerato',
+        body: 'Posizione corrente impostata come 0&deg;.', duration: 2500
+    });
+}
+window.resetEncoder = resetEncoder;
+
+// Posizioni salvate in localStorage: array di {label, deg, ts}
+var SAVED_POS_KEY = 'cammes-saved-positions';
+function loadSavedPositions() {
+    try { return JSON.parse(localStorage.getItem(SAVED_POS_KEY)) || []; } catch (e) { return []; }
+}
+function saveSavedPositions(arr) {
+    try { localStorage.setItem(SAVED_POS_KEY, JSON.stringify(arr)); } catch (e) {}
+}
+function savePositionMark() {
+    if (currentEncoderCount == null) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'warn', title: 'Posizione sconosciuta',
+            body: 'Encoder non ancora letto. Muovi un po\' l\'albero o aspetta il prossimo polling.',
+            duration: 3000
+        });
+        return;
+    }
+    var deg = (currentEncoderCount / 4).toFixed(2);
+    var label = prompt('Nome del riferimento (es. "pms1", "base-circle", "picco-asp"):', '');
+    if (label === null) return;
+    label = String(label).trim().replace(/[^A-Za-z0-9_\-]/g, '').substring(0, 24);
+    if (!label) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'warn', title: 'Nome non valido',
+            body: 'Solo lettere, numeri, _ e -. Massimo 24 caratteri.',
+            duration: 3000
+        });
+        return;
+    }
+    var arr = loadSavedPositions();
+    // Sostituisci se label già esiste
+    var idx = arr.findIndex(function (p) { return p.label === label; });
+    var entry = { label: label, deg: parseFloat(deg), encoderCount: currentEncoderCount, ts: Date.now() };
+    if (idx >= 0) arr[idx] = entry;
+    else arr.push(entry);
+    saveSavedPositions(arr);
+    renderSavedPositions();
+    if (window.cammesToast) window.cammesToast({
+        kind: 'success', title: 'Posizione salvata',
+        body: '<b>' + label + '</b> = ' + deg + '&deg; (encoder ' + currentEncoderCount + ')',
+        duration: 2500
+    });
+}
+function gotoSavedPosition(label) {
+    var arr = loadSavedPositions();
+    var p = arr.find(function (x) { return x.label === label; });
+    if (!p) return;
+    if (motorFree) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'warn', title: 'Motore libero',
+            body: 'Riblocca il motore prima di muoverlo a target.', duration: 3000
+        });
+        return;
+    }
+    // Calcola sfasamento per arrivare a p.encoderCount dal currentEncoderCount
+    if (currentEncoderCount == null) return;
+    var deltaCount = p.encoderCount - currentEncoderCount;
+    // Modulo 360° = 1440 conteggi: sceglie movimento più breve
+    deltaCount = ((deltaCount % 1440) + 1440) % 1440;
+    if (deltaCount > 720) deltaCount -= 1440;
+    var deltaDeg = deltaCount / 4;
+    var deltaUnits = Math.round(deltaDeg * currentMode.subStepsPerDeg);
+    var sign     = deltaUnits >= 0 ? '+' : '-';
+    var absUnits = Math.abs(deltaUnits);
+    var pad      = absUnits < 10 ? '00' + absUnits : (absUnits < 100 ? '0' + absUnits : '' + absUnits);
+    if (absUnits === 0) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'info', title: 'Gi&agrave; in posizione', body: p.label, duration: 2000
+        });
+        return;
+    }
+    var cmd = '$' + sign + pad + '\n';
+    try { sendSocket.send(cmd); } catch (e) {}
+    if (window.cammesToast) window.cammesToast({
+        kind: 'info', title: 'Vado a ' + p.label,
+        body: 'Sfasamento ' + (sign === '+' ? '+' : '-') + absUnits + ' units (' + deltaDeg.toFixed(2) + '&deg;)',
+        duration: 3000
+    });
+}
+function deletePositionMark(label, ev) {
+    if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+    var arr = loadSavedPositions().filter(function (p) { return p.label !== label; });
+    saveSavedPositions(arr);
+    renderSavedPositions();
+}
+function renderSavedPositions() {
+    var wrap = document.getElementById('savedPositions');
+    if (!wrap) return;
+    var arr = loadSavedPositions();
+    wrap.innerHTML = arr.map(function (p) {
+        return '<span class="saved-pos-chip" onclick="gotoSavedPosition(\'' + p.label + '\');" title="Vai a ' + p.deg + '&deg;">' +
+               p.label + ' <span style="opacity:.7;">' + p.deg.toFixed(0) + '&deg;</span>' +
+               '<span class="saved-pos-chip-delete" onclick="deletePositionMark(\'' + p.label + '\', event);">&times;</span>' +
+               '</span>';
+    }).join('');
+}
+window.savePositionMark = savePositionMark;
+window.gotoSavedPosition = gotoSavedPosition;
+window.deletePositionMark = deletePositionMark;
+window.renderSavedPositions = renderSavedPositions;
+document.addEventListener('DOMContentLoaded', renderSavedPositions);
+if (document.readyState !== 'loading') renderSavedPositions();
+
+// ===== LIVE TRACE durante free-spin =====
+// Mentre il motore è sbloccato, ogni misura sensore + encoder forma
+// un punto sul grafico. Ruotando a mano l'utente "disegna" la curva
+// della camma vista dal puntalino del comparatore.
+var liveTraceChart = null;
+var liveTraceData = [];   // {x: deg, y: mm}
+var liveTraceLastEnc = null;
+
+function initLiveTraceChart() {
+    if (liveTraceChart) return;
+    var ctx = document.getElementById('liveTraceCanvas').getContext('2d');
+    var c = alzColors();
+    liveTraceChart = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'Alzata vs Encoder',
+                data: liveTraceData,
+                borderColor: c.accent,
+                backgroundColor: c.accent + '88',
+                pointRadius: 2.5,
+                pointHoverRadius: 4,
+                showLine: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 0 },
+            plugins: { legend: { display: false } },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Encoder (gradi)', color: c.text },
+                    grid: { color: c.grid }, ticks: { color: c.text },
+                    min: 0, max: 360
+                },
+                y: {
+                    title: { display: true, text: 'Alzata (mm)', color: c.text },
+                    grid: { color: c.grid }, ticks: { color: c.text },
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+function showLiveTrace(show) {
+    var wrap = document.getElementById('liveTraceWrap');
+    if (!wrap) return;
+    if (show) {
+        wrap.classList.add('active');
+        initLiveTraceChart();
+    } else {
+        wrap.classList.remove('active');
+    }
+}
+// Aggiunge un punto al chart se siamo in free-spin e abbiamo entrambi
+// i dati (mm valido + encoder count noto). Chiamato dal onmessage.
+function liveTraceAddPoint(mmStr) {
+    if (!motorFree || !liveTraceChart) return;
+    if (currentEncoderCount == null) return;
+    var mm = parseFloat(mmStr);
+    if (!isFinite(mm) || mm < 0 || mm > 30) return;
+    // Normalizza encoder count in 0..360
+    var deg = ((currentEncoderCount / 4) % 360 + 360) % 360;
+    // Evita di accumulare punti identici (encoder fermo)
+    if (liveTraceLastEnc === currentEncoderCount) return;
+    liveTraceLastEnc = currentEncoderCount;
+    liveTraceData.push({ x: deg, y: mm });
+    // Limita a 720 punti per non saturare
+    if (liveTraceData.length > 720) liveTraceData.shift();
+    document.getElementById('liveTraceCount').textContent = liveTraceData.length + ' punti';
+    liveTraceChart.update('none');
+}
+function clearLiveTrace() {
+    liveTraceData.length = 0;
+    liveTraceLastEnc = null;
+    if (liveTraceChart) liveTraceChart.update('none');
+    var cnt = document.getElementById('liveTraceCount');
+    if (cnt) cnt.textContent = '0 punti';
+}
+window.clearLiveTrace = clearLiveTrace;
+window.liveTraceAddPoint = liveTraceAddPoint;
+window.showLiveTrace = showLiveTrace;
 
 var rot = 0;
 var rsign = 1;
