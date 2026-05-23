@@ -381,6 +381,45 @@
         color: var(--accent); text-decoration: underline;
     }
 
+    /* Tag stats bar chart orizzontale (card "Tag più usati") */
+    .tag-stats-bars {
+        display: flex; flex-direction: column; gap: var(--sp-2);
+        margin-top: var(--sp-2);
+    }
+    .tag-stats-row {
+        display: grid; grid-template-columns: 130px 1fr 50px;
+        gap: var(--sp-3); align-items: center;
+        cursor: pointer; padding: 4px 6px;
+        border-radius: var(--r-sm);
+        transition: background var(--t-fast) var(--ease);
+    }
+    .tag-stats-row:hover { background: var(--bg-stripe); }
+    .tag-stats-row.active { background: var(--bg-stripe); }
+    .tag-stats-row.active .tag-stats-label { color: var(--accent-3); font-weight: 700; }
+    .tag-stats-label {
+        font-family: var(--font-mono); font-size: 12px;
+        color: var(--text-primary);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tag-stats-bar-wrap {
+        height: 14px;
+        background: var(--bg-input);
+        border-radius: var(--r-full);
+        overflow: hidden;
+        position: relative;
+    }
+    .tag-stats-bar {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent-3) 0%, var(--accent) 100%);
+        border-radius: var(--r-full);
+        transition: width var(--t-base) var(--ease);
+    }
+    .tag-stats-count {
+        font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+        color: var(--accent-2); text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
     /* Tag badge sui file */
     .file-tags {
         display: inline-flex; flex-wrap: wrap; gap: 4px;
@@ -617,6 +656,14 @@
         <div class="activity-labels" id="activityLabels"></div>
     </div>
 
+    <!-- Tag più usati (auto-hide se nessun tag) -->
+    <div class="card" id="tagStatsCard" style="display:none;">
+        <div class="card-title">Tag pi&ugrave; usati
+            <span class="help-icon" data-tip="<strong>Bar chart orizzontale</strong>Distribuzione dei tag su tutti i file salvati. Click su una barra per applicare il filtro tag corrispondente alla tabella sotto." tabindex="0">?</span>
+        </div>
+        <div id="tagStatsBars" class="tag-stats-bars"></div>
+    </div>
+
     <!-- Recenti -->
     <div class="card">
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
@@ -627,6 +674,7 @@
                     <span id="filterBookmarkedIcon">&#9734;</span> Solo preferiti
                 </label>
                 <button class="home-action-btn" onclick="applyAutoTagAll();" title="Suggerisce tag in base al nome (ducati, race, v8, ecc.)" data-tip="<strong>Auto-tag</strong>Scansiona i nomi dei file e applica tag automatici se riconosce brand (Ducati, Honda, Yamaha&hellip;), tipologia (race, stradale, test-bench), configurazione motore (V8, V6, inline-4). Non sovrascrive tag esistenti, solo aggiunge.">&#128269; Auto-tag</button>
+                <button class="home-action-btn" onclick="openBookmarksInCompare();" title="Apre Confronto coi primi 4 file alzata fra i preferiti">&#9733; Confronta preferiti</button>
                 <button class="home-action-btn" onclick="loadRecents();" title="Ricarica lista">&#8634; Aggiorna</button>
             </span>
         </div>
@@ -891,6 +939,35 @@ function toggleTagFilter(tag) {
     renderRecentsTable();
 }
 
+// Render della card "Tag più usati" come bar chart orizzontale.
+// Auto-hide se non ci sono tag. Click su una barra applica il filtro tag.
+function renderTagStats() {
+    var counts = getAllTagsWithCount();
+    var card = document.getElementById('tagStatsCard');
+    var bars = document.getElementById('tagStatsBars');
+    if (!card || !bars) return;
+    var entries = Object.keys(counts).map(function (k) { return { tag: k, n: counts[k] }; });
+    if (entries.length === 0) {
+        card.style.display = 'none';
+        bars.innerHTML = '';
+        return;
+    }
+    entries.sort(function (a, b) { return b.n - a.n; });
+    var top = entries.slice(0, 8);
+    var maxN = top[0].n;
+    var html = top.map(function (e) {
+        var pct = maxN > 0 ? (e.n / maxN) * 100 : 0;
+        var active = selectedTagFilters.indexOf(e.tag) !== -1 ? ' active' : '';
+        return '<div class="tag-stats-row' + active + '" onclick="toggleTagFilter(\'' + escapeHtml(e.tag) + '\');" title="Click per filtrare per ' + escapeHtml(e.tag) + '">' +
+                 '<div class="tag-stats-label">' + escapeHtml(e.tag) + '</div>' +
+                 '<div class="tag-stats-bar-wrap"><div class="tag-stats-bar" style="width:' + pct.toFixed(1) + '%"></div></div>' +
+                 '<div class="tag-stats-count">' + e.n + '</div>' +
+               '</div>';
+    }).join('');
+    bars.innerHTML = html;
+    card.style.display = '';
+}
+
 // Render dei chip filtro tag in cima alla tabella. Mostra solo tag
 // esistenti in almeno un file.
 function renderTagFilters() {
@@ -968,6 +1045,45 @@ function setDateFilter(t) {
 }
 window.toggleBookmark = toggleBookmark;
 window.toggleBookmarkFilter = toggleBookmarkFilter;
+
+// Apri preferiti (max 4 file _alz) in pagina Confronto via URL loader.
+// Filtra solo i file tipo 'alz' perché grafici.html supporta solo line
+// chart cartesiani (polare ha pagina dedicata).
+function openBookmarksInCompare() {
+    var bookmarks = loadBookmarks();
+    if (!bookmarks.length) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'warn', title: 'Nessun preferito',
+            body: 'Marca prima dei file con la <span style="color:var(--accent-2);">stella</span> per aggiungerli ai preferiti.',
+            duration: 3500
+        });
+        return;
+    }
+    // Filtra solo _alz fra i preferiti (intersezione con archivio noto)
+    var alzNames = [];
+    (_cachedFiles || []).forEach(function (f) {
+        if (f.type === 'alz' && bookmarks.indexOf(f.name) !== -1) alzNames.push(f.name);
+    });
+    if (alzNames.length === 0) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'warn', title: 'Nessun preferito alzata',
+            body: 'I preferiti non contengono file alzata (.scr). La pagina Confronto supporta solo profili cartesiani.',
+            duration: 4000
+        });
+        return;
+    }
+    var picked = alzNames.slice(0, 4);
+    if (alzNames.length > 4) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'info', title: 'Carico i primi 4 preferiti',
+            body: alzNames.length + ' preferiti totali, la pagina Confronto ne supporta max 4.',
+            duration: 3500
+        });
+    }
+    var url = 'grafici.html?files=' + picked.map(encodeURIComponent).join(',');
+    window.location.href = url;
+}
+window.openBookmarksInCompare = openBookmarksInCompare;
 window.onSearchInput = onSearchInput;
 window.clearSearch = clearSearch;
 window.setTypeFilter = setTypeFilter;
@@ -1109,6 +1225,7 @@ function renderRecentsTable() {
         return true;
     });
     renderTagFilters();
+    renderTagStats();
     filtered.sort(function (a, b) {
         var aMark = bookmarkSet[a.name] ? 1 : 0;
         var bMark = bookmarkSet[b.name] ? 1 : 0;
