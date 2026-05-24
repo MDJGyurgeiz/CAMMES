@@ -379,14 +379,31 @@
                     </select>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Rigidezza treno <span class="help-icon" data-tip="<strong>Rigidezza equivalente treno valvole</strong>Combinazione di asta, bilancere, scodellino. Tipico: 300-800 N/mm per treno completo. Solo molla: 500+ N/mm. Pi&ugrave; rigido = valvola segue meglio la cam ma trasmette pi&ugrave; vibrazione. Conservativo: 500 N/mm." tabindex="0">?</span></span>
-                    <input type="number" id="kTrain" value="500" class="input" style="width:75px;" step="50" min="50">
+                    <span class="param-label">Rigidezza treno <span class="help-icon" data-tip="<strong>Rigidezza equivalente treno valvole</strong>Trasferimento forza cam→valvola, dominata dal contatto puntuale (molto rigido).<br><b>OHC con bicchiere</b>: 5000-15000 N/mm<br><b>Finger follower</b>: 3000-8000 N/mm<br><b>Pushrod V8</b>: 2000-5000 N/mm (asta flessibile)<br><b>Diesel pushrod lungo</b>: 1500-2500 N/mm.<br>Default 5000 = OHC tipico." tabindex="0">?</span></span>
+                    <input type="number" id="kTrain" value="5000" class="input" style="width:75px;" step="500" min="500">
                     <span class="param-unit">N/mm</span>
                 </div>
                 <div class="param-row">
                     <span class="param-label">Damping &zeta; <span class="help-icon" data-tip="<strong>Damping ratio</strong>Quanto velocemente le oscillazioni si smorzano. 0 = sistema undamped (oscilla per sempre). 0.05-0.1 tipico per treno valvole reale. 1 = critico (nessuna oscillazione, lento). Range usuale: 0.04-0.12." tabindex="0">?</span></span>
                     <input type="number" id="dampingRatio" value="0.06" class="input" style="width:75px;" step="0.01" min="0" max="1">
                     <span class="param-unit">(0..1)</span>
+                </div>
+                <div class="param-row">
+                    <span class="param-label">Modello <span class="help-icon" data-tip="<strong>1-DOF vs 2-DOF</strong><b>1-DOF</b> (default): un'unica massa = valvola+treno equivalente. Veloce, accurato per OHC con bicchiere/finger. <b>2-DOF</b>: separa bilancere/pushrod dalla valvola, due masse e due rigidezze in serie. Pi&ugrave; preciso per motori pushrod (V8 USA, vintage) e finger con bilancere pesante. Pi&ugrave; lento." tabindex="0">?</span></span>
+                    <select id="complianceModel" class="input" style="width:120px;" onchange="on2DofToggle();">
+                        <option value="1dof" selected>1-DOF (semplice)</option>
+                        <option value="2dof">2-DOF (catena)</option>
+                    </select>
+                </div>
+                <div class="param-row" id="row2DofMass" style="display:none;">
+                    <span class="param-label">Massa interm. <span class="help-icon" data-tip="<strong>Massa bilancere/pushrod (2-DOF)</strong>Massa del bilancere + asta + scodellino spostatosi col bilancere. Tipico: 30-60 g per V8 pushrod, 20-40 g per finger follower. Pi&ugrave; pesante = pi&ugrave; ritardo + valvola pi&ugrave; isolata dalla cam." tabindex="0">?</span></span>
+                    <input type="number" id="massEqIntermediate" value="50" class="input" style="width:75px;" step="5" min="1">
+                    <span class="param-unit">g</span>
+                </div>
+                <div class="param-row" id="row2DofKPush" style="display:none;">
+                    <span class="param-label">k pushrod <span class="help-icon" data-tip="<strong>Rigidezza tra cam e bilancere (2-DOF)</strong>Rappresenta l'asta pushrod (per V8) o la flessibilit&agrave; del braccio cam-side del finger. Tipico: 800-1500 N/mm pushrod corto, 500-1000 N/mm asta lunga. Pi&ugrave; flessibile = pi&ugrave; ritardo." tabindex="0">?</span></span>
+                    <input type="number" id="kPushrod" value="800" class="input" style="width:75px;" step="50" min="50">
+                    <span class="param-unit">N/mm</span>
                 </div>
             </div>
 
@@ -398,6 +415,18 @@
             <div class="flex gap-8" style="margin-top:8px;">
                 <button class="btn btn-secondary" id="btnExportCSV" onclick="exportCSV();" style="flex:1;" disabled data-tip="<strong>Esporta tabella CSV</strong>Salva tutti i dati 360&deg; (alzata, velocit&agrave;, accelerazione, forze) in un file .csv apribile con Excel/LibreOffice.">&#8595; CSV</button>
                 <button class="btn btn-secondary" id="btnExportPDF" onclick="exportPDF();" style="flex:1;" disabled data-tip="<strong>Esporta report PDF</strong>Genera un report stampabile con grafici, tabelle dei risultati e parametri della scheda tecnica del motore.">&#8595; PDF</button>
+            </div>
+
+            <!-- RACE-GRADE: Sweep RPM + Optimizer molla -->
+            <div class="flex gap-8" style="margin-top:8px;">
+                <button class="btn btn-secondary" id="btnSweepRpm" onclick="runRpmSweep();" style="flex:1;" disabled data-tip="<strong>Sweep RPM</strong>Esegue la simulazione compliance a 12 regimi diversi (da rpm/2 a rpm*2) e plotta come cresce il valve float al variare degli RPM. Trova il <b>vero</b> regime massimo operativo, considerando dinamica del treno valvole. Tempo: ~5 secondi.">&#128201; Sweep RPM</button>
+                <button class="btn btn-secondary" id="btnOptimizeSpring" onclick="runSpringOptimizer();" style="flex:1;" disabled data-tip="<strong>Optimizer molla</strong>Cerca la molla minima (k, F&#8320;) che mantiene valve float &lt; 0.1 mm al RPM target. Itera su una griglia di (k, F&#8320;) e simula compliance per ognuna. Suggerisce la combinazione pi&ugrave; leggera (= meno coppia richiesta alla cam) che rispetta il vincolo. Tempo: ~10 secondi.">&#127919; Suggerisci molla</button>
+            </div>
+
+            <!-- Risultati Sweep / Optimizer -->
+            <div id="raceResultsBox" style="display:none; margin-top:12px; padding:10px; background:var(--bg-input); border-radius:var(--r-md); border:1px solid var(--border);">
+                <div id="raceResultsTitle" style="font-family:var(--font-display); font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color:var(--text-muted); margin-bottom:6px;"></div>
+                <div id="raceResultsBody" style="font-size:12px; line-height:1.5;"></div>
             </div>
         </div>
 
@@ -606,6 +635,21 @@
             <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.4;">
                 Quando F. inerzia (linea continua) supera F. molla (tratteggiata) la valvola perde il contatto con la camma (cam float / valve toss).
                 L'incrocio individua il regime critico.
+            </div>
+        </div>
+
+        <!-- Compliance dynamic chart: cam vs valvola REALE (RK4) -->
+        <div class="kin-chart-wrap" id="complianceChartWrap" style="display:none;">
+            <div class="kin-chart-title">
+                <span id="complianceChartTitle">Compliance: alzata cam (imposta) vs valvola reale (RK4)</span>
+                <button class="btn-zoom-reset" onclick="if(complianceChart)complianceChart.resetZoom();">&circlearrowright; Reset Zoom</button>
+            </div>
+            <canvas id="complianceCanvas"></canvas>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.4;">
+                Linea sottile = cam imposta dal profilo (calcolo statico).
+                Linea grossa = posizione effettiva valvola simulata dal solver RK4.
+                Zona rossa = <b>valve float</b>: la valvola perde contatto con la cam (gap &gt; 0).
+                Il picco rosso indica la dinamica più sfavorevole.
             </div>
         </div>
 
@@ -1003,7 +1047,7 @@ function convertPuntToRoller(camLiftRaw, rBase, rRoll, rPunt) {
 function simulateCompliance(camLift720, rpm, params) {
     var p = params || {};
     var m_kg     = (p.massEqG  || 100) / 1000;   // kg
-    var k_train  = (p.kTrainN_mm || 500) * 1000; // N/m
+    var k_train  = (p.kTrainN_mm || 5000) * 1000; // N/m
     var k_spring = (p.kSpringN_mm || 30) * 1000; // N/m
     var F0       = p.F0N || 200;                 // N preload
     var damping  = (p.dampingRatio || 0.06);     // ζ critico
@@ -1073,6 +1117,103 @@ function simulateCompliance(camLift720, rpm, params) {
     return out;
 }
 
+// =============================================================
+// COMPLIANCE 2-DOF — modello catena (cam → bilancere → valvola)
+// =============================================================
+// Sistema a 2 gradi di libertà che separa la massa del bilancere/pushrod
+// dalla massa della valvola, collegate da una rigidezza intermedia.
+// Più realistico per:
+//   - motori pushrod (V8 americani, vintage) dove asta + bilancere hanno
+//     massa significativa e flessibilità
+//   - finger follower con rocker pesante
+//   - rocker shaft + bilancere multi-pezzo
+//
+// Stato: (x1, v1, x2, v2)
+//   x1 = posizione bilancere/pushrod (estremità lato valvola)
+//   x2 = posizione valvola
+//
+// Equazioni:
+//   m1·ẍ1 = k_push·(x_cam - x1) - k_train·(x1 - x2) - c1·ẋ1
+//   m2·ẍ2 = k_train·(x1 - x2) - k_spring·x2 - F0 - c2·ẋ2
+//
+// Quando contact cam-bilancere si perde (x_cam < x1): k_push → 0 (no tension)
+// Quando contact bilancere-valvola si perde (x1 < x2): k_train → 0
+//
+// Solver: Runge-Kutta 4° ordine su stato (x1, v1, x2, v2).
+function simulateCompliance2DOF(camLift720, rpm, params) {
+    var p = params || {};
+    var m1_kg = (p.massEqIntermediateG || 60) / 1000;   // massa bilancere
+    var m2_kg = (p.massEqG || 100) / 1000;              // massa valvola
+    var k_push  = (p.kPushrodN_mm || 800) * 1000;       // rigidezza pushrod/cam-bilancere
+    var k_train = (p.kTrainN_mm   || 5000) * 1000;      // rigidezza bilancere-valvola
+    var k_spring = (p.kSpringN_mm || 30) * 1000;        // rigidezza molla valvola
+    var F0       = p.F0N || 200;
+    var damping  = p.dampingRatio || 0.06;
+
+    var omega_n1 = Math.sqrt(k_push / m1_kg);
+    var omega_n2 = Math.sqrt(k_train / m2_kg);
+    var c1 = 2 * damping * Math.sqrt(k_push * m1_kg);
+    var c2 = 2 * damping * Math.sqrt(k_train * m2_kg);
+
+    var rps = rpm / 60;
+    var degPerSec = rps * 360;
+    if (degPerSec <= 0) degPerSec = 1;
+    var dtPerDeg  = 1 / degPerSec;
+    var dtNatural = (2 * Math.PI / Math.max(omega_n1, omega_n2)) / 80;
+    var subSteps  = Math.max(6, Math.ceil(dtPerDeg / dtNatural));
+    var dt = dtPerDeg / subSteps;
+
+    var x1 = 0, v1 = 0, x2 = 0, v2 = 0;
+
+    function camAt(degIdx) {
+        var i = ((Math.round(degIdx) - 1) % 720 + 720) % 720 + 1;
+        return (camLift720[i] || 0) * 1e-3;
+    }
+
+    function deriv(x1c, v1c, x2c, v2c, degAtT) {
+        var x_cam = camAt(degAtT);
+        // F_cam→bilancere: solo se cam spinge il bilancere (no tensione)
+        var contact1 = x_cam - x1c;
+        var F_push = contact1 > 0 ? k_push * contact1 : 0;
+        // F_bilancere→valvola: solo se bilancere spinge la valvola
+        var contact2 = x1c - x2c;
+        var F_train = contact2 > 0 ? k_train * contact2 : 0;
+        // F_molla valvola
+        var F_spring = F0 + k_spring * Math.max(0, x2c);
+        // Viscose
+        var F_visc1 = c1 * v1c;
+        var F_visc2 = c2 * v2c;
+        // Newton
+        var a1 = (F_push - F_train - F_visc1) / m1_kg;
+        var a2 = (F_train - F_spring - F_visc2) / m2_kg;
+        return [v1c, a1, v2c, a2];
+    }
+
+    var out = new Array(722);
+    for (var ii = 0; ii <= 721; ii++) out[ii] = 0;
+
+    for (var deg = 1; deg <= 720; deg++) {
+        for (var sub = 0; sub < subSteps; sub++) {
+            var degAt = deg + sub / subSteps;
+            // RK4 multi-dimensionale
+            var k1 = deriv(x1, v1, x2, v2, degAt);
+            var k2 = deriv(x1 + k1[0]*dt/2, v1 + k1[1]*dt/2, x2 + k1[2]*dt/2, v2 + k1[3]*dt/2, degAt + 0.5/subSteps);
+            var k3 = deriv(x1 + k2[0]*dt/2, v1 + k2[1]*dt/2, x2 + k2[2]*dt/2, v2 + k2[3]*dt/2, degAt + 0.5/subSteps);
+            var k4 = deriv(x1 + k3[0]*dt,   v1 + k3[1]*dt,   x2 + k3[2]*dt,   v2 + k3[3]*dt,   degAt + 1.0/subSteps);
+            x1 += (k1[0] + 2*k2[0] + 2*k3[0] + k4[0]) * dt / 6;
+            v1 += (k1[1] + 2*k2[1] + 2*k3[1] + k4[1]) * dt / 6;
+            x2 += (k1[2] + 2*k2[2] + 2*k3[2] + k4[2]) * dt / 6;
+            v2 += (k1[3] + 2*k2[3] + 2*k3[3] + k4[3]) * dt / 6;
+            // Vincolo: né bilancere né valvola sotto zero
+            if (x1 < 0) { x1 = 0; if (v1 < 0) v1 = 0; }
+            if (x2 < 0) { x2 = 0; if (v2 < 0) v2 = 0; }
+        }
+        // Posizione della VALVOLA (lift osservato all'esterno)
+        out[deg] = x2 * 1000;
+    }
+    return out;
+}
+
 // Indicatore valve float: misura quanto la curva "valvola reale" si discosta
 // dalla "cam geometrica" — gap = max(camLift - valveLift) durante decelerazione.
 // Se gap > 0.1 mm → float manifesto (valvola perde contatto).
@@ -1084,6 +1225,191 @@ function detectValveFloat(camLift720, valveLift720) {
     }
     return { maxGap: maxGap, gapIdx: gapIdx };
 }
+
+// =============================================================
+// RACE-GRADE: Sweep RPM e Optimizer molla
+// =============================================================
+
+// Sweep RPM: simula compliance a N regimi diversi (1/2x..2x del target)
+// e ritorna una curva valveFloat(RPM). Identifica il punto critico
+// dove float supera la soglia di sicurezza (0.5 mm di default).
+function rpmSweep(camLift720, baseRpm, springParams, opts) {
+    var nPoints = (opts && opts.nPoints) || 12;
+    var rpmMin  = (opts && opts.rpmMin) || baseRpm * 0.5;
+    var rpmMax  = (opts && opts.rpmMax) || baseRpm * 2;
+    var floatThreshold = (opts && opts.threshold) || 0.5;  // mm
+
+    var results = [];
+    var criticalRpm = null;
+    for (var i = 0; i < nPoints; i++) {
+        var rpm = rpmMin + (rpmMax - rpmMin) * i / (nPoints - 1);
+        var valve = simulateCompliance(camLift720, rpm, springParams);
+        var fl = detectValveFloat(camLift720, valve);
+        results.push({ rpm: rpm, float: fl.maxGap, floatDeg: fl.gapIdx - 360 });
+        if (!criticalRpm && fl.maxGap > floatThreshold) criticalRpm = rpm;
+    }
+    return { points: results, criticalRpm: criticalRpm, threshold: floatThreshold };
+}
+
+// Optimizer molla: griglia di ricerca (k, F0) per minimizzare k+F0 mantenendo
+// valveFloat < threshold al RPM target. Usa una scansione coarse poi fine.
+function springOptimizer(camLift720, targetRpm, baseParams, opts) {
+    var threshold = (opts && opts.threshold) || 0.1;   // mm float ammesso
+    var kRange    = (opts && opts.kRange)    || [20, 400];   // N/mm
+    var F0Range   = (opts && opts.F0Range)   || [100, 1500]; // N
+    var nK = 11, nF0 = 8;  // 88 combinazioni
+
+    var best = null;  // {k, F0, maxFloat, costScore}
+    for (var i = 0; i < nK; i++) {
+        var k = kRange[0] + (kRange[1] - kRange[0]) * i / (nK - 1);
+        for (var j = 0; j < nF0; j++) {
+            var F0 = F0Range[0] + (F0Range[1] - F0Range[0]) * j / (nF0 - 1);
+            var p = Object.assign({}, baseParams, { kSpringN_mm: k, F0N: F0 });
+            var valve = simulateCompliance(camLift720, targetRpm, p);
+            var fl = detectValveFloat(camLift720, valve);
+            if (fl.maxGap < threshold) {
+                // Cost: combinazione di k (più rigida = più coppia richiesta + più
+                // attrito) e F0 (precarico). Normalizzo entrambi su 0..1.
+                var kNorm  = (k - kRange[0]) / (kRange[1] - kRange[0]);
+                var F0Norm = (F0 - F0Range[0]) / (F0Range[1] - F0Range[0]);
+                var cost = kNorm + F0Norm;  // somma pesata uguale
+                if (!best || cost < best.costScore) {
+                    best = { k: k, F0: F0, maxFloat: fl.maxGap, costScore: cost };
+                }
+            }
+        }
+    }
+    return best;  // null se nessuna combinazione rispetta il vincolo
+}
+
+// UI handlers
+function runRpmSweep() {
+    if (!lastAnalysis || !lastAnalysis.arrays) return;
+    var box   = document.getElementById('raceResultsBox');
+    var title = document.getElementById('raceResultsTitle');
+    var body  = document.getElementById('raceResultsBody');
+    title.textContent = 'Sweep RPM in corso...';
+    body.innerHTML = '<i>Simulazione di 12 regimi, ~3-5 secondi.</i>';
+    box.style.display = '';
+
+    setTimeout(function () {
+        try {
+            var inp = lastAnalysis.inputs;
+            var anlIn = lastAnalysis.arrays.anlIn;
+            var springParams = {
+                massEqG: inp.massEqIntake,
+                kTrainN_mm: Number(document.getElementById("kTrain").value) || 5000,
+                kSpringN_mm: inp.springK,
+                F0N: inp.springPreload,
+                dampingRatio: Number(document.getElementById('dampingRatio').value) || 0.06
+            };
+            var result = rpmSweep(anlIn, inp.rpm, springParams, { nPoints: 12 });
+
+            // Render tabella + verdict
+            var rows = result.points.map(function (p) {
+                var cls = p.float > 0.5 ? 'red' : (p.float > 0.1 ? 'yellow' : 'green');
+                var col = cls === 'red' ? 'var(--danger)' : (cls === 'yellow' ? 'var(--warning)' : 'var(--success)');
+                return '<tr><td style="padding:2px 8px;color:var(--text-secondary);">' + Math.round(p.rpm) + ' rpm</td>' +
+                       '<td style="padding:2px 8px;text-align:right;color:' + col + ';font-family:var(--font-mono);font-weight:600;">' +
+                       p.float.toFixed(3) + ' mm</td></tr>';
+            }).join('');
+            title.textContent = 'Sweep RPM — aspirazione (' + result.points.length + ' regimi)';
+            var critMsg = result.criticalRpm
+                ? '<b style="color:var(--danger);">RPM critico dinamico:</b> ~' + Math.round(result.criticalRpm).toLocaleString('it-IT') +
+                  ' rpm (oltre questo: valve float &gt; ' + result.threshold + ' mm).'
+                : '<b style="color:var(--success);">Margine ampio</b>: a tutti i regimi testati il float resta sotto ' + result.threshold + ' mm. Motore sicuro.';
+            body.innerHTML = critMsg +
+                '<table style="margin-top:8px;width:100%;border-collapse:collapse;"><thead><tr><th style="text-align:left;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Regime</th><th style="text-align:right;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Valve float max</th></tr></thead><tbody>' + rows + '</tbody></table>';
+            if (window.cammesToast) window.cammesToast({
+                kind: result.criticalRpm ? 'warn' : 'success',
+                title: 'Sweep RPM completato',
+                body: result.criticalRpm ? ('Critico ~' + Math.round(result.criticalRpm) + ' rpm') : 'Nessun valve float significativo nel range testato',
+                duration: 4500
+            });
+        } catch (e) {
+            body.innerHTML = '<span style="color:var(--danger);">Errore: ' + e.message + '</span>';
+        }
+    }, 50);
+}
+
+function runSpringOptimizer() {
+    if (!lastAnalysis || !lastAnalysis.arrays) return;
+    var box   = document.getElementById('raceResultsBox');
+    var title = document.getElementById('raceResultsTitle');
+    var body  = document.getElementById('raceResultsBody');
+    title.textContent = 'Optimizer molla in corso...';
+    body.innerHTML = '<i>Cerca tra 63 combinazioni (k, F&#8320;), ~5-10 secondi.</i>';
+    box.style.display = '';
+
+    setTimeout(function () {
+        try {
+            var inp = lastAnalysis.inputs;
+            var anlIn = lastAnalysis.arrays.anlIn;
+            var baseParams = {
+                massEqG: inp.massEqIntake,
+                kTrainN_mm: Number(document.getElementById("kTrain").value) || 5000,
+                dampingRatio: Number(document.getElementById('dampingRatio').value) || 0.06
+            };
+            // Range esteso per coprire camme race con accelerazioni alte.
+            // Soglia 0.3 mm = "valvola segue bene la cam senza bouncing
+            // significativo". Soglia 0.1 mm sarebbe "perfetta" ma quasi
+            // mai raggiungibile su camme race con alzata > 7 mm.
+            var result = springOptimizer(anlIn, inp.rpm, baseParams, {
+                threshold: 0.3,
+                kRange: [20, 400],      // fino a molle race rigide (300+ N/mm)
+                F0Range: [100, 1500]    // precarichi fino a 1500 N (race)
+            });
+
+            title.textContent = 'Optimizer molla — soglia float 0.3 mm @ ' + inp.rpm + ' rpm';
+            if (!result) {
+                body.innerHTML = '<b style="color:var(--danger);">Nessuna combinazione trovata</b> nel range k=20..400 N/mm, F&#8320;=100..1500 N che mantenga il valve float sotto 0.3 mm al regime ' + inp.rpm + ' rpm.<br><br>' +
+                                 'Possibili soluzioni:<br>' +
+                                 '&bull; Riduci la massa equivalente del treno (' + inp.massEqIntake + ' g attuali)<br>' +
+                                 '&bull; Aumenta la rigidezza treno (' + (Number(document.getElementById("kTrain").value) || 5000) + ' N/mm attuali)<br>' +
+                                 '&bull; Considera RPM target inferiori<br>' +
+                                 '&bull; Allarga il range cercato (modifica kRange/F0Range nel codice)';
+                if (window.cammesToast) window.cammesToast({
+                    kind: 'err', title: 'Optimizer fallito',
+                    body: 'Nessuna molla nel range raggiunge float &lt; 0.1 mm. Riduci massa o RPM target.',
+                    duration: 6000
+                });
+            } else {
+                var currentScore = inp.springK + inp.springPreload / 10;
+                var newScore = result.k + result.F0 / 10;
+                var diffK  = result.k  - inp.springK;
+                var diffF0 = result.F0 - inp.springPreload;
+                body.innerHTML =
+                    '<b style="color:var(--success);">Combinazione minima trovata:</b><br>' +
+                    '<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin-top:8px;font-family:var(--font-mono);">' +
+                      '<div style="color:var(--text-muted);">k molla:</div><div><b>' + result.k.toFixed(1) + ' N/mm</b> ' +
+                      '<span style="color:' + (diffK >= 0 ? 'var(--warning)' : 'var(--success)') + ';">(' + (diffK >= 0 ? '+' : '') + diffK.toFixed(1) + ' vs attuale)</span></div>' +
+                      '<div style="color:var(--text-muted);">F&#8320; precarico:</div><div><b>' + result.F0.toFixed(0) + ' N</b> ' +
+                      '<span style="color:' + (diffF0 >= 0 ? 'var(--warning)' : 'var(--success)') + ';">(' + (diffF0 >= 0 ? '+' : '') + diffF0.toFixed(0) + ' vs attuale)</span></div>' +
+                      '<div style="color:var(--text-muted);">Float max:</div><div><b style="color:var(--success);">' + result.maxFloat.toFixed(3) + ' mm</b></div>' +
+                    '</div>' +
+                    '<p style="margin-top:8px;font-size:11px;color:var(--text-muted);">' +
+                    'Usa il <b>Live tuning</b> sopra per applicare questi valori e verificare l\'analisi completa.</p>';
+                if (window.cammesToast) window.cammesToast({
+                    kind: 'success', title: 'Molla ottimale trovata',
+                    body: 'k=' + result.k.toFixed(0) + ' N/mm, F&#8320;=' + result.F0.toFixed(0) + ' N → float ' + result.maxFloat.toFixed(3) + ' mm',
+                    duration: 6000
+                });
+            }
+        } catch (e) {
+            body.innerHTML = '<span style="color:var(--danger);">Errore: ' + e.message + '</span>';
+        }
+    }, 50);
+}
+window.runRpmSweep = runRpmSweep;
+window.runSpringOptimizer = runSpringOptimizer;
+
+function on2DofToggle() {
+    var sel = document.getElementById('complianceModel');
+    var is2 = sel && sel.value === '2dof';
+    var m = document.getElementById('row2DofMass'); if (m) m.style.display = is2 ? 'flex' : 'none';
+    var k = document.getElementById('row2DofKPush'); if (k) k.style.display = is2 ? 'flex' : 'none';
+}
+window.on2DofToggle = on2DofToggle;
 
 function convertPuntToFinger(camLiftRaw, rBase, lArm, lValve, rPunt, tiltDeg) {
     rPunt = (typeof rPunt === 'number' && rPunt > 0) ? rPunt : 0;
@@ -1966,16 +2292,27 @@ function analyze() {
     var valveLiftIn = null, valveLiftEx = null;
     var floatIn = null, floatEx = null;
     if (complianceOn && rpm > 0) {
-        var kTrain  = Number(document.getElementById('kTrain').value) || 500;
+        var kTrain  = Number(document.getElementById("kTrain").value) || 5000;
         var damping = Number(document.getElementById('dampingRatio').value) || 0.06;
-        valveLiftIn = simulateCompliance(anlIn, rpm, {
+        var modelSel = document.getElementById('complianceModel');
+        var use2DOF = modelSel && modelSel.value === '2dof';
+        var baseParams = {
             massEqG: mEqIn, kTrainN_mm: kTrain, kSpringN_mm: springK,
             F0N: springF0, dampingRatio: damping
-        });
-        valveLiftEx = simulateCompliance(anlEx, rpm, {
-            massEqG: mEqEx, kTrainN_mm: kTrain, kSpringN_mm: springK,
-            F0N: springF0, dampingRatio: damping
-        });
+        };
+        if (use2DOF) {
+            var mInter   = Number(document.getElementById('massEqIntermediate').value) || 50;
+            var kPushrod = Number(document.getElementById('kPushrod').value) || 800;
+            baseParams.massEqIntermediateG = mInter;
+            baseParams.kPushrodN_mm        = kPushrod;
+            valveLiftIn = simulateCompliance2DOF(anlIn, rpm, baseParams);
+            baseParams.massEqG = mEqEx;
+            valveLiftEx = simulateCompliance2DOF(anlEx, rpm, baseParams);
+        } else {
+            valveLiftIn = simulateCompliance(anlIn, rpm, baseParams);
+            baseParams.massEqG = mEqEx;
+            valveLiftEx = simulateCompliance(anlEx, rpm, baseParams);
+        }
         floatIn = detectValveFloat(anlIn, valveLiftIn);
         floatEx = detectValveFloat(anlEx, valveLiftEx);
     }
@@ -2047,6 +2384,7 @@ function analyze() {
     createAccelerationChart(omega);
     createJerkChart(omega);
     createForceChart(forcesIn, forcesEx, rpm);
+    createComplianceChart(anlIn, valveLiftIn, anlEx, valveLiftEx, rpm);
 
     // Update timing diagram
     updateTimingDiagram(durIntake, durExhaust, intakeAng, exhaustAng, adv, LSA);
@@ -2105,6 +2443,8 @@ function analyze() {
     };
     document.getElementById('btnExportCSV').disabled = false;
     document.getElementById('btnExportPDF').disabled = false;
+    var bSw = document.getElementById('btnSweepRpm'); if (bSw) bSw.disabled = false;
+    var bOp = document.getElementById('btnOptimizeSpring'); if (bOp) bOp.disabled = false;
     if (window.cammesToast) {
         var minRpmCrit = Math.min(forcesIn.rpmCrit, forcesEx.rpmCrit);
         var rpmCritStr = isFinite(forcesIn.rpmCrit) && isFinite(forcesEx.rpmCrit)
@@ -2370,6 +2710,54 @@ function createJerkChart(omega) {
 }
 
 // ========== FORCE CHART ==========
+
+// Chart compliance: 2 line sovrapposte per intake (cam vs valvola reale)
+// + zona valve float evidenziata. Mostrato solo con compliance ON.
+var complianceChart = null;
+function createComplianceChart(camLiftIn, valveLiftIn, camLiftEx, valveLiftEx, rpm) {
+    if (complianceChart) { try { complianceChart.destroy(); } catch (e) {} complianceChart = null; }
+    var wrap = document.getElementById('complianceChartWrap');
+    if (!wrap) return;
+    if (!valveLiftIn && !valveLiftEx) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+
+    var labels = [];
+    var camIn = [], valIn = [], camEx = [], valEx = [], floatIn = [], floatEx = [];
+    for (var i = 1; i <= 720; i++) {
+        labels.push(i);
+        var cI = camLiftIn[i] || 0;
+        var vI = (valveLiftIn ? valveLiftIn[i] : null);
+        var cE = camLiftEx[i] || 0;
+        var vE = (valveLiftEx ? valveLiftEx[i] : null);
+        camIn.push(cI); valIn.push(vI);
+        camEx.push(cE); valEx.push(vE);
+        // Evidenzio zona float: dove cam > valve (gap positivo)
+        floatIn.push(valveLiftIn !== null && cI - (vI || 0) > 0.02 ? cI : null);
+        floatEx.push(valveLiftEx !== null && cE - (vE || 0) > 0.02 ? cE : null);
+    }
+
+    var titleEl = document.getElementById('complianceChartTitle');
+    if (titleEl) titleEl.textContent = 'Compliance — alzata cam (imposta) vs valvola reale @ ' + rpm + ' rpm';
+
+    var ctx = document.getElementById('complianceCanvas').getContext('2d');
+    complianceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: 'cam asp. (imposta)',  data: camIn, borderColor: '#00d4ff', borderDash: [4,3], borderWidth: 1, pointRadius: 0, fill: false },
+                { label: 'valvola asp. reale',   data: valIn, borderColor: '#00d4ff', borderWidth: 2.5, pointRadius: 0, fill: false },
+                { label: 'cam scar. (imposta)', data: camEx, borderColor: '#ff5252', borderDash: [4,3], borderWidth: 1, pointRadius: 0, fill: false },
+                { label: 'valvola scar. reale',  data: valEx, borderColor: '#ff5252', borderWidth: 2.5, pointRadius: 0, fill: false },
+                // Zona float in rosso semitrasparente (riempimento sotto la cam)
+                { label: 'float asp.',  data: floatIn, borderColor: 'transparent', backgroundColor: 'rgba(255,82,82,0.18)', pointRadius: 0, fill: '-3', spanGaps: false },
+                { label: 'float scar.', data: floatEx, borderColor: 'transparent', backgroundColor: 'rgba(255,82,82,0.18)', pointRadius: 0, fill: '-2', spanGaps: false }
+            ]
+        },
+        options: kinChartOptions('Alzata (mm)')
+    });
+    window.complianceChart = complianceChart;
+}
 
 function createForceChart(forcesIn, forcesEx, rpm) {
     if (forceChart) forceChart.destroy();
@@ -3310,6 +3698,11 @@ function resetAll() {
     lastAnalysis = null;
     document.getElementById('btnExportCSV').disabled = true;
     document.getElementById('btnExportPDF').disabled = true;
+    var bSwR = document.getElementById('btnSweepRpm'); if (bSwR) bSwR.disabled = true;
+    var bOpR = document.getElementById('btnOptimizeSpring'); if (bOpR) bOpR.disabled = true;
+    var rb = document.getElementById('raceResultsBox'); if (rb) rb.style.display = 'none';
+    if (complianceChart) { try { complianceChart.destroy(); } catch (e) {} complianceChart = null; }
+    var ccw = document.getElementById('complianceChartWrap'); if (ccw) ccw.style.display = 'none';
 
     updateChart();
 }
