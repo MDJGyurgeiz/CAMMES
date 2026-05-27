@@ -3237,6 +3237,12 @@ function exportCSV() {
     lines.push('Margine min scar. [N],' + R.marginMinEx.toFixed(2));
     lines.push('RPM critico asp.,' + (isFinite(R.rpmCritIn) ? Math.round(R.rpmCritIn) : 'inf'));
     lines.push('RPM critico scar.,' + (isFinite(R.rpmCritEx) ? Math.round(R.rpmCritEx) : 'inf'));
+    if (R.complianceOn && R.valveFloatIn !== null && R.valveFloatIn !== undefined) {
+        lines.push('Valve float dinamico asp. [mm],' + R.valveFloatIn.toFixed(3));
+        lines.push('Valve float dinamico asp. [deg],' + R.valveFloatInDeg);
+        lines.push('Valve float dinamico scar. [mm],' + R.valveFloatEx.toFixed(3));
+        lines.push('Valve float dinamico scar. [deg],' + R.valveFloatExDeg);
+    }
     lines.push('Vel. max apertura asp.,' + R.kinIntake.velOpen.toFixed(3) + ' ' + R.kinIntake.unitVel);
     lines.push('Vel. chiusura asp.,' + R.kinIntake.velClose.toFixed(3) + ' ' + R.kinIntake.unitVel);
     lines.push('Acc. max+ asp.,' + R.kinIntake.accPos.toFixed(3) + ' ' + R.kinIntake.unitAcc);
@@ -3523,6 +3529,12 @@ function exportPDF() {
         ['Margine F min',                      R.marginMinIn.toFixed(0) + ' N',               R.marginMinEx.toFixed(0) + ' N'],
         ['RPM critico',                        rpmCritInStr,                                  rpmCritExStr]
     ];
+    // Riga valve float dinamico (solo se compliance attiva)
+    if (R.complianceOn && R.valveFloatIn !== null && R.valveFloatIn !== undefined) {
+        rows.push(['Valve float dinamico',
+            R.valveFloatIn.toFixed(3) + ' mm @ ' + R.valveFloatInDeg + ' deg',
+            R.valveFloatEx.toFixed(3) + ' mm @ ' + R.valveFloatExDeg + ' deg']);
+    }
 
     // Header tabella
     var c1 = margin, c2 = margin + 70, c3 = margin + 130;
@@ -3620,6 +3632,7 @@ function exportPDF() {
     addChartIfPresent(accelerationChart,     'Accelerazione',                  55);
     addChartIfPresent(jerkChart,             'Jerk',                           55);
     addChartIfPresent(forceChart,            'Forze treno valvole',            60);
+    addChartIfPresent(complianceChart,       'Compliance: cam vs valvola reale (RK4)', 60);
 
     // Timing diagram fa pagina a sé per leggibilità
     if (timingChartInstance) {

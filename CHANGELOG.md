@@ -382,8 +382,54 @@ Sessione di refactor profondo e nuove feature avanzate. 35+ commit raggruppabili
 - ✅ **Firmware** Arduino flashato con anti-vibrazione + free-spin + tone
 
 ### Da fare nelle prossime sessioni
-- [ ] Grafico "Valvola reale vs cam" inline quando compliance ON
-- [ ] Sweep RPM: trova RPM critico dinamico iterando
-- [ ] Optimizer molla: suggerisce k/F₀ minimi per float < soglia
-- [ ] Modello compliance 2-DOF (catena cam→bilancere→valvola)
-- [ ] Test compliance su camma race reale + confronto regime massimo
+- [x] ~~Grafico "Valvola reale vs cam" inline quando compliance ON~~ (sotto-sessione 6.2)
+- [x] ~~Sweep RPM: trova RPM critico dinamico iterando~~ (sotto-sessione 6.2)
+- [x] ~~Optimizer molla: suggerisce k/F₀ minimi per float < soglia~~ (sotto-sessione 6.2)
+- [x] ~~Modello compliance 2-DOF (catena cam→bilancere→valvola)~~ (sotto-sessione 6.2)
+- [x] ~~Test compliance su camma race reale~~ (sotto-sessione 6.2, Clio)
+
+---
+
+## Sotto-sessione 6.2 — 2026-05-23/24 — Analisi race-grade avanzata
+### Tag: **v2.1.0-race-analysis**
+
+Estensione della sezione Analisi con 5 strumenti per camme da corsa.
+Commit `a84d464` + `(questo)`.
+
+### 1. Grafico valvola dinamica (`createComplianceChart`)
+Chart Chart.js v4 inline che sovrappone cam imposta (tratteggiata)
+e valvola reale (RK4, grossa) per asp + scar, con zona valve float
+evidenziata in rosso. Auto-hide se compliance OFF.
+
+### 2. Sweep RPM (`rpmSweep` + `runRpmSweep`)
+Bottone "Sweep RPM": 12 simulazioni RK4 da rpm/2 a rpm×2, plotta
+valve float per ogni regime, identifica RPM critico dinamico.
+Test Clio @ Auto 4cyl kTrain 5000: tutto < 0.5 mm, picco risonanza
+@ 5023 rpm (0.363), minimo @ 6795 (0.100).
+
+### 3. Optimizer molla (`springOptimizer` + `runSpringOptimizer`)
+Bottone "Suggerisci molla": griglia 88 combinazioni (k 20-400, F₀
+100-1500), trova la molla minima con float < 0.3 mm. Test Clio @ 6500:
+suggerito k=20/F₀=100 (più leggera dell'attuale) → float 0.074 mm.
+
+### 4. Compliance 2-DOF (`simulateCompliance2DOF`)
+Sistema a 2 masse (bilancere + valvola) + 2 rigidezze in serie, RK4
+4-stati. Selettore UI 1-DOF/2-DOF + input massa intermedia + k pushrod.
+Per V8 pushrod, vintage, finger con bilancere pesante. Test Clio:
+1-DOF float 0.096 mm, 2-DOF 1.510 mm (cattura modo bilancere).
+
+### 5. Fix critico k_train default 500 → 5000 N/mm
+Il default era irrealistico (float 4-6 mm fittizi). Valori reali:
+OHC 5000-15000, finger 3000-8000, pushrod 2000-5000, diesel 1500-2500.
+Dopo il fix i float sono fisicamente coerenti (sub-mm a regimi normali).
+
+### Integrazione export
+- PDF: nuova pagina "Compliance cam vs valvola reale" + riga "Valve
+  float dinamico" nella tabella risultati (solo se compliance ON)
+- CSV: 4 righe valve float dinamico (asp/scar mm + deg)
+
+### Da fare prossime sessioni
+- [ ] Sweep multi-parametro (k+F₀ simultanei, mappa 3D float)
+- [ ] Export "race report" PDF dedicato con sweep + optimizer
+- [ ] Modello compliance 3-DOF con cedevolezza sede valvola
+- [ ] Validazione su camma race reale + confronto regime motore noto
