@@ -37,6 +37,9 @@
         </button>
     </div>
 
+    <!-- Banner stato connessione hardware (nascosto se tutto ok) -->
+    <div id="connBanner" role="status" style="display:none; margin:0 0 14px; padding:10px 14px; border-radius:8px; background:rgba(234,179,8,0.12); border:1px solid rgba(234,179,8,0.55); color:var(--text-primary); font-size:13px; line-height:1.45;"></div>
+
     <!-- Main content: Gauge + Polar Chart -->
     <div class="main-grid">
 
@@ -184,6 +187,13 @@ var msg = "";
 var POL_TOTAL_STEPS = 360;
 var POL_TIME_SEC    = 90;  // stima a priori (ordine grandezza, usata per ETA iniziale)
 var scanEta = window.cammesEta ? window.cammesEta.create() : { start:function(){return this;}, tick:function(){return null;}, stop:function(){} };
+var _pageLoadTs = Date.now();
+var lastPolRx   = 0;   // timestamp ultimo frame sensore (per LED + banner)
+// WebSocket pronti (server raggiungibile)? Usato da LED, banner e guardia START.
+function _wsReady() {
+    return (typeof engineSocket !== 'undefined' && engineSocket.readyState === 1) &&
+           (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1);
+}
 var engineSocket = new WebSocket("ws://localhost:8080");
 
 engineSocket.onopen = function(event) {
@@ -221,6 +231,7 @@ engineSocket.onmessage = function(event) {
     }
 
     if (msg.substring(0, 1) != "*") {
+        lastPolRx = Date.now();   // frame sensore ricevuto (per LED + banner)
         if (Number(msg) < 10) { msg2 = "0" + msg; }
         else { msg2 = msg; }
 
@@ -288,11 +299,46 @@ engineSocket.onmessage = function(event) {
         }
     }
 };
+
+// LED stato + banner guida: distingue "server giù" da "server ok ma Arduino assente".
+function updatePolStatus() {
+    var now = Date.now();
+    var wsOk = _wsReady();
+    var ledSrv = document.getElementById('ledServer');
+    var ledSen = document.getElementById('ledSensor');
+    var ledEnc = document.getElementById('ledEncoder');
+    if (ledSrv) ledSrv.className = 'led ' + (wsOk ? 'ok' : 'err');
+    var senFresh = (lastPolRx !== 0) && (now - lastPolRx) < 5000;
+    if (ledSen) ledSen.className = 'led ' + (senFresh ? 'ok' : (lastPolRx === 0 ? '' : 'warn'));
+    if (ledEnc) ledEnc.className = 'led ' + (senFresh ? 'ok' : '');
+
+    var banner = document.getElementById('connBanner');
+    if (banner) {
+        var graceOver = (now - _pageLoadTs) > 2500;
+        var noArduino = (lastPolRx === 0) ? ((now - _pageLoadTs) > 4500) : ((now - lastPolRx) > 5000);
+        var bmsg = '';
+        if (!wsOk && graceOver) {
+            bmsg = '⚠ Server CAMMES non raggiungibile (ws://localhost:8080). Avvia il server e ricarica la pagina. ' +
+                   'Nel frattempo puoi usare Home e Analisi sui file già salvati.';
+        } else if (wsOk && noArduino) {
+            bmsg = '⚠ Server connesso, ma nessun dato dall’Arduino. Controlla il cavo USB e che il firmware sia caricato: ' +
+                   'la scansione non produrrà misure finché il LED Sensore non diventa verde.';
+        }
+        if (bmsg) { banner.textContent = bmsg; banner.style.display = ''; }
+        else      { banner.style.display = 'none'; }
+    }
+}
+setInterval(updatePolStatus, 700);
 </script>
 
 <script>
 var i = 0;
 function start() {
+    if (!_wsReady()) {
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Server non connesso',
+            body: 'Avvia cammes_server.js e collega l’Arduino prima di scansionare.', duration: 4500 });
+        return;
+    }
     var diamEl = document.getElementById("diam");
     diametro = diamEl ? diamEl.value : '';
     radius = Number(diametro) / 2;

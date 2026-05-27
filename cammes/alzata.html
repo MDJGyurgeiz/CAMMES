@@ -37,6 +37,9 @@
         </button>
     </div>
 
+    <!-- Banner stato connessione hardware (nascosto se tutto ok) -->
+    <div id="connBanner" role="status" style="display:none; margin:0 0 14px; padding:10px 14px; border-radius:8px; background:rgba(234,179,8,0.12); border:1px solid rgba(234,179,8,0.55); color:var(--text-primary); font-size:13px; line-height:1.45;"></div>
+
     <!-- Main content: Gauge + Chart -->
     <div class="main-grid">
 
@@ -301,13 +304,19 @@ var SENSOR_DEAD_MS     = 5000;   // oltre questo: rosso (nessun frame dal firmwa
 var ENCODER_FRESH_MS   = 8000;
 var NAN_TO_AUTOSTOP    = 3;
 
+var _pageLoadTs = Date.now();
+// WebSocket pronti (server raggiungibile)? Usato da LED, banner e guardie START.
+function _wsReady() {
+    return (typeof engineSocket !== 'undefined' && engineSocket.readyState === 1) &&
+           (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1);
+}
+
 function updateStatusLeds() {
     var ledSrv = document.getElementById('ledServer');
     var ledSen = document.getElementById('ledSensor');
     var ledEnc = document.getElementById('ledEncoder');
     if (!ledSrv) return;
-    var wsOk = (typeof engineSocket !== 'undefined' && engineSocket.readyState === 1) &&
-               (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1);
+    var wsOk = _wsReady();
     var now = Date.now();
     ledSrv.className = 'led ' + (wsOk ? 'ok' : 'err');
     // Sensore: verde se misure valide fresche, giallo se NaN o nessuna misura valida ma firmware risponde, rosso se firmware morto
@@ -319,6 +328,26 @@ function updateStatusLeds() {
     ledSen.className = 'led ' + senClass;
     var encOk = (now - lastEncoderRx) < ENCODER_FRESH_MS;
     ledEnc.className = 'led ' + (encOk ? 'ok' : (lastEncoderRx === 0 ? '' : 'warn'));
+
+    // Banner guida: distingue "server giù" da "server ok ma Arduino assente".
+    // Grazia iniziale per non lampeggiare durante l'handshake WebSocket.
+    var banner = document.getElementById('connBanner');
+    if (banner) {
+        var graceOver = (now - _pageLoadTs) > 2500;
+        var bmsg = '';
+        var noArduino = (lastSensorAnyRx === 0)
+            ? ((now - _pageLoadTs) > 4500)               // connesso ma mai un frame
+            : ((now - lastSensorAnyRx) > SENSOR_DEAD_MS); // frame interrotti
+        if (!wsOk && graceOver) {
+            bmsg = '⚠ Server CAMMES non raggiungibile (ws://localhost:8080). Avvia il server e ricarica la pagina. ' +
+                   'Nel frattempo puoi usare Home e Analisi sui file già salvati.';
+        } else if (wsOk && noArduino) {
+            bmsg = '⚠ Server connesso, ma nessun dato dall’Arduino. Controlla il cavo USB e che il firmware sia caricato: ' +
+                   'la scansione non produrrà misure finché i LED Sensore/Encoder non diventano verdi.';
+        }
+        if (bmsg) { banner.textContent = bmsg; banner.style.display = ''; }
+        else      { banner.style.display = 'none'; }
+    }
 }
 setInterval(updateStatusLeds, 700);
 
@@ -620,6 +649,11 @@ engineSocket.onmessage = function(event) {
 <script>
 var i = 0;
 function start() {
+    if (!_wsReady()) {
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Server non connesso',
+            body: 'Avvia cammes_server.js e collega l’Arduino prima di scansionare.', duration: 4500 });
+        return;
+    }
     // Legge target ripetizioni dalla UI all'avvio (poi non cambia per la
     // durata del ciclo completo: l'utente non può cambiarlo mid-sequence
     // perché disabilitiamo lo scanRepeat).
@@ -949,6 +983,11 @@ function m1() {
 <script>
 var labms = 0;
 function ms() {
+    if (typeof _wsReady === 'function' && !_wsReady()) {
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Server non connesso',
+            body: 'Lo Zero virtuale richiede server e Arduino attivi.', duration: 4500 });
+        return;
+    }
     // Ferma SUBITO i polling: la coda WebSocket deve essere libera
     // quando il blocco di fine 0V invierà '$+units'. Senza questo,
     // i 'm' di polling accodati possono ritardare la trasmissione del
