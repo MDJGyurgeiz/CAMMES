@@ -465,6 +465,51 @@ mappa k×F₀ (heatmap rasterizzata) e grafico compliance cam vs valvola.
   (3 simulazioni sweep+optimizer+mappa misurate a ~142 ms totali)
 
 ### Da fare prossime sessioni
-- [ ] Modello compliance 3-DOF con cedevolezza sede valvola
-- [ ] Validazione su camma race reale + confronto regime motore noto
-- [ ] Sweep 3D interattivo (rotazione mappa k×F₀×rpm)
+- [x] ~~Modello compliance 3-DOF con cedevolezza sede valvola~~ (sotto-sessione 6.4)
+- [x] ~~Validazione su camma race reale + confronto regime motore noto~~ (sotto-sessione 6.4)
+- [x] ~~Sweep 3D interattivo (rotazione mappa k×F₀×rpm)~~ (sotto-sessione 6.4)
+
+---
+
+## Sotto-sessione 6.4 — 2026-05-27 — 3-DOF + validazione + sweep 3D
+### Commit: `ca3b0ac` → `d05b57b`
+
+### 0. Igiene: piano e memoria obsoleti corretti
+- Il "fix Zero virtuale" riemerso da plan mode era **già fatto e committato**
+  (`947b785` ack `*mv` + `\n`, `5bb3bd3` closed-loop encoder, 9 maggio). Il
+  codice attuale è migliore del piano (encoder reale vs `maxg+180` open-loop).
+- La memoria "firmware in transizione 2→1 Uno" era stale: l'unificazione è
+  completa dal commit `ed3f421`. Memoria riscritta allo stato reale.
+
+### 1. Compliance 3-DOF (`simulateCompliance3DOF`)
+Terza massa = **sede valvola** (insert + porzione testata) richiamata a terra
+da k_seat + smorzamento; contatto valvola-sede unilaterale (penalty su gap
+g=x2−x3<0). Cattura il **valve bounce** alla chiusura, assente in 1/2-DOF.
+RK4 a 6 stati, passo legato al modo più rigido + cap anti-freeze.
+- UI: opzione "3-DOF (sede)", righe massa sede (15 g) e k sede (80000 N/mm).
+- `tools/test_3dof.js`: regressione, 3/3 PASS (limite rigido k_seat→∞ ⇒
+  3DOF≈2DOF a 0.005 mm; output finito a 9000 rpm; float cresce col regime).
+
+### 2. Validazione su Clio 1.8 16V reale (`tools/validate_clio.js`)
+Estrae la pipeline di produzione (parseCamFile→mapCamToCrank→solver) e la
+applica alla scansione reale `prove/clio_test_1_alz.scr`. Il motore F7P è
+**DOHC a punteria diretta** → 1-DOF è la topologia corretta → float a 7000 rpm
+(fuorigiri) = **0.091 mm**, trascurabile come deve essere per un motore di
+serie sano. 6/6 check PASS; camma confermata 8.60 mm / 246°.
+- Mostra anche che 2/3-DOF sovrastimano (modellano un pushrod inesistente) →
+  monito: il modello va scelto in base all'architettura del treno valvole.
+- La scelta del modello cambia il float di **10×** → `analisi.html` ora
+  registra il modello compliance usato (1/2/3-DOF) ed esporta l'etichetta in
+  CSV e PDF accanto al valve float (tracciabilità).
+
+### 3. Sweep 3D interattivo (`sweep3D` + `render3DSweep` + `run3DSweep`)
+Nuvola ruotabile del valve float sui tre assi k × F₀ × RPM (griglia 8×8×6 =
+384). Proiezione ortografica su canvas con azimuth/elevation, painter's
+algorithm, cubo+assi, punti colorati per float, marcatore molla attuale.
+Drag mouse+touch. Nessuna libreria 3D esterna. Mutuamente esclusivo con la
+mappa 2D. Bottone `btnSweep3D`.
+
+### Da fare prossime sessioni
+- [ ] Modello compliance 3-DOF con cedevolezza sede sui DUE lati (anche bilanciere)
+- [ ] Spring surge: molla a massa distribuita (modi delle spire)
+- [ ] Validazione su camma race reale dedicata + confronto banco
