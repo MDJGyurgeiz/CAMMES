@@ -429,7 +429,42 @@ Dopo il fix i float sono fisicamente coerenti (sub-mm a regimi normali).
 - CSV: 4 righe valve float dinamico (asp/scar mm + deg)
 
 ### Da fare prossime sessioni
-- [ ] Sweep multi-parametro (k+F₀ simultanei, mappa 3D float)
-- [ ] Export "race report" PDF dedicato con sweep + optimizer
+- [x] ~~Sweep multi-parametro (k+F₀ simultanei, mappa float)~~ (sotto-sessione 6.3)
+- [x] ~~Export "race report" PDF dedicato con sweep + optimizer~~ (sotto-sessione 6.3)
 - [ ] Modello compliance 3-DOF con cedevolezza sede valvola
 - [ ] Validazione su camma race reale + confronto regime motore noto
+
+---
+
+## Sotto-sessione 6.3 — 2026-05-27 — Mappa molla + Race report
+### Commit: `d926db2`
+
+### 1. Mappa molla k×F₀ (`springMap` + `renderSpringMap` + `_floatToColor`)
+Heatmap che varia SIMULTANEAMENTE rigidezza k e precarico F₀ su una
+griglia 16×14 (224 combinazioni), calcolando il valve float dinamico di
+ciascuna via `simulateCompliance`. Risolve il "da fare" sweep multi-parametro.
+- Canvas `springMapCanvas` 340×280; colori `_floatToColor`: verde <0.1 mm,
+  giallo 0.1-0.3, rosso >0.3
+- Marker ◎ sulla molla corrente; assi etichettati k (N/mm) × F₀ (N)
+- `runSpringMap` / bottone `btnSpringMap` "🗺 Mappa molla" (~8 s)
+- A colpo d'occhio mostra quali combinazioni molla mantengono il treno
+  valvole sotto soglia al regime target (es. Clio 7/224 a 7000 rpm —
+  fenomeno reale di surge della molla, non un bug)
+
+### 2. Race report PDF (`exportRaceReport`)
+PDF dedicato all'analisi dinamica (copertina viola), separato dal report
+tecnico standard. Contiene config valvola, sweep RPM, molla ottimale,
+mappa k×F₀ (heatmap rasterizzata) e grafico compliance cam vs valvola.
+- Bottone `btnRaceReport` "🏆 Race report"
+- Documento completo per validare il treno valvole di un motore da corsa
+
+### Wire-up
+- Bottoni abilitati in `analyze()` quando compliance ON, disabilitati in
+  `resetAll()`; canvas heatmap nascosto durante sweep/optimizer
+- `prove/clio_test_1_alz.scr`: scansione reale Clio 1.8 usata nei test
+  (3 simulazioni sweep+optimizer+mappa misurate a ~142 ms totali)
+
+### Da fare prossime sessioni
+- [ ] Modello compliance 3-DOF con cedevolezza sede valvola
+- [ ] Validazione su camma race reale + confronto regime motore noto
+- [ ] Sweep 3D interattivo (rotazione mappa k×F₀×rpm)
