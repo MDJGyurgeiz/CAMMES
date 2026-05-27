@@ -553,7 +553,12 @@ default Base per i nuovi utenti.
   contesto in più. I tooltip per-pulsante c'erano già.
 - [x] Ispezionati Confronto e Polare: Polare pulito; Confronto mancava solo la
   guida a video (ora aggiunta).
+- [x] **Alzata/Polare: messaggistica "nessun hardware connesso"** — banner
+  contestuale (server giù vs server-ok-ma-Arduino-assente) + guardia su
+  start()/ms() con toast "Server non connesso". In Polare ha risolto anche un
+  **crash latente** (start() → `sendSocket.send` con sendSocket undefined) e i
+  LED Server/Sensore/Encoder, prima nel markup ma mai aggiornati, ora pilotati.
 
 ### Da fare prossime sessioni
-- [ ] Alzata/Polare: messaggistica "nessun hardware connesso" più esplicita
 - [ ] Eventuale tour guidato passo-passo (oltre al wizard di benvenuto)
+- [ ] Auto-reconnect WebSocket (oggi serve ricaricare quando il server torna su)
