@@ -437,6 +437,9 @@
                 <button class="btn btn-secondary" id="btnSpringMap" onclick="runSpringMap();" style="flex:1;" disabled data-tip="<strong>Mappa molla k×F&#8320;</strong>Heatmap del valve float al variare SIMULTANEO di rigidezza k e precarico F&#8320;. Verde = sicuro (&lt;0.1mm), giallo = limite (0.1-0.3), rosso = float eccessivo. Marca la tua molla attuale (&#9678;) e la zona sicura. A colpo d'occhio vedi quali combinazioni funzionano. Tempo: ~8 secondi.">&#128506; Mappa molla</button>
                 <button class="btn btn-accent" id="btnRaceReport" onclick="exportRaceReport();" style="flex:1;" disabled data-tip="<strong>Race report PDF</strong>Genera un report PDF dedicato all'analisi dinamica: sweep RPM, molla ottimale, mappa k×F&#8320;, grafico compliance. Documento completo per validare il treno valvole di un motore da corsa.">&#127942; Race report</button>
             </div>
+            <div class="flex gap-8" style="margin-top:8px;">
+                <button class="btn btn-secondary" id="btnSweep3D" onclick="run3DSweep();" style="flex:1;" disabled data-tip="<strong>Sweep 3D k×F&#8320;×RPM</strong>Nuvola ruotabile del valve float sui TRE assi insieme: rigidezza k, precarico F&#8320; e regime. Ogni punto colorato (verde sicuro &rarr; rosso float) &egrave; una combinazione simulata. Trascina per ruotare la vista ed esplorare il volume sicuro nello spazio molla-regime. Tempo: ~0.5 s.">&#127922; Sweep 3D</button>
+            </div>
 
             <!-- Risultati Sweep / Optimizer / Mappa -->
             <div id="raceResultsBox" style="display:none; margin-top:12px; padding:10px; background:var(--bg-input); border-radius:var(--r-md); border:1px solid var(--border);">
@@ -444,6 +447,8 @@
                 <div id="raceResultsBody" style="font-size:12px; line-height:1.5;"></div>
                 <canvas id="springMapCanvas" width="340" height="280" style="display:none; margin-top:8px; max-width:100%;"></canvas>
                 <div id="springMapLegend" style="display:none; font-size:10px; color:var(--text-muted); margin-top:4px; text-align:center;"></div>
+                <canvas id="sweep3dCanvas" width="340" height="300" style="display:none; margin-top:8px; max-width:100%; cursor:grab; touch-action:none;"></canvas>
+                <div id="sweep3dLegend" style="display:none; font-size:10px; color:var(--text-muted); margin-top:4px; text-align:center;"></div>
             </div>
         </div>
 
@@ -1427,6 +1432,8 @@ function runRpmSweep() {
     title.textContent = 'Sweep RPM in corso...';
     body.innerHTML = '<i>Simulazione di 12 regimi, ~3-5 secondi.</i>';
     var cv1 = document.getElementById('springMapCanvas'); if (cv1) cv1.style.display = 'none';
+    var c3a = document.getElementById('sweep3dCanvas'); if (c3a) c3a.style.display = 'none';
+    var l3a = document.getElementById('sweep3dLegend'); if (l3a) l3a.style.display = 'none';
     var lg1 = document.getElementById('springMapLegend'); if (lg1) lg1.style.display = 'none';
     box.style.display = '';
 
@@ -1478,6 +1485,8 @@ function runSpringOptimizer() {
     title.textContent = 'Optimizer molla in corso...';
     body.innerHTML = '<i>Cerca tra 88 combinazioni (k, F&#8320;), ~5-10 secondi.</i>';
     var cv2 = document.getElementById('springMapCanvas'); if (cv2) cv2.style.display = 'none';
+    var c3b = document.getElementById('sweep3dCanvas'); if (c3b) c3b.style.display = 'none';
+    var l3b = document.getElementById('sweep3dLegend'); if (l3b) l3b.style.display = 'none';
     var lg2 = document.getElementById('springMapLegend'); if (lg2) lg2.style.display = 'none';
     box.style.display = '';
 
@@ -1649,6 +1658,8 @@ function runSpringMap() {
     title.textContent = 'Mappa molla k×F₀ in corso...';
     body.innerHTML = '<i>Simulazione di 16×14 = 224 combinazioni, ~6-8 secondi.</i>';
     if (canvas) canvas.style.display = 'none';
+    var c3c = document.getElementById('sweep3dCanvas'); if (c3c) c3c.style.display = 'none';
+    var l3c = document.getElementById('sweep3dLegend'); if (l3c) l3c.style.display = 'none';
     box.style.display = '';
 
     setTimeout(function () {
@@ -1672,6 +1683,201 @@ function runSpringMap() {
                 kind: 'success', title: 'Mappa molla completata',
                 body: safeCells + '/' + total + ' combinazioni nella zona sicura',
                 duration: 4000
+            });
+        } catch (e) {
+            body.innerHTML = '<span style="color:var(--danger);">Errore: ' + e.message + '</span>';
+        }
+    }, 50);
+}
+
+// =============================================================
+// SWEEP 3D INTERATTIVO — valve float su (k, F0, RPM)
+// =============================================================
+// Nuvola di punti ruotabile: x=k, y=F0, z=RPM (verticale), colore=float.
+// Proiezione ortografica (rotazione azimuth/elevation via drag), niente
+// librerie 3D esterne. I dati sono cachati: ruotare ri-proietta soltanto,
+// non ri-simula.
+var _sweep3d = null;
+
+// Calcola la griglia 3D (nK×nF0×nRpm) di valve float riusando simulateCompliance.
+function sweep3D(camLift720, baseParams, opts) {
+    var kRange   = (opts && opts.kRange)   || [20, 400];
+    var F0Range  = (opts && opts.F0Range)  || [100, 1500];
+    var rpmRange = (opts && opts.rpmRange) || [3000, 11000];
+    var nK   = (opts && opts.nK)   || 8;
+    var nF0  = (opts && opts.nF0)  || 8;
+    var nRpm = (opts && opts.nRpm) || 6;
+    var kVals = [], F0Vals = [], rpmVals = [];
+    for (var a = 0; a < nK;   a++) kVals.push(kRange[0]   + (kRange[1]-kRange[0])     * a/(nK-1));
+    for (var b = 0; b < nF0;  b++) F0Vals.push(F0Range[0] + (F0Range[1]-F0Range[0])   * b/(nF0-1));
+    for (var c = 0; c < nRpm; c++) rpmVals.push(rpmRange[0] + (rpmRange[1]-rpmRange[0])* c/(nRpm-1));
+    var pts = [], maxF = 0;
+    for (var ik = 0; ik < nK; ik++) {
+        for (var jf = 0; jf < nF0; jf++) {
+            var p = Object.assign({}, baseParams);
+            p.kSpringN_mm = kVals[ik];
+            p.F0N         = F0Vals[jf];
+            for (var lr = 0; lr < nRpm; lr++) {
+                var v  = simulateCompliance(camLift720, rpmVals[lr], p);
+                var fl = detectValveFloat(camLift720, v).maxGap;
+                if (fl > maxF) maxF = fl;
+                pts.push({
+                    nx: (nK   > 1 ? ik/(nK-1)   : 0.5) * 2 - 1,
+                    ny: (nF0  > 1 ? jf/(nF0-1)  : 0.5) * 2 - 1,
+                    nz: (nRpm > 1 ? lr/(nRpm-1) : 0.5) * 2 - 1,
+                    k: kVals[ik], f0: F0Vals[jf], rpm: rpmVals[lr], float: fl
+                });
+            }
+        }
+    }
+    return { pts: pts, kRange: kRange, F0Range: F0Range, rpmRange: rpmRange, maxFloat: maxF };
+}
+
+// Proietta un punto normalizzato (nx,ny,nz∈[-1,1]) sullo schermo dato
+// azimuth/elevation. z = verticale (RPM). Ritorna {sx,sy,depth}.
+function _project3d(nx, ny, nz, az, el, cx, cy, scale) {
+    var ca = Math.cos(az), sa = Math.sin(az), ce = Math.cos(el), se = Math.sin(el);
+    var x1 = nx*ca - ny*sa;          // rotazione azimuth attorno alla verticale
+    var y1 = nx*sa + ny*ca;
+    var z1 = nz;
+    var y2 = y1*ce - z1*se;          // tilt elevation attorno all'asse x
+    var z2 = y1*se + z1*ce;
+    return { sx: cx + x1*scale, sy: cy - z2*scale, depth: y2 };
+}
+
+function render3DSweep() {
+    if (!_sweep3d) return;
+    var canvas = document.getElementById('sweep3dCanvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+    var cx = W/2, cy = H/2 + 8, scale = Math.min(W, H) * 0.30;
+    var az = _sweep3d.az, el = _sweep3d.el, d = _sweep3d.data;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0f0f1a'; ctx.fillRect(0, 0, W, H);
+
+    // --- cubo di riferimento (12 spigoli) ---
+    var corners = [];
+    for (var sx = -1; sx <= 1; sx += 2)
+      for (var sy = -1; sy <= 1; sy += 2)
+        for (var sz = -1; sz <= 1; sz += 2)
+            corners.push(_project3d(sx, sy, sz, az, el, cx, cy, scale));
+    // indici corner: bit0=z, bit1=y, bit2=x → 0..7
+    var edges = [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
+    ctx.strokeStyle = 'rgba(136,136,170,0.25)'; ctx.lineWidth = 1;
+    edges.forEach(function (e) {
+        ctx.beginPath();
+        ctx.moveTo(corners[e[0]].sx, corners[e[0]].sy);
+        ctx.lineTo(corners[e[1]].sx, corners[e[1]].sy);
+        ctx.stroke();
+    });
+    // etichette assi (k lungo x, F0 lungo y, RPM lungo z)
+    ctx.fillStyle = 'rgba(200,200,220,0.8)'; ctx.font = '10px monospace';
+    var lblK   = _project3d( 1.25, -1, -1, az, el, cx, cy, scale);
+    var lblF0  = _project3d(-1,  1.25, -1, az, el, cx, cy, scale);
+    var lblRpm = _project3d(-1, -1,  1.28, az, el, cx, cy, scale);
+    ctx.fillText('k', lblK.sx, lblK.sy);
+    ctx.fillText('F₀', lblF0.sx, lblF0.sy);
+    ctx.fillText('RPM', lblRpm.sx, lblRpm.sy);
+
+    // --- punti, ordinati per profondità (painter) ---
+    var proj = d.pts.map(function (p) {
+        var pr = _project3d(p.nx, p.ny, p.nz, az, el, cx, cy, scale);
+        return { sx: pr.sx, sy: pr.sy, depth: pr.depth, float: p.float };
+    });
+    proj.sort(function (a, b) { return a.depth - b.depth; });   // lontani prima
+    proj.forEach(function (q) {
+        ctx.beginPath();
+        ctx.fillStyle = _floatToColor(q.float);
+        ctx.globalAlpha = 0.85;
+        ctx.arc(q.sx, q.sy, 3.5, 0, Math.PI*2);
+        ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    // --- marcatore molla attuale: colonna verticale (RPM) a (curK,curF0) ---
+    function clamp1(t) { return t < -1 ? -1 : t > 1 ? 1 : t; }
+    var mkx = clamp1((_sweep3d.curK  - d.kRange[0])  / (d.kRange[1]  - d.kRange[0])  * 2 - 1);
+    var mky = clamp1((_sweep3d.curF0 - d.F0Range[0]) / (d.F0Range[1] - d.F0Range[0]) * 2 - 1);
+    var mBot = _project3d(mkx, mky, -1, az, el, cx, cy, scale);
+    var mTop = _project3d(mkx, mky,  1, az, el, cx, cy, scale);
+    ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(mBot.sx, mBot.sy); ctx.lineTo(mTop.sx, mTop.sy); ctx.stroke();
+    ctx.fillStyle = '#ffd23f';
+    ctx.beginPath(); ctx.arc(mTop.sx, mTop.sy, 4, 0, Math.PI*2); ctx.fill();
+}
+
+// Aggancia drag (mouse + touch) una sola volta per canvas.
+function _bindSweep3dDrag(canvas) {
+    if (!canvas || canvas._sweep3dBound) return;
+    canvas._sweep3dBound = true;
+    function down(x, y) { if (_sweep3d) { _sweep3d.dragging = true; _sweep3d.lastX = x; _sweep3d.lastY = y; canvas.style.cursor = 'grabbing'; } }
+    function move(x, y) {
+        if (!_sweep3d || !_sweep3d.dragging) return;
+        _sweep3d.az += (x - _sweep3d.lastX) * 0.01;
+        _sweep3d.el += (y - _sweep3d.lastY) * 0.01;
+        if (_sweep3d.el >  1.45) _sweep3d.el =  1.45;
+        if (_sweep3d.el < -1.45) _sweep3d.el = -1.45;
+        _sweep3d.lastX = x; _sweep3d.lastY = y;
+        render3DSweep();
+    }
+    function up() { if (_sweep3d) { _sweep3d.dragging = false; canvas.style.cursor = 'grab'; } }
+    canvas.addEventListener('mousedown', function (e) { down(e.offsetX, e.offsetY); });
+    window.addEventListener('mousemove', function (e) {
+        if (!_sweep3d || !_sweep3d.dragging) return;
+        var r = canvas.getBoundingClientRect();
+        move(e.clientX - r.left, e.clientY - r.top);
+    });
+    window.addEventListener('mouseup', up);
+    canvas.addEventListener('touchstart', function (e) { var t = e.touches[0]; var r = canvas.getBoundingClientRect(); down(t.clientX - r.left, t.clientY - r.top); e.preventDefault(); }, { passive: false });
+    canvas.addEventListener('touchmove', function (e) { var t = e.touches[0]; var r = canvas.getBoundingClientRect(); move(t.clientX - r.left, t.clientY - r.top); e.preventDefault(); }, { passive: false });
+    canvas.addEventListener('touchend', up);
+}
+
+function run3DSweep() {
+    if (!lastAnalysis || !lastAnalysis.arrays) return;
+    var box    = document.getElementById('raceResultsBox');
+    var title  = document.getElementById('raceResultsTitle');
+    var body   = document.getElementById('raceResultsBody');
+    var mapC   = document.getElementById('springMapCanvas'); if (mapC) mapC.style.display = 'none';
+    var mapL   = document.getElementById('springMapLegend'); if (mapL) mapL.style.display = 'none';
+    var canvas = document.getElementById('sweep3dCanvas');
+    var legend = document.getElementById('sweep3dLegend');
+    title.textContent = 'Sweep 3D k×F₀×RPM in corso...';
+    body.innerHTML = '<i>Simulazione di 8×8×6 = 384 combinazioni, ~0.5 s.</i>';
+    if (canvas) canvas.style.display = 'none';
+    if (legend) legend.style.display = 'none';
+    box.style.display = '';
+
+    setTimeout(function () {
+        try {
+            var inp = lastAnalysis.inputs;
+            var anlIn = lastAnalysis.arrays.anlIn;
+            var baseParams = {
+                massEqG: inp.massEqIntake,
+                kTrainN_mm: Number(document.getElementById('kTrain').value) || 5000,
+                dampingRatio: Number(document.getElementById('dampingRatio').value) || 0.06
+            };
+            var data = sweep3D(anlIn, baseParams, {});
+            _sweep3d = { data: data, az: 0.6, el: 0.5, curK: inp.springK, curF0: inp.springPreload,
+                         dragging: false, lastX: 0, lastY: 0 };
+            var safe = 0; data.pts.forEach(function (p) { if (p.float < 0.3) safe++; });
+            title.textContent = 'Sweep 3D — valve float su k × F₀ × RPM (aspirazione)';
+            body.innerHTML = '<b>' + safe + '/' + data.pts.length + '</b> combinazioni (k×F&#8320;×RPM) con float &lt; 0.3 mm. ' +
+                'Verticale = RPM, piano orizzontale = k×F&#8320;. Linea gialla = molla attuale. <b>Trascina il grafico per ruotarlo.</b>';
+            if (canvas) canvas.style.display = '';
+            if (legend) {
+                legend.style.display = '';
+                legend.innerHTML = '<span style="color:#22c55e;">&#9679;</span> &lt;0.1mm &nbsp; ' +
+                                   '<span style="color:#eab308;">&#9679;</span> 0.1-0.3 &nbsp; ' +
+                                   '<span style="color:#ef4444;">&#9679;</span> &gt;0.3 &nbsp;|&nbsp; RPM ' +
+                                   data.rpmRange[0] + '-' + data.rpmRange[1];
+            }
+            _bindSweep3dDrag(canvas);
+            render3DSweep();
+            if (window.cammesToast) window.cammesToast({
+                kind: 'success', title: 'Sweep 3D pronto',
+                body: 'Trascina il grafico per ruotare la vista', duration: 3500
             });
         } catch (e) {
             body.innerHTML = '<span style="color:var(--danger);">Errore: ' + e.message + '</span>';
@@ -1819,6 +2025,7 @@ function exportRaceReport() {
 window.runRpmSweep = runRpmSweep;
 window.runSpringOptimizer = runSpringOptimizer;
 window.runSpringMap = runSpringMap;
+window.run3DSweep = run3DSweep;
 window.exportRaceReport = exportRaceReport;
 
 function on2DofToggle() {
@@ -2876,6 +3083,7 @@ function analyze() {
     var bSw = document.getElementById('btnSweepRpm'); if (bSw) bSw.disabled = false;
     var bOp = document.getElementById('btnOptimizeSpring'); if (bOp) bOp.disabled = false;
     var bMap = document.getElementById('btnSpringMap'); if (bMap) bMap.disabled = false;
+    var b3D = document.getElementById('btnSweep3D'); if (b3D) b3D.disabled = false;
     var bRR = document.getElementById('btnRaceReport'); if (bRR) bRR.disabled = false;
     if (window.cammesToast) {
         var minRpmCrit = Math.min(forcesIn.rpmCrit, forcesEx.rpmCrit);
@@ -4148,6 +4356,7 @@ function resetAll() {
     var bSwR = document.getElementById('btnSweepRpm'); if (bSwR) bSwR.disabled = true;
     var bOpR = document.getElementById('btnOptimizeSpring'); if (bOpR) bOpR.disabled = true;
     var bMapR = document.getElementById('btnSpringMap'); if (bMapR) bMapR.disabled = true;
+    var b3DR = document.getElementById('btnSweep3D'); if (b3DR) b3DR.disabled = true;
     var bRRR = document.getElementById('btnRaceReport'); if (bRRR) bRRR.disabled = true;
     var rb = document.getElementById('raceResultsBox'); if (rb) rb.style.display = 'none';
     if (complianceChart) { try { complianceChart.destroy(); } catch (e) {} complianceChart = null; }
