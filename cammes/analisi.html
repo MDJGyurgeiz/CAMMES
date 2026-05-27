@@ -417,16 +417,22 @@
                 <button class="btn btn-secondary" id="btnExportPDF" onclick="exportPDF();" style="flex:1;" disabled data-tip="<strong>Esporta report PDF</strong>Genera un report stampabile con grafici, tabelle dei risultati e parametri della scheda tecnica del motore.">&#8595; PDF</button>
             </div>
 
-            <!-- RACE-GRADE: Sweep RPM + Optimizer molla -->
+            <!-- RACE-GRADE: Sweep RPM + Optimizer molla + Mappa + Report -->
             <div class="flex gap-8" style="margin-top:8px;">
                 <button class="btn btn-secondary" id="btnSweepRpm" onclick="runRpmSweep();" style="flex:1;" disabled data-tip="<strong>Sweep RPM</strong>Esegue la simulazione compliance a 12 regimi diversi (da rpm/2 a rpm*2) e plotta come cresce il valve float al variare degli RPM. Trova il <b>vero</b> regime massimo operativo, considerando dinamica del treno valvole. Tempo: ~5 secondi.">&#128201; Sweep RPM</button>
-                <button class="btn btn-secondary" id="btnOptimizeSpring" onclick="runSpringOptimizer();" style="flex:1;" disabled data-tip="<strong>Optimizer molla</strong>Cerca la molla minima (k, F&#8320;) che mantiene valve float &lt; 0.1 mm al RPM target. Itera su una griglia di (k, F&#8320;) e simula compliance per ognuna. Suggerisce la combinazione pi&ugrave; leggera (= meno coppia richiesta alla cam) che rispetta il vincolo. Tempo: ~10 secondi.">&#127919; Suggerisci molla</button>
+                <button class="btn btn-secondary" id="btnOptimizeSpring" onclick="runSpringOptimizer();" style="flex:1;" disabled data-tip="<strong>Optimizer molla</strong>Cerca la molla minima (k, F&#8320;) che mantiene valve float &lt; 0.3 mm al RPM target. Itera su una griglia di (k, F&#8320;) e simula compliance per ognuna. Suggerisce la combinazione pi&ugrave; leggera (= meno coppia richiesta alla cam) che rispetta il vincolo. Tempo: ~10 secondi.">&#127919; Suggerisci molla</button>
+            </div>
+            <div class="flex gap-8" style="margin-top:8px;">
+                <button class="btn btn-secondary" id="btnSpringMap" onclick="runSpringMap();" style="flex:1;" disabled data-tip="<strong>Mappa molla k×F&#8320;</strong>Heatmap del valve float al variare SIMULTANEO di rigidezza k e precarico F&#8320;. Verde = sicuro (&lt;0.1mm), giallo = limite (0.1-0.3), rosso = float eccessivo. Marca la tua molla attuale (&#9678;) e la zona sicura. A colpo d'occhio vedi quali combinazioni funzionano. Tempo: ~8 secondi.">&#128506; Mappa molla</button>
+                <button class="btn btn-accent" id="btnRaceReport" onclick="exportRaceReport();" style="flex:1;" disabled data-tip="<strong>Race report PDF</strong>Genera un report PDF dedicato all'analisi dinamica: sweep RPM, molla ottimale, mappa k×F&#8320;, grafico compliance. Documento completo per validare il treno valvole di un motore da corsa.">&#127942; Race report</button>
             </div>
 
-            <!-- Risultati Sweep / Optimizer -->
+            <!-- Risultati Sweep / Optimizer / Mappa -->
             <div id="raceResultsBox" style="display:none; margin-top:12px; padding:10px; background:var(--bg-input); border-radius:var(--r-md); border:1px solid var(--border);">
                 <div id="raceResultsTitle" style="font-family:var(--font-display); font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color:var(--text-muted); margin-bottom:6px;"></div>
                 <div id="raceResultsBody" style="font-size:12px; line-height:1.5;"></div>
+                <canvas id="springMapCanvas" width="340" height="280" style="display:none; margin-top:8px; max-width:100%;"></canvas>
+                <div id="springMapLegend" style="display:none; font-size:10px; color:var(--text-muted); margin-top:4px; text-align:center;"></div>
             </div>
         </div>
 
@@ -1290,6 +1296,8 @@ function runRpmSweep() {
     var body  = document.getElementById('raceResultsBody');
     title.textContent = 'Sweep RPM in corso...';
     body.innerHTML = '<i>Simulazione di 12 regimi, ~3-5 secondi.</i>';
+    var cv1 = document.getElementById('springMapCanvas'); if (cv1) cv1.style.display = 'none';
+    var lg1 = document.getElementById('springMapLegend'); if (lg1) lg1.style.display = 'none';
     box.style.display = '';
 
     setTimeout(function () {
@@ -1338,7 +1346,9 @@ function runSpringOptimizer() {
     var title = document.getElementById('raceResultsTitle');
     var body  = document.getElementById('raceResultsBody');
     title.textContent = 'Optimizer molla in corso...';
-    body.innerHTML = '<i>Cerca tra 63 combinazioni (k, F&#8320;), ~5-10 secondi.</i>';
+    body.innerHTML = '<i>Cerca tra 88 combinazioni (k, F&#8320;), ~5-10 secondi.</i>';
+    var cv2 = document.getElementById('springMapCanvas'); if (cv2) cv2.style.display = 'none';
+    var lg2 = document.getElementById('springMapLegend'); if (lg2) lg2.style.display = 'none';
     box.style.display = '';
 
     setTimeout(function () {
@@ -1400,8 +1410,286 @@ function runSpringOptimizer() {
         }
     }, 50);
 }
+// Mappa molla: griglia 2D (k, F0) → valve float. Per ogni cella simula
+// compliance al RPM target. Ritorna {grid, kVals, F0Vals, minFloat, maxFloat}.
+function springMap(camLift720, targetRpm, baseParams, opts) {
+    var kRange  = (opts && opts.kRange)  || [20, 400];
+    var F0Range = (opts && opts.F0Range) || [100, 1500];
+    var nK  = (opts && opts.nK)  || 16;
+    var nF0 = (opts && opts.nF0) || 14;
+    var grid = [];      // grid[iF0][iK] = float
+    var kVals = [], F0Vals = [];
+    var minFloat = Infinity, maxFloat = -Infinity;
+    for (var iK = 0; iK < nK; iK++) kVals.push(kRange[0] + (kRange[1]-kRange[0])*iK/(nK-1));
+    for (var iF = 0; iF < nF0; iF++) F0Vals.push(F0Range[0] + (F0Range[1]-F0Range[0])*iF/(nF0-1));
+    for (var jf = 0; jf < nF0; jf++) {
+        var row = [];
+        for (var jk = 0; jk < nK; jk++) {
+            var p = Object.assign({}, baseParams, { kSpringN_mm: kVals[jk], F0N: F0Vals[jf] });
+            var valve = simulateCompliance(camLift720, targetRpm, p);
+            var fl = detectValveFloat(camLift720, valve);
+            row.push(fl.maxGap);
+            if (fl.maxGap < minFloat) minFloat = fl.maxGap;
+            if (fl.maxGap > maxFloat) maxFloat = fl.maxGap;
+        }
+        grid.push(row);
+    }
+    return { grid: grid, kVals: kVals, F0Vals: F0Vals, minFloat: minFloat, maxFloat: maxFloat };
+}
+
+// Colore cella heatmap: verde (<0.1) → giallo (0.1-0.3) → rosso (>0.3)
+function _floatToColor(f) {
+    if (f < 0.1)  return 'rgb(0,200,90)';
+    if (f < 0.3)  {
+        var t = (f - 0.1) / 0.2;  // 0..1
+        return 'rgb(' + Math.round(255*t) + ',200,' + Math.round(90*(1-t)) + ')';
+    }
+    if (f < 0.8) {
+        var t2 = (f - 0.3) / 0.5;
+        return 'rgb(255,' + Math.round(200*(1-t2)) + ',30)';
+    }
+    return 'rgb(220,50,50)';
+}
+
+function renderSpringMap(map, curK, curF0) {
+    var canvas = document.getElementById('springMapCanvas');
+    var legend = document.getElementById('springMapLegend');
+    if (!canvas) return;
+    canvas.style.display = '';
+    if (legend) legend.style.display = '';
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    var padL = 50, padB = 30, padT = 8, padR = 8;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+    var nK = map.kVals.length, nF0 = map.F0Vals.length;
+    var cellW = plotW / nK, cellH = plotH / nF0;
+
+    // Celle (F0 cresce verso l'alto → inverto l'indice riga)
+    for (var jf = 0; jf < nF0; jf++) {
+        for (var jk = 0; jk < nK; jk++) {
+            ctx.fillStyle = _floatToColor(map.grid[jf][jk]);
+            var x = padL + jk * cellW;
+            var y = padT + (nF0 - 1 - jf) * cellH;
+            ctx.fillRect(x, y, cellW + 0.5, cellH + 0.5);
+        }
+    }
+    // Marker posizione attuale (k, F0)
+    var kMin = map.kVals[0], kMax = map.kVals[nK-1];
+    var f0Min = map.F0Vals[0], f0Max = map.F0Vals[nF0-1];
+    var mx = padL + ((curK - kMin) / (kMax - kMin)) * plotW;
+    var my = padT + (1 - (curF0 - f0Min) / (f0Max - f0Min)) * plotH;
+    if (mx >= padL && mx <= padL + plotW && my >= padT && my <= padT + plotH) {
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(mx, my, 6, 0, 2*Math.PI); ctx.stroke();
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(mx, my, 6, 0, 2*Math.PI); ctx.stroke();
+    }
+    // Assi
+    var txtCol = (window.cammesGetCssVar && window.cammesGetCssVar('--text-muted')) || '#8888aa';
+    ctx.fillStyle = txtCol; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+    // X (k)
+    for (var ax = 0; ax < nK; ax += Math.ceil(nK/5)) {
+        ctx.fillText(Math.round(map.kVals[ax]), padL + (ax+0.5)*cellW, H - padB + 14);
+    }
+    ctx.fillText('k molla (N/mm) →', padL + plotW/2, H - 4);
+    // Y (F0)
+    ctx.textAlign = 'right';
+    for (var ay = 0; ay < nF0; ay += Math.ceil(nF0/5)) {
+        var yy = padT + (nF0 - 1 - ay) * cellH + cellH/2;
+        ctx.fillText(Math.round(map.F0Vals[ay]), padL - 4, yy + 3);
+    }
+    ctx.save();
+    ctx.translate(12, padT + plotH/2); ctx.rotate(-Math.PI/2);
+    ctx.textAlign = 'center'; ctx.fillText('F₀ precarico (N) →', 0, 0);
+    ctx.restore();
+
+    if (legend) legend.innerHTML = '&#9678; = molla attuale &middot; ' +
+        '<span style="color:rgb(0,200,90);">verde</span> float&lt;0.1 &middot; ' +
+        '<span style="color:rgb(255,200,30);">giallo</span> 0.1-0.3 &middot; ' +
+        '<span style="color:rgb(220,50,50);">rosso</span> &gt;0.3 mm';
+}
+
+function runSpringMap() {
+    if (!lastAnalysis || !lastAnalysis.arrays) return;
+    var box   = document.getElementById('raceResultsBox');
+    var title = document.getElementById('raceResultsTitle');
+    var body  = document.getElementById('raceResultsBody');
+    var canvas = document.getElementById('springMapCanvas');
+    title.textContent = 'Mappa molla k×F₀ in corso...';
+    body.innerHTML = '<i>Simulazione di 16×14 = 224 combinazioni, ~6-8 secondi.</i>';
+    if (canvas) canvas.style.display = 'none';
+    box.style.display = '';
+
+    setTimeout(function () {
+        try {
+            var inp = lastAnalysis.inputs;
+            var anlIn = lastAnalysis.arrays.anlIn;
+            var baseParams = {
+                massEqG: inp.massEqIntake,
+                kTrainN_mm: Number(document.getElementById('kTrain').value) || 5000,
+                dampingRatio: Number(document.getElementById('dampingRatio').value) || 0.06
+            };
+            var map = springMap(anlIn, inp.rpm, baseParams, { nK: 16, nF0: 14 });
+            title.textContent = 'Mappa molla k×F₀ — valve float @ ' + inp.rpm + ' rpm (aspirazione)';
+            // Conta celle sicure
+            var safeCells = 0, total = 0;
+            map.grid.forEach(function (row) { row.forEach(function (f) { total++; if (f < 0.3) safeCells++; }); });
+            body.innerHTML = '<b>' + safeCells + '/' + total + '</b> combinazioni mantengono float &lt; 0.3 mm. ' +
+                'La tua molla attuale (k=' + inp.springK + ', F&#8320;=' + inp.springPreload + ') &egrave; marcata con &#9678;.';
+            renderSpringMap(map, inp.springK, inp.springPreload);
+            if (window.cammesToast) window.cammesToast({
+                kind: 'success', title: 'Mappa molla completata',
+                body: safeCells + '/' + total + ' combinazioni nella zona sicura',
+                duration: 4000
+            });
+        } catch (e) {
+            body.innerHTML = '<span style="color:var(--danger);">Errore: ' + e.message + '</span>';
+        }
+    }, 50);
+}
+
+// Race report PDF dedicato: documento di analisi dinamica del treno
+// valvole. Esegue sweep RPM + optimizer + spring map e li impagina in
+// un PDF strutturato. Indipendente da exportPDF (che è la scheda completa).
+function exportRaceReport() {
+    if (!lastAnalysis || !lastAnalysis.arrays) return;
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'PDF non disponibile', body: 'jspdf non caricato.', duration: 4000 });
+        return;
+    }
+    if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Race report in elaborazione', body: 'Calcolo sweep + optimizer + mappa, ~15 secondi...', duration: 4000 });
+
+    setTimeout(function () {
+        try {
+            var jsPDF = window.jspdf.jsPDF;
+            var doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+            var pageW = doc.internal.pageSize.getWidth();
+            var pageH = doc.internal.pageSize.getHeight();
+            var margin = 14;
+            var inp = lastAnalysis.inputs, R = lastAnalysis.results;
+            var anlIn = lastAnalysis.arrays.anlIn;
+            var baseParams = {
+                massEqG: inp.massEqIntake,
+                kTrainN_mm: Number(document.getElementById('kTrain').value) || 5000,
+                dampingRatio: Number(document.getElementById('dampingRatio').value) || 0.06
+            };
+
+            // ===== Cover =====
+            doc.setFillColor(20, 14, 28); doc.rect(0, 0, pageW, 42, 'F');
+            doc.setFillColor(177, 76, 255); doc.rect(0, 42, pageW, 2.5, 'F');
+            doc.setFont('helvetica','bold'); doc.setFontSize(24); doc.setTextColor(255,255,255);
+            doc.text('CAMMES', margin, 20);
+            doc.setFontSize(13); doc.setTextColor(177,76,255);
+            doc.text('RACE REPORT — Analisi dinamica treno valvole', margin, 30);
+            doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(190,180,210);
+            doc.text(new Date().toLocaleString('it-IT') + '  ·  ' + (inp.intakeFile || 'camma') + '  ·  ' + inp.rpm + ' rpm target', margin, 38);
+
+            var y = 54;
+            function sect(t) {
+                doc.setFillColor(177,76,255); doc.rect(margin, y-1, 1.5, 6, 'F');
+                doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(40,46,60);
+                doc.text(t, margin+4, y+4); y += 9;
+            }
+
+            // ===== 1. Parametri =====
+            sect('Configurazione');
+            doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60,66,80);
+            var cfg = [
+                'Camma: ' + (inp.intakeFile || '-') + '  ·  Max alzata: ' + R.maxLiftIn.toFixed(2) + ' mm  ·  Durata: ' + R.durIntake + ' deg',
+                'Molla: k=' + inp.springK + ' N/mm  ·  F0=' + inp.springPreload + ' N  ·  Massa eq.=' + inp.massEqIntake + ' g',
+                'Treno: k_train=' + baseParams.kTrainN_mm + ' N/mm  ·  damping=' + baseParams.dampingRatio + '  ·  RPM target=' + inp.rpm
+            ];
+            cfg.forEach(function (l) { doc.text(l, margin, y); y += 5; });
+            y += 4;
+
+            // ===== 2. Sweep RPM =====
+            sect('Sweep RPM — valve float vs regime');
+            var sweep = rpmSweep(anlIn, inp.rpm, Object.assign({ kSpringN_mm: inp.springK, F0N: inp.springPreload }, baseParams), { nPoints: 12 });
+            // Mini-tabella 2 colonne
+            doc.setFontSize(8);
+            var col2x = margin + 95;
+            var half = Math.ceil(sweep.points.length / 2);
+            for (var si = 0; si < sweep.points.length; si++) {
+                var pt = sweep.points[si];
+                var col = si < half ? margin : col2x;
+                var ry  = y + (si % half) * 5;
+                var fcol = pt.float > 0.5 ? [220,50,50] : (pt.float > 0.3 ? [200,150,30] : [0,160,90]);
+                doc.setTextColor(90,90,110);
+                doc.text(Math.round(pt.rpm) + ' rpm:', col, ry);
+                doc.setTextColor(fcol[0],fcol[1],fcol[2]);
+                doc.text(pt.float.toFixed(3) + ' mm', col + 30, ry);
+            }
+            y += half * 5 + 4;
+            doc.setTextColor(40,46,60); doc.setFontSize(9);
+            if (sweep.criticalRpm) {
+                doc.text('RPM critico dinamico: ~' + Math.round(sweep.criticalRpm) + ' rpm (float > ' + sweep.threshold + ' mm)', margin, y);
+            } else {
+                doc.text('Nessun valve float > ' + sweep.threshold + ' mm nel range testato. Margine ampio.', margin, y);
+            }
+            y += 8;
+
+            // ===== 3. Optimizer =====
+            sect('Molla ottimale');
+            var opt = springOptimizer(anlIn, inp.rpm, baseParams, { threshold: 0.3, kRange: [20,400], F0Range: [100,1500] });
+            doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60,66,80);
+            if (opt) {
+                doc.text('Combinazione minima (float < 0.3 mm): k=' + opt.k.toFixed(0) + ' N/mm, F0=' + opt.F0.toFixed(0) + ' N → float ' + opt.maxFloat.toFixed(3) + ' mm', margin, y); y += 5;
+                var dK = opt.k - inp.springK, dF = opt.F0 - inp.springPreload;
+                doc.text('Rispetto attuale: ' + (dK>=0?'+':'') + dK.toFixed(0) + ' N/mm, ' + (dF>=0?'+':'') + dF.toFixed(0) + ' N', margin, y); y += 7;
+            } else {
+                doc.setTextColor(180,40,40);
+                doc.text('Nessuna molla nel range k=20-400, F0=100-1500 raggiunge float < 0.3 mm a ' + inp.rpm + ' rpm.', margin, y); y += 7;
+            }
+
+            // ===== 4. Spring map (heatmap come immagine) =====
+            if (y + 90 > pageH - 16) { doc.addPage(); y = margin; }
+            sect('Mappa molla k×F0');
+            var map = springMap(anlIn, inp.rpm, baseParams, { nK: 16, nF0: 14 });
+            renderSpringMap(map, inp.springK, inp.springPreload);
+            var mapCanvas = document.getElementById('springMapCanvas');
+            try {
+                var mapImg = mapCanvas.toDataURL('image/png');
+                doc.addImage(mapImg, 'PNG', margin, y, 120, 99);
+                y += 103;
+            } catch (e) { doc.text('(mappa non disponibile)', margin, y); y += 6; }
+
+            // ===== 5. Compliance chart =====
+            if (complianceChart) {
+                if (y + 70 > pageH - 16) { doc.addPage(); y = margin; }
+                sect('Compliance — cam vs valvola reale');
+                try {
+                    var ccImg = complianceChart.toBase64Image('image/png', 1);
+                    doc.addImage(ccImg, 'PNG', margin, y, pageW - 2*margin, 60);
+                    y += 64;
+                } catch (e) {}
+            }
+
+            // Footer su tutte le pagine
+            var tp = doc.internal.getNumberOfPages();
+            for (var p = 1; p <= tp; p++) {
+                doc.setPage(p);
+                var fy = pageH - 8;
+                doc.setDrawColor(200,208,220); doc.setLineWidth(0.2);
+                doc.line(margin, fy-3, pageW-margin, fy-3);
+                doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(120,130,145);
+                doc.text('CAMMES Race Report', margin, fy);
+                doc.text('Pagina ' + p + ' di ' + tp, pageW - margin - 22, fy);
+            }
+
+            var fname = 'cammes_race_report_' + new Date().toISOString().substring(0,10) + '.pdf';
+            doc.save(fname);
+            if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Race report esportato', body: fname + ' (' + tp + ' pagine)', duration: 5000 });
+        } catch (e) {
+            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Errore race report', body: e.message, duration: 5000 });
+        }
+    }, 100);
+}
+
 window.runRpmSweep = runRpmSweep;
 window.runSpringOptimizer = runSpringOptimizer;
+window.runSpringMap = runSpringMap;
+window.exportRaceReport = exportRaceReport;
 
 function on2DofToggle() {
     var sel = document.getElementById('complianceModel');
@@ -2445,6 +2733,8 @@ function analyze() {
     document.getElementById('btnExportPDF').disabled = false;
     var bSw = document.getElementById('btnSweepRpm'); if (bSw) bSw.disabled = false;
     var bOp = document.getElementById('btnOptimizeSpring'); if (bOp) bOp.disabled = false;
+    var bMap = document.getElementById('btnSpringMap'); if (bMap) bMap.disabled = false;
+    var bRR = document.getElementById('btnRaceReport'); if (bRR) bRR.disabled = false;
     if (window.cammesToast) {
         var minRpmCrit = Math.min(forcesIn.rpmCrit, forcesEx.rpmCrit);
         var rpmCritStr = isFinite(forcesIn.rpmCrit) && isFinite(forcesEx.rpmCrit)
@@ -3713,6 +4003,8 @@ function resetAll() {
     document.getElementById('btnExportPDF').disabled = true;
     var bSwR = document.getElementById('btnSweepRpm'); if (bSwR) bSwR.disabled = true;
     var bOpR = document.getElementById('btnOptimizeSpring'); if (bOpR) bOpR.disabled = true;
+    var bMapR = document.getElementById('btnSpringMap'); if (bMapR) bMapR.disabled = true;
+    var bRRR = document.getElementById('btnRaceReport'); if (bRRR) bRRR.disabled = true;
     var rb = document.getElementById('raceResultsBox'); if (rb) rb.style.display = 'none';
     if (complianceChart) { try { complianceChart.destroy(); } catch (e) {} complianceChart = null; }
     var ccw = document.getElementById('complianceChartWrap'); if (ccw) ccw.style.display = 'none';
