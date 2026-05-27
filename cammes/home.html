@@ -679,6 +679,7 @@
             <a href="analisi.html">Analisi</a>
         </div>
         <div class="header-spacer"></div>
+        <button id="concert-toggle" class="help-toggle" type="button" onclick="openHomeConcert();" aria-label="Concerto col motore" title="Concerto col motore" data-tip="<strong>Concerto col motore</strong>Lo stepper esegue brani modulando la frequenza dei pulsi. 4 brani curati: Inno di Mameli, Per Elisa, Tetris, Vivaldi Primavera.">&#127932;</button>
         <button id="help-toggle" class="help-toggle" type="button" aria-label="Guida rapida" title="Apri la guida rapida">?</button>
         <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambia tema" title="Cambia tema chiaro/scuro">
             <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -783,7 +784,6 @@
                 </label>
                 <button class="home-action-btn" onclick="applyAutoTagAll();" title="Suggerisce tag in base al nome (ducati, race, v8, ecc.)" data-tip="<strong>Auto-tag</strong>Scansiona i nomi dei file e applica tag automatici se riconosce brand (Ducati, Honda, Yamaha&hellip;), tipologia (race, stradale, test-bench), configurazione motore (V8, V6, inline-4). Non sovrascrive tag esistenti, solo aggiunge.">&#128269; Auto-tag</button>
                 <button class="home-action-btn" onclick="openBookmarksInCompare();" title="Apre Confronto coi primi 4 file alzata fra i preferiti">&#9733; Confronta preferiti</button>
-                <button class="home-action-btn" onclick="openHomeConcert();" title="Fai cantare il motore stepper con brani famosi" data-tip="<strong>Concerto col motore</strong>Lo stepper esegue brani modulando la frequenza dei pulsi. 4 brani curati: Inno di Mameli, Per Elisa, Tetris, Vivaldi Primavera.">&#127932; Concerto motore</button>
                 <button class="home-action-btn" onclick="exportMetadata();" title="Scarica un backup JSON dei tuoi tag, bookmark e posizioni salvate" data-tip="<strong>Export metadati</strong>Scarica un file JSON con tutti i tuoi tag, bookmark, posizioni salvate e impostazioni preferenze. Utile per backup periodico o spostare le tue etichette su un altro PC. NON contiene i file .scr (quelli copia la cartella prove/).">&#128190; Export</button>
                 <button class="home-action-btn" onclick="document.getElementById('importMetaInput').click();" title="Ripristina tag/bookmark da un file JSON" data-tip="<strong>Import metadati</strong>Carica un file JSON di backup esportato precedentemente. Ripristina tag, bookmark e posizioni salvate (sovrascrive quelli correnti).">&#128229; Import</button>
                 <input type="file" id="importMetaInput" accept=".json,application/json" style="display:none;" onchange="importMetadataFile(event);">
@@ -1264,6 +1264,7 @@ function loadRecents() {
         .then(function (r) { return r.json(); })
         .then(function (data) {
             var files = data.files || [];
+            _cachedFiles = files;   // popola la cache letta da renderRecentsTable/auto-tag/activity/count
 
             // Stats
             var nAlz = files.filter(function (f) { return f.type === 'alz'; }).length;
