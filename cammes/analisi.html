@@ -2855,6 +2855,7 @@ function analyze() {
             kinIntake: resIn, kinExhaust: resEx,
             // Compliance (race-grade dynamic simulation), null se OFF
             complianceOn:    complianceOn,
+            complianceModel: complianceOn ? (modelVal === '3dof' ? '3-DOF (sede)' : modelVal === '2dof' ? '2-DOF (catena)' : '1-DOF') : null,
             valveFloatIn:    floatIn ? floatIn.maxGap : null,
             valveFloatInDeg: floatIn ? floatIn.gapIdx - 360 : null,
             valveFloatEx:    floatEx ? floatEx.maxGap : null,
@@ -3669,6 +3670,7 @@ function exportCSV() {
     lines.push('RPM critico asp.,' + (isFinite(R.rpmCritIn) ? Math.round(R.rpmCritIn) : 'inf'));
     lines.push('RPM critico scar.,' + (isFinite(R.rpmCritEx) ? Math.round(R.rpmCritEx) : 'inf'));
     if (R.complianceOn && R.valveFloatIn !== null && R.valveFloatIn !== undefined) {
+        lines.push('Modello compliance,' + (R.complianceModel || '1-DOF'));
         lines.push('Valve float dinamico asp. [mm],' + R.valveFloatIn.toFixed(3));
         lines.push('Valve float dinamico asp. [deg],' + R.valveFloatInDeg);
         lines.push('Valve float dinamico scar. [mm],' + R.valveFloatEx.toFixed(3));
@@ -3962,6 +3964,7 @@ function exportPDF() {
     ];
     // Riga valve float dinamico (solo se compliance attiva)
     if (R.complianceOn && R.valveFloatIn !== null && R.valveFloatIn !== undefined) {
+        rows.push(['Modello compliance', (R.complianceModel || '1-DOF'), '']);
         rows.push(['Valve float dinamico',
             R.valveFloatIn.toFixed(3) + ' mm @ ' + R.valveFloatInDeg + ' deg',
             R.valveFloatEx.toFixed(3) + ' mm @ ' + R.valveFloatExDeg + ' deg']);
