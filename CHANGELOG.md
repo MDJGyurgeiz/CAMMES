@@ -516,7 +516,14 @@ mappa 2D. Bottone `btnSweep3D`.
 
 ---
 
-## Sotto-sessione 6.5 — 2026-05-27 — Analisi UX: modalità Base / Avanzato
+## Sotto-sessione 6.5 — 2026-05-27 — Audit UX completo + 2 bug fix
+### Tag: **v2.4.0-ux**
+Da audit di usabilità "nuovo utente" su tutte le 5 pagine: modalità Base/
+Avanzato in Analisi, fix tabella Home, Concerto ricollocato, caption
+orientative su Alzata/Polare/Confronto, messaggistica "nessun hardware".
+Due bug funzionali trovati e corretti per strada: tabella Home sempre vuota
+(`_cachedFiles` mai popolato) e crash latente di Polare `start()`
+(`sendSocket.send` con socket undefined).
 
 ### Audit usabilità (nuovo utente)
 Esaminate le pagine come le vede chi non ha mai aperto il software (snapshot
