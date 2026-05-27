@@ -513,3 +513,34 @@ mappa 2D. Bottone `btnSweep3D`.
 - [ ] Modello compliance 3-DOF con cedevolezza sede sui DUE lati (anche bilanciere)
 - [ ] Spring surge: molla a massa distribuita (modi delle spire)
 - [ ] Validazione su camma race reale dedicata + confronto banco
+
+---
+
+## Sotto-sessione 6.5 — 2026-05-27 — Analisi UX: modalità Base / Avanzato
+
+### Audit usabilità (nuovo utente)
+Esaminate le pagine come le vede chi non ha mai aperto il software (snapshot
+DOM/accessibilità + lettura del codice). Verdetto: Home e Alzata intelligibili
+per un utente del dominio; **Analisi era un muro** — 24 input + 13 pulsanti +
+38 tooltip tutti sullo stesso piano, senza percorso minimo evidente.
+- Verificato (e NON corretto perché corretti): il wizard di benvenuto è gattato
+  a prima-visita (chiave localStorage condivisa, `cammes-ui.js`), non assilla.
+
+### Modalità Base / Avanzato sulla STESSA schermata (no compartimenti)
+Toggle `Base | Avanzato` nell'intestazione della card Parametri di
+`analisi.html`. Progressive disclosure non distruttiva: in Base restano visibili
+solo i parametri essenziali (preset, import asp/scar, tipologia/angolo lobo/gioco,
+RPM, rif. durata, molla k/F₀/massa, Analizza/Reset/CSV/PDF); in Avanzato
+compaiono in posto Anticipo, bilancieri, smooth, follower simulato, compliance
+dinamica e i 5 strumenti race. I campi nascosti restano nel DOM coi default →
+`analyze()` invariato. Scelta ricordata in `localStorage` (`cammes-analisi-mode`),
+default Base per i nuovi utenti.
+- CSS `.mode-base .adv-only{display:none}`, `setAnalysisMode()`, 9 blocchi
+  taggati `adv-only`. Verificato in browser: Base nasconde 11/11 controlli
+  avanzati e mostra 6/6 essenziali; Avanzato li rivela; persistenza OK; 0 errori.
+
+### Da fare (dall'audit, non ancora fatti)
+- [ ] Home: riconciliare i contatori (header "8 misurazioni" vs lista "0 / nessun file")
+- [ ] Alzata: chiarire le label gergali ("Zero virtuale", "Sblocca motore", "Salva pos")
+- [ ] Spostare "Concerto motore" fuori dalla toolbar dati della Home
+- [ ] Ispezionare anche Confronto e Polare con la stessa lente
