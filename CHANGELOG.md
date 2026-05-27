@@ -539,8 +539,21 @@ default Base per i nuovi utenti.
   taggati `adv-only`. Verificato in browser: Base nasconde 11/11 controlli
   avanzati e mostra 6/6 essenziali; Avanzato li rivela; persistenza OK; 0 errori.
 
-### Da fare (dall'audit, non ancora fatti)
-- [ ] Home: riconciliare i contatori (header "8 misurazioni" vs lista "0 / nessun file")
-- [ ] Alzata: chiarire le label gergali ("Zero virtuale", "Sblocca motore", "Salva pos")
-- [ ] Spostare "Concerto motore" fuori dalla toolbar dati della Home
-- [ ] Ispezionare anche Confronto e Polare con la stessa lente
+### Azioni dall'audit — completate
+- [x] **Home: tabella misure sempre vuota (BUG)** — `loadRecents()` non assegnava
+  mai `_cachedFiles` (sorgente di tabella/auto-tag/activity/count): header "8
+  misurazioni" ma lista "0". Fix una riga. Ora header e lista concordano (8=8).
+- [x] **Concerto motore fuori dalla toolbar dati** — spostato nell'header Home
+  (icona 🎼), la toolbar misurazioni ha solo operazioni sui dati.
+- [x] **Caption orientative** (label gergali / stato iniziale a zero che sembra
+  rotto): aggiunta una riga di spiegazione sotto i titoli sezione in Alzata
+  ("Rotazione manuale e zero" → spiega Zero virtuale / Sblocca motore), Polare
+  ("Rotazione manuale" → Sblocca motore) e Confronto ("Dati misurazione" →
+  spiega il flusso e le righe grafico 1–4). Terminologia invariata, solo
+  contesto in più. I tooltip per-pulsante c'erano già.
+- [x] Ispezionati Confronto e Polare: Polare pulito; Confronto mancava solo la
+  guida a video (ora aggiunta).
+
+### Da fare prossime sessioni
+- [ ] Alzata/Polare: messaggistica "nessun hardware connesso" più esplicita
+- [ ] Eventuale tour guidato passo-passo (oltre al wizard di benvenuto)
