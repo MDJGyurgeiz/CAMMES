@@ -2309,10 +2309,23 @@ function exportSinglePDF(fileName, fileType) {
     doc.text(fileType === 'pol' ? 'Profilo polare 360 deg' : 'Profilo alzata 360 deg', margin + 4, y + 3);
     y += 6;
     try {
-        var img = _quickViewChart.toBase64Image('image/png', 1);
-        var imgW = pageW - 2 * margin;
-        var imgH = fileType === 'pol' ? 110 : 80;
-        doc.addImage(img, 'PNG', margin, y, imgW, imgH);
+        // Cattura su fondo BIANCO opaco a 2x, mantenendo l'aspect ratio reale
+        // del canvas (niente schiacciamento). Chart.js esporta PNG trasparente
+        // e i colori chiari del tema scuro sbiadirebbero su pagina bianca.
+        var src = _quickViewChart.canvas;
+        var cw = src.width || 700, ch = src.height || 400;
+        var tmp = document.createElement('canvas');
+        tmp.width = cw * 2; tmp.height = ch * 2;
+        var tctx = tmp.getContext('2d');
+        tctx.fillStyle = '#ffffff'; tctx.fillRect(0, 0, tmp.width, tmp.height);
+        tctx.drawImage(src, 0, 0, tmp.width, tmp.height);
+        var img = tmp.toDataURL('image/png');
+        var availW = pageW - 2 * margin;
+        var aspect = ch / cw;
+        var maxH = fileType === 'pol' ? 120 : 90;
+        var imgW = availW, imgH = availW * aspect;
+        if (imgH > maxH) { imgH = maxH; imgW = imgH / aspect; }
+        doc.addImage(img, 'PNG', margin + (availW - imgW) / 2, y, imgW, imgH);
         y += imgH + 6;
     } catch (e) {
         doc.setFont('helvetica', 'italic'); doc.setFontSize(9);

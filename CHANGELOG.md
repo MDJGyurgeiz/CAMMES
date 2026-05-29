@@ -566,6 +566,40 @@ default Base per i nuovi utenti.
   **crash latente** (start() → `sendSocket.send` con sendSocket undefined) e i
   LED Server/Sensore/Encoder, prima nel markup ma mai aggiornati, ora pilotati.
 
+---
+
+## Sotto-sessione 6.6 — 2026-05-29 — Fix export PDF (grafici)
+
+Segnalato: in tutti gli export PDF i grafici risultavano **assenti/bianchi** e
+**tagliati/disallineati**. Diagnosi (pixel-sampling sul canvas esportato): il
+PNG di Chart.js è trasparente → su PDF bianco va bene il fondo, ma due bug reali:
+1. **Squish**: ogni grafico forzato in box ad altezza fissa (55/60 mm) mentre il
+   canvas ha aspect ≈0.6 → deformazione verticale (~metà altezza reale).
+2. **Assenti/bianchi**: `addChartIfPresent` faceva `if(!chart) return` (sezione
+   sparita); cattura su contenitore nascosto → riquadro bianco.
+
+### Fix
+- Helper `chartToPrintImage(chart)` (analisi.html): compone il canvas su fondo
+  **bianco opaco** a **2× risoluzione**, ritorna l'**aspect ratio reale**; se il
+  buffer è vuoto tenta un resize, altrimenti ritorna null (→ placeholder, non
+  riquadro muto).
+- `addChartIfPresent` + blocco timing riscritti: altezza = larghezza × aspect
+  (niente squish), page-break sull'altezza vera, e `(grafico non disponibile)`
+  esplicito quando manca.
+- `exportRaceReport`: compliance chart via helper; spring map renderizzata in
+  **modalità stampa** (`renderSpringMap(..,{forPrint:true})`: fondo bianco,
+  etichette scure, marker più marcato) + aspect corretto, poi ripristino schermo.
+- `home.html` `exportSinglePDF`: cattura inline white-bg + 2× + aspect corretto.
+
+### Verifica
+Test live (camma Clio reale, asp+scar+compliance): tutti i 7 grafici presenti e
+con immagine valida (nessun null/bianco), helper produce fondo bianco opaco +
+aspect reale (profilo 0.59, timing 1.0), `exportPDF`/`exportRaceReport` senza
+eccezioni. Regressioni `test_3dof` 3/3 e `validate_clio` ancora verdi (fix solo
+di rendering). Conferma visiva finale demandata all'utente (gli screenshot del
+preview vanno in timeout in questo ambiente).
+
 ### Da fare prossime sessioni
+- [ ] Colori dato (cyan/giallo) più scuri in stampa per contrasto su bianco (opz.)
 - [ ] Eventuale tour guidato passo-passo (oltre al wizard di benvenuto)
 - [ ] Auto-reconnect WebSocket (oggi serve ricaricare quando il server torna su)

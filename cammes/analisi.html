@@ -1607,15 +1607,21 @@ function _floatToColor(f) {
     return 'rgb(220,50,50)';
 }
 
-function renderSpringMap(map, curK, curF0) {
+function renderSpringMap(map, curK, curF0, opts) {
+    var forPrint = !!(opts && opts.forPrint);
     var canvas = document.getElementById('springMapCanvas');
     var legend = document.getElementById('springMapLegend');
     if (!canvas) return;
-    canvas.style.display = '';
-    if (legend) legend.style.display = '';
+    if (!forPrint) {
+        canvas.style.display = '';
+        if (legend) legend.style.display = '';
+    }
     var ctx = canvas.getContext('2d');
     var W = canvas.width, H = canvas.height;
     ctx.clearRect(0, 0, W, H);
+    // In stampa: fondo bianco opaco (su PDF il trasparente diventerebbe bianco
+    // ma marker/etichette chiare sparirebbero) → forziamo testi scuri sotto.
+    if (forPrint) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H); }
     var padL = 50, padB = 30, padT = 8, padR = 8;
     var plotW = W - padL - padR, plotH = H - padT - padB;
     var nK = map.kVals.length, nF0 = map.F0Vals.length;
@@ -1636,13 +1642,16 @@ function renderSpringMap(map, curK, curF0) {
     var mx = padL + ((curK - kMin) / (kMax - kMin)) * plotW;
     var my = padT + (1 - (curF0 - f0Min) / (f0Max - f0Min)) * plotH;
     if (mx >= padL && mx <= padL + plotW && my >= padT && my <= padT + plotH) {
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+        // Anello bianco + anello nero: su schermo (scuro) spicca il bianco,
+        // su stampa (bianco) spicca il nero, reso più spesso per leggibilità.
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = forPrint ? 3 : 2;
         ctx.beginPath(); ctx.arc(mx, my, 6, 0, 2*Math.PI); ctx.stroke();
-        ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+        ctx.strokeStyle = '#000'; ctx.lineWidth = forPrint ? 2 : 1;
         ctx.beginPath(); ctx.arc(mx, my, 6, 0, 2*Math.PI); ctx.stroke();
     }
     // Assi
-    var txtCol = (window.cammesGetCssVar && window.cammesGetCssVar('--text-muted')) || '#8888aa';
+    var txtCol = forPrint ? '#222222'
+        : ((window.cammesGetCssVar && window.cammesGetCssVar('--text-muted')) || '#8888aa');
     ctx.fillStyle = txtCol; ctx.font = '10px monospace'; ctx.textAlign = 'center';
     // X (k)
     for (var ax = 0; ax < nK; ax += Math.ceil(nK/5)) {
@@ -1999,23 +2008,31 @@ function exportRaceReport() {
             if (y + 90 > pageH - 16) { doc.addPage(); y = margin; }
             sect('Mappa molla k×F0');
             var map = springMap(anlIn, inp.rpm, baseParams, { nK: 16, nF0: 14 });
-            renderSpringMap(map, inp.springK, inp.springPreload);
             var mapCanvas = document.getElementById('springMapCanvas');
             try {
-                var mapImg = mapCanvas.toDataURL('image/png');
-                doc.addImage(mapImg, 'PNG', margin, y, 120, 99);
-                y += 103;
+                // Render in modalità stampa (fondo bianco + etichette scure)
+                renderSpringMap(map, inp.springK, inp.springPreload, { forPrint: true });
+                var mapW = 130;                                  // mm
+                var mapH = mapW * (mapCanvas.height / mapCanvas.width);  // aspect reale
+                doc.addImage(mapCanvas.toDataURL('image/png'), 'PNG', margin, y, mapW, mapH);
+                y += mapH + 6;
+                // Ripristina l'aspetto a schermo (tema scuro) per il box live
+                renderSpringMap(map, inp.springK, inp.springPreload);
             } catch (e) { doc.text('(mappa non disponibile)', margin, y); y += 6; }
 
             // ===== 5. Compliance chart =====
             if (complianceChart) {
-                if (y + 70 > pageH - 16) { doc.addPage(); y = margin; }
+                var ccPrint = chartToPrintImage(complianceChart);
+                var availW = pageW - 2*margin;
+                var ccH = ccPrint ? Math.min(80, availW * ccPrint.aspect) : 6;
+                if (y + ccH + 12 > pageH - 16) { doc.addPage(); y = margin; }
                 sect('Compliance — cam vs valvola reale');
-                try {
-                    var ccImg = complianceChart.toBase64Image('image/png', 1);
-                    doc.addImage(ccImg, 'PNG', margin, y, pageW - 2*margin, 60);
-                    y += 64;
-                } catch (e) {}
+                if (ccPrint) {
+                    var ccW = ccH / ccPrint.aspect;
+                    if (ccW > availW) { ccW = availW; ccH = ccW * ccPrint.aspect; }
+                    doc.addImage(ccPrint.dataURL, 'PNG', margin + (availW - ccW)/2, y, ccW, ccH);
+                    y += ccH + 4;
+                } else { doc.text('(grafico non disponibile)', margin, y); y += 8; }
             }
 
             // Footer su tutte le pagine
@@ -3969,6 +3986,39 @@ function exportCSV() {
 
 // ========== EXPORT PDF ==========
 
+// =============================================================
+// Export PDF: cattura grafici robusta (sfondo bianco, 2x, aspect ratio)
+// =============================================================
+// Chart.js esporta un PNG TRASPARENTE: su pagina PDF bianca il fondo va bene,
+// ma (a) i colori chiari del tema scuro sbiadiscono e (b) se incolliamo il
+// canvas in un box ad altezza fissa lo schiacciamo. Questo helper risolve:
+//   - compone il canvas del chart su un canvas BIANCO opaco (niente wash-out)
+//   - cattura a 2x per nitidezza
+//   - ritorna l'aspect ratio reale così il chiamante calcola l'altezza giusta
+// Se il chart non è renderizzato (contenitore display:none → buffer vuoto)
+// prova un resize; se ancora a 0, ritorna null così il chiamante stampa un
+// placeholder invece di un riquadro bianco muto.
+function chartToPrintImage(chart) {
+    if (!chart || !chart.canvas) return null;
+    var src = chart.canvas;
+    // Se il canvas non è misurabile (contenitore nascosto), tenta un resize
+    // a una dimensione di stampa nota prima di catturare.
+    if (!src.width || !src.height || src.width < 8 || src.height < 8) {
+        try { chart.resize(700, 380); chart.update('none'); } catch (e) {}
+    }
+    var w = src.width, h = src.height;
+    if (!w || !h) return null;
+    var scale = 2;
+    var out = document.createElement('canvas');
+    out.width = w * scale; out.height = h * scale;
+    var ctx = out.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, out.width, out.height);
+    try { ctx.drawImage(src, 0, 0, out.width, out.height); }
+    catch (e) { return null; }
+    return { dataURL: out.toDataURL('image/png'), aspect: h / w };
+}
+
 function exportPDF() {
     if (!lastAnalysis) {
         if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Analisi mancante', body: 'Premi <b>Analizza</b> prima di esportare.', duration: 3500 });
@@ -4303,34 +4353,52 @@ function exportPDF() {
     // ============================================================
     // GRAFICI (uno per riga, footer/header automatico)
     // ============================================================
-    function addChartIfPresent(chart, title, h) {
-        if (!chart) return;
+    // Larghezza disponibile; altezza derivata dall'aspect ratio reale del
+    // grafico (niente più schiacciamento), con un tetto per non sforare pagina.
+    function addChartIfPresent(chart, title, maxH) {
+        var availW = pageW - 2 * margin;
+        var cap = maxH || 80;
+        var print = chartToPrintImage(chart);
+        // Altezza proporzionata; se manca l'immagine usiamo una riga di testo.
+        var h = print ? Math.min(cap, availW * print.aspect) : 6;
         if (y + h + 18 > pageH - 18) { doc.addPage(); y = margin; }
         sectionHeader(title);
-        try {
-            var img = chart.toBase64Image('image/png', 1);
-            doc.addImage(img, 'PNG', margin, y, pageW - 2 * margin, h);
+        if (print) {
+            var w = h / print.aspect;            // larghezza coerente all'altezza clampata
+            if (w > availW) { w = availW; h = w * print.aspect; }
+            var x = margin + (availW - w) / 2;   // centrato
+            doc.addImage(print.dataURL, 'PNG', x, y, w, h);
             y += h + 6;
-        } catch (e) { doc.text('(grafico non disponibile)', margin, y); y += 5; }
+        } else {
+            doc.setFont('helvetica', 'italic'); doc.setFontSize(9);
+            doc.setTextColor(150, 150, 160);
+            doc.text('(grafico non disponibile)', margin, y + 2);
+            doc.setTextColor(0, 0, 0);
+            y += 8;
+        }
     }
 
-    addChartIfPresent(window.analisiLine,    'Profilo albero motore 720 deg', 60);
-    addChartIfPresent(velocityChart,         'Velocita',                       55);
-    addChartIfPresent(accelerationChart,     'Accelerazione',                  55);
-    addChartIfPresent(jerkChart,             'Jerk',                           55);
-    addChartIfPresent(forceChart,            'Forze treno valvole',            60);
-    addChartIfPresent(complianceChart,       'Compliance: cam vs valvola reale (RK4)', 60);
+    addChartIfPresent(window.analisiLine,    'Profilo albero motore 720 deg', 90);
+    addChartIfPresent(velocityChart,         'Velocita',                       70);
+    addChartIfPresent(accelerationChart,     'Accelerazione',                  70);
+    addChartIfPresent(jerkChart,             'Jerk',                           70);
+    addChartIfPresent(forceChart,            'Forze treno valvole',            80);
+    addChartIfPresent(complianceChart,       'Compliance: cam vs valvola reale (RK4)', 80);
 
     // Timing diagram fa pagina a sé per leggibilità
     if (timingChartInstance) {
         doc.addPage(); y = margin;
         sectionHeader('Diagramma fasatura');
-        try {
-            var img = timingChartInstance.toBase64Image('image/png', 1);
-            var w = 110;
-            doc.addImage(img, 'PNG', (pageW - w) / 2, y, w, w);
-            y += w + 6;
-        } catch (e) {}
+        var tp = chartToPrintImage(timingChartInstance);
+        if (tp) {
+            var w = 110;                          // doughnut quadrato
+            var th = w * tp.aspect;
+            doc.addImage(tp.dataURL, 'PNG', (pageW - w) / 2, y, w, th);
+            y += th + 6;
+        } else {
+            doc.setFont('helvetica', 'italic'); doc.setFontSize(9);
+            doc.text('(diagramma non disponibile)', margin, y); y += 8;
+        }
     }
 
     // ============================================================
