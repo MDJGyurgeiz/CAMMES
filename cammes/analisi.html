@@ -3998,6 +3998,83 @@ function exportCSV() {
 // Se il chart non è renderizzato (contenitore display:none → buffer vuoto)
 // prova un resize; se ancora a 0, ritorna null così il chiamante stampa un
 // placeholder invece di un riquadro bianco muto.
+// Scurisce un colore CHIARO per la stampa su bianco (cyan/giallo del tema
+// scuro sbiadiscono). Lascia invariati: colori già scuri, fill traslucidi
+// (alpha<0.95, sono riempimenti), valori non parsabili. Gestisce hex, rgb(),
+// rgba() e array (es. doughnut).
+function _darkenForPrint(color) {
+    if (Array.isArray(color)) return color.map(_darkenForPrint);
+    if (typeof color !== 'string') return color;
+    var r, g, b, a = 1;
+    var m;
+    if ((m = color.match(/^#([0-9a-f]{3})$/i))) {
+        r = parseInt(m[1][0] + m[1][0], 16); g = parseInt(m[1][1] + m[1][1], 16); b = parseInt(m[1][2] + m[1][2], 16);
+    } else if ((m = color.match(/^#([0-9a-f]{6})$/i))) {
+        r = parseInt(m[1].slice(0,2),16); g = parseInt(m[1].slice(2,4),16); b = parseInt(m[1].slice(4,6),16);
+    } else if ((m = color.match(/^rgba?\(([^)]+)\)$/i))) {
+        var p = m[1].split(',').map(function (s) { return parseFloat(s); });
+        r = p[0]; g = p[1]; b = p[2]; a = (p.length > 3) ? p[3] : 1;
+    } else return color;            // 'transparent', named, gradient → lascia
+    if (a < 0.95) return color;     // riempimento traslucido → non toccare
+    var lum = 0.299*r + 0.587*g + 0.114*b;
+    if (lum <= 150) return color;   // già scuro abbastanza per il bianco
+    var f = 0.5;                    // porta verso scuro mantenendo la tinta
+    return 'rgb(' + Math.round(r*f) + ',' + Math.round(g*f) + ',' + Math.round(b*f) + ')';
+}
+
+// Applica una palette "da stampa" (testo/legenda scuri, griglia chiara, colori
+// dato scuriti) salvando gli originali, così dopo la cattura si ripristina.
+// Ritorna una funzione restore().
+function _applyPrintPalette(chart) {
+    var saved = { ds: [], scales: {}, legend: undefined, title: undefined };
+    var o = chart.options || {};
+    (chart.data && chart.data.datasets || []).forEach(function (d, i) {
+        saved.ds[i] = { border: d.borderColor, bg: d.backgroundColor };
+        d.borderColor     = _darkenForPrint(d.borderColor);
+        d.backgroundColor = _darkenForPrint(d.backgroundColor);
+    });
+    var plugins = o.plugins || {};
+    if (plugins.legend && plugins.legend.labels) {
+        saved.legend = plugins.legend.labels.color;
+        plugins.legend.labels.color = '#222222';
+    }
+    if (plugins.title) { saved.title = plugins.title.color; plugins.title.color = '#222222'; }
+    if (o.scales) {
+        Object.keys(o.scales).forEach(function (id) {
+            var sc = o.scales[id]; if (!sc) return;
+            saved.scales[id] = {
+                tick: sc.ticks && sc.ticks.color,
+                grid: sc.grid && sc.grid.color,
+                title: sc.title && sc.title.color
+            };
+            if (sc.ticks) sc.ticks.color = '#333333';
+            if (sc.grid)  sc.grid.color  = '#dddddd';
+            if (sc.title) sc.title.color = '#333333';
+        });
+    }
+    // update('none') aggiorna gli stili degli elementi ma NON ridisegna il
+    // canvas in modo sincrono (il render è schedulato): la cattura immediata
+    // prenderebbe il frame vecchio (colori chiari). chart.draw() forza il
+    // ridisegno sincrono sul buffer → la cattura vede i colori da stampa.
+    chart.update('none');
+    try { chart.draw(); } catch (e) {}
+    return function restore() {
+        (chart.data && chart.data.datasets || []).forEach(function (d, i) {
+            if (saved.ds[i]) { d.borderColor = saved.ds[i].border; d.backgroundColor = saved.ds[i].bg; }
+        });
+        if (plugins.legend && plugins.legend.labels) plugins.legend.labels.color = saved.legend;
+        if (plugins.title) plugins.title.color = saved.title;
+        if (o.scales) Object.keys(saved.scales).forEach(function (id) {
+            var sc = o.scales[id], s = saved.scales[id]; if (!sc || !s) return;
+            if (sc.ticks) sc.ticks.color = s.tick;
+            if (sc.grid)  sc.grid.color  = s.grid;
+            if (sc.title) sc.title.color = s.title;
+        });
+        chart.update('none');
+        try { chart.draw(); } catch (e) {}
+    };
+}
+
 function chartToPrintImage(chart) {
     if (!chart || !chart.canvas) return null;
     var src = chart.canvas;
@@ -4008,15 +4085,23 @@ function chartToPrintImage(chart) {
     }
     var w = src.width, h = src.height;
     if (!w || !h) return null;
+    // Palette di stampa (colori dato scuri + testo scuro su griglia chiara),
+    // poi ripristino l'aspetto a schermo.
+    var restore = null;
+    try { restore = _applyPrintPalette(chart); } catch (e) { restore = null; }
     var scale = 2;
     var out = document.createElement('canvas');
     out.width = w * scale; out.height = h * scale;
     var ctx = out.getContext('2d');
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, out.width, out.height);
-    try { ctx.drawImage(src, 0, 0, out.width, out.height); }
-    catch (e) { return null; }
-    return { dataURL: out.toDataURL('image/png'), aspect: h / w };
+    var result = null;
+    try {
+        ctx.drawImage(src, 0, 0, out.width, out.height);
+        result = { dataURL: out.toDataURL('image/png'), aspect: h / w };
+    } catch (e) { result = null; }
+    if (restore) { try { restore(); } catch (e) {} }
+    return result;
 }
 
 function exportPDF() {

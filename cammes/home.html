@@ -2311,8 +2311,22 @@ function exportSinglePDF(fileName, fileType) {
     try {
         // Cattura su fondo BIANCO opaco a 2x, mantenendo l'aspect ratio reale
         // del canvas (niente schiacciamento). Chart.js esporta PNG trasparente
-        // e i colori chiari del tema scuro sbiadirebbero su pagina bianca.
-        var src = _quickViewChart.canvas;
+        // e i colori chiari del tema scuro sbiadirebbero su pagina bianca:
+        // scurisco temporaneamente linea/testo/griglia per la stampa, poi
+        // ripristino l'aspetto a schermo.
+        var qc = _quickViewChart, qo = qc.options || {};
+        var savedB = qc.data.datasets.map(function (d) { return d.borderColor; });
+        qc.data.datasets.forEach(function (d) { d.borderColor = '#0a4a5e'; });
+        var savedScales = {};
+        if (qo.scales) Object.keys(qo.scales).forEach(function (id) {
+            var sc = qo.scales[id]; if (!sc) return;
+            savedScales[id] = { t: sc.ticks && sc.ticks.color, g: sc.grid && sc.grid.color };
+            if (sc.ticks) sc.ticks.color = '#333'; if (sc.grid) sc.grid.color = '#ddd';
+        });
+        // update('none') non ridisegna sincrono il canvas: draw() forza il
+        // repaint così la cattura vede i colori da stampa.
+        qc.update('none'); try { qc.draw(); } catch (e) {}
+        var src = qc.canvas;
         var cw = src.width || 700, ch = src.height || 400;
         var tmp = document.createElement('canvas');
         tmp.width = cw * 2; tmp.height = ch * 2;
@@ -2320,6 +2334,13 @@ function exportSinglePDF(fileName, fileType) {
         tctx.fillStyle = '#ffffff'; tctx.fillRect(0, 0, tmp.width, tmp.height);
         tctx.drawImage(src, 0, 0, tmp.width, tmp.height);
         var img = tmp.toDataURL('image/png');
+        // ripristino aspetto a schermo
+        qc.data.datasets.forEach(function (d, i) { d.borderColor = savedB[i]; });
+        if (qo.scales) Object.keys(savedScales).forEach(function (id) {
+            var sc = qo.scales[id], s = savedScales[id]; if (!sc) return;
+            if (sc.ticks) sc.ticks.color = s.t; if (sc.grid) sc.grid.color = s.g;
+        });
+        qc.update('none'); try { qc.draw(); } catch (e) {}
         var availW = pageW - 2 * margin;
         var aspect = ch / cw;
         var maxH = fileType === 'pol' ? 120 : 90;
