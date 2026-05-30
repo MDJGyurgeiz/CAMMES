@@ -242,6 +242,12 @@ var stepflag = 0;
 var i = 0;
 var maxg_encoder       = null;   // conteggio encoder al momento del picco (per 0 virtuale)
 var currentEncoderCount = null;   // ultimo conteggio encoder ricevuto (con la misura)
+// Controllo divergenza stepper↔encoder durante la scansione: se i passi
+// comandati avanzano ma l'encoder resta quasi fermo, il motore sta slittando
+// (accoppiamento lasco, cinghia, stallo). Encoder = 4 conteggi/grado camma.
+var _encChkBaseI = 0;          // indice sub-step all'inizio della finestra
+var _encChkBaseCount = null;   // conteggio encoder all'inizio della finestra
+var _encAlarmed = false;       // allarme già emesso in questo run (una volta)
 
 // Modalità scansione: ogni preset definisce campioni media, micropassi per unità,
 // passo motore totale per coprire 360° camma e quante letture aggregare per ogni
@@ -648,6 +654,31 @@ var _engineOnMessage = function(event) {
             var etaSec = scanEta.tick(i);
             window.cammesScanProgress.set(i, currentMode.totalSteps, etaSec);
         }
+        // Controllo divergenza stepper↔encoder (finestra 10° camma). Atteso:
+        // 4 conteggi/grado → 40 conteggi ogni 10°. Se l'encoder si è mosso meno
+        // del 25% dell'atteso, il motore sta probabilmente slittando. Allarme
+        // una sola volta per run, non blocca la scansione.
+        if (startflag === 1 && currentEncoderCount !== null) {
+            if (_encChkBaseCount === null) { _encChkBaseCount = currentEncoderCount; _encChkBaseI = i; }
+            else if (!_encAlarmed && (i - _encChkBaseI) >= 10 * currentMode.subStepsPerDeg) {
+                var degAdv   = (i - _encChkBaseI) / currentMode.subStepsPerDeg;
+                var expected = 4 * degAdv;                     // conteggi attesi
+                var d = (currentEncoderCount - _encChkBaseCount) % 1440;  // wrap-safe
+                if (d >  720) d -= 1440;
+                if (d < -720) d += 1440;
+                var actual = Math.abs(d);
+                if (expected >= 16 && actual < 0.25 * expected) {
+                    _encAlarmed = true;
+                    if (window.cammesToast) window.cammesToast({
+                        kind: 'warn', title: 'Possibile slittamento stepper',
+                        body: 'Encoder mosso ' + actual + ' conteggi (~' + (actual/4).toFixed(1) +
+                              '°) su ' + Math.round(degAdv) + '° comandati. Verifica accoppiamento motore/albero e corrente driver.',
+                        duration: 8000
+                    });
+                }
+                _encChkBaseCount = currentEncoderCount; _encChkBaseI = i;
+            }
+        }
         if (startflag == 1 && i < currentMode.totalSteps && stepflag == 0) {
             if (rsign == 1) { sendSocket.send('p'); }
             if (rsign == -1) { sendSocket.send('q'); }
@@ -779,6 +810,8 @@ function _startSingleRun(firstRun) {
     subBuffer = {};
     pdata.length = 0; pdindex.length = 0;
     max = 0; maxg = 0; maxg_encoder = null;
+    // Reset controllo divergenza stepper↔encoder per questo run
+    _encChkBaseI = 0; _encChkBaseCount = null; _encAlarmed = false;
     if (config && config.data) { config.data.labels.length = 0; config.data.datasets.forEach(function(d){ d.data.length = 0; }); }
     if (window.myLine) { try { window.myLine.update(); } catch(e) {} }
     i = i + 1;
