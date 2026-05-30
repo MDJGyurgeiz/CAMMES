@@ -631,7 +631,34 @@ In scansione (alzata) confronta passi comandati vs avanzamento encoder reale
 mode-independent, conservativo sul backlash. Soglie validate numericamente.
 
 ### Da fare prossime sessioni
-- [ ] Tour guidato passo-passo (oltre al wizard di benvenuto)
-- [ ] Compliance 3-DOF su entrambi i lati / spring surge (modi spire)
-- [ ] Validazione su camma race dedicata + confronto banco
-- [ ] Fase D: ESLint + issue GitHub
+- [x] ~~Fase D: ESLint + issue GitHub~~ (sotto-sessione 6.8)
+- [ ] Tour guidato passo-passo → issue #4
+- [ ] Compliance 3-DOF su entrambi i lati → issue #2 / spring surge → issue #1
+- [ ] Validazione su camma race dedicata + confronto banco → issue #3
+
+---
+
+## Sotto-sessione 6.8 — 2026-05-29 — Fase D: ESLint + issue GitHub
+
+### ESLint (commit `ab53503`)
+- `cammes/eslint.config.js`: flat config con globals inline (niente dipendenza
+  `globals`), regole curate pro-bug (no-undef, no-dupe-keys, valid-typeof,
+  no-func-assign, no-eval) senza rumore di stile sul codice ES5. Copre
+  cammes_server.js (Node), cammes-ui.js (browser), tools/*.js (Node); script
+  inline HTML esclusi (richiederebbero plugin + molto rumore).
+- package.json: script `lint` e `test`; eslint in devDependencies.
+- Finding: 1 errore reale (no-func-assign sul monkey-patch di close() in
+  cammes-ui.js → documentato come intenzionale) + warning benigni gestiti.
+  Lint finale: 0 errori, 1 warning noto (var resolved nel check path-traversal,
+  lasciato intatto perché sicurezza). Regressioni node ancora verdi.
+- Nota: install locale eslint fallisce su cartella Google Drive (EBADF); usato
+  eslint globale per eseguire. `npm install` su checkout normale lo installa.
+
+### Issue GitHub (repo privato MDJGyurgeiz/CAMMES)
+Aperte 5 issue per la roadmap (non c'erano TODO nel codice → tracciamento del
+backlog):
+- #1 Spring surge (molla a massa distribuita)
+- #2 Compliance 3-DOF cedevolezza lato bilanciere
+- #3 Validazione camma race dedicata + banco (bloccante: serve file race)
+- #4 Tour guidato passo-passo
+- #5 Build pkg: pkg.assets riferisce librerie obsolete a root invece di lib/ (bug)
