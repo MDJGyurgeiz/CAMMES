@@ -599,7 +599,39 @@ eccezioni. Regressioni `test_3dof` 3/3 e `validate_clio` ancora verdi (fix solo
 di rendering). Conferma visiva finale demandata all'utente (gli screenshot del
 preview vanno in timeout in questo ambiente).
 
+---
+
+## Sotto-sessione 6.7 — 2026-05-29 — 4 migliorie piccolo/alto valore
+
+Dall'elenco "genuinamente da fare" emerso dall'audit. Tutte verificate qui
+(le due hardware anche a livello logico; prova al banco a carico utente).
+
+### 1. `tools/test_followers.js` (commit `c2cb201`)
+Regressione delle 3 conversioni follower, invarianti derivate dal codice:
+roller = max(0, raw−rPunt) e rRoll ininfluente; finger tilt=0 = raw×(lValve/
+lArm) esatto (err 1e-15); bicchiere finito/≥0, picco=picco grezzo, rPunt
+sottratto. 8/8 PASS. Colma l'unico buco di copertura test.
+
+### 2. Contrasto colori in stampa (commit `a13dd06`)
+`_darkenForPrint` + `_applyPrintPalette` in chartToPrintImage: prima della
+cattura scurisce i colori chiari (cyan/giallo), testo/legenda → scuri, griglia
+chiara; ripristina dopo. Fix chiave: `update('none')` non ridisegna sincrono →
+`chart.draw()` esplicito. Linea profilo da lum 153 (sbiadita) a 79 (leggibile).
+Stessa logica inline in home.html.
+
+### 3. Auto-reconnect WebSocket (commit `01693e5`)
+alzata + polare: handler resi nominati, `connectEngine()` con onclose/onerror
+→ retry ogni 3s senza reload; toast "Connessione ripristinata". Verifica live:
+close forzato → riconnesso entro ~2.5s su entrambe.
+
+### 4. Allarme slittamento stepper↔encoder (commit `75d4b80`)
+In scansione (alzata) confronta passi comandati vs avanzamento encoder reale
+(4 conteggi/grado, finestra 10°=40 conteggi); se l'encoder è quasi fermo
+(<25% atteso) → toast avviso una volta per run, non blocca. Wrap-safe,
+mode-independent, conservativo sul backlash. Soglie validate numericamente.
+
 ### Da fare prossime sessioni
-- [ ] Colori dato (cyan/giallo) più scuri in stampa per contrasto su bianco (opz.)
-- [ ] Eventuale tour guidato passo-passo (oltre al wizard di benvenuto)
-- [ ] Auto-reconnect WebSocket (oggi serve ricaricare quando il server torna su)
+- [ ] Tour guidato passo-passo (oltre al wizard di benvenuto)
+- [ ] Compliance 3-DOF su entrambi i lati / spring surge (modi spire)
+- [ ] Validazione su camma race dedicata + confronto banco
+- [ ] Fase D: ESLint + issue GitHub
