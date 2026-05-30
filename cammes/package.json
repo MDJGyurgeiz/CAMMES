@@ -20,17 +20,17 @@
   },
   "pkg": {
     "assets": [
+      "home.html",
       "alzata.html",
       "polare.html",
       "grafici.html",
       "analisi.html",
       "style.css",
-      "gauge.min.js",
-      "Chart.min.js",
-      "Chart.bundle.js",
-      "responsivevoice.js",
-      "jquery.min.js",
+      "cammes-ui.js",
       "jspdf.umd.min.js",
+      "responsivevoice.js",
+      "lib/**/*",
+      "fonts/**/*",
       "images/**/*",
       "prove/**/*"
     ],
