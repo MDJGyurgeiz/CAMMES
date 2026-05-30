@@ -46,6 +46,8 @@ var bundle = names.map(function (n) { return extractFn(html, n); }).join('\n\n')
 
 // `window` stub: convertPuntToBicchiere referenzia window.cammesToast nel ramo
 // di warning. Definendolo evitiamo ReferenceError a prescindere dai parametri.
+// (usato dentro la stringa eval() qui sotto, invisibile al linter)
+// eslint-disable-next-line no-unused-vars
 var window = { cammesToast: null, _suppressBicchWarn: true };
 var convertPuntToBicchiere, convertPuntToRoller, convertPuntToFinger;
 // eslint-disable-next-line no-eval

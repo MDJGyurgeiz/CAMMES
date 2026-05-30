@@ -458,6 +458,9 @@
     document.addEventListener('keydown', onKey);
 
     var origClose = close;
+    // Monkey-patch intenzionale: avvolge close() per rimuovere il listener
+    // keydown alla chiusura. La riassegnazione della funzione è voluta.
+    // eslint-disable-next-line no-func-assign
     close = function () {
       document.removeEventListener('keydown', onKey);
       origClose();

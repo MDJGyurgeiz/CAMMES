@@ -7,11 +7,16 @@
   "scripts": {
     "start": "node cammes_server.js",
     "start:no-browser": "node cammes_server.js --no-browser",
-    "build": "pkg . --targets node18-win-x64 --output cammes.exe --compress GZip"
+    "build": "pkg . --targets node18-win-x64 --output cammes.exe --compress GZip",
+    "lint": "eslint --config eslint.config.js cammes_server.js cammes-ui.js tools/*.js",
+    "test": "node tools/test_3dof.js && node tools/test_followers.js && node tools/validate_clio.js"
   },
   "dependencies": {
     "ws": "^8.16.0",
     "serialport": "^12.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0"
   },
   "pkg": {
     "assets": [
