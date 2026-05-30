@@ -194,9 +194,19 @@ function _wsReady() {
     return (typeof engineSocket !== 'undefined' && engineSocket.readyState === 1) &&
            (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1);
 }
-var engineSocket = new WebSocket("ws://localhost:8080");
+// Connessione WebSocket con AUTO-RECONNECT: retry ogni 3s se il server cade,
+// senza ricaricare la pagina. updatePolStatus riflette lo stato (LED+banner).
+var WS_URL = "ws://localhost:8080";
+var engineSocket = null;
+var _engineReconnectTimer = null;
+var _everConnected = false;
 
-engineSocket.onopen = function(event) {
+var _engineOnOpen = function(event) {
+    if (_everConnected && window.cammesToast) {
+        window.cammesToast({ kind: 'success', title: 'Connessione ripristinata',
+            body: 'Server di nuovo raggiungibile.', duration: 2500 });
+    }
+    _everConnected = true;
     document.imp2.imp2.value = "  gradi  " + "0";
     document.cpot.cpot.value = " " + "00.00";
     gaugemicrom.value = 0;
@@ -221,7 +231,7 @@ function onMoveProfileChange() {
     }
 }
 
-engineSocket.onmessage = function(event) {
+var _engineOnMessage = function(event) {
     msg = event.data;
 
     // Durante free-spin mostra grado encoder LIVE nel display
@@ -299,6 +309,26 @@ engineSocket.onmessage = function(event) {
         }
     }
 };
+
+// (Ri)connessione del socket engine con retry automatico ogni 3s.
+function _engineScheduleReconnect() {
+    if (window._cammesClosing) return;
+    if (_engineReconnectTimer) return;
+    _engineReconnectTimer = setTimeout(function () {
+        _engineReconnectTimer = null;
+        connectEngine();
+    }, 3000);
+}
+function connectEngine() {
+    try {
+        engineSocket = new WebSocket(WS_URL);
+        engineSocket.onopen    = _engineOnOpen;
+        engineSocket.onmessage = _engineOnMessage;
+        engineSocket.onclose   = _engineScheduleReconnect;
+        engineSocket.onerror   = function () { try { engineSocket.close(); } catch (e) {} };
+    } catch (e) { _engineScheduleReconnect(); }
+}
+connectEngine();
 
 // LED stato + banner guida: distingue "server giù" da "server ok ma Arduino assente".
 function updatePolStatus() {
