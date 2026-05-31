@@ -501,12 +501,210 @@
   }
   window.cammesValidate = { error: markInputError };
 
+  // -------- GUIDED TOUR (coachmark per-pagina) ---------------------------
+  // Tour on-demand che evidenzia i controlli reali della pagina corrente, uno
+  // alla volta (oltre al wizard di benvenuto, che resta testuale/automatico).
+  var TOUR_KEY = 'cammes-tour-done-v1';
+
+  function getCurrentPage() {
+    var t = document.title || '';
+    if (/Home/i.test(t))      return 'home';
+    if (/Alzata/i.test(t))    return 'alzata';
+    if (/Polare/i.test(t))    return 'polare';
+    if (/Confronto/i.test(t)) return 'grafici';
+    if (/Analisi/i.test(t))   return 'analisi';
+    return null;
+  }
+  window.cammesGetCurrentPage = getCurrentPage;
+
+  // Step per pagina: { sel: selettore, title, body }. Gli step il cui
+  // selettore non esiste sulla pagina vengono saltati automaticamente.
+  var TOUR_STEPS = {
+    home: [
+      { sel: '.home-tiles',     title: 'Le 4 sezioni', body: 'Da qui entri in <b>Alzata</b>, <b>Polare</b>, <b>Confronto</b> e <b>Analisi</b>. È il punto di partenza.' },
+      { sel: '#homeStats',      title: 'Stato archivio', body: 'Quante misure hai salvato e qual è l\'ultima. Un colpo d\'occhio sui dati.' },
+      { sel: '#recentsSearch',  title: 'Cerca e filtra', body: 'Trova le misure per nome; sotto puoi filtrare per tipo, data e tag.' },
+      { sel: '#concert-toggle', title: 'Concerto col motore', body: 'Un extra: fai &ldquo;suonare&rdquo; lo stepper con brani famosi. 🎵' }
+    ],
+    alzata: [
+      { sel: '#scanMode',  title: 'Modalità scansione', body: 'Scegli la precisione: da <b>Veloce</b> (~1 min) ad <b>Atomic</b> (massima risoluzione). Il tempo stimato è indicato.' },
+      { sel: 'button[onclick^="start"]', title: 'Avvia', body: 'START esegue una scansione completa 360° del profilo di alzata.' },
+      { sel: '#msBtn',     title: 'Zero virtuale', body: 'Porta in automatico il picco di alzata a un riferimento fisso (+180°), così alberi montati diversamente restano confrontabili.' },
+      { sel: '#freeBtn',   title: 'Sblocca motore', body: 'Libera l\'albero per girarlo a mano leggendo encoder e comparatore dal vivo.' },
+      { sel: '#nome',      title: 'Salva', body: 'Dai un nome e salva: il suffisso <code>_alz</code> è aggiunto in automatico.' }
+    ],
+    polare: [
+      { sel: 'input[id="diam"], #diam', title: 'Diametro a riposo', body: 'Inserisci il diametro base dell\'albero: il profilo polare lo usa come riferimento.' },
+      { sel: 'button[onclick^="start"]', title: 'Avvia', body: 'START esegue la scansione polare 360°.' },
+      { sel: '#freeBtn',   title: 'Sblocca motore', body: 'Come in Alzata: gira l\'albero a mano leggendo i sensori dal vivo.' }
+    ],
+    grafici: [
+      { sel: '#fileinput1', title: 'Carica i profili', body: 'Scegli fino a 4 file <code>_alz</code>/<code>_pol</code>: le curve si sovrappongono nel grafico.' },
+      { sel: '#viewMode',   title: 'Sovrapposto / Differenza', body: 'Confronta le curve sovrapposte oppure mostra la differenza (con statistiche max/media/RMSE).' },
+      { sel: '#replayBtn',  title: 'Replay', body: 'Ridisegna le curve da 0° a 360° per un confronto animato.' }
+    ],
+    analisi: [
+      { sel: '#modeBaseBtn',       title: 'Base / Avanzato', body: 'In <b>Base</b> vedi solo l\'essenziale; <b>Avanzato</b> mostra follower, compliance e strumenti race.' },
+      { sel: '#fileIntake',        title: 'Importa la camma', body: 'Carica i file di aspirazione e scarico, poi premi Analizza.' },
+      { sel: 'button[onclick^="analyze"]', title: 'Analizza', body: 'Calcola durata, LSA, alzata, velocità/accelerazione, forze e RPM critico.' },
+      { sel: '#complianceEnabled', title: 'Compliance (race)', body: 'Simulazione dinamica del treno valvole: valve float, bounce, modelli 1/2/3-DOF.' },
+      { sel: '#surgeEnabled',      title: 'Surge molla', body: 'Modella la molla a massa distribuita per stimare la <b>risonanza delle spire</b> ad alto regime.' }
+    ]
+  };
+
+  var _tour = null;   // { steps, idx, els:{backdrop,hole,pop} }
+
+  function _ensureTourStyle() {
+    if (document.getElementById('cammes-tour-style')) return;
+    var st = document.createElement('style');
+    st.id = 'cammes-tour-style';
+    st.textContent =
+      '.cammes-tour-backdrop{position:fixed;inset:0;z-index:950;background:transparent;}' +
+      '.cammes-tour-hole{position:fixed;border-radius:8px;border:2px solid var(--accent,#00d4ff);' +
+        'box-shadow:0 0 0 9999px rgba(7,9,13,0.72),0 0 14px var(--accent,#00d4ff);' +
+        'transition:top .2s,left .2s,width .2s,height .2s;pointer-events:none;z-index:951;}' +
+      '.cammes-tour-pop{position:fixed;z-index:952;max-width:300px;background:var(--bg-elev-2,#1a1a2e);' +
+        'border:1px solid var(--border-strong,#2a2a4a);border-radius:10px;padding:14px 16px;' +
+        'box-shadow:0 10px 34px rgba(0,0,0,.55);color:var(--text-primary,#e8e8f0);' +
+        'font-family:var(--font-sans,system-ui,sans-serif);font-size:13px;line-height:1.5;}' +
+      '.cammes-tour-pop h4{margin:0 0 6px;font-family:var(--font-display,inherit);font-size:15px;' +
+        'color:var(--accent,#00d4ff);}' +
+      '.cammes-tour-pop code{font-family:var(--font-mono,monospace);background:var(--bg-input,#12121f);' +
+        'color:var(--accent-2,#7df);padding:1px 5px;border-radius:3px;}' +
+      '.cammes-tour-nav{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:8px;}' +
+      '.cammes-tour-nav .step{font-size:11px;color:var(--text-muted,#8888aa);}' +
+      '.cammes-tour-nav button{font-family:inherit;font-size:12px;padding:5px 12px;border-radius:6px;' +
+        'border:1px solid var(--border-card,#2a2a4a);background:var(--bg-input,#12121f);' +
+        'color:var(--text-primary,#e8e8f0);cursor:pointer;}' +
+      '.cammes-tour-nav button.primary{background:var(--accent,#00d4ff);color:#06121a;border-color:transparent;font-weight:bold;}';
+    document.head.appendChild(st);
+  }
+
+  function _tourCleanup(completed) {
+    if (!_tour) return;
+    window.removeEventListener('resize', _tourReposition);
+    window.removeEventListener('scroll', _tourReposition, true);
+    document.removeEventListener('keydown', _tourKey);
+    ['backdrop', 'hole', 'pop'].forEach(function (k) {
+      if (_tour.els[k] && _tour.els[k].parentNode) _tour.els[k].parentNode.removeChild(_tour.els[k]);
+    });
+    _tour = null;
+    if (completed) { try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {} }
+  }
+
+  function _tourKey(e) {
+    if (!_tour) return;
+    if (e.key === 'Escape') _tourCleanup(false);
+    else if (e.key === 'ArrowRight') _tourGo(1);
+    else if (e.key === 'ArrowLeft') _tourGo(-1);
+  }
+
+  function _tourReposition() {
+    if (!_tour) return;
+    var step = _tour.steps[_tour.idx];
+    var el = step.el;
+    var r = el.getBoundingClientRect();
+    var pad = 6;
+    var hole = _tour.els.hole, pop = _tour.els.pop;
+    hole.style.top = (r.top - pad) + 'px';
+    hole.style.left = (r.left - pad) + 'px';
+    hole.style.width = (r.width + pad * 2) + 'px';
+    hole.style.height = (r.height + pad * 2) + 'px';
+    // posiziona il pop sotto, o sopra se non c'è spazio
+    var popH = pop.offsetHeight || 140, popW = pop.offsetWidth || 300;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var top = r.bottom + 12;
+    if (top + popH > vh - 8) top = Math.max(8, r.top - popH - 12);
+    var left = Math.min(Math.max(8, r.left), vw - popW - 8);
+    pop.style.top = top + 'px';
+    pop.style.left = left + 'px';
+  }
+
+  function _tourRender() {
+    var step = _tour.steps[_tour.idx];
+    var el = step.el;
+    if (el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    var last = _tour.idx === _tour.steps.length - 1;
+    _tour.els.pop.innerHTML =
+      '<h4></h4><div class="b"></div>' +
+      '<div class="cammes-tour-nav"><span class="step"></span><span>' +
+      '<button class="prev">Indietro</button> <button class="next primary"></button></span></div>';
+    _tour.els.pop.querySelector('h4').textContent = step.title;
+    _tour.els.pop.querySelector('.b').innerHTML = step.body;
+    _tour.els.pop.querySelector('.step').textContent = (_tour.idx + 1) + ' / ' + _tour.steps.length;
+    var prevBtn = _tour.els.pop.querySelector('.prev');
+    var nextBtn = _tour.els.pop.querySelector('.next');
+    prevBtn.style.visibility = _tour.idx === 0 ? 'hidden' : 'visible';
+    nextBtn.textContent = last ? 'Fine ✓' : 'Avanti';
+    prevBtn.onclick = function () { _tourGo(-1); };
+    nextBtn.onclick = function () { last ? _tourCleanup(true) : _tourGo(1); };
+    // Posiziona subito (sincrono, non dipende da rAF) e di nuovo dopo che lo
+    // scrollIntoView ha aggiornato i rect.
+    _tourReposition();
+    requestAnimationFrame(function () { setTimeout(_tourReposition, 60); });
+    setTimeout(_tourReposition, 120);
+  }
+
+  function _tourGo(delta) {
+    if (!_tour) return;
+    var n = _tour.idx + delta;
+    if (n < 0 || n >= _tour.steps.length) return;
+    _tour.idx = n;
+    _tourRender();
+  }
+
+  function startTour() {
+    if (_tour) return;
+    var page = getCurrentPage();
+    var defs = (page && TOUR_STEPS[page]) || [];
+    // risolvi i selettori, salta quelli assenti
+    var steps = [];
+    defs.forEach(function (s) {
+      var el = null;
+      try { el = document.querySelector(s.sel); } catch (e) {}
+      if (el && el.offsetParent !== null) steps.push({ el: el, title: s.title, body: s.body });
+    });
+    if (!steps.length) {
+      showToast({ kind: 'info', title: 'Tour non disponibile', body: 'Nessun elemento da mostrare su questa pagina.', duration: 3000 });
+      return;
+    }
+    _ensureTourStyle();
+    var backdrop = document.createElement('div'); backdrop.className = 'cammes-tour-backdrop';
+    backdrop.addEventListener('click', function () { _tourCleanup(false); });
+    var hole = document.createElement('div'); hole.className = 'cammes-tour-hole';
+    var pop = document.createElement('div'); pop.className = 'cammes-tour-pop';
+    document.body.appendChild(backdrop);
+    document.body.appendChild(hole);
+    document.body.appendChild(pop);
+    _tour = { steps: steps, idx: 0, els: { backdrop: backdrop, hole: hole, pop: pop } };
+    window.addEventListener('resize', _tourReposition);
+    window.addEventListener('scroll', _tourReposition, true);
+    document.addEventListener('keydown', _tourKey);
+    _tourRender();
+  }
+  window.cammesTour = { start: startTour };
+
   // -------- INIT al DOM ready --------------------------------------------
   function init() {
     const btn = document.getElementById('theme-toggle');
     if (btn) btn.addEventListener('click', toggleTheme);
     const helpBtn = document.getElementById('help-toggle');
-    if (helpBtn) helpBtn.addEventListener('click', showWizard);
+    if (helpBtn) {
+      helpBtn.addEventListener('click', showWizard);
+      // Inietta il bottone Tour accanto al "?" (solo sulle pagine note),
+      // così non serve modificare i 5 HTML.
+      if (getCurrentPage() && !document.getElementById('tour-toggle')) {
+        var tb = document.createElement('button');
+        tb.id = 'tour-toggle';
+        tb.type = 'button';
+        tb.className = helpBtn.className;
+        tb.title = 'Tour guidato della pagina';
+        tb.setAttribute('aria-label', 'Tour guidato');
+        tb.textContent = '🗺';
+        tb.addEventListener('click', startTour);
+        helpBtn.parentNode.insertBefore(tb, helpBtn);
+      }
+    }
     refreshTooltips();
     showWizardIfFirstTime();
   }
