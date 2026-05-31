@@ -124,6 +124,24 @@ console.log('CHECK 3 (float cresce col regime):');
 console.log('   max gap cam-valvola @2000 = ' + gapLo.toFixed(4) + ' mm,  @9000 = ' + gapHi.toFixed(4) + ' mm');
 if (gapHi >= gapLo) { console.log('   PASS'); } else { console.log('   FAIL'); fails++; }
 
+// ---- CHECK 4: cedevolezza pivot bilanciere (k_pivot) ----
+// k_pivot=0 (o assente) ≡ 3-DOF originale (retrocompatibilità). Un k_pivot
+// finito vincola il bilanciere → cambia il lift valvola.
+var noPivot   = simulateCompliance3DOF(cam, rpm2, realParams);
+var p0 = Object.assign({}, realParams); p0.kPivotN_mm = 0;
+var withZero  = simulateCompliance3DOF(cam, rpm2, p0);
+var pBig = Object.assign({}, realParams); pBig.kPivotN_mm = 30000;
+var withPivot = simulateCompliance3DOF(cam, rpm2, pBig);
+var diffZero = 0, diffBig = 0;
+for (var dd = 1; dd <= 720; dd++) {
+    diffZero = Math.max(diffZero, Math.abs((noPivot[dd]||0) - (withZero[dd]||0)));
+    diffBig  = Math.max(diffBig,  Math.abs((noPivot[dd]||0) - (withPivot[dd]||0)));
+}
+console.log('CHECK 4 (cedevolezza pivot bilanciere):');
+console.log('   k_pivot=0 vs assente: max diff = ' + diffZero.toFixed(5) + ' mm (atteso ~0)');
+console.log('   k_pivot=30000 vs base: max diff = ' + diffBig.toFixed(4) + ' mm (atteso > 0)');
+if (diffZero < 1e-6 && diffBig > 1e-3) { console.log('   PASS'); } else { console.log('   FAIL'); fails++; }
+
 console.log('');
-if (fails === 0) { console.log('TUTTI I CHECK PASSANO (3/3)'); process.exit(0); }
+if (fails === 0) { console.log('TUTTI I CHECK PASSANO (4/4)'); process.exit(0); }
 else { console.log(fails + ' CHECK FALLITI'); process.exit(1); }

@@ -433,6 +433,11 @@
                     <input type="number" id="kSeat" value="80000" class="input" style="width:85px;" step="5000" min="5000">
                     <span class="param-unit">N/mm</span>
                 </div>
+                <div class="param-row" id="row3DofKPivot" style="display:none;">
+                    <span class="param-label">k pivot bilanc. <span class="help-icon" data-tip="<strong>Cedevolezza pivot bilanciere (3-DOF)</strong>Rigidezza del perno/albero del bilanciere verso la testata. <b>0 = perno libero</b> (comportamento 3-DOF base: bilanciere massa libera tra cam e valvola). Valori finiti = il perno cede sotto carico (es. 20&#8202;000-60&#8202;000 N/mm per alberi reali). Cattura la cedevolezza del lato perno, oltre a cam (k pushrod) e valvola (k treno)." tabindex="0">?</span></span>
+                    <input type="number" id="kPivot" value="0" class="input" style="width:85px;" step="5000" min="0">
+                    <span class="param-unit">N/mm (0=libero)</span>
+                </div>
                 <div class="param-row">
                     <span class="param-label">Surge molla <span class="help-icon" data-tip="<strong>Surge molla (massa distribuita)</strong>Modella la molla valvola come catena di spire (massa distribuita) invece che molla ideale. Ad alto regime le spire entrano in <b>risonanza (surge)</b>: oscillano tra loro, perdono forza, possono sbattere → modo di guasto race. Calcola la <b>frequenza di surge</b> (&frac12;&middot;&radic;(k/m)) e quanto la molla &egrave; in risonanza al regime scelto. Usa il moto valvola (compliance se attiva, altrimenti profilo cam)." tabindex="0">?</span></span>
                     <select id="surgeEnabled" class="input" style="width:120px;" onchange="onSurgeToggle();">
@@ -1309,6 +1314,11 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
     var k_train  = (p.kTrainN_mm   || 5000) * 1000;     // bilancere→valvola
     var k_spring = (p.kSpringN_mm  || 30)   * 1000;     // molla valvola
     var k_seat   = (p.kSeatN_mm    || 80000)* 1000;     // sede→testata (rigidezza)
+    // Cedevolezza pivot bilanciere (lato perno): molla del perno verso terra.
+    // 0 = perno libero → comportamento 3-DOF originale (bilanciere massa libera
+    // tra k_push e k_train). Valori finiti = perno con rigidezza propria
+    // (cede sotto carico). Più alto = perno più rigido/vincolato.
+    var k_pivot  = (p.kPivotN_mm && p.kPivotN_mm > 0) ? p.kPivotN_mm * 1000 : 0;
     var F0       = p.F0N || 200;
     var damping  = p.dampingRatio || 0.06;
 
@@ -1317,6 +1327,7 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
     // Smorzamento di contatto più alto (seating anelastico, e_restituz<1).
     var zeta_c    = 0.30;
 
+    var c_pivot = k_pivot > 0 ? 2 * damping * Math.sqrt(k_pivot * m1_kg) : 0;
     var c1 = 2 * damping * Math.sqrt(k_push  * m1_kg);
     var c2 = 2 * damping * Math.sqrt(k_train * m2_kg);
     var c3 = 2 * damping * Math.sqrt(k_seat  * m3_kg);
@@ -1324,7 +1335,7 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
 
     // Passo: risolve il modo più rigido (contatto/sede) a 1/80 di periodo.
     var omegaMax = Math.sqrt(Math.max(k_push/m1_kg, k_train/m2_kg,
-                                      k_seat/m3_kg, k_contact/m2_kg));
+                                      k_seat/m3_kg, k_contact/m2_kg, k_pivot/m1_kg));
     var rps = rpm / 60;
     var degPerSec = rps * 360;
     if (degPerSec <= 0) degPerSec = 1;
@@ -1356,7 +1367,9 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
             if (N < 0) N = 0;   // il contatto spinge soltanto, non tira
         }
         // Newton: N spinge la valvola in +x (la riapre = bounce), la sede in -x
-        var a1 = (F_push - F_train - c1 * v1c) / m1_kg;
+        // Cedevolezza pivot: richiamo elastico del perno verso terra (se k_pivot>0)
+        var F_pivot = k_pivot > 0 ? (k_pivot * x1c + c_pivot * v1c) : 0;
+        var a1 = (F_push - F_train - c1 * v1c - F_pivot) / m1_kg;
         var a2 = (F_train - F_spring - c2 * v2c + N) / m2_kg;
         var a3 = (-N - k_seat * x3c - c3 * v3c) / m3_kg;
         return [v1c, a1, v2c, a2, v3c, a3];
@@ -2249,6 +2262,7 @@ function on2DofToggle() {
     var k = document.getElementById('row2DofKPush');  if (k) k.style.display = isChain ? 'flex' : 'none';
     var ms = document.getElementById('row3DofSeatMass'); if (ms) ms.style.display = is3 ? 'flex' : 'none';
     var ks = document.getElementById('row3DofKSeat');    if (ks) ks.style.display = is3 ? 'flex' : 'none';
+    var kp = document.getElementById('row3DofKPivot');   if (kp) kp.style.display = is3 ? 'flex' : 'none';
 }
 window.on2DofToggle = on2DofToggle;
 
@@ -3157,6 +3171,7 @@ function analyze() {
         if (modelVal === '3dof') {
             baseParams.massSeatG = Number(document.getElementById('massSeat').value) || 15;
             baseParams.kSeatN_mm = Number(document.getElementById('kSeat').value) || 80000;
+            baseParams.kPivotN_mm = Number(document.getElementById('kPivot').value) || 0;
             valveLiftIn = simulateCompliance3DOF(anlIn, rpm, baseParams);
             baseParams.massEqG = mEqEx;
             valveLiftEx = simulateCompliance3DOF(anlEx, rpm, baseParams);
