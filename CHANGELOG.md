@@ -662,3 +662,40 @@ backlog):
 - #3 Validazione camma race dedicata + banco (bloccante: serve file race)
 - #4 Tour guidato passo-passo
 - #5 Build pkg: pkg.assets riferisce librerie obsolete a root invece di lib/ (bug)
+
+---
+
+## Sotto-sessione 6.9 — 2026-05-31 — Roadmap: #1 surge, #2 pivot, #4 tour
+### Tag: **v2.6.0**
+Implementate le 3 issue fattibili della roadmap (#3 resta bloccata: serve un
+file di camma race reale). Ognuna verificata e committata separatamente.
+
+### #1 Spring surge — molla a massa distribuita (commit `64cd206`)
+`simulateSpringSurge`: molla discretizzata in N masse (m/N), N+1 segmenti
+k=(N+1)·kSpring, base fissa, capo guidato dal moto valvola, RK4. Cattura la
+risonanza delle spire (surge) ad alto regime, invisibile al modello a massa
+concentrata. `springSurgeFreqHz` = ½·√(k/m). Ritorna surgeFreqHz, surgeRatio,
+maxCoilAmp, harmonicOrder, criticalRpm. UI (select + massa molla + spire),
+dispatch in analyze(), export CSV/PDF. `tools/test_surge.js` 5/5: freq propria
++ convergenza catena discreta + risonanza + bounded.
+
+### #2 Cedevolezza pivot bilanciere 3-DOF (commit `d819ee0`)
+`simulateCompliance3DOF` + param `kPivotN_mm`: termine -k_pivot·x1 (perno→terra).
+Default 0 = comportamento originale (retrocompat esatta). UI riga nel gruppo
+3-DOF. `test_3dof.js` CHECK 4: k_pivot=0 ≡ assente, k_pivot finito cambia il
+lift. Modello lumped semplificato, off di default (knob power-user).
+
+### #4 Tour guidato passo-passo (commit `bbd0d18`)
+Coachmark per-pagina in `cammes-ui.js` (spotlight + tooltip, Indietro/Avanti/
+Fine/ESC). Bottone 🗺 iniettato accanto al "?" e CSS iniettata da JS → nessuna
+modifica ai 5 HTML né a style.css. TOUR_STEPS per home/alzata/polare/grafici/
+analisi su id reali; step assenti saltati. Gating localStorage, on-demand.
+Verificato su tutte le pagine (spotlight dimensionato, navigazione, 0 errori).
+
+### Stato issue
+Chiuse #1, #2, #4 (+ #5 in 6.8). Aperta solo #3 (validazione camma race —
+bloccata sui dati: caricare un file _alz di camma da corsa in prove/).
+
+### Da fare prossime sessioni
+- [ ] #3 Validazione su camma race reale (quando disponibile il file)
+- [ ] Surge: grafico dedicato dell'ampiezza spire vs regime (oggi solo metriche)
