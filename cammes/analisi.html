@@ -433,6 +433,23 @@
                     <input type="number" id="kSeat" value="80000" class="input" style="width:85px;" step="5000" min="5000">
                     <span class="param-unit">N/mm</span>
                 </div>
+                <div class="param-row">
+                    <span class="param-label">Surge molla <span class="help-icon" data-tip="<strong>Surge molla (massa distribuita)</strong>Modella la molla valvola come catena di spire (massa distribuita) invece che molla ideale. Ad alto regime le spire entrano in <b>risonanza (surge)</b>: oscillano tra loro, perdono forza, possono sbattere → modo di guasto race. Calcola la <b>frequenza di surge</b> (&frac12;&middot;&radic;(k/m)) e quanto la molla &egrave; in risonanza al regime scelto. Usa il moto valvola (compliance se attiva, altrimenti profilo cam)." tabindex="0">?</span></span>
+                    <select id="surgeEnabled" class="input" style="width:120px;" onchange="onSurgeToggle();">
+                        <option value="0" selected>OFF</option>
+                        <option value="1">ON (massa distrib.)</option>
+                    </select>
+                </div>
+                <div class="param-row" id="rowSurgeMass" style="display:none;">
+                    <span class="param-label">Massa molla <span class="help-icon" data-tip="<strong>Massa della molla valvola</strong>Massa totale della/e molla/e. Tipico: 30-70 g. Pi&ugrave; pesante = frequenza di surge pi&ugrave; bassa = surge a regimi pi&ugrave; bassi (peggio). La frequenza di surge fondamentale &egrave; &frac12;&middot;&radic;(k/m)." tabindex="0">?</span></span>
+                    <input type="number" id="springMass" value="50" class="input" style="width:75px;" step="5" min="1">
+                    <span class="param-unit">g</span>
+                </div>
+                <div class="param-row" id="rowSurgeCoils" style="display:none;">
+                    <span class="param-label">Spire attive <span class="help-icon" data-tip="<strong>Numero di spire attive</strong>Usato per discretizzare la molla nel modello a massa distribuita (numero di nodi della catena). Tipico 8-16. Non cambia la frequenza fondamentale, solo la finezza del modello." tabindex="0">?</span></span>
+                    <input type="number" id="springCoils" value="12" class="input" style="width:75px;" step="1" min="4" max="24">
+                    <span class="param-unit">spire</span>
+                </div>
             </div>
 
             <!-- Action buttons -->
@@ -1385,6 +1402,139 @@ function detectValveFloat(camLift720, valveLift720) {
 }
 
 // =============================================================
+// SPRING SURGE — molla valvola a MASSA DISTRIBUITA (modi delle spire)
+// =============================================================
+// I solver compliance trattano la molla come F = F0 + k·x (massa concentrata):
+// non vedono il SURGE, cioè la risonanza longitudinale delle spire ad alto
+// regime (le spire oscillano tra loro, possono sbattere o staccarsi → perdita
+// di forza, rotture). Qui modelliamo la molla come catena di N masse
+// (m_spring/N) collegate da N+1 segmenti in serie di rigidezza (N+1)·k (la
+// serie ridà k), base fissa alla testata, capo superiore GUIDATO dal moto
+// della valvola. Analisi disaccoppiata (standard): il surge è valutato DATO
+// il moto valvola, non retroagisce sul valve float.
+//
+// Frequenza propria fondamentale (estremi fissi): f1 = ½·√(k/m_spring).
+// surgeRatio = ampiezza di oscillazione interna / corsa valvola: >~1 = surge.
+function springSurgeFreqHz(kSpringN_mm, springMassG) {
+    var k = (kSpringN_mm || 30) * 1000;       // N/m
+    var m = (springMassG || 50) / 1000;       // kg
+    if (m <= 0 || k <= 0) return 0;
+    return 0.5 * Math.sqrt(k / m);            // Hz (fondamentale estremi fissi)
+}
+
+function simulateSpringSurge(valveLift720, rpm, params) {
+    var p = params || {};
+    var k_spring = (p.kSpringN_mm || 30) * 1000;        // N/m (totale)
+    var m_spring = (p.springMassG || 50) / 1000;        // kg (massa molla)
+    var N = Math.max(4, Math.min(24, Math.round(p.springCoils || 12)));
+    var zeta = (p.dampingRatio || 0.06);
+    if (m_spring <= 0 || k_spring <= 0 || rpm <= 0) {
+        return { surgeFreqHz: 0, surgeRatio: 0, maxCoilAmpMm: 0, harmonicOrder: 0 };
+    }
+
+    var m_i   = m_spring / N;                  // massa per nodo interno
+    var k_seg = (N + 1) * k_spring;            // serie di N+1 segmenti = k_spring
+    var c_seg = 2 * zeta * Math.sqrt(k_seg * m_i);
+
+    // Tempo: 720° albero motore = 1 ciclo cam = 2 giri = 120/rpm secondi.
+    var T_cycle = 120 / rpm;                    // s per 720°
+    var degPerSec = 720 / T_cycle;
+
+    // Profilo lift in metri + pendenza (per la velocità del drive).
+    var lift = new Array(721), slope = new Array(721);
+    for (var d = 1; d <= 720; d++) lift[d] = (valveLift720[d] || 0) * 1e-3;
+    lift[0] = lift[720];
+    for (var d2 = 1; d2 <= 720; d2++) {
+        var dn = d2 + 1 > 720 ? 1 : d2 + 1, dp = d2 - 1 < 1 ? 720 : d2 - 1;
+        slope[d2] = (lift[dn] - lift[dp]) / 2;  // m per grado
+    }
+    var maxLift = 0; for (var dm = 1; dm <= 720; dm++) if (lift[dm] > maxLift) maxLift = lift[dm];
+    if (maxLift <= 0) return { surgeFreqHz: springSurgeFreqHz(p.kSpringN_mm, p.springMassG), surgeRatio: 0, maxCoilAmpMm: 0, harmonicOrder: 0 };
+
+    function driveAt(crankDeg) {
+        var dd = ((crankDeg - 1) % 720 + 720) % 720 + 1;
+        var i0 = Math.floor(dd), frac = dd - i0;
+        var a = lift[i0] || 0, b = lift[(i0 % 720) + 1] || 0;
+        var s = a + (b - a) * frac;
+        var sdot = (slope[i0] || 0) * degPerSec;   // m/s
+        return { s: s, sdot: sdot };
+    }
+
+    // Passo: risolve il modo più rapido della catena (ω_max ≈ 2√(k_seg/m_i)).
+    var omegaMax = 2 * Math.sqrt(k_seg / m_i);
+    var dtFast = (2 * Math.PI / omegaMax) / 12;
+    var dtDeg  = 1 / degPerSec;
+    var dt = Math.min(dtFast, dtDeg / 2);
+    var nCycles = 3;                            // lascia assestare il transitorio
+    var totalT = nCycles * T_cycle;
+    var nSteps = Math.ceil(totalT / dt);
+    if (nSteps > 80000) { nSteps = 80000; dt = totalT / nSteps; }
+
+    // Stato: y[0..N-1] (posizioni nodi interni), v[0..N-1] (velocità).
+    var y = new Array(N), v = new Array(N);
+    for (var ii = 0; ii < N; ii++) { y[ii] = 0; v[ii] = 0; }
+
+    function accel(yy, vv, drv, out) {
+        for (var i = 0; i < N; i++) {
+            var yl = (i === 0) ? 0      : yy[i - 1];
+            var vl = (i === 0) ? 0      : vv[i - 1];
+            var yr = (i === N - 1) ? drv.s    : yy[i + 1];
+            var vr = (i === N - 1) ? drv.sdot : vv[i + 1];
+            out[i] = (k_seg * (yl - yy[i]) + k_seg * (yr - yy[i])
+                    + c_seg * (vl - vv[i]) + c_seg * (vr - vv[i])) / m_i;
+        }
+    }
+
+    var a1 = new Array(N), a2 = new Array(N), a3 = new Array(N), a4 = new Array(N);
+    var yt = new Array(N), vt = new Array(N);
+    var t = 0, maxDev = 0;
+    var lastCycleStart = (nCycles - 1) * T_cycle;   // misura il surge a regime
+
+    for (var step = 0; step < nSteps; step++) {
+        var crank = ((t / T_cycle) % 1) * 720;
+        var d0 = driveAt(crank);
+        var dHalf = driveAt(((t + dt / 2) / T_cycle % 1) * 720);
+        var dFull = driveAt(((t + dt) / T_cycle % 1) * 720);
+
+        accel(y, v, d0, a1);
+        for (var b1 = 0; b1 < N; b1++) { yt[b1] = y[b1] + v[b1] * dt / 2; vt[b1] = v[b1] + a1[b1] * dt / 2; }
+        accel(yt, vt, dHalf, a2);
+        for (var b2 = 0; b2 < N; b2++) { yt[b2] = y[b2] + (v[b2] + a1[b2] * dt / 2) * dt / 2; vt[b2] = v[b2] + a2[b2] * dt / 2; }
+        accel(yt, vt, dHalf, a3);
+        for (var b3 = 0; b3 < N; b3++) { yt[b3] = y[b3] + (v[b3] + a2[b3] * dt / 2) * dt; vt[b3] = v[b3] + a3[b3] * dt; }
+        accel(yt, vt, dFull, a4);
+        for (var b4 = 0; b4 < N; b4++) {
+            y[b4] += (v[b4] + 2 * (v[b4] + a1[b4] * dt / 2) + 2 * (v[b4] + a2[b4] * dt / 2) + (v[b4] + a3[b4] * dt)) * dt / 6;
+            v[b4] += (a1[b4] + 2 * a2[b4] + 2 * a3[b4] + a4[b4]) * dt / 6;
+        }
+        t += dt;
+
+        // Surge = scostamento dalla distribuzione quasi-statica lineare
+        // y_i,statico = s·(i+1)/(N+1). Misurato solo nell'ultimo ciclo.
+        if (t >= lastCycleStart) {
+            var sNow = d0.s;
+            for (var c = 0; c < N; c++) {
+                var yStatic = sNow * (c + 1) / (N + 1);
+                var dev = Math.abs(y[c] - yStatic);
+                if (dev > maxDev) maxDev = dev;
+                if (!isFinite(y[c])) return { surgeFreqHz: springSurgeFreqHz(p.kSpringN_mm, p.springMassG), surgeRatio: Infinity, maxCoilAmpMm: Infinity, harmonicOrder: 0, diverged: true };
+            }
+        }
+    }
+
+    var fSurge = springSurgeFreqHz(p.kSpringN_mm, p.springMassG);
+    var fCam = rpm / 120;                        // Hz evento cam (1 ogni 720°)
+    var nHarm = fCam > 0 ? Math.round(fSurge / fCam) : 0;
+    return {
+        surgeFreqHz: fSurge,
+        surgeRatio: maxDev / maxLift,            // ampiezza interna / corsa valvola
+        maxCoilAmpMm: maxDev * 1000,
+        harmonicOrder: nHarm,                    // armonica cam ~ surge a questo rpm
+        criticalRpm: nHarm > 0 ? Math.round(fSurge * 120 / nHarm) : null
+    };
+}
+
+// =============================================================
 // RACE-GRADE: Sweep RPM e Optimizer molla
 // =============================================================
 
@@ -2101,6 +2251,14 @@ function on2DofToggle() {
     var ks = document.getElementById('row3DofKSeat');    if (ks) ks.style.display = is3 ? 'flex' : 'none';
 }
 window.on2DofToggle = on2DofToggle;
+
+function onSurgeToggle() {
+    var sel = document.getElementById('surgeEnabled');
+    var on = sel && sel.value === '1';
+    var rm = document.getElementById('rowSurgeMass');  if (rm) rm.style.display = on ? 'flex' : 'none';
+    var rc = document.getElementById('rowSurgeCoils'); if (rc) rc.style.display = on ? 'flex' : 'none';
+}
+window.onSurgeToggle = onSurgeToggle;
 
 function convertPuntToFinger(camLiftRaw, rBase, lArm, lValve, rPunt, tiltDeg) {
     rPunt = (typeof rPunt === 'number' && rPunt > 0) ? rPunt : 0;
@@ -3015,6 +3173,22 @@ function analyze() {
         floatEx = detectValveFloat(anlEx, valveLiftEx);
     }
 
+    // ====== SPRING SURGE (massa distribuita) ======
+    // Indipendente dalla compliance: pilota la molla col moto valvola reale
+    // (se compliance ON) o col profilo cam (altrimenti).
+    var surgeOn = document.getElementById('surgeEnabled') &&
+                  document.getElementById('surgeEnabled').value === '1';
+    var surgeIn = null;
+    if (surgeOn && rpm > 0) {
+        var surgeParams = {
+            kSpringN_mm: springK,
+            springMassG: Number(document.getElementById('springMass').value) || 50,
+            springCoils: Number(document.getElementById('springCoils').value) || 12,
+            dampingRatio: Number(document.getElementById('dampingRatio').value) || 0.06
+        };
+        surgeIn = simulateSpringSurge(valveLiftIn || anlIn, rpm, surgeParams);
+    }
+
     // ====== DISPLAY RESULTS ======
     document.getElementById('resultsCard').style.display = 'block';
 
@@ -3128,7 +3302,13 @@ function analyze() {
             valveFloatIn:    floatIn ? floatIn.maxGap : null,
             valveFloatInDeg: floatIn ? floatIn.gapIdx - 360 : null,
             valveFloatEx:    floatEx ? floatEx.maxGap : null,
-            valveFloatExDeg: floatEx ? floatEx.gapIdx - 360 : null
+            valveFloatExDeg: floatEx ? floatEx.gapIdx - 360 : null,
+            // Spring surge (molla a massa distribuita), null se OFF
+            surgeOn:          !!surgeOn,
+            surgeFreqHz:      surgeIn ? surgeIn.surgeFreqHz : null,
+            surgeRatio:       surgeIn ? surgeIn.surgeRatio : null,
+            surgeHarmonic:    surgeIn ? surgeIn.harmonicOrder : null,
+            surgeCriticalRpm: (surgeIn && surgeIn.criticalRpm) ? surgeIn.criticalRpm : null
         },
         arrays: {
             anlIn: anlIn, anlEx: anlEx,
@@ -3946,6 +4126,12 @@ function exportCSV() {
         lines.push('Valve float dinamico scar. [mm],' + R.valveFloatEx.toFixed(3));
         lines.push('Valve float dinamico scar. [deg],' + R.valveFloatExDeg);
     }
+    if (R.surgeOn && R.surgeFreqHz) {
+        lines.push('Surge molla freq. [Hz],' + Math.round(R.surgeFreqHz));
+        lines.push('Surge ratio @ RPM,' + (isFinite(R.surgeRatio) ? R.surgeRatio.toFixed(3) : 'inf'));
+        lines.push('Surge armonica cam,' + (R.surgeHarmonic || '-'));
+        if (R.surgeCriticalRpm) lines.push('Surge regime critico [rpm],' + R.surgeCriticalRpm);
+    }
     lines.push('Vel. max apertura asp.,' + R.kinIntake.velOpen.toFixed(3) + ' ' + R.kinIntake.unitVel);
     lines.push('Vel. chiusura asp.,' + R.kinIntake.velClose.toFixed(3) + ' ' + R.kinIntake.unitVel);
     lines.push('Acc. max+ asp.,' + R.kinIntake.accPos.toFixed(3) + ' ' + R.kinIntake.unitAcc);
@@ -4356,6 +4542,15 @@ function exportPDF() {
         rows.push(['Valve float dinamico',
             R.valveFloatIn.toFixed(3) + ' mm @ ' + R.valveFloatInDeg + ' deg',
             R.valveFloatEx.toFixed(3) + ' mm @ ' + R.valveFloatExDeg + ' deg']);
+    }
+    // Riga spring surge (solo se attivo)
+    if (R.surgeOn && R.surgeFreqHz) {
+        var surgeTxt = 'freq ' + Math.round(R.surgeFreqHz) + ' Hz';
+        if (R.surgeCriticalRpm) surgeTxt += ' · critico ~' + R.surgeCriticalRpm + ' rpm';
+        var ratioTxt = isFinite(R.surgeRatio)
+            ? (R.surgeRatio.toFixed(2) + (R.surgeRatio > 1 ? ' (surge!)' : R.surgeRatio > 0.4 ? ' (attenz.)' : ' (ok)'))
+            : 'instabile';
+        rows.push(['Surge molla', surgeTxt, 'ratio ' + ratioTxt]);
     }
 
     // Header tabella
