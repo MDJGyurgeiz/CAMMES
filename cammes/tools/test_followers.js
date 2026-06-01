@@ -78,19 +78,26 @@ console.log('=============================================================');
 console.log(' REGRESSIONE CONVERSIONI FOLLOWER (camma sintetica picco ' + PEAK + ' mm)');
 console.log('=============================================================');
 
-// ---- ROLLER: out = max(0, raw - rPunt), rRoll ininfluente ----
+// ---- ROLLER: inviluppo radiale reale ----
+//  (1) rRoll→0 ⇒ profilo puntalino (ltrue = max(0, raw-rPunt))
+//  (2) rRoll finito CAMBIA l'output (non più inerte) e resta finito/≥0
+//  (3) rRoll più grande arrotonda di più (output diverge maggiormente dal raw)
 var rPunt = 1.5;
+var roll0  = convertPuntToRoller(cam, 14, 0,  rPunt);
 var roll8  = convertPuntToRoller(cam, 14, 8,  rPunt);
 var roll12 = convertPuntToRoller(cam, 14, 12, rPunt);
-var rollerExact = true, rollerRRollIndep = true;
+var roll0Exact = true, diff8 = 0, diff12 = 0, roll8Finite = true;
 for (var i = 1; i <= 360; i++) {
     var expect = Math.max(0, cam[i] - rPunt);
-    if (Math.abs((roll8[i]||0) - expect) > 1e-9) rollerExact = false;
-    if (Math.abs((roll8[i]||0) - (roll12[i]||0)) > 1e-9) rollerRRollIndep = false;
+    if (Math.abs((roll0[i]||0) - expect) > 1e-9) roll0Exact = false;
+    if (!isFinite(roll8[i]||0) || (roll8[i]||0) < -1e-9) roll8Finite = false;
+    diff8  = Math.max(diff8,  Math.abs((roll8[i]||0)  - expect));
+    diff12 = Math.max(diff12, Math.abs((roll12[i]||0) - expect));
 }
-console.log('ROLLER:');
-check('out[t] = max(0, raw - rPunt)', rollerExact, 'picco ' + peakOf(roll8).toFixed(3) + ' = ' + (PEAK - rPunt).toFixed(3));
-check('rRoll non cambia l\'output (approssimazione dichiarata)', rollerRRollIndep);
+console.log('ROLLER (inviluppo radiale):');
+check('rRoll→0 ⇒ profilo puntalino max(0,raw−rPunt)', roll0Exact, 'picco ' + peakOf(roll0).toFixed(3));
+check('rRoll=8 cambia l\'output (non più inerte) e resta finito/≥0', roll8Finite && diff8 > 1e-3, 'maxΔ vs raw = ' + diff8.toFixed(3) + ' mm');
+check('rRoll=12 arrotonda più di rRoll=8 (Δ cresce con il raggio)', diff12 > diff8, 'Δ12=' + diff12.toFixed(3) + ' > Δ8=' + diff8.toFixed(3));
 
 // ---- FINGER: tilt=0,rPunt=0 → rapporto lineare lValve/lArm ----
 var fRatio = convertPuntToFinger(cam, 14, 25, 30, 0, 0);   // 30/25 = 1.2
@@ -124,5 +131,5 @@ check('picco ≈ picco grezzo (0.7–1.4×)', biccPeakOK, 'bicch ' + pkB.toFixed
 check('rPunt > picco → output ~0 (sottrazione puntalino)', biccZero, 'picco ' + peakOf(biccBig).toExponential(1));
 
 console.log('');
-if (fails === 0) { console.log('TUTTI I CHECK PASSANO (' + (8) + '/8)'); process.exit(0); }
+if (fails === 0) { console.log('TUTTI I CHECK PASSANO (9/9)'); process.exit(0); }
 else { console.log(fails + ' CHECK FALLITI'); process.exit(1); }

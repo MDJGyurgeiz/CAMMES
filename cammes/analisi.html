@@ -1047,38 +1047,53 @@ function convertPuntToBicchiere(camLiftRaw, rBase, dBicch, rPunt) {
     return out;
 }
 
-// Converte scansione PUNTALINO → curva che leggerebbe un ROLLER FOLLOWER
-// (rullo di raggio rRoll che rotola sulla cam).
-// Matematica: il rullo tocca la cam nel punto della superficie più
-// vicino al centro del rullo. Il centro del rullo dista (rRoll) dal
-// punto di contatto, lungo la normale alla cam.
-// Approssimazione: per ogni angolo α, traccio il fascio di rette da
-// (0,0) (centro cam) in direzione α e cerco il punto della cam-offset
-// più alto in quella direzione. La cam-offset è il profilo della cam
-// "ingrassato" di rRoll lungo la normale (= edge della curva traslata).
+// Converte scansione PUNTALINO → curva valvola con ROLLER FOLLOWER (rullo
+// radiale in linea, raggio rRoll, che rotola sulla cam).
+// Cinematica esatta dell'inviluppo: il CENTRO del rullo traccia la "pitch
+// curve" = profilo cam offset di rRoll lungo la normale. Per un follower
+// radiale all'angolo α, il centro è sul raggio α a distanza d(α); il rullo
+// (raggio rRoll) deve restare tangente al profilo senza penetrarlo:
+//   per ogni punto cam P(θ)=ρ(θ)·(cosθ,sinθ),  |C−P| ≥ rRoll.
+// Con C = d·(cosα,sinα) e Δ=α−θ:  d²−2ρcosΔ·d+(ρ²−rRoll²) ≥ 0.
+// Il centro più basso che libera tutti i punti raggiungibili (|ρ sinΔ|≤rRoll):
+//   d(α) = max_θ [ ρcosΔ + √(rRoll² − ρ²sin²Δ) ]
+// Alzata follower = d(α) − (rBase + rRoll).  (a base circle ρ=rBase,Δ=0 → 0)
 //
-// Implementazione semplificata: la cam-offset si ottiene aggiungendo
-// rRoll al raggio polare in ogni punto. È un'approssimazione valida
-// quando rRoll è piccolo rispetto al raggio di curvatura della cam,
-// che è il caso pratico (rullo 6-12 mm, curvatura cam 20+ mm).
+// Limiti: rRoll→0 ⇒ d=ρ(α) ⇒ alzata = profilo puntalino (ltrue). rRoll grande
+// ⇒ il rullo non entra negli incavi e arrotonda naso/fianchi (lift modificato).
 function convertPuntToRoller(camLiftRaw, rBase, rRoll, rPunt) {
-    var r = new Array(361);
+    var DEG = Math.PI / 180;
     rPunt = (typeof rPunt === 'number' && rPunt > 0) ? rPunt : 0;
-    var out = new Array(361);
-    out[0] = 0;
+    rRoll = (typeof rRoll === 'number' && rRoll > 0) ? rRoll : 0;
+    // Profilo cam vero (raggio polare) dopo sottrazione puntalino.
+    var rho = new Array(361);
     for (var t = 1; t <= 360; t++) {
         var ltrue = (camLiftRaw[t] || 0) - rPunt;
         if (ltrue < 0) ltrue = 0;
-        // Profilo cam-offset: lift letto dal centro del rullo
-        // = lift_cam + (rRoll dovuto a rotolamento)
-        // Il rullo aggiunge rRoll all'altezza percepita rispetto al base
-        out[t] = ltrue;  // Su superfici lisce con grande raggio di
-                         // curvatura il rullo legge lo stesso lift,
-                         // solo posizionato leggermente in anticipo/ritardo.
-                         // Per applicazioni standard è ~equivalente al puntalino
-                         // corretto da rPunt. La differenza significativa
-                         // emerge solo nelle zone di forte curvatura
-                         // (rampe iniziali/finali).
+        rho[t] = rBase + ltrue;
+    }
+    if (rRoll <= 0) {   // rullo nullo = puntalino
+        var p = new Array(361); p[0] = 0;
+        for (var q = 1; q <= 360; q++) p[q] = rho[q] - rBase;
+        return p;
+    }
+    var rRoll2 = rRoll * rRoll;
+    var win = 75;   // finestra angolare: oltre, ρ·sinΔ supera rRoll (fuori portata)
+    var out = new Array(361);
+    out[0] = 0;
+    for (var a = 1; a <= 360; a++) {
+        var dMax = -Infinity;
+        for (var off = -win; off <= win; off++) {
+            var th = ((a + off - 1) % 360 + 360) % 360 + 1;
+            var rhoT = rho[th];
+            var dlt = off * DEG;
+            var lateral = rhoT * Math.sin(dlt);
+            if (lateral * lateral > rRoll2) continue;          // punto fuori dalla portata del rullo
+            var d = rhoT * Math.cos(dlt) + Math.sqrt(rRoll2 - lateral * lateral);
+            if (d > dMax) dMax = d;
+        }
+        var lift = dMax - (rBase + rRoll);
+        out[a] = lift > 0 ? lift : 0;
     }
     return out;
 }
