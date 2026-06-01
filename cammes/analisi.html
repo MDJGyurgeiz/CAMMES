@@ -2532,14 +2532,17 @@ function convertPuntToFinger(camLiftRaw, rBase, lArm, lValve, rPunt, tiltDeg) {
 
     var out = new Array(361);
     out[0] = 0;
+    var saturated = false;
     for (var t = 1; t <= 360; t++) {
         var ltrue = (camLiftRaw[t] || 0) - rPunt;
         if (ltrue < 0) ltrue = 0;
         if (ltrue === 0) { out[t] = 0; continue; }
         // Calcolo rotazione finger
         var argAsin = sinCam0 + ltrue / lArm;
-        if (argAsin >  1) argAsin =  1;   // saturazione (lift > arm length)
-        if (argAsin < -1) argAsin = -1;
+        // Saturazione: alzata > geometria leva (asin fuori da [-1,1]) → curva
+        // troncata. Segnaliamo invece di clampare in silenzio.
+        if (argAsin > 1)  { argAsin = 1;  saturated = true; }
+        if (argAsin < -1) { argAsin = -1; saturated = true; }
         var dPhi = Math.asin(argAsin) - thetaCam0;
         // Movimento estremità lato valvola (positivo = apertura)
         // Il braccio valvola ruota di -dPhi (specularmente), quindi:
@@ -2547,6 +2550,7 @@ function convertPuntToFinger(camLiftRaw, rBase, lArm, lValve, rPunt, tiltDeg) {
         // Convenzione segno: voglio lift positivo = valvola aperta
         out[t] = Math.abs(deltaVal);
     }
+    window._fingerSaturated = saturated;   // letto dal dispatcher per l'avviso
     return out;
 }
 
@@ -2825,7 +2829,16 @@ function applyVirtualFollower(camLift) {
         var lArm   = Number(document.getElementById('lArm').value)   || 25;
         var lValve = Number(document.getElementById('lValve').value) || 30;
         var tilt   = Number(document.getElementById('fingerTilt').value) || 0;
-        return convertPuntToFinger(camLift, rBase, lArm, lValve, rPunt, tilt);
+        var fout = convertPuntToFinger(camLift, rBase, lArm, lValve, rPunt, tilt);
+        // Avviso se la geometria leva non regge l'alzata (asin saturato → curva
+        // troncata): meglio dirlo che restituire numeri silenziosamente sbagliati.
+        if (window._fingerSaturated && window.cammesToast && !window._fingerWarnShown) {
+            window._fingerWarnShown = true;
+            window.cammesToast({ kind: 'warn', title: 'Geometria leva insufficiente',
+                body: 'L\'alzata supera la corsa del braccio camma (L=' + lArm + ' mm): la curva finger è troncata. Aumenta <b>L braccio camma</b> o verifica i parametri.',
+                duration: 6500 });
+        }
+        return fout;
     }
     return camLift;
 }
@@ -3433,6 +3446,20 @@ function analyze() {
         }
         floatIn = detectValveFloat(anlIn, valveLiftIn);
         floatEx = detectValveFloat(anlEx, valveLiftEx);
+        // Guard anti-divergenza: se il solver ha prodotto un'alzata valvola
+        // non-finita o assurda (> 3× picco cam, tipico di sotto-risoluzione a
+        // k_seat estremi col cap subSteps), avvisa invece di mostrare numeri
+        // silenziosamente sbagliati.
+        var _vmax = 0, _cmax = 0, _vfin = true;
+        for (var _i = 1; _i <= 720; _i++) {
+            var _vv = (valveLiftIn[_i] || 0); if (!isFinite(_vv)) _vfin = false; else if (_vv > _vmax) _vmax = _vv;
+            if ((anlIn[_i] || 0) > _cmax) _cmax = anlIn[_i];
+        }
+        if ((!_vfin || (_cmax > 0 && _vmax > 3 * _cmax)) && window.cammesToast) {
+            window.cammesToast({ kind: 'warn', title: 'Compliance instabile',
+                body: 'La simulazione dinamica diverge a questi parametri (rigidezze/masse estreme o RPM molto alto). Risultati float/surge inaffidabili: riduci k sede o RPM.',
+                duration: 6500 });
+        }
     }
 
     // ====== SPRING SURGE (massa distribuita) ======

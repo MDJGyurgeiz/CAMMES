@@ -1401,6 +1401,7 @@ input.input-error {
   .gauge-svg-arc-value { transition: none !important; }
   .cammes-wizard-backdrop,
   .cammes-wizard { transition: none !important; }
+  .cammes-tour-hole { transition: none !important; }
   .scan-progress-wrap.active .scan-progress-bar::after { animation: none !important; }
   .led.ok.pulse,
   .led.warn.pulse,
