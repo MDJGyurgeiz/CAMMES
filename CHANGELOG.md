@@ -698,4 +698,17 @@ bloccata sui dati: caricare un file _alz di camma da corsa in prove/).
 
 ### Da fare prossime sessioni
 - [ ] #3 Validazione su camma race reale (quando disponibile il file)
-- [ ] Surge: grafico dedicato dell'ampiezza spire vs regime (oggi solo metriche)
+
+---
+
+## Sotto-sessione 6.10 — 2026-05-31 — Surge vs RPM (grafico)
+### Tag: **v2.6.1**
+Completa la feature surge (#1) con la vista che mancava: `surgeSweep()` +
+`runSurgeSweep()` + `renderSurgeSweep()` in analisi.html. Spazza 36 regimi
+(1.5k–12k rpm) calcolando il surge ratio e plotta la curva su canvas
+(`surgeSweepCanvas`): i picchi sono i regimi di risonanza della molla, con
+soglia rossa a 1.0 e marcatore del regime attuale. Riporta il picco e il
+regime critico. Bottone "🎶 Surge vs RPM" nella riga race (abilitato dopo
+analisi, guard se surge OFF), mutuamente esclusivo con gli altri canvas race.
+Verifica browser: picco surge 2.00 @ 10200 rpm (critico) su molla soft,
+chart disegnato, 0 errori console. Regressione test_surge 5/5 invariata.

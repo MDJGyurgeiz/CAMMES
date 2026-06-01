@@ -478,6 +478,7 @@
             </div>
             <div class="flex gap-8 adv-only" style="margin-top:8px;">
                 <button class="btn btn-secondary" id="btnSweep3D" onclick="run3DSweep();" style="flex:1;" disabled data-tip="<strong>Sweep 3D k×F&#8320;×RPM</strong>Nuvola ruotabile del valve float sui TRE assi insieme: rigidezza k, precarico F&#8320; e regime. Ogni punto colorato (verde sicuro &rarr; rosso float) &egrave; una combinazione simulata. Trascina per ruotare la vista ed esplorare il volume sicuro nello spazio molla-regime. Tempo: ~0.5 s.">&#127922; Sweep 3D</button>
+                <button class="btn btn-secondary" id="btnSurgeSweep" onclick="runSurgeSweep();" style="flex:1;" disabled data-tip="<strong>Surge vs RPM</strong>Plotta il <b>surge ratio</b> della molla (ampiezza oscillazione spire / corsa valvola) al variare del regime. I picchi mostrano i <b>regimi di risonanza</b> dove le spire vanno in surge. Richiede <b>Surge molla = ON</b>. La linea rossa a 1.0 &egrave; la soglia di surge serio. Tempo: ~2 s.">&#127926; Surge vs RPM</button>
             </div>
 
             <!-- Risultati Sweep / Optimizer / Mappa -->
@@ -488,6 +489,8 @@
                 <div id="springMapLegend" style="display:none; font-size:10px; color:var(--text-muted); margin-top:4px; text-align:center;"></div>
                 <canvas id="sweep3dCanvas" width="340" height="300" style="display:none; margin-top:8px; max-width:100%; cursor:grab; touch-action:none;"></canvas>
                 <div id="sweep3dLegend" style="display:none; font-size:10px; color:var(--text-muted); margin-top:4px; text-align:center;"></div>
+                <canvas id="surgeSweepCanvas" width="340" height="240" style="display:none; margin-top:8px; max-width:100%;"></canvas>
+                <div id="surgeSweepLegend" style="display:none; font-size:10px; color:var(--text-muted); margin-top:4px; text-align:center;"></div>
             </div>
         </div>
 
@@ -1613,6 +1616,8 @@ function runRpmSweep() {
     body.innerHTML = '<i>Simulazione di 12 regimi, ~3-5 secondi.</i>';
     var cv1 = document.getElementById('springMapCanvas'); if (cv1) cv1.style.display = 'none';
     var c3a = document.getElementById('sweep3dCanvas'); if (c3a) c3a.style.display = 'none';
+    var ssa = document.getElementById('surgeSweepCanvas'); if (ssa) ssa.style.display = 'none';
+    var ssal = document.getElementById('surgeSweepLegend'); if (ssal) ssal.style.display = 'none';
     var l3a = document.getElementById('sweep3dLegend'); if (l3a) l3a.style.display = 'none';
     var lg1 = document.getElementById('springMapLegend'); if (lg1) lg1.style.display = 'none';
     box.style.display = '';
@@ -1666,6 +1671,8 @@ function runSpringOptimizer() {
     body.innerHTML = '<i>Cerca tra 88 combinazioni (k, F&#8320;), ~5-10 secondi.</i>';
     var cv2 = document.getElementById('springMapCanvas'); if (cv2) cv2.style.display = 'none';
     var c3b = document.getElementById('sweep3dCanvas'); if (c3b) c3b.style.display = 'none';
+    var ssb = document.getElementById('surgeSweepCanvas'); if (ssb) ssb.style.display = 'none';
+    var ssbl = document.getElementById('surgeSweepLegend'); if (ssbl) ssbl.style.display = 'none';
     var l3b = document.getElementById('sweep3dLegend'); if (l3b) l3b.style.display = 'none';
     var lg2 = document.getElementById('springMapLegend'); if (lg2) lg2.style.display = 'none';
     box.style.display = '';
@@ -1849,6 +1856,8 @@ function runSpringMap() {
     if (canvas) canvas.style.display = 'none';
     var c3c = document.getElementById('sweep3dCanvas'); if (c3c) c3c.style.display = 'none';
     var l3c = document.getElementById('sweep3dLegend'); if (l3c) l3c.style.display = 'none';
+    var ssc = document.getElementById('surgeSweepCanvas'); if (ssc) ssc.style.display = 'none';
+    var sscl = document.getElementById('surgeSweepLegend'); if (sscl) sscl.style.display = 'none';
     box.style.display = '';
 
     setTimeout(function () {
@@ -1878,6 +1887,123 @@ function runSpringMap() {
         }
     }, 50);
 }
+
+// =============================================================
+// SURGE vs RPM — surgeRatio della molla al variare del regime
+// =============================================================
+// Spazza un range di regimi calcolando il surge ratio (ampiezza spire / corsa
+// valvola). I picchi rivelano i regimi di risonanza della molla.
+function surgeSweep(driveLift720, springParams, opts) {
+    var rpmMin = (opts && opts.rpmMin) || 1500;
+    var rpmMax = (opts && opts.rpmMax) || 12000;
+    var n      = (opts && opts.n) || 36;
+    var pts = [], worst = { rpm: 0, ratio: -1 };
+    for (var i = 0; i < n; i++) {
+        var rpm = rpmMin + (rpmMax - rpmMin) * i / (n - 1);
+        var r = simulateSpringSurge(driveLift720, rpm, springParams);
+        var ratio = isFinite(r.surgeRatio) ? r.surgeRatio : 5;
+        pts.push({ rpm: rpm, ratio: ratio });
+        if (ratio > worst.ratio) worst = { rpm: Math.round(rpm), ratio: ratio };
+    }
+    return { points: pts, worst: worst, freqHz: pts.length ? springSurgeFreqHz(springParams.kSpringN_mm, springParams.springMassG) : 0 };
+}
+
+function renderSurgeSweep(sweep, curRpm) {
+    var canvas = document.getElementById('surgeSweepCanvas');
+    var legend = document.getElementById('surgeSweepLegend');
+    if (!canvas) return;
+    canvas.style.display = ''; if (legend) legend.style.display = '';
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    var padL = 44, padR = 10, padT = 12, padB = 28;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+    var pts = sweep.points;
+    var rpmMin = pts[0].rpm, rpmMax = pts[pts.length - 1].rpm;
+    var maxRatio = 0; pts.forEach(function (p) { if (p.ratio > maxRatio) maxRatio = p.ratio; });
+    var yMax = Math.max(1.2, maxRatio * 1.1);
+    function px(rpm) { return padL + (rpm - rpmMin) / (rpmMax - rpmMin) * plotW; }
+    function py(ratio) { return padT + plotH - Math.min(ratio, yMax) / yMax * plotH; }
+    var txt = (window.cammesGetCssVar && window.cammesGetCssVar('--text-muted')) || '#8888aa';
+    var grid = (window.cammesGetCssVar && window.cammesGetCssVar('--grid')) || '#2a2a4a';
+    // assi + griglia
+    ctx.strokeStyle = grid; ctx.lineWidth = 1; ctx.fillStyle = txt; ctx.font = '9px monospace';
+    ctx.textAlign = 'right';
+    for (var gy = 0; gy <= yMax; gy += (yMax > 3 ? 1 : 0.5)) {
+        var yy = py(gy);
+        ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(W - padR, yy); ctx.globalAlpha = 0.4; ctx.stroke(); ctx.globalAlpha = 1;
+        ctx.fillText(gy.toFixed(1), padL - 4, yy + 3);
+    }
+    ctx.textAlign = 'center';
+    for (var gr = 0; gr <= 5; gr++) {
+        var rr = rpmMin + (rpmMax - rpmMin) * gr / 5;
+        ctx.fillText(Math.round(rr / 1000) + 'k', px(rr), H - padB + 12);
+    }
+    // soglia surge serio (ratio = 1.0) in rosso
+    ctx.strokeStyle = 'rgba(220,50,50,0.8)'; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(padL, py(1)); ctx.lineTo(W - padR, py(1)); ctx.stroke(); ctx.setLineDash([]);
+    // curva surge ratio
+    ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 2; ctx.beginPath();
+    pts.forEach(function (p, i) { var x = px(p.rpm), y = py(p.ratio); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+    ctx.stroke();
+    // marcatore regime corrente
+    if (curRpm >= rpmMin && curRpm <= rpmMax) {
+        ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 1.5; ctx.setLineDash([2, 2]);
+        ctx.beginPath(); ctx.moveTo(px(curRpm), padT); ctx.lineTo(px(curRpm), padT + plotH); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.fillStyle = txt; ctx.textAlign = 'center';
+    ctx.fillText('regime (rpm) →', padL + plotW / 2, H - 2);
+    if (legend) legend.innerHTML = '<span style="color:#00d4ff;">—</span> surge ratio &middot; ' +
+        '<span style="color:rgb(220,50,50);">- -</span> soglia 1.0 &middot; ' +
+        '<span style="color:#ffd23f;">|</span> regime attuale &middot; freq surge ' + Math.round(sweep.freqHz) + ' Hz';
+}
+
+function runSurgeSweep() {
+    if (!lastAnalysis || !lastAnalysis.arrays) return;
+    var surgeSel = document.getElementById('surgeEnabled');
+    if (!surgeSel || surgeSel.value !== '1') {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Surge OFF',
+            body: 'Attiva <b>Surge molla = ON</b> e ri-analizza prima di questo sweep.', duration: 4000 });
+        return;
+    }
+    var box = document.getElementById('raceResultsBox');
+    var title = document.getElementById('raceResultsTitle');
+    var body = document.getElementById('raceResultsBody');
+    // nascondi gli altri canvas
+    ['springMapCanvas', 'springMapLegend', 'sweep3dCanvas', 'sweep3dLegend'].forEach(function (id) {
+        var el = document.getElementById(id); if (el) el.style.display = 'none';
+    });
+    var sc = document.getElementById('surgeSweepCanvas'); if (sc) sc.style.display = 'none';
+    title.textContent = 'Surge vs RPM in corso...';
+    body.innerHTML = '<i>Simulazione del surge a 36 regimi, ~2 secondi.</i>';
+    box.style.display = '';
+    setTimeout(function () {
+        try {
+            var inp = lastAnalysis.inputs;
+            var anlIn = lastAnalysis.arrays.anlIn;
+            var springParams = {
+                kSpringN_mm: inp.springK,
+                springMassG: Number(document.getElementById('springMass').value) || 50,
+                springCoils: Number(document.getElementById('springCoils').value) || 12,
+                dampingRatio: Number(document.getElementById('dampingRatio').value) || 0.06
+            };
+            var sweep = surgeSweep(anlIn, springParams, {});
+            title.textContent = 'Surge vs RPM — risonanza molla (aspirazione)';
+            var w = sweep.worst;
+            var verdict = w.ratio > 1 ? '<b style="color:var(--danger);">surge critico</b>'
+                        : w.ratio > 0.4 ? '<b style="color:var(--warning);">attenzione</b>'
+                        : '<b style="color:var(--success);">margine ampio</b>';
+            body.innerHTML = 'Picco surge ratio <b>' + w.ratio.toFixed(2) + '</b> a <b>' + w.rpm +
+                ' rpm</b> (' + verdict + '). Frequenza di surge ' + Math.round(sweep.freqHz) + ' Hz.';
+            renderSurgeSweep(sweep, inp.rpm);
+            if (window.cammesToast) window.cammesToast({ kind: w.ratio > 1 ? 'warn' : 'success',
+                title: 'Surge sweep completato', body: 'Picco ' + w.ratio.toFixed(2) + ' @ ' + w.rpm + ' rpm', duration: 4000 });
+        } catch (e) {
+            body.innerHTML = '<span style="color:var(--danger);">Errore: ' + e.message + '</span>';
+        }
+    }, 50);
+}
+window.runSurgeSweep = runSurgeSweep;
 
 // =============================================================
 // SWEEP 3D INTERATTIVO — valve float su (k, F0, RPM)
@@ -3341,6 +3467,7 @@ function analyze() {
     var bOp = document.getElementById('btnOptimizeSpring'); if (bOp) bOp.disabled = false;
     var bMap = document.getElementById('btnSpringMap'); if (bMap) bMap.disabled = false;
     var b3D = document.getElementById('btnSweep3D'); if (b3D) b3D.disabled = false;
+    var bSS = document.getElementById('btnSurgeSweep'); if (bSS) bSS.disabled = false;
     var bRR = document.getElementById('btnRaceReport'); if (bRR) bRR.disabled = false;
     if (window.cammesToast) {
         var minRpmCrit = Math.min(forcesIn.rpmCrit, forcesEx.rpmCrit);
@@ -4765,6 +4892,7 @@ function resetAll() {
     var bOpR = document.getElementById('btnOptimizeSpring'); if (bOpR) bOpR.disabled = true;
     var bMapR = document.getElementById('btnSpringMap'); if (bMapR) bMapR.disabled = true;
     var b3DR = document.getElementById('btnSweep3D'); if (b3DR) b3DR.disabled = true;
+    var bSSR = document.getElementById('btnSurgeSweep'); if (bSSR) bSSR.disabled = true;
     var bRRR = document.getElementById('btnRaceReport'); if (bRRR) bRRR.disabled = true;
     var rb = document.getElementById('raceResultsBox'); if (rb) rb.style.display = 'none';
     if (complianceChart) { try { complianceChart.destroy(); } catch (e) {} complianceChart = null; }
