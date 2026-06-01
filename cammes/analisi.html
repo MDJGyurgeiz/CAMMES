@@ -768,6 +768,28 @@
         </div>
     </div>
 
+    <!-- Animazione meccanismo (hidden until analysis) -->
+    <div class="card" id="mechAnimCard" style="display:none;">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>Animazione meccanismo</span>
+            <span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                <select id="mechAnimSide" class="input" style="width:auto;font-size:12px;padding:4px 8px;" onchange="mechAnimRefresh();" data-tip="<strong>Quale camma animare</strong>Mostra il meccanismo per la camma di aspirazione o di scarico.">
+                    <option value="in" selected>Aspirazione</option>
+                    <option value="ex">Scarico</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" id="mechAnimPlay" onclick="mechAnimToggle();" data-tip="<strong>Play/Pausa</strong>Avvia o ferma la rotazione della camma.">&#9654; Play</button>
+                <span style="font-size:11px;color:var(--text-muted);">vel.</span>
+                <input type="range" id="mechAnimSpeed" min="20" max="600" value="180" style="width:90px;" data-tip="<strong>Velocità</strong>Giri/min simulati dell'animazione (solo estetico).">
+            </span>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px;line-height:1.45;">
+            Vista laterale di <b>cosa fa il meccanismo</b>: la camma ruota, il follower
+            (<span id="mechAnimFollowerName">bicchiere</span>) segue il profilo, la valvola apre/chiude e la molla si comprime.
+            Usa il <b>tipo follower</b> e il <b>bilanciere</b> impostati sopra.
+        </p>
+        <canvas id="mechAnimCanvas" width="360" height="440" style="max-width:100%; display:block; margin:0 auto; border-radius:var(--r-md);"></canvas>
+    </div>
+
     <!-- A vs B Comparison card -->
     <div class="card ab-card">
         <div class="ab-toggle" onclick="toggleAB()">
@@ -2351,6 +2373,85 @@ window.runSpringMap = runSpringMap;
 window.run3DSweep = run3DSweep;
 
 // =============================================================
+// ANIMAZIONE MECCANISMO (usa il modulo condiviso cammesCamAnim)
+// =============================================================
+var _mechAnimator = null;
+var _mechAngle = 0;
+var _mechCamLift = null;     // profilo cam 1..360 (mm) lato selezionato
+var _mechMaxLift = 10;
+
+function _mechBuildCamLift() {
+    if (!lastAnalysis || !lastAnalysis.arrays) { _mechCamLift = null; return; }
+    var sideSel = document.getElementById('mechAnimSide');
+    var side = sideSel ? sideSel.value : 'in';
+    var crank = (side === 'ex') ? lastAnalysis.arrays.anlEx : lastAnalysis.arrays.anlIn;
+    if (!crank) { _mechCamLift = null; return; }
+    // 720 crank → 360 cam: campiona ogni 2°
+    var cam = new Array(361); var mx = 0;
+    for (var c = 1; c <= 360; c++) { var v = crank[2 * c] || crank[2 * c - 1] || 0; cam[c] = v > 0 ? v : 0; if (cam[c] > mx) mx = cam[c]; }
+    _mechCamLift = cam; _mechMaxLift = Math.max(1, mx);
+    // nome follower nella descrizione
+    var ftSel = document.getElementById('followerType');
+    var names = { punt: 'puntalino', bicch: 'bicchiere', roller: 'rullo', finger: 'finger' };
+    var nameEl = document.getElementById('mechAnimFollowerName');
+    if (nameEl) nameEl.textContent = names[ftSel ? ftSel.value : 'punt'] || 'follower';
+}
+
+function _mechFrame() {
+    if (!_mechCamLift) return null;
+    if (_mechAnimator && _mechAnimator.isRunning()) {
+        var spd = Number((document.getElementById('mechAnimSpeed') || {}).value) || 180;
+        _mechAngle = (_mechAngle + spd / 100) % 360;
+    }
+    var idx = Math.max(1, Math.min(360, Math.round(_mechAngle) || 1));
+    var sideSel = document.getElementById('mechAnimSide');
+    var rockerId = (sideSel && sideSel.value === 'ex') ? 'rockerExhaust' : 'rockerIntake';
+    return {
+        camAngleDeg: _mechAngle,
+        camLift: _mechCamLift,
+        followerLift: _mechCamLift[idx] || 0,
+        rBase: Number((document.getElementById('rBase') || {}).value) || 14,
+        maxLift: _mechMaxLift,
+        followerType: (document.getElementById('followerType') || {}).value || 'punt',
+        rocker: Number((document.getElementById(rockerId) || {}).value) || 1,
+        rRoll: Number((document.getElementById('rRoll') || {}).value) || 8
+    };
+}
+
+function _mechEnsureAnimator() {
+    if (_mechAnimator) return _mechAnimator;
+    var cv = document.getElementById('mechAnimCanvas');
+    if (!cv || !window.cammesCamAnim) return null;
+    _mechAnimator = window.cammesCamAnim.animator(cv, _mechFrame);
+    return _mechAnimator;
+}
+
+function mechAnimRefresh() {
+    _mechBuildCamLift();
+    var a = _mechEnsureAnimator();
+    if (a) a.drawOnce();
+}
+window.mechAnimRefresh = mechAnimRefresh;
+
+function mechAnimToggle() {
+    var a = _mechEnsureAnimator();
+    if (!a) return;
+    var btn = document.getElementById('mechAnimPlay');
+    if (a.isRunning()) { a.stop(); if (btn) btn.innerHTML = '&#9654; Play'; }
+    else {
+        // rispetta prefers-reduced-motion: disegna un fotogramma e non animare
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            a.drawOnce();
+            if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Movimento ridotto',
+                body: 'Animazione disattivata dalle preferenze di sistema (reduced motion).', duration: 3500 });
+            return;
+        }
+        a.start(); if (btn) btn.innerHTML = '&#10074;&#10074; Pausa';
+    }
+}
+window.mechAnimToggle = mechAnimToggle;
+
+// =============================================================
 // Modalità Base / Avanzato — progressive disclosure sulla stessa schermata.
 // In Base resta visibile solo l'essenziale (preset, import, timing, RPM,
 // molla, analizza/export); in Avanzato compaiono follower, compliance e
@@ -2454,6 +2555,11 @@ function onFollowerTypeChange() {
     show('rowRPunt',     isVirtual);
     var hint = document.getElementById('followerHint');
     if (hint) hint.style.display = isVirtual ? 'block' : 'none';
+    // Aggiorna il fotogramma dell'animazione se la card è visibile
+    if (typeof mechAnimRefresh === 'function') {
+        var mc = document.getElementById('mechAnimCard');
+        if (mc && mc.style.display !== 'none') mechAnimRefresh();
+    }
 }
 
 // Preset rapidi: valori tipici per classe motore. L'utente può sempre
@@ -3461,6 +3567,10 @@ function analyze() {
             valveLiftIn: valveLiftIn, valveLiftEx: valveLiftEx
         }
     };
+    // Animazione meccanismo: ora che lastAnalysis è popolato, mostra e disegna
+    var mechCard = document.getElementById('mechAnimCard');
+    if (mechCard) { mechCard.style.display = 'block'; mechAnimRefresh(); }
+
     document.getElementById('btnExportCSV').disabled = false;
     document.getElementById('btnExportPDF').disabled = false;
     var bSw = document.getElementById('btnSweepRpm'); if (bSw) bSw.disabled = false;
@@ -4858,6 +4968,9 @@ function resetAll() {
     document.getElementById('exhaustStatus').textContent = '';
     document.getElementById('resultsCard').style.display = 'none';
     document.getElementById('kinematicsCard').style.display = 'none';
+    // Ferma e nascondi l'animazione meccanismo
+    if (_mechAnimator) { _mechAnimator.stop(); var mpb = document.getElementById('mechAnimPlay'); if (mpb) mpb.innerHTML = '&#9654; Play'; }
+    var mc = document.getElementById('mechAnimCard'); if (mc) mc.style.display = 'none';
     document.getElementById('fileIntake').value = '';
     document.getElementById('fileExhaust').value = '';
     document.getElementById('intakeAngle').value = '100';

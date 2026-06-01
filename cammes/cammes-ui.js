@@ -684,6 +684,139 @@
   }
   window.cammesTour = { start: startTour };
 
+  // -------- ANIMAZIONE MECCANISMO CAM (2D schematico) --------------------
+  // Vista laterale: camma che ruota + follower che segue il profilo + stelo/
+  // valvola che apre + molla che si comprime. Canvas 2D puro, offline-safe.
+  // drawCamMechanism(ctx, opts): disegno puro di un fotogramma.
+  //   opts: { w, h, camAngleDeg, camLift (array 1..360 mm | null), followerLift (mm),
+  //           rBase (mm), maxLift (mm), followerType, rocker, rRoll (mm) }
+  function _cam_css(name, fallback) {
+    try { var v = getCssVar(name); return v || fallback; } catch (e) { return fallback; }
+  }
+  function drawCamMechanism(ctx, o) {
+    var w = o.w, h = o.h;
+    var rBase = o.rBase || 14, maxLift = o.maxLift || 10, rocker = o.rocker || 1;
+    var fLift = Math.max(0, o.followerLift || 0);
+    var ang = ((o.camAngleDeg || 0) % 360 + 360) % 360;
+    var ftype = o.followerType || 'punt';
+    var rRoll = o.rRoll || 8;
+    var accent = _cam_css('--accent', '#00d4ff');
+    var danger = _cam_css('--danger', '#ff5252');
+    var muted = _cam_css('--text-muted', '#8888aa');
+    var card = _cam_css('--bg-card', '#1a1a2e');
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = _cam_css('--bg-input', '#12121f'); ctx.fillRect(0, 0, w, h);
+
+    var rMax = rBase + maxLift;                 // mm
+    var pivotX = w * 0.5, pivotY = h * 0.80;
+    // scala: il raggio max della camma occupa ~30% h; lascia spazio sopra per follower+valvola
+    var scale = Math.min((w * 0.40) / rMax, (h * 0.30) / rMax);
+    var DEG = Math.PI / 180;
+
+    // ---- molla + valvola (sopra), disegnate prima così la camma le copre al contatto ----
+    var contactY = pivotY - (rBase + fLift) * scale;         // y del punto di contatto (alto)
+    var followerH = 16;                                      // altezza corpo follower px
+    var stemTopY = contactY - followerH - (maxLift - fLift) * scale * 0.0 - 70; // testa valvola
+    var valveLiftMm = fLift * rocker;
+
+    // stelo valvola
+    ctx.strokeStyle = muted; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(pivotX, contactY - followerH); ctx.lineTo(pivotX, stemTopY); ctx.stroke();
+    // molla attorno allo stelo: coils compressi con l'alzata
+    var springTop = stemTopY + 6, springBot = contactY - followerH - 4;
+    var coils = 7;
+    var compress = 1 - 0.45 * (fLift / (maxLift || 1));      // 1=esteso, <1 compresso
+    ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.beginPath();
+    var segs = coils * 2, sx = 9;
+    for (var c = 0; c <= segs; c++) {
+      var yy = springTop + (springBot - springTop) * (c / segs) * compress;
+      var xx = pivotX + ((c % 2 === 0) ? -sx : sx);
+      if (c === 0) ctx.moveTo(pivotX, springTop); else ctx.lineTo(xx, yy);
+    }
+    ctx.lineTo(pivotX, springBot); ctx.stroke();
+    // testa valvola (trapezio)
+    ctx.fillStyle = (valveLiftMm > 0.05) ? accent : muted;
+    ctx.beginPath();
+    ctx.moveTo(pivotX - 22, stemTopY); ctx.lineTo(pivotX + 22, stemTopY);
+    ctx.lineTo(pivotX + 14, stemTopY - 10); ctx.lineTo(pivotX - 14, stemTopY - 10);
+    ctx.closePath(); ctx.fill();
+
+    // ---- follower ----
+    ctx.fillStyle = card; ctx.strokeStyle = accent; ctx.lineWidth = 2;
+    if (ftype === 'roller') {
+      var rr = Math.max(6, rRoll * scale);
+      ctx.beginPath(); ctx.arc(pivotX, contactY - rr, rr, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(pivotX, contactY - rr, 2.5, 0, 2 * Math.PI); ctx.fill();
+    } else if (ftype === 'finger') {
+      // leva: braccio inclinato che tocca la camma
+      ctx.beginPath(); ctx.moveTo(pivotX - 34, contactY - followerH); ctx.lineTo(pivotX + 18, contactY);
+      ctx.lineTo(pivotX + 18, contactY - 6); ctx.lineTo(pivotX - 30, contactY - followerH - 6);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else { // bicchiere / puntalino: piattello
+      ctx.fillRect(pivotX - 18, contactY - followerH, 36, followerH);
+      ctx.strokeRect(pivotX - 18, contactY - followerH, 36, followerH);
+      ctx.strokeStyle = accent; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(pivotX - 20, contactY); ctx.lineTo(pivotX + 20, contactY); ctx.stroke();
+    }
+
+    // ---- camma (forma polare ruotata) ----
+    ctx.save();
+    ctx.translate(pivotX, pivotY);
+    ctx.fillStyle = 'rgba(120,130,160,0.18)';
+    ctx.strokeStyle = accent; ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (o.camLift && o.camLift.length >= 360) {
+      for (var phi = 0; phi < 360; phi++) {
+        var liftP = Math.max(0, o.camLift[phi + 1] || 0);
+        var r = (rBase + liftP) * scale;
+        // φ a "ore 12" quando φ===ang → angolo schermo = (φ - ang) - 90°
+        var a = (phi - ang - 90) * DEG;
+        var x = r * Math.cos(a), y = r * Math.sin(a);
+        if (phi === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else {
+      // nessun profilo: cerchio base
+      ctx.arc(0, 0, rBase * scale, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    }
+    // mozzo + tacca di fase (per vedere la rotazione)
+    ctx.fillStyle = muted; ctx.beginPath(); ctx.arc(0, 0, 4, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = danger; ctx.lineWidth = 2;
+    var ta = (-ang - 90) * DEG;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(rBase * scale * 0.8 * Math.cos(ta), rBase * scale * 0.8 * Math.sin(ta)); ctx.stroke();
+    ctx.restore();
+
+    // ---- readout ----
+    ctx.fillStyle = muted; ctx.font = '11px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('cam ' + Math.round(ang) + '°', 8, 14);
+    ctx.fillText('alzata ' + fLift.toFixed(2) + ' mm', 8, 28);
+    ctx.fillText('valvola ' + valveLiftMm.toFixed(2) + ' mm', 8, 42);
+  }
+
+  // Animatore: chiama frameFn() ogni rAF per ottenere gli opts e ridisegna.
+  // Guardia visibilità (rAF si ferma in tab nascoste) → watchdog setTimeout.
+  function createCamAnimator(canvas, frameFn) {
+    var ctx = canvas.getContext('2d');
+    var running = false, raf = null, wd = null;
+    function tick() {
+      if (!running) return;
+      try {
+        var o = frameFn();
+        if (o) { o.w = canvas.width; o.h = canvas.height; drawCamMechanism(ctx, o); }
+      } catch (e) {}
+      raf = requestAnimationFrame(tick);
+      clearTimeout(wd); wd = setTimeout(tick, 120);   // fallback se rAF è sospeso
+    }
+    return {
+      start: function () { if (running) return; running = true; tick(); },
+      stop: function () { running = false; if (raf) cancelAnimationFrame(raf); clearTimeout(wd); },
+      drawOnce: function () { try { var o = frameFn(); if (o) { o.w = canvas.width; o.h = canvas.height; drawCamMechanism(ctx, o); } } catch (e) {} },
+      isRunning: function () { return running; }
+    };
+  }
+  window.cammesCamAnim = { draw: drawCamMechanism, animator: createCamAnimator };
+
   // -------- INIT al DOM ready --------------------------------------------
   function init() {
     const btn = document.getElementById('theme-toggle');
