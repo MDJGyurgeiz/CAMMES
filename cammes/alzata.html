@@ -53,6 +53,11 @@
             <form name="imp2">
                 <input type="text" name="imp2" readonly class="gauge-degrees">
             </form>
+            <!-- Meccanismo live: cosa sta facendo la macchina ORA -->
+            <div style="margin-top:10px; text-align:center;">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:4px;">Meccanismo (live)</div>
+                <canvas id="liveMechCanvas" width="240" height="260" style="max-width:100%;border-radius:var(--r-md);"></canvas>
+            </div>
         </div>
 
         <!-- Right: Chart -->
@@ -357,6 +362,27 @@ function updateStatusLeds() {
 }
 setInterval(updateStatusLeds, 700);
 
+// Meccanismo live (~10 fps): mostra "cosa fa la macchina ORA" — camma orientata
+// all'angolo encoder reale + follower (puntalino) alla quota del comparatore.
+// Se è stata acquisita una scansione, disegna il profilo reale che ruota.
+var _liveMechCv = null;
+setInterval(function () {
+    if (!window.cammesCamAnim) return;
+    if (!_liveMechCv) _liveMechCv = document.getElementById('liveMechCanvas');
+    if (!_liveMechCv || _liveMechCv.offsetParent === null) return;
+    var enc = (typeof currentEncoderCount === 'number') ? currentEncoderCount : 0;
+    var camDeg = (enc / 4) % 360; if (camDeg < 0) camDeg += 360;
+    var prof = (pdata && pdata.length >= 360) ? pdata : null;
+    try {
+        window.cammesCamAnim.draw(_liveMechCv.getContext('2d'), {
+            w: _liveMechCv.width, h: _liveMechCv.height,
+            camAngleDeg: camDeg, camLift: prof,
+            followerLift: window._liveLift || 0,
+            rBase: 14, maxLift: 12, followerType: 'punt', rocker: 1
+        });
+    } catch (e) {}
+}, 100);
+
 // Probe periodico in idle:
 // - sensore a 5 Hz (200 ms) → display alzata "real-time" anche fuori scansione
 // - encoder a 0.2 Hz (5 s) → basta per LED + posizione assoluta
@@ -485,6 +511,7 @@ var _engineOnMessage = function(event) {
             document.cpot.cpot.value = " " + msg2;
             gaugemicrom.value = msg;
             gaugemicrom.draw();
+            window._liveLift = n;   // alzata corrente (mm) per il meccanismo live
             // Live trace: durante free-spin, accumula punti (deg→mm)
             if (motorFree && typeof liveTraceAddPoint === 'function') {
                 liveTraceAddPoint(msg);
