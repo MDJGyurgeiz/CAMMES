@@ -712,3 +712,43 @@ regime critico. Bottone "🎶 Surge vs RPM" nella riga race (abilitato dopo
 analisi, guard se surge OFF), mutuamente esclusivo con gli altri canvas race.
 Verifica browser: picco surge 2.00 @ 10200 rpm (critico) su molla soft,
 chart disegnato, 0 errori console. Regressione test_surge 5/5 invariata.
+
+---
+
+## Sotto-sessione 6.11 — 2026-05-31 — Re-audit completo + Animazione 2D + fix reali
+### Tag: **v2.7.0**
+
+### Referto audit (3 agenti Explore + verifica diretta)
+Audit completo (math, firmware, server, UI/grafica). **Nessun bug critico
+confermato**: le affermazioni "critiche" degli agenti sono state smentite
+leggendo il codice — utile promemoria che gli audit automatici vanno verificati.
+- `cmdBuf[16]` "overflow": FALSO, read-loop guardato (`cmdLen < sizeof-1`, master.ino:497).
+- "race encoder": FALSO, `encoderCount` è `volatile` + letto sotto `noInterrupts()`.
+- "`/api/files` mancante": FALSO, esiste (cammes_server.js:178).
+- "leak poll/listener cross-pagina / motorFree persistente": FALSO, app multi-pagina
+  (navigazione = full reload → contesto JS distrutto).
+- ":focus-visible e prefers-reduced-motion mancanti": FALSO, già presenti e adeguati.
+
+### Animazione 2D del meccanismo (risposta a "vedere cosa fa la macchina")
+Scelta animazione 2D (no 3D/WebGL: vincolo exe offline su PC officina).
+- `cammes-ui.js`: modulo condiviso `window.cammesCamAnim` (drawCamMechanism +
+  animator rAF). Camma rotante (lobo polare), follower per tipo, valvola, molla.
+- `analisi.html`: card "Animazione meccanismo" (play/pausa/velocità/lato) sul
+  profilo analizzato. Verificato: follower più alto al picco lift → cinematica corretta.
+- `alzata.html`: vista meccanismo **LIVE** orientata all'encoder reale + follower
+  alla lettura comparatore; disegna il profilo scansionato che ruota. Draw-only.
+- Rispetta prefers-reduced-motion.
+
+### Fix di correttezza REALI (gli unici genuini)
+- **Roller follower**: era un placebo (rRoll ignorato). Sostituito con l'inviluppo
+  radiale reale (pitch curve, d(α)=max[ρcosΔ+√(rRoll²−ρ²sin²Δ)]). rRoll→0=puntalino,
+  rRoll grande arrotonda. test_followers 9/9.
+- **Finger**: warning quando la geometria leva satura (asin clamp) invece del clamp muto.
+- **Guard divergenza**: toast "Compliance instabile" se l'alzata simulata è non-finita
+  o >3× picco cam (rete di sicurezza sul cap subSteps).
+- **a11y**: aggiunto `.cammes-tour-hole` al blocco prefers-reduced-motion (il resto
+  era già a posto).
+
+### Da fare prossime sessioni
+- [ ] #3 Validazione su camma race reale (serve il file)
+- [ ] (opz) vista 3D WebGL del meccanismo se il parco PC officina lo consente
