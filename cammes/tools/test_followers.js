@@ -1,18 +1,21 @@
 // =============================================================
 //  test_followers.js — regressione per le conversioni follower virtuale
 // =============================================================
-// Estrae convertPuntToBicchiere / convertPuntToRoller / convertPuntToFinger
-// direttamente da analisi.html (niente copia-incolla che possa divergere) e
-// verifica invarianti DERIVATE dal codice reale, non assunte:
+// Estrae stylusCompensate + convertPuntToBicchiere/Roller/Finger direttamente
+// da analisi.html (niente copia-incolla che possa divergere) e verifica
+// invarianti DERIVATE dal codice reale, non assunte:
 //
-//   ROLLER   → out[t] = max(0, raw[t] - rPunt)   (rRoll non entra: è
-//              l'approssimazione dichiarata nel commento del codice)
+//   PUNTALINO→ compensazione raggio sfera = offset NORMALE: ltrue = raw +
+//              rPunt·(1−cosα). Correzione ≥0, NULLA al naso/base, cresce sui
+//              fianchi (NON la vecchia sottrazione piatta raw−rPunt, che era
+//              un bug: abbassava tutto e faceva leggere il bicchiere < puntalino)
+//   ROLLER   → rRoll→0 ⇒ profilo puntalino compensato (≥raw, =raw al picco);
+//              rRoll finito CAMBIA l'output e arrotonda il naso (Δ cresce col R)
 //   FINGER   → con tilt=0 e rPunt=0 la cinematica esatta si riduce al
 //              rapporto lineare: out[t] = raw[t] * (lValve / lArm)
 //              (e con lValve==lArm → identità)
-//   BICCHIERE→ piattello piatto: output finito e ≥0; picco ≈ picco grezzo
-//              (al naso il piattello legge ≈ l'alzata di picco); rPunt
-//              sottratto (rPunt enorme → output ~0)
+//   BICCHIERE→ piattello piatto: output finito e ≥0; picco ≈ picco grezzo;
+//              rPunt>0 NON cambia il picco (naso) ma alza i fianchi
 //
 // Uso:  node cammes/tools/test_followers.js     (exit 0 = tutto ok)
 
@@ -41,7 +44,7 @@ function extractFn(src, name) {
     throw new Error('brace non bilanciate in ' + name);
 }
 
-var names = ['convertPuntToBicchiere', 'convertPuntToRoller', 'convertPuntToFinger'];
+var names = ['stylusCompensate', 'convertPuntToBicchiere', 'convertPuntToRoller', 'convertPuntToFinger'];
 var bundle = names.map(function (n) { return extractFn(html, n); }).join('\n\n');
 
 // `window` stub: convertPuntToBicchiere referenzia window.cammesToast nel ramo
@@ -49,7 +52,7 @@ var bundle = names.map(function (n) { return extractFn(html, n); }).join('\n\n')
 // (usato dentro la stringa eval() qui sotto, invisibile al linter)
 // eslint-disable-next-line no-unused-vars
 var window = { cammesToast: null, _suppressBicchWarn: true };
-var convertPuntToBicchiere, convertPuntToRoller, convertPuntToFinger;
+var stylusCompensate, convertPuntToBicchiere, convertPuntToRoller, convertPuntToFinger;
 // eslint-disable-next-line no-eval
 eval(bundle + '\n' + names.map(function (n) { return n + '=' + n + ';'; }).join('\n'));
 
@@ -78,25 +81,39 @@ console.log('=============================================================');
 console.log(' REGRESSIONE CONVERSIONI FOLLOWER (camma sintetica picco ' + PEAK + ' mm)');
 console.log('=============================================================');
 
-// ---- ROLLER: inviluppo radiale reale ----
-//  (1) rRoll→0 ⇒ profilo puntalino (ltrue = max(0, raw-rPunt))
-//  (2) rRoll finito CAMBIA l'output (non più inerte) e resta finito/≥0
-//  (3) rRoll più grande arrotonda di più (output diverge maggiormente dal raw)
+// ---- PUNTALINO: compensazione offset normale (≥0, nulla al picco) ----
 var rPunt = 1.5;
+var comp = stylusCompensate(cam, 14, rPunt);
+var compNonNeg = true, compAdds = 0, pkCamIdx = 1, pkCam = 0;
+for (var c = 1; c <= 360; c++) { if (cam[c] > pkCam) { pkCam = cam[c]; pkCamIdx = c; } }
+for (var ci = 1; ci <= 360; ci++) {
+    var dcomp = (comp[ci]||0) - cam[ci];      // correzione = comp − raw
+    if (dcomp < -1e-9) compNonNeg = false;    // mai negativa
+    if (dcomp > compAdds) compAdds = dcomp;   // massima aggiunta (sui fianchi)
+}
+var compAtPeak = Math.abs((comp[pkCamIdx]||0) - cam[pkCamIdx]);   // ~0 al naso
+console.log('PUNTALINO (stylusCompensate, offset normale):');
+check('correzione ≥ 0 ovunque (mai sottrae, era il bug)', compNonNeg);
+check('correzione ~0 al picco/naso (normale = radiale)', compAtPeak < 1e-3, 'Δ@picco ' + compAtPeak.toExponential(1));
+check('correzione > 0 sui fianchi (smussatura sfera)', compAdds > 1e-3, 'max +' + compAdds.toFixed(3) + ' mm');
+
+// ---- ROLLER: inviluppo radiale reale ----
+//  (1) rRoll→0 ⇒ profilo puntalino compensato (≥ raw, = raw al picco)
+//  (2) rRoll finito CAMBIA l'output (arrotonda il naso) e resta finito/≥0
+//  (3) rRoll più grande arrotonda di più (Δ vs rRoll=0 cresce col raggio)
 var roll0  = convertPuntToRoller(cam, 14, 0,  rPunt);
 var roll8  = convertPuntToRoller(cam, 14, 8,  rPunt);
 var roll12 = convertPuntToRoller(cam, 14, 12, rPunt);
-var roll0Exact = true, diff8 = 0, diff12 = 0, roll8Finite = true;
+var roll0Comp = true, diff8 = 0, diff12 = 0, roll8Finite = true;
 for (var i = 1; i <= 360; i++) {
-    var expect = Math.max(0, cam[i] - rPunt);
-    if (Math.abs((roll0[i]||0) - expect) > 1e-9) roll0Exact = false;
+    if (Math.abs((roll0[i]||0) - (comp[i]||0)) > 1e-9) roll0Comp = false;   // = profilo compensato
     if (!isFinite(roll8[i]||0) || (roll8[i]||0) < -1e-9) roll8Finite = false;
-    diff8  = Math.max(diff8,  Math.abs((roll8[i]||0)  - expect));
-    diff12 = Math.max(diff12, Math.abs((roll12[i]||0) - expect));
+    diff8  = Math.max(diff8,  Math.abs((roll8[i]||0)  - (roll0[i]||0)));
+    diff12 = Math.max(diff12, Math.abs((roll12[i]||0) - (roll0[i]||0)));
 }
 console.log('ROLLER (inviluppo radiale):');
-check('rRoll→0 ⇒ profilo puntalino max(0,raw−rPunt)', roll0Exact, 'picco ' + peakOf(roll0).toFixed(3));
-check('rRoll=8 cambia l\'output (non più inerte) e resta finito/≥0', roll8Finite && diff8 > 1e-3, 'maxΔ vs raw = ' + diff8.toFixed(3) + ' mm');
+check('rRoll→0 ⇒ profilo puntalino compensato', roll0Comp, 'picco ' + peakOf(roll0).toFixed(3));
+check('rRoll=8 cambia l\'output (arrotonda) e resta finito/≥0', roll8Finite && diff8 > 1e-3, 'maxΔ vs rRoll0 = ' + diff8.toFixed(3) + ' mm');
 check('rRoll=12 arrotonda più di rRoll=8 (Δ cresce con il raggio)', diff12 > diff8, 'Δ12=' + diff12.toFixed(3) + ' > Δ8=' + diff8.toFixed(3));
 
 // ---- FINGER: tilt=0,rPunt=0 → rapporto lineare lValve/lArm ----
@@ -118,18 +135,27 @@ check('tilt=0 → out = raw * (lValve/lArm) = raw*1.2', fingerRatioOK, 'errMax '
 check('tilt=0, lValve=lArm → identità', identOK);
 check('tilt=30° → output finito e ≥0 (cinematica non-lineare)', allFinite(fTilt) && allNonNeg(fTilt), 'picco ' + peakOf(fTilt).toFixed(3));
 
-// ---- BICCHIERE: finito, ≥0, picco ≈ picco grezzo; rPunt sottratto ----
+// ---- BICCHIERE: finito, ≥0, picco ≈ picco grezzo; rPunt alza i fianchi ----
 var bicc = convertPuntToBicchiere(cam, 14, 20, 0);
 var pkRaw = rawPeak(cam), pkB = peakOf(bicc);
 var biccFinite = allFinite(bicc) && allNonNeg(bicc);
 var biccPeakOK = (pkB >= 0.7 * pkRaw && pkB <= 1.4 * pkRaw);
-var biccBig = convertPuntToBicchiere(cam, 14, 20, /*rPunt*/ PEAK + 5); // rPunt > picco → tutto a 0
-var biccZero = peakOf(biccBig) < 1e-6;
+// rPunt>0: compensazione offset normale → picco INVARIATO (naso), fianchi più pieni
+var biccR = convertPuntToBicchiere(cam, 14, 20, 1.5);
+var pkR = peakOf(biccR);
+var biccPeakSame = Math.abs(pkR - pkB) < 0.02 * pkB;
+var biccFlankUp = 0, biccNoDrop = true;
+for (var b = 1; b <= 360; b++) {
+    var dd = (biccR[b]||0) - (bicc[b]||0);
+    if (dd > biccFlankUp) biccFlankUp = dd;
+    if (dd < -1e-6) biccNoDrop = false;       // rPunt non deve MAI abbassare (era il bug)
+}
 console.log('BICCHIERE (piattello Ø20):');
 check('output finito e ≥0', biccFinite);
 check('picco ≈ picco grezzo (0.7–1.4×)', biccPeakOK, 'bicch ' + pkB.toFixed(3) + ' vs raw ' + pkRaw.toFixed(3));
-check('rPunt > picco → output ~0 (sottrazione puntalino)', biccZero, 'picco ' + peakOf(biccBig).toExponential(1));
+check('rPunt>0 NON abbassa il picco (naso invariato)', biccPeakSame && biccNoDrop, 'pkR ' + pkR.toFixed(3) + ' vs pk0 ' + pkB.toFixed(3));
+check('rPunt>0 alza i fianchi (compensazione sfera, non più bug)', biccFlankUp > 1e-3, 'max +' + biccFlankUp.toFixed(3) + ' mm');
 
 console.log('');
-if (fails === 0) { console.log('TUTTI I CHECK PASSANO (9/9)'); process.exit(0); }
+if (fails === 0) { console.log('TUTTI I CHECK PASSANO (13/13)'); process.exit(0); }
 else { console.log(fails + ' CHECK FALLITI'); process.exit(1); }

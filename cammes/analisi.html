@@ -205,7 +205,7 @@
                     </select>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Angolo lobo <span class="help-icon" data-tip="<strong>Angolo lobo (Lobe angle)</strong>Posizione angolare del centro del lobo (massima alzata) rispetto al PMS, misurata sull'albero a CAMME. Tipicamente 100-115&deg; per motori stradali, 100-108&deg; per motori sportivi. Pi&ugrave; basso = camma pi&ugrave; aggressiva." tabindex="0">?</span></span>
+                    <span class="param-label">Angolo lobo <span class="help-icon" data-tip="<strong>Angolo / centro lobo aspirazione</strong>Posizione del centro del lobo (massima alzata) rispetto al PMS, in <b>gradi MOTORE</b> (manovella), ATDC. Tipicamente 100-115&deg; stradale, 100-108&deg; sportivo. Pi&ugrave; basso = camma pi&ugrave; aggressiva. <b>Determina anche l'alzata al PMS</b> (incrocio): l'app la calcola come l'alzata a questo angolo dal naso misurato del lobo." tabindex="0">?</span></span>
                     <input type="number" id="intakeAngle" value="100" class="input" style="width:75px;" step="0.5">
                     <span class="param-unit">&deg;</span>
                 </div>
@@ -237,7 +237,7 @@
                     </select>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Angolo lobo <span class="help-icon" data-tip="<strong>Angolo lobo scarico</strong>Posizione del centro del lobo scarico rispetto al PMS, sull'albero camme. Tipicamente 105-115&deg; stradale, 100-108&deg; sportivo." tabindex="0">?</span></span>
+                    <span class="param-label">Angolo lobo <span class="help-icon" data-tip="<strong>Angolo / centro lobo scarico</strong>Posizione del centro del lobo scarico rispetto al PMS, in <b>gradi MOTORE</b> (manovella), BTDC. Tipicamente 105-115&deg; stradale, 100-108&deg; sportivo. <b>Determina anche l'alzata al PMS</b> (incrocio): l'app la calcola come l'alzata a questo angolo dal naso misurato del lobo." tabindex="0">?</span></span>
                     <input type="number" id="exhaustAngle" value="100" class="input" style="width:75px;" step="0.5">
                     <span class="param-unit">&deg;</span>
                 </div>
@@ -339,9 +339,10 @@
                 </div>
                 <!-- R cerchio base e R puntalino: comuni a bicchiere/rullo/finger -->
                 <div class="param-row" id="rowRBase" style="display:none;">
-                    <span class="param-label">R cerchio base <span class="help-icon" data-tip="<strong>Raggio base camma</strong>Parte non sollevata della cam ('fondo'). Misurabile con calibro dove la valvola &egrave; chiusa. Tipici: 12-18 mm moto, 14-22 mm auto." tabindex="0">?</span></span>
-                    <input type="number" id="rBase" value="14.0" class="input" style="width:75px;" step="0.1" min="1">
-                    <span class="param-unit">mm</span>
+                    <span class="param-label">R base asp/scar <span class="help-icon" data-tip="<strong>Raggio cerchio base camma (per lato)</strong>Parte non sollevata della cam ('fondo'), dove la valvola &egrave; chiusa. <b>Aspirazione e scarico possono differire</b> (es. VW KR 16V: 32.64 / 34.25 mm): per questo sono due campi separati. Misurabile col calibro. Tipici: 12-18 mm moto, 14-35 mm auto. Usato per la geometria di contatto del follower simulato." tabindex="0">?</span></span>
+                    <input type="number" id="rBase" value="14.0" class="input" style="width:60px;" step="0.01" min="1" title="Raggio base ASPIRAZIONE">
+                    <input type="number" id="rBaseExhaust" value="14.0" class="input" style="width:60px;" step="0.01" min="1" title="Raggio base SCARICO">
+                    <span class="param-unit">mm (asp/sca)</span>
                 </div>
                 <div class="param-row" id="rowRPunt" style="display:none;">
                     <span class="param-label">R puntalino <span class="help-icon" data-tip="<strong>Raggio punta comparatore</strong>Raggio della sfera del puntalino Neoteck usato in scansione. Tipico 1.5 mm. Viene <i>sottratto</i> dalla curva grezza per ottenere il profilo cam vero prima di simulare bicchiere/rullo/leva." tabindex="0">?</span></span>
@@ -929,6 +930,10 @@
 // ========== STATE ==========
 var crankIntake = [];    // 720 values (index 1-720)
 var crankExhaust = [];   // 720 values (index 1-720)
+var rawIntake = [];      // 360 grezzo gradi-camma (sorgente per ri-elaborazione)
+var rawExhaust = [];     // 360 grezzo gradi-camma
+var folIntake = [];      // 360 gradi-camma post-follower (per alzata al PMS)
+var folExhaust = [];     // 360 gradi-camma post-follower
 var intakeLoaded = false;
 var exhaustLoaded = false;
 var intakeMaxLift = 0, intakeMaxPos = 0;
@@ -989,21 +994,54 @@ var TYPOLOGY = {
 //
 // Avvisa via toast se Ø bicchiere è troppo grande per il lobo (l'impronta
 // del piattello copre quasi tutta la cam → alzata simulata distorta).
+// Compensazione del raggio del PUNTALINO SFERICO usato in scansione.
+// La sfera (raggio rPunt) tocca la cam e il suo CENTRO traccia un profilo
+// offset di rPunt lungo la NORMALE alla superficie. Il comparatore è azzerato
+// sul cerchio base, dove la normale È radiale: lì l'offset rPunt è già incluso
+// nello zero. Quindi nell'ALZATA (differenza dallo zero) l'offset si CANCELLA
+// al naso e sul base circle, e resta solo un contributo sui FIANCHI, dove la
+// normale non è radiale:
+//      lift_vero(θ) = lift_misurato(θ) + rPunt·(1 − cos α),
+//      α = atan2( d(lift)/dθ , r ),   r = rBase + lift.
+// Poiché cos α ≤ 1, la correzione è SEMPRE ≥ 0: il puntalino "smussa" i fianchi
+// e il profilo cam vero è leggermente più pieno della misura grezza.
+// NB: il vecchio modello faceva `ltrue = raw − rPunt` (sottrazione piatta) —
+// ERRORE: abbassava tutta la curva di rPunt anche al naso (dove non c'è alcun
+// offset radiale), facendo leggere al bicchiere MENO del puntalino. Bug reale.
+// Ritorna l'array dell'alzata vera ltrue[1..360] (≥0) rispetto al cerchio base.
+function stylusCompensate(camLiftRaw, rBase, rPunt) {
+    rPunt = (typeof rPunt === 'number' && rPunt > 0) ? rPunt : 0;
+    var lift = new Array(361);
+    lift[0] = 0;
+    var i;
+    for (i = 1; i <= 360; i++) { var v = camLiftRaw[i] || 0; lift[i] = v > 0 ? v : 0; }
+    if (rPunt === 0) return lift;          // nessun puntalino → nessuna correzione
+    var DEG = Math.PI / 180;
+    var out = new Array(361);
+    out[0] = 0;
+    for (i = 1; i <= 360; i++) {
+        var prev = i === 1 ? 360 : i - 1;
+        var next = i === 360 ? 1 : i + 1;
+        var dLdTheta = (lift[next] - lift[prev]) / 2 / DEG;   // mm per radiante
+        var r = rBase + lift[i];
+        var alpha = Math.atan2(dLdTheta, r);                  // angolo normale↔radiale
+        out[i] = lift[i] + rPunt * (1 - Math.cos(alpha));
+    }
+    return out;
+}
+
 function convertPuntToBicchiere(camLiftRaw, rBase, dBicch, rPunt) {
     var R = dBicch / 2;
     var DEG = Math.PI / 180;
     rPunt = (typeof rPunt === 'number' && rPunt > 0) ? rPunt : 0;
 
-    // pre-compute r(θ) array in coordinate polari del LOBO geometrico.
-    // Sottraggo rPunt: la sfera "alza" la misura grezza rispetto al
-    // contatto piano-cam, quindi tolgo il suo raggio per ottenere il
-    // profilo che vedrebbe un piattello.
+    // Profilo cam vero r(θ) in coordinate polari, con compensazione corretta
+    // del puntalino sferico (offset normale, vedi stylusCompensate).
+    var lt = stylusCompensate(camLiftRaw, rBase, rPunt);
     var r = new Array(361);
     var rMax = rBase;
     for (var t = 1; t <= 360; t++) {
-        var ltrue = (camLiftRaw[t] || 0) - rPunt;
-        if (ltrue < 0) ltrue = 0;  // sotto al puntalino = base circle
-        r[t] = rBase + ltrue;
+        r[t] = rBase + lt[t];
         if (r[t] > rMax) rMax = r[t];
     }
 
@@ -1065,12 +1103,11 @@ function convertPuntToRoller(camLiftRaw, rBase, rRoll, rPunt) {
     var DEG = Math.PI / 180;
     rPunt = (typeof rPunt === 'number' && rPunt > 0) ? rPunt : 0;
     rRoll = (typeof rRoll === 'number' && rRoll > 0) ? rRoll : 0;
-    // Profilo cam vero (raggio polare) dopo sottrazione puntalino.
+    // Profilo cam vero (raggio polare) con compensazione corretta del puntalino.
+    var lt = stylusCompensate(camLiftRaw, rBase, rPunt);
     var rho = new Array(361);
     for (var t = 1; t <= 360; t++) {
-        var ltrue = (camLiftRaw[t] || 0) - rPunt;
-        if (ltrue < 0) ltrue = 0;
-        rho[t] = rBase + ltrue;
+        rho[t] = rBase + lt[t];
     }
     if (rRoll <= 0) {   // rullo nullo = puntalino
         var p = new Array(361); p[0] = 0;
@@ -2533,10 +2570,10 @@ function convertPuntToFinger(camLiftRaw, rBase, lArm, lValve, rPunt, tiltDeg) {
     var out = new Array(361);
     out[0] = 0;
     var saturated = false;
+    var lt = stylusCompensate(camLiftRaw, rBase, rPunt);   // profilo cam vero
     for (var t = 1; t <= 360; t++) {
-        var ltrue = (camLiftRaw[t] || 0) - rPunt;
-        if (ltrue < 0) ltrue = 0;
-        if (ltrue === 0) { out[t] = 0; continue; }
+        var ltrue = lt[t];
+        if (ltrue <= 0) { out[t] = 0; continue; }
         // Calcolo rotazione finger
         var argAsin = sinCam0 + ltrue / lArm;
         // Saturazione: alzata > geometria leva (asin fuori da [-1,1]) → curva
@@ -2661,6 +2698,7 @@ function applyEnginePreset() {
     setSel('followerType',     p.followerType);
     setVal('diamBicch',        p.diamBicch);
     setVal('rBase',            p.rBase);
+    setVal('rBaseExhaust',     (p.rBaseExhaust != null ? p.rBaseExhaust : p.rBase));
     setVal('rPunt',            p.rPunt);
     setVal('springK',          p.springK);
     setVal('springPreload',    p.springPreload);
@@ -2810,11 +2848,13 @@ function findMax(crankArr) {
 //   - 'bicch' → bicchiere piatto Ø (D)
 //   - 'roller'→ rullo di raggio (rRoll)
 //   - 'finger'→ leva con rapporto braccio camma/valvola
-function applyVirtualFollower(camLift) {
+function applyVirtualFollower(camLift, side) {
     var t = document.getElementById('followerType').value;
     if (!t || t === 'punt') return camLift;
 
-    var rBase  = Number(document.getElementById('rBase').value)  || 14;
+    // Raggio cerchio base PER LATO (aspirazione/scarico possono differire).
+    var rbEl = document.getElementById(side === 'exhaust' ? 'rBaseExhaust' : 'rBase');
+    var rBase  = (rbEl && Number(rbEl.value)) || Number(document.getElementById('rBase').value) || 14;
     var rPunt  = Number(document.getElementById('rPunt').value)  || 1.5;
 
     if (t === 'bicch') {
@@ -2856,7 +2896,9 @@ function importIntake() {
     var fr = new FileReader();
     fr.onload = function() {
         var camLift = parseCamFile(fr.result);
-        camLift = applyVirtualFollower(camLift);
+        rawIntake = camLift.slice();                       // grezzo gradi-camma (sorgente)
+        camLift = applyVirtualFollower(camLift, 'intake');
+        folIntake = camLift.slice();
         var angle = Number(document.getElementById('intakeAngle').value);
         var clearance = Number(document.getElementById('intakeClearance').value);
 
@@ -2888,7 +2930,9 @@ function importExhaust() {
     var fr = new FileReader();
     fr.onload = function() {
         var camLift = parseCamFile(fr.result);
-        camLift = applyVirtualFollower(camLift);
+        rawExhaust = camLift.slice();                      // grezzo gradi-camma (sorgente)
+        camLift = applyVirtualFollower(camLift, 'exhaust');
+        folExhaust = camLift.slice();
         var angle = Number(document.getElementById('exhaustAngle').value);
         var clearance = Number(document.getElementById('exhaustClearance').value);
 
@@ -3333,6 +3377,20 @@ function analyze() {
     var rockerIn = Number(document.getElementById('rockerIntake').value) || 1.0;
     var rockerEx = Number(document.getElementById('rockerExhaust').value) || 1.0;
 
+    // Ri-elabora SEMPRE dai dati grezzi memorizzati con i parametri CORRENTI
+    // (follower, raggio base per lato, angolo lobo, gioco): così modificare un
+    // parametro e ri-analizzare ha effetto senza dover re-importare i file.
+    // folIntake/folExhaust = profilo gradi-camma post-follower (pre-gioco),
+    // usato per l'alzata al PMS riferita al picco misurato.
+    if (rawIntake && rawIntake.length) {
+        folIntake   = applyVirtualFollower(rawIntake.slice(), 'intake');
+        crankIntake = mapCamToCrank(folIntake, intakeAng, intakeClear, 'intake');
+    }
+    if (rawExhaust && rawExhaust.length) {
+        folExhaust   = applyVirtualFollower(rawExhaust.slice(), 'exhaust');
+        crankExhaust = mapCamToCrank(folExhaust, exhaustAng, exhaustClear, 'exhaust');
+    }
+
     // Apply rocker arm ratio for analysis
     var anlIn = (rockerIn !== 1.0) ? applyRockerRatio(crankIntake, rockerIn) : crankIntake;
     var anlEx = (rockerEx !== 1.0) ? applyRockerRatio(crankExhaust, rockerEx) : crankExhaust;
@@ -3367,9 +3425,22 @@ function analyze() {
     var asymIn = computeLobeAsymmetry(anlIn, mxIn.idx);
     var asymEx = computeLobeAsymmetry(anlEx, mxEx.idx);
 
-    // Lift at TDC (crankshaft degree 361 = overlap TDC)
-    var liftInTDC = anlIn[361] || 0;
-    var liftExTDC = anlEx[361] || 0;
+    // Alzata al PMS (overlap TDC) — RIFERITA AL PICCO MISURATO del lobo, non
+    // all'origine arbitraria della scansione (la vecchia anlIn[361] campionava
+    // un punto fisso scollegato dal lobo → numero privo di senso fisico).
+    // Il centro lobo (intakeAngle/exhaustAngle) è in gradi MOTORE; 1°camma =
+    // 2°motore → offset in gradi-camma = angolo/2. A |centro lobo| dal naso la
+    // valvola è alla quota di incrocio al PMS. Campiono il fianco di salita
+    // (dato più pulito; lobo ~simmetrico → fianco apertura ≈ chiusura).
+    var _camWrap = function (i) { return ((Math.round(i) - 1) % 360 + 360) % 360 + 1; };
+    var _argMaxCam = function (arr) {
+        var mi = 1, mv = -Infinity;
+        for (var q = 1; q <= 360; q++) { var v = arr[q] || 0; if (v > mv) { mv = v; mi = q; } }
+        return mi;
+    };
+    var dPkIn = _argMaxCam(folIntake), dPkEx = _argMaxCam(folExhaust);
+    var liftInTDC = Math.max(0, (folIntake[_camWrap(dPkIn - intakeAng / 2)] || 0) - intakeClear) * rockerIn;
+    var liftExTDC = Math.max(0, (folExhaust[_camWrap(dPkEx - exhaustAng / 2)] || 0) - exhaustClear) * rockerEx;
 
     // Lobe Separation Angle
     var LSA = (intakeAng + exhaustAng) / 2;

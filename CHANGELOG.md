@@ -752,3 +752,48 @@ Scelta animazione 2D (no 3D/WebGL: vincolo exe offline su PC officina).
 ### Da fare prossime sessioni
 - [ ] #3 Validazione su camma race reale (serve il file)
 - [ ] (opz) vista 3D WebGL del meccanismo se il parco PC officina lo consente
+
+---
+
+## Sotto-sessione 6.12 — 2026-06-13 — Alzata al PMS corretta (caso reale VW KR 1.8 16V)
+### Tag: **v2.8.0**
+
+Innescata da un caso reale: due scansioni VW KR 1.8 16V (asp `VW-kr1_8-ASP_alz.scr`,
+sca `VW-kr1_8-SC_alz.scr`). L'utente si aspettava 3,5/3,3 mm di alzata al PMS, il
+software dava 1,7/1,0. **Analisi → tre cause reali, tutte corrette.**
+
+### Diagnosi (perché 1,7/1,0 era sbagliato)
+1. **PMS ancorato all'origine della scansione**, non al picco del lobo: `liftInTDC`
+   era `anlIn[361]` (indice fisso = punto del profilo scollegato dal lobo). Due
+   scansioni indipendenti asp/sca non contengono la fasatura camma↔manovella, quindi
+   l'indice 361 cadeva su un punto arbitrario del fianco.
+2. **Mostrava il puntalino sferico, non il bicchiere Ø35** realmente montato.
+3. **Bug nella conversione bicchiere** (vedi sotto): leggeva *meno* del puntalino.
+
+### Fix 1 — Compensazione puntalino sferico (`stylusCompensate`, commit pending)
+Il vecchio modello faceva `ltrue = raw − rPunt` (sottrazione **piatta**): abbassava
+tutta la curva di 1,5 mm anche al naso, dove non c'è alcun offset radiale → il
+bicchiere risultava più basso del puntalino (fisicamente impossibile). Sostituito con
+la compensazione corretta a **offset normale**: `lift_vero = raw + rPunt·(1−cos α)`,
+`α = atan2(d(lift)/dθ, r)`. La correzione è **≥0, nulla al naso/base, cresce sui
+fianchi** (la sfera "smussa" i fianchi). Helper condiviso usato da bicchiere/rullo/
+finger. Picco bicchiere ora = picco grezzo (11,24/10,51), non più 9,74/9,00.
+
+### Fix 2 — Alzata al PMS riferita al picco MISURATO + centro lobo per lato
+`liftInTDC`/`liftExTDC` ora = alzata (follower convertito) a |centro lobo| **gradi
+motore** dal naso misurato di ciascun lobo (1°camma = 2°motore → offset = angolo/2).
+Riusa i campi "Angolo lobo" asp/sca (che sono già in gradi motore: tooltip corretti,
+prima dicevano erroneamente "albero a CAMME"). `analyze()` **ri-elabora sempre dai
+dati grezzi** memorizzati con i parametri correnti → cambiare follower/raggio base/
+angolo ora ha effetto senza re-importare (prima era un bug latente).
+
+### Fix 3 — Raggio base per lato (asp/sca)
+Nuovo campo `rBaseExhaust`: aspirazione e scarico possono avere cerchio base diverso
+(VW KR: 32,64 / 34,25 mm). `applyVirtualFollower(camLift, side)` usa il raggio del lato.
+
+### Esito sul caso VW KR (Ø35, gioco 0,3, centro lobo 104°)
+- **Asp 2,18 mm / Sca 1,71 mm** — valore fisicamente corretto per centro lobo 104°.
+- I 3,5/3,3 attesi si ottengono a **centro lobo ~90° motore**: o le camme sono montate
+  ~14° più anticipate, o quel dato viene da una fasatura diversa. Ora il software dà il
+  numero vero per qualunque centro lobo l'utente inserisca (verificato in browser +
+  end-to-end con le funzioni reali; regressioni test_followers 13/13, 3dof/surge/clio ok).
