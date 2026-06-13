@@ -797,3 +797,36 @@ Nuovo campo `rBaseExhaust`: aspirazione e scarico possono avere cerchio base div
   ~14° più anticipate, o quel dato viene da una fasatura diversa. Ora il software dà il
   numero vero per qualunque centro lobo l'utente inserisca (verificato in browser +
   end-to-end con le funzioni reali; regressioni test_followers 13/13, 3dof/surge/clio ok).
+
+---
+
+## Sotto-sessione 6.13 — 2026-06-14 — Salva profilo (grezzo / convertito) in archivio
+### Tag: **v2.9.0**
+
+Feature richiesta: poter salvare un profilo come **grezzo** (puntalino, come misurato)
+oppure **gia convertito** al follower reale (bicchiere / rullo / finger), per avere in
+archivio sia il dato sorgente sia la curva pronta. Implementata con un **unico bottone**
+in Analisi: e il menu *Tipo follower* a decidere cosa si salva (modello mentale identico
+alla richiesta).
+
+### Server (`cammes_server.js`)
+- Nuovo handler **POST/PUT `/api/file/<nome>.scr`**: scrive il file in `prove/` riusando le
+  guardie gia presenti (`isSafeFilename` + anti path-traversal), solo `.scr`, body cap 2 MB,
+  `mkdir prove/` recursive. Risponde `{ok, saved}`.
+
+### Analisi (`analisi.html`)
+- Bottone **Salva profilo** (abilitato dopo l'analisi). `saveProfileToArchive()`:
+  - follower = **Puntalino** -> salva la curva **grezza** (header `_pline`);
+  - follower = **bicchiere/rullo/finger** -> salva la curva **gia convertita** (ricostruita
+    dai dati grezzi coi parametri correnti via `applyVirtualFollower`), con **header
+    marcatore** `_pline_conv:tipo:param` e suffisso nel nome (`_bicch35`/`_roll8`/`_finger`).
+  - POST in `prove/` -> il file compare in Home accanto alle altre misure. Toast di esito.
+- **Anti doppia-conversione** (`detectConvertedFile`): caricando un file marcato `_pline_conv`,
+  l'analisi imposta automaticamente follower = **Puntalino** e avvisa, cosi non riconverte
+  una curva gia-follower. Memorizzati `intakeFileBase`/`exhaustFileBase` per i nomi.
+
+### Verifica (browser, server reale)
+- Salvati i convertiti dei 2 file VW (bicchiere 35) -> creati in `prove/` (via `/api/files`).
+- Ricaricato il convertito: header rilevato -> follower forzato a Puntalino, picco 11.24,
+  **alzata al PMS 2.175 mm identica** = nessuna riconversione. 0 errori console. File di test
+  poi rimossi. Regressioni test_followers 13/13, 3dof/surge/clio/vw invariate.

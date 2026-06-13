@@ -196,6 +196,32 @@ var httpServer = http.createServer(function (req, res) {
             return sendJson(res, 403, { error: 'Path traversal rifiutato' });
         }
 
+        // POST/PUT: salva un file misura (.scr) in prove/. Usato dall'export
+        // "Salva profilo" dell'analisi (grezzo o curva follower già convertita).
+        if (req.method === 'POST' || req.method === 'PUT') {
+            if (!/\.scr$/i.test(fname)) {
+                return sendJson(res, 400, { error: 'Salvataggio consentito solo per file .scr' });
+            }
+            var body = '';
+            req.on('data', function (chunk) {
+                body += chunk;
+                if (body.length > 2000000) { req.destroy(); }   // cap 2 MB di sicurezza
+            });
+            req.on('end', function () {
+                fs.mkdir(PROVE_DIR, { recursive: true }, function () {
+                    fs.writeFile(fpath, body, function (err) {
+                        if (err) {
+                            log('API', 'POST save errore: ' + err.message);
+                            return sendJson(res, 500, { error: 'Errore salvataggio', detail: err.message });
+                        }
+                        log('API', 'POST save ok: ' + fname + ' (' + body.length + ' B)');
+                        sendJson(res, 200, { ok: true, saved: fname });
+                    });
+                });
+            });
+            return;
+        }
+
         if (req.method === 'DELETE') {
             fs.unlink(fpath, function (err) {
                 if (err) {

@@ -467,6 +467,9 @@
                 <button class="btn btn-secondary" id="btnExportCSV" onclick="exportCSV();" style="flex:1;" disabled data-tip="<strong>Esporta tabella CSV</strong>Salva tutti i dati 360&deg; (alzata, velocit&agrave;, accelerazione, forze) in un file .csv apribile con Excel/LibreOffice.">&#8595; CSV</button>
                 <button class="btn btn-secondary" id="btnExportPDF" onclick="exportPDF();" style="flex:1;" disabled data-tip="<strong>Esporta report PDF</strong>Genera un report stampabile con grafici, tabelle dei risultati e parametri della scheda tecnica del motore.">&#8595; PDF</button>
             </div>
+            <div class="flex gap-8" style="margin-top:8px;">
+                <button class="btn btn-secondary" id="btnSaveProfile" onclick="saveProfileToArchive();" style="flex:1;" disabled data-tip="<strong>Salva profilo in archivio (prove/)</strong>Salva la curva come file .scr accanto alle altre misure (visibile in Home). Il menu <b>Tipo follower</b> decide COSA salvi:<br>&bull; <b>Puntalino</b> &rarr; salva il GREZZO cos&igrave; misurato;<br>&bull; <b>Bicchiere/Rullo/Finger</b> &rarr; salva la curva GI&Agrave; CONVERTITA col follower scelto (marcata: al ricarico non verr&agrave; riconvertita).">&#128190; Salva profilo</button>
+            </div>
 
             <!-- RACE-GRADE: Sweep RPM + Optimizer molla + Mappa + Report -->
             <div class="flex gap-8 adv-only" style="margin-top:8px;">
@@ -934,6 +937,8 @@ var rawIntake = [];      // 360 grezzo gradi-camma (sorgente per ri-elaborazione
 var rawExhaust = [];     // 360 grezzo gradi-camma
 var folIntake = [];      // 360 gradi-camma post-follower (per alzata al PMS)
 var folExhaust = [];     // 360 gradi-camma post-follower
+var intakeFileBase = ''; // nome base file aspirazione caricato (per salva in archivio)
+var exhaustFileBase = '';// nome base file scarico caricato
 var intakeLoaded = false;
 var exhaustLoaded = false;
 var intakeMaxLift = 0, intakeMaxPos = 0;
@@ -2883,6 +2888,22 @@ function applyVirtualFollower(camLift, side) {
     return camLift;
 }
 
+// Se il file caricato è già una curva FOLLOWER (header _pline_conv: salvato da
+// "Salva profilo"), NON va riconvertito: imposta follower = Puntalino e avvisa.
+function detectConvertedFile(text) {
+    var first = (String(text).split(/\r?\n/)[0] || '').trim();
+    if (first.indexOf('_pline_conv') !== 0) return false;
+    var info = first.replace('_pline_conv', '').replace(/^[:|]/, '') || 'follower';
+    var ft = document.getElementById('followerType');
+    if (ft && ft.value !== 'punt') { ft.value = 'punt'; if (typeof onFollowerTypeChange === 'function') onFollowerTypeChange(); }
+    if (window.cammesToast) window.cammesToast({
+        kind: 'info', title: 'Profilo gi&agrave; convertito',
+        body: 'Questo file &egrave; una curva follower (' + info + '): follower impostato su <b>Puntalino</b> per non riconvertirlo.',
+        duration: 6000
+    });
+    return true;
+}
+
 function importIntake() {
     var input = document.getElementById('fileIntake');
     if (!input.files || !input.files[0]) { alert('Selezionare un file'); return; }
@@ -2895,6 +2916,8 @@ function importIntake() {
     var file = input.files[0];
     var fr = new FileReader();
     fr.onload = function() {
+        intakeFileBase = nom[0];
+        detectConvertedFile(fr.result);                    // se già follower → forza punt
         var camLift = parseCamFile(fr.result);
         rawIntake = camLift.slice();                       // grezzo gradi-camma (sorgente)
         camLift = applyVirtualFollower(camLift, 'intake');
@@ -2929,6 +2952,8 @@ function importExhaust() {
     var file = input.files[0];
     var fr = new FileReader();
     fr.onload = function() {
+        exhaustFileBase = nom[0];
+        detectConvertedFile(fr.result);                    // se già follower → forza punt
         var camLift = parseCamFile(fr.result);
         rawExhaust = camLift.slice();                      // grezzo gradi-camma (sorgente)
         camLift = applyVirtualFollower(camLift, 'exhaust');
@@ -2949,6 +2974,52 @@ function importExhaust() {
         updateChart();
     };
     fr.readAsText(file);
+}
+
+// Salva il profilo corrente in archivio (prove/) come .scr. Il menu "Tipo
+// follower" decide COSA viene salvato:
+//  - Puntalino (punt)  \u2192 curva GREZZA (header _pline), cos\u00EC com'\u00E8 misurata.
+//  - Bicchiere/Rullo/Finger \u2192 curva GI\u00C0 CONVERTITA col follower scelto, con
+//    header marcatore "_pline_conv:tipo:param" e suffisso nel nome (_bicchNN\u2026):
+//    al ricarico l'analisi la riconosce e NON la riconverte (vedi detectConvertedFile).
+function saveProfileToArchive() {
+    if (!intakeLoaded && !exhaustLoaded) { alert('Importa prima almeno una camma.'); return; }
+    var ft = (document.getElementById('followerType') || {}).value || 'punt';
+    var conv = ft !== 'punt';
+    var hdr = '_pline', tag = '', desc = 'grezzo (puntalino)';
+    if (conv) {
+        if (ft === 'bicch') { var d = Number(document.getElementById('diamBicch').value) || 0; tag = 'bicch' + d; hdr = '_pline_conv:bicch:' + d; desc = 'bicchiere \u00D8' + d; }
+        else if (ft === 'roller') { var rr = Number(document.getElementById('rRoll').value) || 0; tag = 'roll' + rr; hdr = '_pline_conv:roll:' + rr; desc = 'rullo R' + rr; }
+        else if (ft === 'finger') { var la = Number(document.getElementById('lArm').value) || 0, lv = Number(document.getElementById('lValve').value) || 0; tag = 'finger'; hdr = '_pline_conv:finger:' + la + 'x' + lv; desc = 'finger ' + la + '/' + lv; }
+    }
+    function buildContent(curve) {
+        var lines = [hdr];
+        for (var i = 1; i <= 360; i++) { lines.push(i + ',' + (+(Number(curve[i] || 0)).toFixed(4))); }
+        return lines.join('\r\n') + '\r\n';
+    }
+    function nameFor(base) {
+        var b = String(base || 'profilo').replace(/[^A-Za-z0-9._-]/g, '-');   // safe per il server
+        if (!tag) return b + '.scr';
+        return (/_alz$/.test(b) ? b.replace(/_alz$/, '_' + tag + '_alz') : b + '_' + tag) + '.scr';
+    }
+    var jobs = [];
+    if (intakeLoaded)  jobs.push({ name: nameFor(intakeFileBase),  body: buildContent(applyVirtualFollower(rawIntake.slice(),  'intake')) });
+    if (exhaustLoaded) jobs.push({ name: nameFor(exhaustFileBase), body: buildContent(applyVirtualFollower(rawExhaust.slice(), 'exhaust')) });
+    Promise.all(jobs.map(function (j) {
+        return fetch('/api/file/' + encodeURIComponent(j.name), { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: j.body })
+            .then(function (r) { return r.json(); })
+            .then(function (res) { return { name: j.name, ok: !!(res && res.ok), err: res && res.error }; })
+            .catch(function (e) { return { name: j.name, ok: false, err: e.message }; });
+    })).then(function (results) {
+        var okNames = results.filter(function (r) { return r.ok; }).map(function (r) { return r.name; });
+        var bad = results.filter(function (r) { return !r.ok; });
+        if (!window.cammesToast) return;
+        if (bad.length === 0) {
+            window.cammesToast({ kind: 'success', title: 'Profilo salvato (' + desc + ')', body: 'In prove/: <b>' + okNames.join('</b>, <b>') + '</b>', duration: 6000 });
+        } else {
+            window.cammesToast({ kind: 'warn', title: 'Salvataggio non riuscito', body: bad.map(function (r) { return r.name + ': ' + (r.err || 'errore'); }).join('<br>'), duration: 8000 });
+        }
+    });
 }
 
 // ========== KINEMATIC COMPUTATIONS ==========
@@ -3686,6 +3757,7 @@ function analyze() {
 
     document.getElementById('btnExportCSV').disabled = false;
     document.getElementById('btnExportPDF').disabled = false;
+    var bSv = document.getElementById('btnSaveProfile'); if (bSv) bSv.disabled = false;
     var bSw = document.getElementById('btnSweepRpm'); if (bSw) bSw.disabled = false;
     var bOp = document.getElementById('btnOptimizeSpring'); if (bOp) bOp.disabled = false;
     var bMap = document.getElementById('btnSpringMap'); if (bMap) bMap.disabled = false;
@@ -5114,6 +5186,7 @@ function resetAll() {
     lastAnalysis = null;
     document.getElementById('btnExportCSV').disabled = true;
     document.getElementById('btnExportPDF').disabled = true;
+    var bSvR = document.getElementById('btnSaveProfile'); if (bSvR) bSvR.disabled = true;
     var bSwR = document.getElementById('btnSweepRpm'); if (bSwR) bSwR.disabled = true;
     var bOpR = document.getElementById('btnOptimizeSpring'); if (bOpR) bOpR.disabled = true;
     var bMapR = document.getElementById('btnSpringMap'); if (bMapR) bMapR.disabled = true;
