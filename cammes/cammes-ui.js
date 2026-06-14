@@ -30,8 +30,6 @@
     setStoredTheme(next);
     document.dispatchEvent(new CustomEvent('cammes:theme:change', { detail: { theme: next } }));
   }
-  window.cammesToggleTheme = toggleTheme;
-
   // Helper: legge una CSS custom property dal :root (utile per Chart.js v4
   // che vuole stringhe-colore esplicite — i grafici si aggiornano a tema
   // cambiato ascoltando l'evento 'cammes:theme:change').
@@ -481,10 +479,7 @@
     }
   }
 
-  function resetWizardFlag() {
-    try { localStorage.removeItem(WIZARD_KEY); } catch (e) {}
-  }
-  window.cammesWizard = { show: showWizard, showIfFirstTime: showWizardIfFirstTime, reset: resetWizardFlag };
+  window.cammesWizard = { show: showWizard, showIfFirstTime: showWizardIfFirstTime };
 
   // -------- VALIDATION HELPERS ------------------------------------------
   // Marca un input come errato/ok con styling + (opzionale) messaggio toast.
@@ -515,8 +510,6 @@
     if (/Analisi/i.test(t))   return 'analisi';
     return null;
   }
-  window.cammesGetCurrentPage = getCurrentPage;
-
   // Step per pagina: { sel: selettore, title, body }. Gli step il cui
   // selettore non esiste sulla pagina vengono saltati automaticamente.
   var TOUR_STEPS = {

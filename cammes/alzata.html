@@ -961,22 +961,6 @@ window.onload = function() {
 </script>
 
 <script>
-var i = 0;
-var dato = 0;
-var newlabel;
-function insert() {
-    i = i + 1;
-    newlabel = 5;
-    dato = 20;
-    config.data.labels.push(newlabel);
-    config.data.datasets.forEach((dataset) => {
-        dataset.data.push(dato);
-    });
-    window.myLine.update();
-}
-</script>
-
-<script>
 function reset() {
     while (config.data.labels.length > 0) {
         config.data.labels.pop();
@@ -985,19 +969,6 @@ function reset() {
         });
     }
     window.myLine.update();
-}
-</script>
-
-<script>
-function update() {
-    for (k = 1; k <= 360; k++) {
-        newlabel = k;
-        birdsData.labels.push(newlabel);
-        birdsData.datasets.forEach((dataset) => {
-            dataset.data.push(k * 10);
-        });
-    }
-    window.polarAreaChart.update();
 }
 </script>
 

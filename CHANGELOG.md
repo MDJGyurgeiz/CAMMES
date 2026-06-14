@@ -830,3 +830,32 @@ alla richiesta).
 - Ricaricato il convertito: header rilevato -> follower forzato a Puntalino, picco 11.24,
   **alzata al PMS 2.175 mm identica** = nessuna riconversione. 0 errori console. File di test
   poi rimossi. Regressioni test_followers 13/13, 3dof/surge/clio/vw invariate.
+
+---
+
+## Sotto-sessione 6.14 — 2026-06-14 — Pulizia codice morto (referto audit campi)
+### Tag: **v2.10.0**
+
+Dopo l'audit esaustivo di ogni elemento UI (255 elementi, 247 ok, 0 doppioni, 0 rotti —
+con verifica adversariale che ha ribaltato 2 falsi positivi), rimossi i pochi residui
+morti/vestigiali confermati. Nessun cambiamento funzionale.
+
+- **`alzata.html`**: rimosse le funzioni orfane `insert()` (placeholder di test, valori
+  hardcoded 5/20) e `update()` (copia-incolla da polare.html: usava `birdsData`/
+  `polarAreaChart` inesistenti in alzata; mai chiamata). `reset()` resta (in uso).
+- **`home.html`**: rimosso il checkbox nascosto `#filterBookmarked` (vestigiale,
+  `display:none` mai tolto e `.checked` mai letto): il toggle "Solo preferiti" usa già
+  label+icona + la variabile `filterOnlyBookmarks`.
+- **`cammes-ui.js`**: rimosse 3 esposizioni `window.*` mai consumate nel codebase —
+  `cammesToggleTheme` (duplicato dell'handler interno cablato via addEventListener),
+  `cammesWizard.reset` (+ funzione `resetWizardFlag`), `cammesGetCurrentPage` (la funzione
+  interna `getCurrentPage` resta, è load-bearing per il tour).
+- **`polare.html`**: hardening del bottone Salva da `type=submit` a `type=button` (non era
+  un bug — non ha form-owner, verificato — ma elimina la fragilità futura).
+
+### Verifica (browser)
+- home: toggle tema ancora funzionante (dark→light) nonostante l'export rimosso, toggle
+  "Solo preferiti" ancora funzionante, checkbox rimosso, API pubbliche superstiti intatte.
+- alzata: `insert`/`update` assenti, `reset` presente, pagina ok.
+- polare: Salva = `type=button`, nessun form-owner, `sav()` definita.
+- 0 errori console su tutte e tre. Regressioni test_followers 13/13, 3dof/surge/clio/vw verdi.
