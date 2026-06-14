@@ -267,6 +267,13 @@
                     <input type="number" id="durationRef" value="1.0" class="input" style="width:75px;" step="0.1" min="0">
                     <span class="param-unit">mm</span>
                 </div>
+                <div class="param-row adv-only">
+                    <span class="param-label">Corr. baseline <span class="help-icon" data-tip="<strong>Correzione baseline / eccentricit&agrave;</strong>Rimuove dal profilo una linea di base che varia dolcemente lungo il giro (DC + 1&ordf; armonica), tipica di una camma montata leggermente fuori centro o di runout del cerchio base: il cerchio base torna a 0 e il lobo &egrave; depurato dall'ondulazione. Su scansioni gi&agrave; pulite non cambia nulla (no-op). Default ON." tabindex="0">?</span></span>
+                    <select id="baselineCorrect" class="input" style="width:90px;">
+                        <option value="1" selected>ON</option>
+                        <option value="0">OFF</option>
+                    </select>
+                </div>
                 <div class="param-row">
                     <span class="param-label">RPM <span class="help-icon" data-tip="<strong>Regime motore (RPM)</strong>Giri/minuto a cui calcolare velocit&agrave;, accelerazione e forze inerziali. Usa l'RPM massimo previsto: se F.inerzia &gt; F.molla la valvola galleggia (valve float) → pista pericolosa." tabindex="0">?</span></span>
                     <input type="number" id="rpmInput" value="6000" class="input" style="width:75px;" step="100" min="0">
@@ -2853,6 +2860,78 @@ function findMax(crankArr) {
 //   - 'bicch' → bicchiere piatto Ø (D)
 //   - 'roller'→ rullo di raggio (rRoll)
 //   - 'finger'→ leva con rapporto braccio camma/valvola
+// ---- Correzione BASELINE / ECCENTRICITÀ del cerchio base --------------------
+// Una camma montata leggermente fuori centro (o con runout del cerchio base)
+// aggiunge alla lettura radiale un termine che varia UNA volta per giro:
+// b(θ) = a0 + a1·cosθ + b1·sinθ (DC + 1ª armonica). Lo si stima coi minimi
+// quadrati SUI SOLI punti di cerchio base (alzata sotto soglia, lobo escluso) e
+// lo si sottrae a tutta la curva: il fondo torna a ~0 e il lobo è depurato.
+// Su scansioni già pulite il fit ≈ 0 → no-op. (Es. scarico VW con fondo ~0.21mm.)
+function _det3(m) {
+    return m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+         - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+         + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+}
+function _solve3(M, V) {
+    var d = _det3(M);
+    if (Math.abs(d) < 1e-9) return null;
+    var r = [];
+    for (var k = 0; k < 3; k++) {
+        var Mk = [M[0].slice(), M[1].slice(), M[2].slice()];
+        Mk[0][k] = V[0]; Mk[1][k] = V[1]; Mk[2][k] = V[2];
+        r[k] = _det3(Mk) / d;
+    }
+    return r;
+}
+function removeCamBaseline(raw) {
+    var DEG = Math.PI / 180, i;
+    var out = new Array(361); out[0] = 0;
+    var peak = 0;
+    for (i = 1; i <= 360; i++) { var v = raw[i] || 0; if (v > peak) peak = v; }
+    for (i = 1; i <= 360; i++) out[i] = raw[i] || 0;
+    if (peak <= 0) return out;
+    var thr = Math.max(0.15, 0.05 * peak);   // soglia lobo
+    var MARGIN = 12;                          // gradi: escludi lobo + rampe dal fit
+    var lobe = new Array(361);
+    for (i = 1; i <= 360; i++) lobe[i] = (raw[i] || 0) >= thr;
+    function _nearLobe(idx) {
+        for (var o = -MARGIN; o <= MARGIN; o++) {
+            var j = ((idx + o - 1) % 360 + 360) % 360 + 1;
+            if (lobe[j]) return true;
+        }
+        return false;
+    }
+    var n = 0, Sc = 0, Ss = 0, Scc = 0, Sss = 0, Scs = 0, Sy = 0, Syc = 0, Sys = 0;
+    for (i = 1; i <= 360; i++) {
+        if (_nearLobe(i)) continue;           // salta lobo e rampe (evita bias del fit)
+        var y = raw[i] || 0;
+        var c = Math.cos(i * DEG), s = Math.sin(i * DEG);
+        n++; Sc += c; Ss += s; Scc += c * c; Sss += s * s; Scs += c * s;
+        Sy += y; Syc += y * c; Sys += y * s;
+    }
+    if (n < 30) return out;                   // troppi pochi punti base → non correggo
+    var sol = _solve3([[n, Sc, Ss], [Sc, Scc, Scs], [Ss, Scs, Sss]], [Sy, Syc, Sys]);
+    if (!sol) return out;
+    var a0 = sol[0], a1 = sol[1], b1 = sol[2];
+    var amp = Math.sqrt(a1 * a1 + b1 * b1);   // ampiezza eccentricità (mm)
+    if (amp > (window._lastBaselineAmp || 0)) window._lastBaselineAmp = amp;
+    for (i = 1; i <= 360; i++) {
+        var base = a0 + a1 * Math.cos(i * DEG) + b1 * Math.sin(i * DEG);
+        var cv = (raw[i] || 0) - base;
+        out[i] = cv > 0 ? cv : 0;
+    }
+    return out;
+}
+// Vero se la correzione baseline è attiva (default ON).
+function baselineEnabled() {
+    var el = document.getElementById('baselineCorrect');
+    return !el || el.value !== '0';
+}
+// Restituisce il grezzo da usare in analisi: con correzione baseline se attiva.
+function analysisRaw(raw) {
+    return baselineEnabled() ? removeCamBaseline(raw) : raw.slice();
+}
+
 function applyVirtualFollower(camLift, side) {
     var t = document.getElementById('followerType').value;
     if (!t || t === 'punt') return camLift;
@@ -3002,9 +3081,12 @@ function saveProfileToArchive() {
         if (!tag) return b + '.scr';
         return (/_alz$/.test(b) ? b.replace(/_alz$/, '_' + tag + '_alz') : b + '_' + tag) + '.scr';
     }
+    // grezzo (punt) → salva il dato come misurato; convertito → applica baseline
+    // (se attiva) + follower, coerente con ciò che mostra l'analisi.
+    function curveFor(rawX, side) { return conv ? applyVirtualFollower(analysisRaw(rawX), side) : rawX.slice(); }
     var jobs = [];
-    if (intakeLoaded)  jobs.push({ name: nameFor(intakeFileBase),  body: buildContent(applyVirtualFollower(rawIntake.slice(),  'intake')) });
-    if (exhaustLoaded) jobs.push({ name: nameFor(exhaustFileBase), body: buildContent(applyVirtualFollower(rawExhaust.slice(), 'exhaust')) });
+    if (intakeLoaded)  jobs.push({ name: nameFor(intakeFileBase),  body: buildContent(curveFor(rawIntake,  'intake')) });
+    if (exhaustLoaded) jobs.push({ name: nameFor(exhaustFileBase), body: buildContent(curveFor(rawExhaust, 'exhaust')) });
     Promise.all(jobs.map(function (j) {
         return fetch('/api/file/' + encodeURIComponent(j.name), { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: j.body })
             .then(function (r) { return r.json(); })
@@ -3453,13 +3535,21 @@ function analyze() {
     // parametro e ri-analizzare ha effetto senza dover re-importare i file.
     // folIntake/folExhaust = profilo gradi-camma post-follower (pre-gioco),
     // usato per l'alzata al PMS riferita al picco misurato.
+    window._lastBaselineAmp = 0;   // ricalcolata da removeCamBaseline (max dei due lati)
     if (rawIntake && rawIntake.length) {
-        folIntake   = applyVirtualFollower(rawIntake.slice(), 'intake');
+        folIntake   = applyVirtualFollower(analysisRaw(rawIntake), 'intake');
         crankIntake = mapCamToCrank(folIntake, intakeAng, intakeClear, 'intake');
     }
     if (rawExhaust && rawExhaust.length) {
-        folExhaust   = applyVirtualFollower(rawExhaust.slice(), 'exhaust');
+        folExhaust   = applyVirtualFollower(analysisRaw(rawExhaust), 'exhaust');
         crankExhaust = mapCamToCrank(folExhaust, exhaustAng, exhaustClear, 'exhaust');
+    }
+    // Avviso (una volta) se la correzione baseline ha tolto un'eccentricità reale
+    if (baselineEnabled() && window._lastBaselineAmp > 0.05 && window.cammesToast && !window._baselineToastShown) {
+        window._baselineToastShown = true;
+        window.cammesToast({ kind: 'info', title: 'Baseline corretta',
+            body: 'Rimossa un\'ondulazione di base ~&plusmn;' + window._lastBaselineAmp.toFixed(2) + ' mm (probabile eccentricit&agrave;/runout di montaggio). Disattivabile con "Corr. baseline = OFF".',
+            duration: 6500 });
     }
 
     // Apply rocker arm ratio for analysis

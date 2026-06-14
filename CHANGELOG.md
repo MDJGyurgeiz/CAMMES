@@ -859,3 +859,32 @@ morti/vestigiali confermati. Nessun cambiamento funzionale.
 - alzata: `insert`/`update` assenti, `reset` presente, pagina ok.
 - polare: Salva = `type=button`, nessun form-owner, `sav()` definita.
 - 0 errori console su tutte e tre. Regressioni test_followers 13/13, 3dof/surge/clio/vw verdi.
+
+---
+
+## Sotto-sessione 6.15 — 2026-06-14 — Correzione baseline / eccentricità (bonifica acquisizione b)
+### Tag: **v2.11.0**
+
+Prima delle due "bonifiche acquisizione". Lo scarico VW ha un fondo di cerchio base che
+non torna a 0 (~0,21 mm, variabile lungo il giro): firma di camma montata fuori centro /
+runout. Non è un offset costante → non si sottrae una costante.
+
+- **`removeCamBaseline()`** (analisi.html): stima la baseline come **DC + 1ª armonica**
+  `a0 + a1·cosθ + b1·sinθ` (minimi quadrati, sistema 3×3 via Cramer) sui **soli punti di
+  cerchio base** — il lobo e le sue rampe sono esclusi con un margine di ±12° per non
+  falsare il fit — e la sottrae a tutta la curva (clamp ≥0). Su scansioni pulite il fit ≈ 0
+  → no-op. Toggle **Corr. baseline ON/OFF** (default ON, sezione avanzata).
+- Cablata in `analyze()` (via `analysisRaw()`, prima della conversione follower) e nel
+  **salva convertito** (la curva esportata riflette la correzione). Il **salva grezzo**
+  resta il dato come misurato. Avviso una‑tantum se rimuove un'eccentricità > 0,05 mm.
+- **`tools/test_baseline.js`** (nuovo): camma pulita → no-op esatto (Δ 0.0000, picco
+  preservato); camma + 0,25·cosθ → base→0 e profilo recuperato esattamente, eccentricità
+  stimata 0,250; **file VW scarico reale → base 0,220 → 0,048 mm**, picco 10,50 → 10,46.
+
+### Verifica (browser + node)
+- Node: test_baseline tutti verdi + regressioni test_followers 13/13, 3dof/surge/clio/vw invariate.
+- Browser: toggle presente; con ON l'alzata al PMS scarico cambia (1,706 → 1,829 mm:
+  correzione applicata), eccentricità stimata ~0,08 mm, 0 errori console.
+
+Nota: questa è la bonifica **(b)**. La **(a)** — indicizzare il profilo sull'encoder invece
+che sugli step — è lato acquisizione live e va validata al banco (vedi prossima voce).
