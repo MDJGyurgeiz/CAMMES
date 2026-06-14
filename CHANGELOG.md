@@ -888,3 +888,39 @@ runout. Non è un offset costante → non si sottrae una costante.
 
 Nota: questa è la bonifica **(b)**. La **(a)** — indicizzare il profilo sull'encoder invece
 che sugli step — è lato acquisizione live e va validata al banco (vedi prossima voce).
+
+---
+
+## Sotto-sessione 6.16 — 2026-06-14 — Indicizzazione su encoder (bonifica acquisizione a)
+### Tag: **v2.12.0**
+
+Seconda bonifica. Oggi il profilo viene indicizzato sui **passi** del motore
+(`deg = floor((i-1)/subStepsPerDeg)+1`, alzata.html); l'encoder reale (4 conteggi/°) è letto
+ma usato solo per zero-virtuale e allarme slittamento. Se lo stepper slitta sotto carico
+(molla del tastatore sui fianchi) i passi non corrispondono alla rotazione vera → profilo
+deformato.
+
+- **Selettore "Sorgente angolo: Passi (default) / Encoder"** in alzata.html. Default **Passi**
+  (comportamento storico, noto-buono): l'encoder è opt-in finché non validato al banco.
+- **`pdEncoder[]`**: durante la scansione si memorizza il conteggio encoder per grado
+  (accanto a `pdata`), resettato a ogni run.
+- **`reindexByEncoder(pd, pdEnc)`**: al salvataggio, se Sorgente=Encoder, re-indicizza il
+  profilo sulla posizione reale — riferisce il conteggio al primo campione (offset libero),
+  ricava la direzione dal segno dello span, aggrega per grado-encoder e interpola i buchi.
+  **Fallback automatico ai passi** (ritorna null) se i dati encoder sono insufficienti
+  (assenti / span < 360 cnt / troppi buchi). Riporta la divergenza max passi↔encoder.
+- `sav()`: usa il profilo re-indicizzato quando disponibile, con toast esplicito (indicizzato
+  su encoder + divergenza, oppure "encoder non disponibile → salvato sui passi").
+
+- **`tools/test_encoder_reindex.js`** (nuovo): encoder lineare → identità (Δ 0.0000);
+  offset costante → invariato; direzione invertita → identità; slittamento (scala 0.95) →
+  output valido, picco preservato, divergenza 18°; nessun encoder → null (fallback passi).
+
+### Verifica e limiti
+- Node: test_encoder_reindex tutti verdi + regressioni invariate (baseline/followers/3dof/surge/clio/vw).
+- Browser: selettore presente (default Passi), funzioni cablate, identità esatta in-pagina,
+  fallback null, 0 errori console.
+- **Limite onesto**: la *logica* di re-indicizzazione è testata, ma l'integrazione live
+  (Arduino + encoder + camma che gira) **non è validabile senza il banco**. Per questo il
+  default resta Passi: alla prima scansione reale con Sorgente=Encoder, confrontare il
+  profilo coi passi prima di adottarlo stabilmente.

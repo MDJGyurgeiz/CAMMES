@@ -114,6 +114,15 @@
                 <span class="help-icon" data-tip="<strong>Anti-vibrazione</strong><b>Scattoso</b>: comportamento originale, max velocit&agrave;. Vibra a basse RPM.<br><b>Standard</b>: rampa accelerazione 4 step, +60% tempo, vibrazioni dimezzate. Consigliato per acquisizione.<br><b>Morbido</b>: rampa 8 step + pulse 120μs. Per camme delicate o sistemi rigidi che propagano risonanze.<br><b>Extra-morbido</b>: rampa 16 step + pulse 180μs. Per cogliere ogni dettaglio metrologico, sacrifica velocit&agrave;." tabindex="0">?</span>
             </div>
 
+            <div class="controls-group">
+                <span class="toggle-label">Sorgente angolo</span>
+                <select id="angleSource" class="input" style="width:175px;" data-tip="<strong>Sorgente dell'asse angolare</strong><b>Passi</b> (default): l'angolo deriva dai passi comandati al motore (comportamento storico).<br><b>Encoder</b>: al salvataggio il profilo viene re-indicizzato sulla posizione REALE letta dall'encoder, immune a slittamento dello stepper e a errori di passi/grado. In mancanza di dati encoder torna automaticamente ai passi.">
+                    <option value="step" selected>Passi motore (default)</option>
+                    <option value="encoder">Encoder (reale)</option>
+                </select>
+                <span class="help-icon" data-tip="<strong>Encoder vs Passi</strong>Se lo stepper slitta sotto carico (molla del tastatore sui fianchi ripidi), i passi non corrispondono pi&ugrave; alla rotazione vera della camma e il profilo si deforma. L'indicizzazione su <b>encoder</b> ancora ogni punto a dove la camma &egrave; davvero. <b>Verifica una scansione al banco</b> la prima volta prima di adottarlo stabilmente." tabindex="0">?</span>
+            </div>
+
             <div class="separator"></div>
 
             <form name="mas">
@@ -241,6 +250,7 @@ var max = 0;
 var k = 0;
 var pdata = new Array();
 var pdindex = new Array();
+var pdEncoder = new Array();   // conteggio encoder cumulativo per grado (re-indicizzazione encoder)
 var msg = "";
 var startflag = 0;
 var stepflag = 0;
@@ -547,6 +557,7 @@ var _engineOnMessage = function(event) {
                     pdata[deg]   = sum / subBuffer[deg].length;
                 }
             }
+            if (msgEncoder !== null) pdEncoder[deg] = msgEncoder;   // encoder reale per questo grado
 
             // Tracking massimo (su valore corrente del bin, anche se non ancora chiuso)
             var currentBinVal = (currentMode.subStepsPerDeg <= 1) ? pdata[deg]
@@ -835,7 +846,7 @@ function _startSingleRun(firstRun) {
     i = 0;
     consecutiveNaN = 0;
     subBuffer = {};
-    pdata.length = 0; pdindex.length = 0;
+    pdata.length = 0; pdindex.length = 0; pdEncoder.length = 0;
     max = 0; maxg = 0; maxg_encoder = null;
     // Reset controllo divergenza stepper↔encoder per questo run
     _encChkBaseI = 0; _encChkBaseCount = null; _encAlarmed = false;
@@ -974,6 +985,55 @@ function reset() {
 
 <script>
 var stringa = "";
+// Vero se l'utente ha scelto di indicizzare il profilo sull'encoder reale.
+function angleSourceEncoder() {
+    var el = document.getElementById('angleSource');
+    return !!el && el.value === 'encoder';
+}
+
+// Re-indicizza il profilo (alzata per grado-passo) sulla posizione REALE letta
+// dall'encoder (4 conteggi/° camma). Immune a slittamento dello stepper e a
+// errori di passi/grado. Ritorna un nuovo array [1..360] oppure null (→ il
+// chiamante tiene il profilo a passi) se i dati encoder sono insufficienti.
+//   - riferisce il conteggio al primo campione valido (offset libero)
+//   - ricava direzione dal segno dello span
+//   - aggrega i campioni per grado-encoder e interpola eventuali buchi
+function reindexByEncoder(pd, pdEnc) {
+    var COUNTS_PER_DEG = 4, i;
+    var first = -1, last = -1;
+    for (i = 1; i <= 360; i++) { if (typeof pdEnc[i] === 'number' && !isNaN(pdEnc[i])) { if (first < 0) first = i; last = i; } }
+    if (first < 0 || first === last) return null;
+    var E0 = pdEnc[first], span = pdEnc[last] - E0;
+    if (Math.abs(span) < 360) return null;            // atteso ~1440 cnt/giro; troppo piccolo → sospetto
+    var sign = span >= 0 ? 1 : -1;
+    var acc = new Array(361), cnt = new Array(361);
+    for (i = 1; i <= 360; i++) { acc[i] = 0; cnt[i] = 0; }
+    var maxDiv = 0;
+    for (i = 1; i <= 360; i++) {
+        if (typeof pdEnc[i] !== 'number' || isNaN(pdEnc[i])) continue;
+        var v = pd[i]; if (typeof v !== 'number' || isNaN(v)) continue;
+        var deg = ((Math.round((pdEnc[i] - E0) * sign / COUNTS_PER_DEG)) % 360 + 360) % 360 + 1;
+        acc[deg] += v; cnt[deg]++;
+        var dv = Math.abs(deg - i); if (dv > 180) dv = 360 - dv; if (dv > maxDiv) maxDiv = dv;
+    }
+    var out = new Array(361); out[0] = 0;
+    var have = 0;
+    for (i = 1; i <= 360; i++) { if (cnt[i] > 0) { out[i] = acc[i] / cnt[i]; have++; } else out[i] = null; }
+    if (have < 180) return null;                      // troppi buchi → non affidabile
+    for (i = 1; i <= 360; i++) {                       // interpola i buchi (lineare, circolare)
+        if (out[i] !== null) continue;
+        var pv = null, qv = null, pd2 = 0, qd = 0, s;
+        for (s = 1; s <= 360; s++) { var pi = ((i - s - 1) % 360 + 360) % 360 + 1; if (out[pi] !== null) { pv = out[pi]; pd2 = s; break; } }
+        for (s = 1; s <= 360; s++) { var qi = ((i + s - 1) % 360 + 360) % 360 + 1; if (out[qi] !== null) { qv = out[qi]; qd = s; break; } }
+        if (pv === null && qv === null) out[i] = 0;
+        else if (pv === null) out[i] = qv;
+        else if (qv === null) out[i] = pv;
+        else out[i] = pv + (qv - pv) * pd2 / (pd2 + qd);
+    }
+    window._encReindexDivergence = maxDiv;
+    return out;
+}
+
 function sav() {
     var nameEl = document.getElementById("nome");
     var rawName = (nameEl && nameEl.value || '').trim();
@@ -988,15 +1048,30 @@ function sav() {
     }
     // Sanifica nome (no spazi/caratteri non sicuri per filesystem)
     var safeName = rawName.replace(/[^A-Za-z0-9_\-]/g, '_');
+    // Sorgente angolo: se 'encoder', re-indicizza il profilo sulla posizione
+    // reale (fallback automatico ai passi se i dati encoder sono insufficienti).
+    var wantEnc = angleSourceEncoder();
+    var reEnc = wantEnc ? reindexByEncoder(pdata, pdEncoder) : null;
+    var saveData = reEnc || pdata;
+    var nMax = reEnc ? 360 : (pdindex.length - 1);
     stringa = "";
-    for (t = 1; t < pdindex.length; t++) {
-        stringa = stringa + pdindex[t] + "," + pdata[t] + "\r\n";
+    for (t = 1; t <= nMax; t++) {
+        var idx = reEnc ? t : pdindex[t];
+        stringa = stringa + idx + "," + saveData[t] + "\r\n";
     }
     var fname = safeName + "_alz";
     var stringa2 = "*" + fname + "*" + "_pline" + "\r\n" + stringa;
     sendSocket.send(stringa2);
     document.salva.salva.value = " file salvato";
-    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'File salvato', body: fname + '.scr in cartella prove/.', duration: 4000 });
+    if (window.cammesToast) {
+        if (wantEnc && !reEnc) {
+            window.cammesToast({ kind: 'warn', title: 'Encoder non disponibile', body: 'Dati encoder insufficienti per la re-indicizzazione: salvato sui <b>passi motore</b>.', duration: 5500 });
+        } else if (reEnc) {
+            window.cammesToast({ kind: 'info', title: 'Indicizzato su encoder', body: fname + '.scr salvato (ancorato alla posizione reale; divergenza max dai passi: ' + (window._encReindexDivergence || 0).toFixed(1) + '&deg;).', duration: 5500 });
+        } else {
+            window.cammesToast({ kind: 'success', title: 'File salvato', body: fname + '.scr in cartella prove/.', duration: 4000 });
+        }
+    }
 }
 </script>
 
