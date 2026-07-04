@@ -1014,3 +1014,21 @@ web monolitico, consegna rotta. Piano in 4 fasi approvato dall'utente.
   10/10 registrati, picco tracciato, pdEncoder riempito, completamento e chiusura ok),
   0 errori console. **Validazione live al banco richiesta prima di adottarlo** (per
   questo il default resta Browser).
+
+### Fase 4 — Consegna da prodotto · Tag: **v3.0.0**
+- **Hot-plug seriale** (cammes_server.js): se all'avvio non c'è l'Arduino, il server
+  ricontrolla le porte ogni 5 s finché non compare — si può avviare l'exe PRIMA di
+  collegare l'USB, senza riavvii. Retry anche su errori di apertura/list.
+- **Badge versione** su ogni pagina (basso a destra, `CAMMES v3.0.0` via cammes-ui.js,
+  `window.CAMMES_VERSION`): in assistenza si sa subito quale build gira.
+- **README riscritto** (era fermo a marzo: citava serve.js/gauge.min.js/charts/ rimossi):
+  architettura v3, struttura reale, protocollo aggiornato (S/x/v), pagine, quickstart,
+  qualità/test, **Android marcato SPERIMENTALE** (fermo alla UI v1).
+- **MANUALE_OPERATORE.md** (1 pagina): avvio, misura, analisi, problemi frequenti, backup.
+- **Build exe riproducibile**: `pkg` pinnato in devDependencies; `cammes.exe` ricompilato
+  dal sorgente v3 (38,5 MB, node18-win-x64) → `CAMMES_DIST/cammes.exe` (il vecchio exe di
+  marzo salvato come `cammes_v1_backup.exe`). NOTA: su questo PC una policy di controllo
+  applicazioni (WDAC) blocca l'esecuzione di exe nuovi non firmati → smoke test runtime
+  da fare sul PC d'officina; il codice impacchettato è lo stesso verificato via node.
+- **GitHub Release v3.0.0** con `cammes.exe` allegato (i binari non stanno nel repo:
+  `.gitignore` esclude *.exe/*.apk).

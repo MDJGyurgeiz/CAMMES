@@ -451,8 +451,26 @@ function initSerial() {
     }
 }
 
+// HOT-PLUG: se all'avvio non c'è nessun Arduino (o l'apertura fallisce),
+// riprova ogni 5 s finché non compare. Così si può avviare il programma
+// PRIMA di collegare l'USB, senza dover riavviare.
+var _serialRetryTimer = null;
+var _serialRetryLogged = false;
+function scheduleSerialRetry() {
+    if (_serialRetryTimer) return;
+    if (!_serialRetryLogged) {
+        log('SERIAL', 'In attesa di un Arduino: ricontrollo le porte ogni 5s (hot-plug)');
+        _serialRetryLogged = true;
+    }
+    _serialRetryTimer = setTimeout(function () {
+        _serialRetryTimer = null;
+        if (!serialPort) autoDetectSerial();
+    }, 5000);
+}
+
 function autoDetectSerial() {
     if (!SerialPort) return;
+    if (serialPort) return;   // già connessi
 
     // Usa il metodo list() per trovare le porte
     var listFn = SerialPort.list;
@@ -463,7 +481,7 @@ function autoDetectSerial() {
 
     listFn().then(function (ports) {
         if (ports.length === 0) {
-            log('SERIAL', 'Nessuna porta COM trovata - modalita\' demo');
+            scheduleSerialRetry();
             return;
         }
 
@@ -492,9 +510,12 @@ function autoDetectSerial() {
 
         if (arduinoPort) {
             openSerialPort(arduinoPort);
+        } else {
+            scheduleSerialRetry();
         }
     }).catch(function (err) {
         log.error('SERIAL', 'Errore elencando porte: ' + err.message);
+        scheduleSerialRetry();
     });
 }
 
@@ -525,6 +546,7 @@ function openSerialPort(comPort) {
 
         serialPort.on('open', function () {
             log('SERIAL', 'Connesso a ' + comPort + ' @ ' + SERIAL_BAUD + ' baud');
+            _serialRetryLogged = false;   // prossima attesa hot-plug loggata di nuovo
         });
 
         serialPort.on('data', function (data) {
@@ -564,6 +586,8 @@ function openSerialPort(comPort) {
 
     } catch (err) {
         log.error('SERIAL', 'Errore apertura porta ' + comPort + ': ' + err.message);
+        serialPort = null;
+        scheduleSerialRetry();
     }
 }
 

@@ -1,238 +1,143 @@
-# CAMMES - Sistema di Misura Profili Alberi a Camme
+# CAMMES — Sistema di Misura Profili Alberi a Camme
 
-Sistema completo per la misurazione e l'analisi dei profili degli alberi a camme per motori. Comprende hardware (Arduino), software PC (server Node.js + interfaccia web) e app Android.
+Sistema completo per misurare e analizzare i profili degli alberi a camme: hardware (Arduino Uno + stepper + encoder + comparatore), server PC (Node.js, distribuito come `.exe` standalone offline) e interfaccia web.
 
-> **Architettura corrente (dal 2026-05-03)**: singolo Arduino Uno + driver stepper esterno opto-isolato + encoder rotativo LDP3806 sull'albero camme + comparatore Neoteck via LM339N. La vecchia configurazione a 2 Arduino (master + sensore via SPI) è stata sostituita; lo sketch dismesso vive in `legacy/micrometro_SPI/`.
+**Versione corrente: v3.0.0** — la versione in esecuzione è mostrata in basso a destra in ogni pagina.
+
+> Per l'uso quotidiano in officina vedi **[MANUALE_OPERATORE.md](MANUALE_OPERATORE.md)** (1 pagina).
 
 ---
 
-## Architettura del Sistema
+## Architettura
 
 ```
-                                          ┌─────────────────────┐
-                                          │   Browser / WebView  │
-                                          │  (HTML + Chart.js)   │
-                                          └─────────┬───────────┘
-                                                    │
-                              ┌─────────────────────┼─────────────────────┐
-                              │                     │                     │
-                     ┌────────┴────────┐   ┌────────┴────────┐   ┌───────┴────────┐
-                     │   PC (Windows)   │   │  App Android     │   │  Analisi       │
-                     │  cammes_server   │   │  USB OTG Serial  │   │  (standalone)  │
-                     │  HTTP + WS + RS  │   │  WebView bridge  │   │  import .scr   │
-                     └────────┬────────┘   └────────┬────────┘   └────────────────┘
-                              │                     │
-                         USB seriale           USB OTG
-                              │                     │
-                     ┌────────┴────────────────────┴────────┐
-                     │          Arduino Uno (unico)           │
-                     │  Stepper esterno opto-isolato         │
-                     │  + encoder LDP3806 (1:1 albero camme) │
-                     │  + comparatore Neoteck via LM339N     │
-                     └───────────────────────────────────────┘
+      ┌───────────────────────────┐
+      │    Browser (HTML+JS)      │   5 pagine: Home · Alzata · Polare ·
+      │  Chart.js v4, no framework│   Confronto · Analisi
+      └────────────┬──────────────┘
+                   │ HTTP :3000  +  WebSocket :8080
+      ┌────────────┴──────────────┐
+      │  cammes_server.js (.exe)  │   statico + bridge WS↔seriale + archivio prove/
+      └────────────┬──────────────┘
+                   │ USB seriale 9600 baud (hot-plug: riconnessione automatica)
+      ┌────────────┴──────────────┐
+      │      Arduino Uno (v3)     │   stepper via driver opto-isolato (TB6600/DM542)
+      │                           │   encoder LDP3806 1:1 camme (1440 cnt/giro)
+      │                           │   comparatore Neoteck via LM339N
+      └───────────────────────────┘
 ```
 
 ---
 
-## Struttura del Progetto
+## Struttura del progetto
 
 ```
 CAMMES/
-│
-├── cammes/                          # App web (frontend + server)
-│   ├── cammes_server.js             #   Server unificato HTTP + WebSocket + Seriale
-│   ├── cammes.exe                   #   Server compilato (pkg, Node 18)
-│   ├── alzata.html                  #   Pagina misura alzata (gauge + grafico live)
-│   ├── polare.html                  #   Pagina diagramma polare
-│   ├── grafici.html                 #   Pagina grafici e tabella dati
-│   ├── analisi.html                 #   Analisi cinematica (vel, acc, jerk, snap)
-│   ├── style.css                    #   Design system dark theme
-│   ├── serve.js                     #   Server HTTP statico per sviluppo
-│   ├── gauge.min.js                 #   Libreria gauge circolare
-│   ├── Chart.bundle.js              #   Chart.js (grafici)
-│   ├── Chart.min.js                 #   Chart.js minificato
-│   ├── responsivevoice.js           #   Sintesi vocale (annunci misura)
-│   ├── charts/                      #   Chart.js sorgenti + jQuery
-│   ├── images/                      #   Icone UI (start, stop, piu, meno, ecc.)
-│   ├── prove/                       #   File demo profili camme (.scr)
-│   │   ├── fiat_fca_asp_alz.scr     #     Fiat FCA aspirazione - alzata
-│   │   ├── fiat_fca_sc_alz.scr      #     Fiat FCA scarico - alzata
-│   │   ├── 305_asp_alz.scr          #     Peugeot 305 aspirazione - alzata
-│   │   └── 305_asp_pol.scr          #     Peugeot 305 aspirazione - polare
-│   └── package.json                 #   Dipendenze: ws, serialport
-│
-├── master/                          # Sketch Arduino unificato (1 Uno)
-│   └── master.ino                   #   Stepper esterno + encoder LDP3806 +
-│                                    #   sensore Neoteck + UART seriale
-│
-├── legacy/                          # Materiale architettura precedente
-│   ├── README.md                    #   Note legacy
-│   └── micrometro_SPI/              #   Vecchio sketch del 2° Arduino (SPI)
-│       └── micrometro_SPI.ino       #   Bit-banging 24-bit, FALLING, SPI master
-│
-├── cammes-android/                  # App Android (WebView + USB Serial)
-│   ├── app/src/main/
-│   │   ├── kotlin/com/cammes/app/
-│   │   │   ├── MainActivity.kt      #     WebView + JavascriptInterface bridge
-│   │   │   └── UsbSerialManager.kt  #     USB OTG serial (CH340/FTDI/CP2102)
-│   │   ├── assets/                  #     Copia file web per uso offline
-│   │   ├── res/                     #     Layout, icone, temi, filtri USB
-│   │   └── AndroidManifest.xml      #     USB host, permessi
-│   ├── build.gradle.kts             #   Config build (SDK 34, minSdk 21)
-│   ├── settings.gradle.kts          #   Repositories (jitpack per usb-serial)
-│   └── gradlew.bat                  #   Wrapper Gradle
-│
-├── CAMMES_DIST/                     # Distribuzione Windows
-│   └── cammes.exe                   #   Eseguibile standalone (Node 18 + pkg)
-│
-├── CAMMES.apk                       # APK Android pronto da installare
-├── CHANGELOG.md                     # Log dettagliato di tutte le sessioni
-├── camme-analisi_rev8.5.xlsm        # Foglio Excel analisi (VBA, legacy)
-├── package-lock.json                # Lock dipendenze Node.js
-├── salva.bat                        # Doppio click = commit + push su GitHub
-├── aggiorna.bat                     # Doppio click = pull da GitHub
-└── README.md                        # Questo file
+├── cammes/                       # App web + server
+│   ├── cammes_server.js          #   server HTTP + WebSocket + seriale (hot-plug)
+│   ├── home.html                 #   dashboard: archivio misure, tag, preferiti, backup
+│   ├── alzata.html               #   acquisizione alzata (scan classico o autonomo v3)
+│   ├── polare.html               #   acquisizione diagramma polare
+│   ├── grafici.html              #   confronto fino a 4 profili (sovrapposto/differenza)
+│   ├── analisi.html              #   analisi camme: timing, follower virtuale, dinamica
+│   ├── cammes-ui.js              #   modulo condiviso UI (tema, toast, gauge, tour, versione)
+│   ├── cammes-scan.js            #   modulo condiviso acquisizione (WS, reconnect, jog)
+│   ├── lib/cammes-math.js        #   LIBRERIA MATEMATICA (usata da browser E test node)
+│   ├── lib/                      #   Chart.js v4, plugin zoom, hammer
+│   ├── tools/                    #   test regressione + validazioni (npm test)
+│   ├── prove/                    #   archivio misure .scr (demo + reali)
+│   └── package.json              #   deps: ws, serialport · dev: eslint, pkg
+├── master/master.ino             # firmware unificato v3 (1 Arduino Uno)
+├── legacy/                       # vecchia architettura 2-Arduino (dismessa)
+├── cammes-android/               # app Android — SPERIMENTALE, non allineata (v1, marzo)
+├── CAMMES_DIST/cammes.exe        # eseguibile standalone (build locale)
+├── CHANGELOG.md                  # storia completa del progetto
+├── salva.bat / aggiorna.bat      # push / pull GitHub
+└── README.md
 ```
 
 ---
 
-## Pagine Web
+## Pagine web
 
-| Pagina | Descrizione | Arduino richiesto |
-|--------|------------|:-:|
-| **Alzata** | Misura alzata camme in tempo reale. Gauge circolare, grafico lineare 0-360 gradi, controllo stepper, rotazione manuale. | Si |
-| **Polare** | Diagramma polare della camme. Visualizzazione radiale del profilo. | Si |
-| **Grafici** | Grafici e tabella dati delle misure effettuate. | Si |
-| **Analisi** | Analisi cinematica offline: importa file .scr e calcola velocita, accelerazione, jerk, snap. Filtro Savitzky-Golay configurabile. | No |
+| Pagina | Descrizione | Arduino |
+|--------|-------------|:-:|
+| **Home** | Archivio misure con ricerca, tag, preferiti, quick-view, backup/restore ZIP | No |
+| **Alzata** | Acquisizione profilo 0–360°: gauge live, modalità Veloce→Atomic, run ripetuti con statistiche, zero virtuale, sorgente angolo Passi/Encoder, motore scansione Browser/Firmware | Sì |
+| **Polare** | Acquisizione diagramma polare | Sì |
+| **Confronto** | Fino a 4 profili sovrapposti o in differenza (max/media/RMSE), replay animato | No |
+| **Analisi** | Correlazione asp/scarico (durate, LSA, aperture/chiusure, alzata al PMS), follower virtuale (bicchiere Ø/rullo/finger), correzione baseline/eccentricità, cinematica, molla & forze, compliance 1/2/3-DOF, surge, strumenti race, export PDF/CSV, salva profilo (grezzo o convertito). Le funzioni extra si attivano dal pannello **⚙ Funzioni** | No |
 
 ---
 
 ## Hardware
 
-### Componenti
-- **Arduino Uno** - Controller unico (stepper + sensore + encoder)
-- **Driver stepper esterno opto-isolato** (es. TB6600/DM542 — 6 morsetti PUL±/DIR±/ENA±). Configurazione **common-anode**: 5V Arduino su PUL+/DIR+/ENA+; GND alimentazione 36V NON in comune con GND Arduino (giusto, è isolato dagli optocoupler).
-- **Stepper NEMA 17** - Rotazione albero a camme (32 step/grado = 11.520 step/giro)
-- **Encoder rotativo LDP3806-360BM-G5-24C** - 360 PPR, montato 1:1 sull'albero camme. Decoding x4 → 1440 conteggi/giro = 0.25°/conteggio. Output NPN open-collector, richiede pull-up 4.7 kΩ a +5V su entrambi i canali A e B.
-- **Comparatore Neoteck** (0-25.4 mm) - Sensore alzata
-- **Op-amp LM339N** - Interfaccia comparatore-Arduino
+- **Arduino Uno** — controller unico (firmware `master/master.ino` v3)
+- **Driver stepper opto-isolato** (TB6600/DM542, common-anode: 5V su PUL+/DIR+/ENA+; GND 36V separato dal GND Arduino)
+- **NEMA 17** — 32 micropassi = 1° camma (11.520 step/giro, riduzione inclusa)
+- **Encoder LDP3806-360BM** — 360 PPR ×4 = 1440 cnt/giro, 1:1 sull'albero camme, pull-up 4.7 kΩ su A e B
+- **Comparatore Neoteck** 0–25,4 mm via **LM339N**
 
-### Pinout Arduino Uno
+### Pinout
 
-| Pin | Direzione | Collegato a | Funzione |
-|-----|-----------|-------------|----------|
-| **D2** (INT0) | IN | LM339N pin 2 | Clock impulsi sensore (FALLING) |
-| **D4** | IN | LM339N pin 14 | DATA bit sensore |
-| **D3** (INT1) | IN | encoder A (verde) + pull-up 4.7kΩ→5V | Canale A encoder |
-| **D8** (PCINT0) | IN | encoder B (bianco) + pull-up 4.7kΩ→5V | Canale B encoder |
-| **D7** | OUT | driver stepper PUL− | Impulso passo (pin storico) |
-| **D6** | OUT | driver stepper DIR− | Direzione (pin storico) |
-| **D5** | OUT | driver stepper ENA− | Enable driver (pin storico) |
-| **D0/D1** | UART | USB → PC | Seriale 9600 baud |
-| **5V** | — | rosso encoder + LM339N + Neoteck + PUL+/DIR+/ENA+ del driver | Alimentazione logica |
-| **GND** | — | nero encoder + shield + GND logico (NON al GND 36V motore) | Massa logica |
+| Pin | Dir | Collegato a | Funzione |
+|-----|-----|-------------|----------|
+| D2 (INT0) | IN | LM339N | clock impulsi sensore (FALLING) |
+| D4 | IN | LM339N | bit DATA sensore |
+| D3 (INT1) | IN | encoder A + pull-up | canale A |
+| D8 (PCINT0) | IN | encoder B + pull-up | canale B |
+| D7 / D6 / D5 | OUT | PUL− / DIR− / ENA− | stepper |
+| D0/D1 | UART | USB → PC | seriale 9600 baud |
 
-### Protocollo Seriale (9600 baud)
+### Protocollo seriale (9600 baud) — principali
 
 | Comando | Direzione | Descrizione |
 |---------|-----------|-------------|
-| `p` | PC → Arduino | Rotazione 1° antiorario + emette misura |
-| `q` | PC → Arduino | Rotazione 1° orario + emette misura |
-| `$+NNN` | PC → Arduino | Rotazione manuale oraria (NNN gradi) |
-| `$-NNN` | PC → Arduino | Rotazione manuale antioraria (NNN gradi) |
-| `?` | PC → Arduino | Query encoder: stampa conteggio + gradi |
-| `!` | PC → Arduino | Reset zero encoder |
-| `XX.XX\n*se` | Arduino → PC | Misura alzata in mm + terminatore |
-| `encoder=NNN deg=XX.XX\n*pos` | Arduino → PC | Risposta a `?` |
-| `*zero` | Arduino → PC | Conferma reset encoder |
+| `p` / `q` | PC→Uno | 1 unità di rotazione (∓) + misura → `X.XX N` + `*se` |
+| `S±NNNNN` | PC→Uno | **Scan autonomo (v3)**: l'Uno esegue N unità da solo, settle adattivo, streaming `#i:enc:mm`, fine `*sdone` |
+| `x` | PC→Uno | Abort scan autonomo → `*sabort` |
+| `$±NNN` | PC→Uno | Rotazione manuale → `*mv` |
+| `m` | PC→Uno | Solo misura → `*sm` |
+| `?` / `!` | PC→Uno | Query encoder (`encoder=N deg=…` + `*pos`) / reset zero |
+| `v` | PC→Uno | Versione/capacità → `ver=3.0 scan=1` + `*ver` |
+| `cN rN wN uN aN gN kN` | PC→Uno | Config: campioni, µpassi, settle, pulse, rampa, preset |
+| `f` / `l` | PC→Uno | Motore libero / bloccato |
 
 ---
 
-## Installazione e Utilizzo
+## Installazione e utilizzo
 
-### Prerequisiti PC
-- **Node.js** v10+ (per `npm install` e sviluppo)
-- Oppure usare direttamente `CAMMES_DIST/cammes.exe` (nessuna dipendenza)
+### PC Windows (consigliato)
+Scarica `cammes.exe` dall'ultima **GitHub Release** (o usa `CAMMES_DIST\cammes.exe`) e avvialo: si apre il browser su `http://localhost:3000`. Nessuna installazione. L'Arduino può essere collegato anche **dopo** l'avvio (hot-plug).
 
-### Avvio rapido (Windows)
+### Da sorgente
 ```batch
-:: Metodo 1: Eseguibile standalone
-CAMMES_DIST\cammes.exe
-
-:: Metodo 2: Da sorgente
 cd cammes
 npm install
-npm start
-```
-Si apre automaticamente il browser su `http://localhost:3000` (HTTP statico). Il server espone anche un WebSocket su `ws://localhost:8080` per il bridge seriale Arduino.
-
-### App Android
-1. Copiare `CAMMES.apk` sul telefono
-2. Installare (abilitare "Origini sconosciute" se richiesto)
-3. Collegare Arduino via cavo USB OTG (USB-C → USB-A)
-4. L'app riconosce automaticamente Arduino Uno
-
-### Ricompilare app Android
-```batch
-:: Prerequisiti: JDK 17 + Android SDK 34
-cd cammes-android
-gradlew.bat assembleDebug
-:: Output: app\build\outputs\apk\debug\app-debug.apk
+npm start          :: server su :3000 + WS :8080
+npm test           :: 7 suite di regressione/validazione
+npm run lint       :: eslint su server + moduli + tools
+npm run build      :: genera cammes.exe (pkg, node18-win-x64)
 ```
 
-### Arduino
-Aprire gli sketch `.ino` con Arduino IDE e caricare su Arduino Uno.
+### Firmware
+Compilare/flashare `master/master.ino` su Arduino Uno (Arduino IDE o `arduino-cli compile --fqbn arduino:avr:uno master`). Lo **scan autonomo** richiede firmware **v3** (verifica col comando `v`).
+
+### App Android — SPERIMENTALE
+`CAMMES.apk` e `cammes-android/` sono fermi alla UI v1 (marzo): **non includono** Home, analisi race-grade, follower, baseline, encoder, salva profilo. Utilizzabile solo per acquisizione base; da ricostruire prima di distribuirla.
 
 ---
 
-## Sincronizzazione tra PC
+## Qualità e test
 
-Questo repo usa Git + GitHub per mantenere il progetto sincronizzato tra piu computer.
+- **`lib/cammes-math.js`**: tutta la matematica (conversioni follower, baseline/eccentricità, mappatura camma→albero, compliance 1/2/3-DOF, surge, re-indicizzazione encoder) vive in un'unica libreria usata sia dal browser sia dai test node.
+- **`npm test`**: 7 suite — follower (13 check), 3-DOF, surge, baseline, encoder-reindex, validazione su **Renault Clio 1.8 16V** e **VW KR 1.8 16V** reali (quest'ultima confrontata con misure al banco motore).
+- Correzioni metrologiche documentate nel CHANGELOG (compensazione puntalino sferico a offset normale, alzata al PMS riferita al picco misurato, raggio base per lato, baseline 1ª armonica).
 
-### Salvare le modifiche
-Doppio click su **`salva.bat`** oppure:
-```bash
-git add -A && git commit -m "descrizione" && git push
-```
+## Sincronizzazione
 
-### Aggiornare da un altro PC
-Doppio click su **`aggiorna.bat`** oppure:
-```bash
-git pull
-```
-
-### Setup nuovo PC
-```bash
-git clone https://github.com/MDJGyurgeiz/CAMMES.git
-cd CAMMES
-cd cammes && npm install
-```
-
----
-
-## Analisi Cinematica
-
-La pagina **Analisi** (`analisi.html`) calcola le derivate del profilo camme:
-
-- **Alzata** h(θ) — profilo misurato (mm)
-- **Velocita** h'(θ) — prima derivata (mm/grado)
-- **Accelerazione** h''(θ) — seconda derivata (mm/grado²)
-- **Jerk** h'''(θ) — terza derivata (mm/grado³)
-- **Snap** h''''(θ) — quarta derivata (mm/grado⁴)
-
-Filtro **Savitzky-Golay** configurabile (5, 7, 9, 11 punti) per ridurre il rumore nelle derivate.
-
-Formattazione automatica con notazione ingegneristica (×10⁶, ×10⁹, ×10¹²).
-
----
+`salva.bat` = commit+push · `aggiorna.bat` = pull · repo: `github.com/MDJGyurgeiz/CAMMES`
 
 ## Tecnologie
 
-| Area | Tecnologia |
-|------|-----------|
-| Frontend | HTML5, CSS3, JavaScript, Chart.js, Hammer.js |
-| Server PC | Node.js, WebSocket (ws), SerialPort |
-| Arduino | C/C++, stepper control, bit-banging, interrupt |
-| App Android | Kotlin, WebView, usb-serial-for-android |
-| Build PC | pkg (Node.js → exe standalone) |
-| Build Android | Gradle 8.5, Android SDK 34, JDK 17 |
+HTML5/CSS3/JS (no framework, offline-first) · Chart.js v4 · Node.js (ws, serialport) · pkg → exe · Arduino C/C++ (ISR encoder x4, bit-bang sensore) · Kotlin/WebView (Android, sperimentale)

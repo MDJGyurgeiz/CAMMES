@@ -6,6 +6,12 @@
 (function () {
   'use strict';
 
+  // -------- VERSIONE ------------------------------------------------------
+  // Unico punto di verità della versione mostrata nella UI (badge in basso a
+  // destra su ogni pagina). Allineala a package.json/tag quando rilasci.
+  var CAMMES_VERSION = 'v3.0.0';
+  window.CAMMES_VERSION = CAMMES_VERSION;
+
   // -------- THEME (dark/light) -------------------------------------------
   const THEME_KEY = 'cammes-theme';
 
@@ -834,6 +840,16 @@
     }
     refreshTooltips();
     showWizardIfFirstTime();
+    // Badge versione (assistenza: sapere quale build gira su un PC d'officina)
+    if (!document.getElementById('cammes-version-badge')) {
+      var vb = document.createElement('div');
+      vb.id = 'cammes-version-badge';
+      vb.textContent = 'CAMMES ' + CAMMES_VERSION;
+      vb.title = 'Versione software — citala quando chiedi assistenza';
+      vb.style.cssText = 'position:fixed;right:8px;bottom:6px;z-index:40;font-size:10px;' +
+        'color:var(--text-muted,#8888aa);opacity:.65;pointer-events:none;user-select:none;';
+      document.body.appendChild(vb);
+    }
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
