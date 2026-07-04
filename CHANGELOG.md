@@ -924,3 +924,40 @@ deformato.
   (Arduino + encoder + camma che gira) **non è validabile senza il banco**. Per questo il
   default resta Passi: alla prima scansione reale con Sorgente=Encoder, confrontare il
   profilo coi passi prima di adottarlo stabilmente.
+
+---
+
+## Sotto-sessione 6.17 — 2026-07-04 — UI a moduli: schermata pulita di default
+### Tag: **v2.13.0**
+
+Richiesta utente: il programma è diventato complicato per chi deve solo analizzare i
+profili asp/scarico e correlarli (gradi di apertura + grafico). Le funzioni extra ora
+sono **moduli attivabili a spunta** — la schermata di default mostra solo l'essenziale.
+
+### Pannello "⚙ Funzioni" (analisi.html)
+- Bottone nell'header della card Parametri → pannello con 7 checkbox persistenti
+  (`localStorage cammes-modules-v1`): **Follower simulato**, **Molla & forze**,
+  **Cinematica**, **Dinamica valvole (compliance+surge)**, **Strumenti race**,
+  **Animazione meccanismo**, **Confronto A/B**. Default: **tutte OFF**.
+- Meccanismo: ogni blocco è taggato `data-module="a b c"` ed è visibile se ALMENO UNO
+  dei moduli è attivo → "dinamica"/"race" portano con sé i parametri molla che gli
+  servono. I campi disattivati restano nel DOM coi default → `analyze()` invariata.
+- **Migrazione**: chi usava "Avanzato" ritrova tutti i moduli attivi (nessuna regressione
+  percepita). Il toggle **Base/Avanzato resta** ma con scopo ridotto: parametri fini
+  (anticipo, bilancieri, smoothing, baseline).
+- Vista default (utente nuovo): Preset, Aspirazione, Scarico, Rif. durata, Analizza/
+  Reset/CSV/PDF/Salva → risultati fasatura + grafico 720°. La sezione risultati
+  "Forze molla e RPM critico", cinematica, animazione e confronto compaiono solo coi
+  rispettivi moduli.
+- Tour aggiornato (primo step = pannello Funzioni); gli step su elementi nascosti si
+  saltano da soli (guard `offsetParent` già presente in cammes-ui.js).
+
+### Verifica (browser, stato utente-nuovo con localStorage pulito)
+- Default: core visibile, 7 blocchi nascosti (molla/compliance/follower/race/confronto/
+  RPM/cinematica). Attiva "dinamica" → compare compliance E parametri molla; race resta
+  nascosto. Reload → scelta ricordata, checkbox sincronizzate, bottone "(1 attive)".
+- Analisi completa sui file VW a moduli spenti: risultati fasatura ok (durata 255°,
+  overlap 47.5°), sezioni extra nascoste. Tutti i moduli ON → tutto ricompare e
+  l'analisi popola anche forze/cinematica. 0 errori console.
+- Regressioni node tutte verdi (baseline, encoder_reindex, followers 13/13, 3dof, surge,
+  clio, vw — l'estrazione delle funzioni non è toccata).

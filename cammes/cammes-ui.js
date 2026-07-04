@@ -537,7 +537,8 @@
       { sel: '#replayBtn',  title: 'Replay', body: 'Ridisegna le curve da 0° a 360° per un confronto animato.' }
     ],
     analisi: [
-      { sel: '#modeBaseBtn',       title: 'Base / Avanzato', body: 'In <b>Base</b> vedi solo l\'essenziale; <b>Avanzato</b> mostra follower, compliance e strumenti race.' },
+      { sel: '#btnModules',        title: 'Funzioni aggiuntive', body: 'Di default vedi solo il flusso essenziale. Da qui attivi i moduli extra: <b>molla</b>, <b>dinamica valvole</b>, <b>strumenti race</b>, <b>animazione</b>, <b>confronto A/B</b>. La scelta viene ricordata.' },
+      { sel: '#modeBaseBtn',       title: 'Base / Avanzato', body: 'In <b>Base</b> vedi i campi minimi; <b>Avanzato</b> aggiunge i parametri fini (anticipo, bilancieri, smoothing, baseline).' },
       { sel: '#fileIntake',        title: 'Importa la camma', body: 'Carica i file di aspirazione e scarico, poi premi Analizza.' },
       { sel: 'button[onclick^="analyze"]', title: 'Analizza', body: 'Calcola durata, LSA, alzata, velocità/accelerazione, forze e RPM critico.' },
       { sel: '#complianceEnabled', title: 'Compliance (race)', body: 'Simulazione dinamica del treno valvole: valve float, bounce, modelli 1/2/3-DOF.' },

@@ -48,6 +48,29 @@
        In modalità Base gli elementi .adv-only sono nascosti (ma restano nel
        DOM coi loro valori di default, così l'analisi funziona comunque). */
     .mode-base .adv-only { display: none !important; }
+
+    /* Moduli funzione: blocchi opzionali (molla, dinamica, race, ecc.) attivabili
+       dal pannello "Funzioni". Un elemento con data-module è visibile solo se
+       almeno uno dei suoi moduli è attivo. I campi nascosti restano nel DOM coi
+       loro default → l'analisi funziona identica. */
+    .mod-hidden { display: none !important; }
+    .modules-btn {
+        font-size: 11px; padding: 4px 10px; border-radius: var(--r-md);
+        background: var(--bg-input); border: 1px solid var(--border);
+        color: var(--text-muted); cursor: pointer; white-space: nowrap;
+    }
+    .modules-btn:hover { color: var(--text); border-color: var(--accent); }
+    .modules-panel {
+        margin: 8px 0 12px; padding: 10px 12px; border: 1px solid var(--border);
+        border-radius: var(--r-md); background: var(--bg-input);
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 4px 16px;
+    }
+    .modules-panel label {
+        display: flex; align-items: center; gap: 8px; font-size: 12px;
+        color: var(--text); cursor: pointer; padding: 3px 0; line-height: 1.3;
+    }
+    .modules-panel input[type=checkbox] { accent-color: var(--accent); cursor: pointer; }
+    .modules-panel .mod-desc { color: var(--text-muted); font-size: 10.5px; }
     .mode-toggle { display: inline-flex; border: 1px solid var(--border-card); border-radius: 6px; overflow: hidden; }
     .mode-toggle button { background: transparent; color: var(--text-muted); border: none; padding: 4px 14px;
                           font-size: 11px; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; font-family: inherit; }
@@ -168,12 +191,26 @@
         <div class="card" id="paramCard">
             <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
                 <span>Parametri</span>
-                <span class="mode-toggle" role="group" aria-label="Livello di dettaglio">
-                    <button type="button" id="modeBaseBtn" onclick="setAnalysisMode('base');">Base</button>
-                    <button type="button" id="modeAdvBtn" onclick="setAnalysisMode('advanced');">Avanzato</button>
+                <span style="display:inline-flex; gap:8px; align-items:center;">
+                    <button type="button" class="modules-btn" id="btnModules" onclick="toggleModulesPanel();" data-tip="<strong>Funzioni aggiuntive</strong>Attiva solo i moduli che ti servono: molla, dinamica valvole, strumenti race, animazione&hellip; Il resto della schermata rimane pulito. La scelta viene ricordata.">&#9881; Funzioni</button>
+                    <span class="mode-toggle" role="group" aria-label="Livello di dettaglio">
+                        <button type="button" id="modeBaseBtn" onclick="setAnalysisMode('base');">Base</button>
+                        <button type="button" id="modeAdvBtn" onclick="setAnalysisMode('advanced');">Avanzato</button>
+                    </span>
                 </span>
             </div>
             <p class="mode-hint" id="modeHint"></p>
+
+            <!-- Pannello moduli: attiva/disattiva i blocchi funzione opzionali -->
+            <div class="modules-panel" id="modulesPanel" style="display:none;">
+                <label><input type="checkbox" data-mod="follower" onchange="onModuleToggle(this);"> Follower simulato <span class="mod-desc">bicchiere &Oslash; / rullo / leva</span></label>
+                <label><input type="checkbox" data-mod="molla" onchange="onModuleToggle(this);"> Molla &amp; forze <span class="mod-desc">F. inerzia, RPM critico</span></label>
+                <label><input type="checkbox" data-mod="cinematica" onchange="onModuleToggle(this);"> Cinematica <span class="mod-desc">velocit&agrave;, accelerazione, jerk</span></label>
+                <label><input type="checkbox" data-mod="dinamica" onchange="onModuleToggle(this);"> Dinamica valvole <span class="mod-desc">compliance 1/2/3-DOF, surge</span></label>
+                <label><input type="checkbox" data-mod="race" onchange="onModuleToggle(this);"> Strumenti race <span class="mod-desc">sweep RPM, optimizer, mappe, report</span></label>
+                <label><input type="checkbox" data-mod="anim" onchange="onModuleToggle(this);"> Animazione meccanismo <span class="mod-desc">camma+follower in movimento</span></label>
+                <label><input type="checkbox" data-mod="confronto" onchange="onModuleToggle(this);"> Confronto A vs B <span class="mod-desc">due set di camme a confronto</span></label>
+            </div>
 
             <!-- Preset rapido -->
             <div class="param-row" style="margin-bottom:12px;">
@@ -274,7 +311,7 @@
                         <option value="0">OFF</option>
                     </select>
                 </div>
-                <div class="param-row">
+                <div class="param-row" data-module="molla dinamica race cinematica">
                     <span class="param-label">RPM <span class="help-icon" data-tip="<strong>Regime motore (RPM)</strong>Giri/minuto a cui calcolare velocit&agrave;, accelerazione e forze inerziali. Usa l'RPM massimo previsto: se F.inerzia &gt; F.molla la valvola galleggia (valve float) → pista pericolosa." tabindex="0">?</span></span>
                     <input type="number" id="rpmInput" value="6000" class="input" style="width:75px;" step="100" min="0">
                     <span class="param-unit">giri/min</span>
@@ -302,8 +339,8 @@
                 </div>
             </div>
 
-            <!-- NEW: Virtual follower geometry -->
-            <div class="param-separator adv-only">
+            <!-- NEW: Virtual follower geometry (modulo: follower) -->
+            <div class="param-separator" data-module="follower">
                 <div class="param-group-title">Follower simulato (bicchiere virtuale)
                     <span class="help-icon" data-tip="<strong>Cosa fa il bicchiere virtuale</strong>Permette di simulare quale alzata <i>vera</i> avresti se invece del puntalino sferico usato per misurare la camma, avessi un bicchiere piatto reale. Cos&igrave; misuri UNA volta col puntalino e simuli infiniti bicchieri diversi senza rifare scansioni." tabindex="0">?</span>
                 </div>
@@ -361,8 +398,8 @@
                 </div>
             </div>
 
-            <!-- NEW: Spring force parameters -->
-            <div class="param-separator">
+            <!-- NEW: Spring force parameters (modulo: molla; serve anche a dinamica/race) -->
+            <div class="param-separator" data-module="molla dinamica race">
                 <div class="param-group-title">Parametri molla &amp; treno valvole
                     <span class="help-icon" data-tip="<strong>Forze in gioco</strong>L'app confronta la forza esercitata dalla molla (k·x + F&#8320;) con la forza inerziale richiesta per accelerare la massa (m·a). Se F.inerzia &gt; F.molla, la valvola perde contatto con la camma (<i>valve float</i>) → rischio rotture e perdita di tenuta." tabindex="0">?</span>
                 </div>
@@ -391,8 +428,8 @@
                 </div>
             </div>
 
-            <!-- NEW: Compliance treno valvole (race-grade dynamic simulation) -->
-            <div class="param-separator adv-only">
+            <!-- NEW: Compliance treno valvole (modulo: dinamica) -->
+            <div class="param-separator" data-module="dinamica">
                 <div class="param-group-title">Compliance treno valvole (race)
                     <span class="help-icon" data-tip="<strong>Simulazione dinamica valvola</strong>Modello massa-molla-smorzatore (RK4) per stimare la posizione REALE della valvola durante il ciclo, tenendo conto dell'elasticit&agrave; del treno (asta+bilancere+molla). Predice <b>valve float</b> dinamico, <b>ritardo</b> apertura, <b>bounce</b> alla chiusura. Per analisi race ad alto regime." tabindex="0">?</span>
                 </div>
@@ -479,21 +516,21 @@
             </div>
 
             <!-- RACE-GRADE: Sweep RPM + Optimizer molla + Mappa + Report -->
-            <div class="flex gap-8 adv-only" style="margin-top:8px;">
+            <div class="flex gap-8" style="margin-top:8px;" data-module="race">
                 <button class="btn btn-secondary" id="btnSweepRpm" onclick="runRpmSweep();" style="flex:1;" disabled data-tip="<strong>Sweep RPM</strong>Esegue la simulazione compliance a 12 regimi diversi (da rpm/2 a rpm*2) e plotta come cresce il valve float al variare degli RPM. Trova il <b>vero</b> regime massimo operativo, considerando dinamica del treno valvole. Tempo: ~5 secondi.">&#128201; Sweep RPM</button>
                 <button class="btn btn-secondary" id="btnOptimizeSpring" onclick="runSpringOptimizer();" style="flex:1;" disabled data-tip="<strong>Optimizer molla</strong>Cerca la molla minima (k, F&#8320;) che mantiene valve float &lt; 0.3 mm al RPM target. Itera su una griglia di (k, F&#8320;) e simula compliance per ognuna. Suggerisce la combinazione pi&ugrave; leggera (= meno coppia richiesta alla cam) che rispetta il vincolo. Tempo: ~10 secondi.">&#127919; Suggerisci molla</button>
             </div>
-            <div class="flex gap-8 adv-only" style="margin-top:8px;">
+            <div class="flex gap-8" style="margin-top:8px;" data-module="race">
                 <button class="btn btn-secondary" id="btnSpringMap" onclick="runSpringMap();" style="flex:1;" disabled data-tip="<strong>Mappa molla k×F&#8320;</strong>Heatmap del valve float al variare SIMULTANEO di rigidezza k e precarico F&#8320;. Verde = sicuro (&lt;0.1mm), giallo = limite (0.1-0.3), rosso = float eccessivo. Marca la tua molla attuale (&#9678;) e la zona sicura. A colpo d'occhio vedi quali combinazioni funzionano. Tempo: ~8 secondi.">&#128506; Mappa molla</button>
                 <button class="btn btn-accent" id="btnRaceReport" onclick="exportRaceReport();" style="flex:1;" disabled data-tip="<strong>Race report PDF</strong>Genera un report PDF dedicato all'analisi dinamica: sweep RPM, molla ottimale, mappa k×F&#8320;, grafico compliance. Documento completo per validare il treno valvole di un motore da corsa.">&#127942; Race report</button>
             </div>
-            <div class="flex gap-8 adv-only" style="margin-top:8px;">
+            <div class="flex gap-8" style="margin-top:8px;" data-module="race">
                 <button class="btn btn-secondary" id="btnSweep3D" onclick="run3DSweep();" style="flex:1;" disabled data-tip="<strong>Sweep 3D k×F&#8320;×RPM</strong>Nuvola ruotabile del valve float sui TRE assi insieme: rigidezza k, precarico F&#8320; e regime. Ogni punto colorato (verde sicuro &rarr; rosso float) &egrave; una combinazione simulata. Trascina per ruotare la vista ed esplorare il volume sicuro nello spazio molla-regime. Tempo: ~0.5 s.">&#127922; Sweep 3D</button>
                 <button class="btn btn-secondary" id="btnSurgeSweep" onclick="runSurgeSweep();" style="flex:1;" disabled data-tip="<strong>Surge vs RPM</strong>Plotta il <b>surge ratio</b> della molla (ampiezza oscillazione spire / corsa valvola) al variare del regime. I picchi mostrano i <b>regimi di risonanza</b> dove le spire vanno in surge. Richiede <b>Surge molla = ON</b>. La linea rossa a 1.0 &egrave; la soglia di surge serio. Tempo: ~2 s.">&#127926; Surge vs RPM</button>
             </div>
 
-            <!-- Risultati Sweep / Optimizer / Mappa -->
-            <div id="raceResultsBox" style="display:none; margin-top:12px; padding:10px; background:var(--bg-input); border-radius:var(--r-md); border:1px solid var(--border);">
+            <!-- Risultati Sweep / Optimizer / Mappa (modulo: race) -->
+            <div id="raceResultsBox" data-module="race" style="display:none; margin-top:12px; padding:10px; background:var(--bg-input); border-radius:var(--r-md); border:1px solid var(--border);">
                 <div id="raceResultsTitle" style="font-family:var(--font-display); font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color:var(--text-muted); margin-bottom:6px;"></div>
                 <div id="raceResultsBody" style="font-size:12px; line-height:1.5;"></div>
                 <canvas id="springMapCanvas" width="340" height="280" style="display:none; margin-top:8px; max-width:100%;"></canvas>
@@ -625,8 +662,8 @@
                     </div>
                 </div>
 
-                <!-- Forze molla &amp; Cam Float (NEW) -->
-                <div class="result-section">
+                <!-- Forze molla &amp; Cam Float (modulo: molla) -->
+                <div class="result-section" data-module="molla dinamica race">
                     <div class="result-section-title" style="display:flex;justify-content:space-between;align-items:center;">
                         <span>Forze molla e RPM critico</span>
                         <span id="liveTuningBadge" class="live-tuning-badge" style="display:none;" data-tip="<strong>Live tuning attivo</strong>Cambia i campi <b>RPM</b>, <b>k</b>, <b>F&#8320;</b> o <b>massa eq.</b> sopra per vedere aggiornarsi forze e RPM critico in tempo reale, senza ri-premere Analizza.">&#9679; Live tuning</span>
@@ -669,8 +706,8 @@
         </div>
     </div>
 
-    <!-- Kinematic Analysis card (hidden until analysis) -->
-    <div class="card" id="kinematicsCard" style="display:none;">
+    <!-- Kinematic Analysis card (modulo: cinematica) -->
+    <div class="card" id="kinematicsCard" data-module="cinematica dinamica" style="display:none;">
         <div class="card-title">Analisi Cinematica</div>
 
         <!-- Velocity chart -->
@@ -779,8 +816,8 @@
         </div>
     </div>
 
-    <!-- Animazione meccanismo (hidden until analysis) -->
-    <div class="card" id="mechAnimCard" style="display:none;">
+    <!-- Animazione meccanismo (modulo: anim) -->
+    <div class="card" id="mechAnimCard" data-module="anim" style="display:none;">
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
             <span>Animazione meccanismo</span>
             <span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -801,8 +838,8 @@
         <canvas id="mechAnimCanvas" width="360" height="440" style="max-width:100%; display:block; margin:0 auto; border-radius:var(--r-md);"></canvas>
     </div>
 
-    <!-- A vs B Comparison card -->
-    <div class="card ab-card">
+    <!-- A vs B Comparison card (modulo: confronto) -->
+    <div class="card ab-card" data-module="confronto">
         <div class="ab-toggle" onclick="toggleAB()">
             <span class="ab-toggle-arrow" id="abArrow">&#9654;</span>
             <span class="card-title" style="margin:0;cursor:pointer;">Confronto A vs B</span>
@@ -2530,8 +2567,8 @@ function setAnalysisMode(mode) {
     var bA = document.getElementById('modeAdvBtn');  if (bA) bA.classList.toggle('active',  adv);
     var hint = document.getElementById('modeHint');
     if (hint) hint.textContent = adv
-        ? 'Tutti i parametri visibili: follower simulato, compliance dinamica e strumenti race.'
-        : 'Solo i parametri essenziali per un’analisi completa. Passa ad Avanzato per follower, compliance e strumenti race.';
+        ? 'Parametri fini visibili (anticipo, bilancieri, smoothing, baseline). Le funzioni extra si attivano dal pannello ⚙ Funzioni.'
+        : 'Solo l’essenziale: importa le camme, imposta angolo lobo e gioco, Analizza. Funzioni extra dal pannello ⚙ Funzioni.';
     try { localStorage.setItem('cammes-analisi-mode', mode); } catch (e) {}
 }
 window.setAnalysisMode = setAnalysisMode;
@@ -2543,6 +2580,67 @@ window.setAnalysisMode = setAnalysisMode;
     else apply();
 })();
 window.exportRaceReport = exportRaceReport;
+
+// =============================================================
+// Moduli funzione — la schermata di default mostra solo il flusso essenziale
+// (importa asp/scarico → correla con angoli/gioco → risultati + grafico).
+// Molla, dinamica, race, cinematica, animazione e confronto sono blocchi
+// opzionali attivabili dal pannello ⚙ Funzioni: ogni elemento con
+// data-module="a b c" è visibile se ALMENO UNO dei moduli elencati è attivo
+// (così "dinamica" e "race" portano con sé i parametri molla che gli servono).
+// I campi disattivati restano nel DOM coi loro default → analyze() invariata.
+// Scelte ricordate in localStorage.
+// =============================================================
+var MODULES_KEY = 'cammes-modules-v1';
+function getModules() {
+    try { return JSON.parse(localStorage.getItem(MODULES_KEY)) || {}; } catch (e) { return {}; }
+}
+function applyModules() {
+    var m = getModules();
+    var els = document.querySelectorAll('[data-module]');
+    for (var i = 0; i < els.length; i++) {
+        var keys = els[i].getAttribute('data-module').split(/\s+/);
+        var on = false;
+        for (var k = 0; k < keys.length; k++) { if (m[keys[k]]) { on = true; break; } }
+        els[i].classList.toggle('mod-hidden', !on);
+    }
+    var boxes = document.querySelectorAll('#modulesPanel input[data-mod]');
+    var count = 0;
+    for (var b = 0; b < boxes.length; b++) {
+        var key = boxes[b].getAttribute('data-mod');
+        boxes[b].checked = !!m[key];
+        if (m[key]) count++;
+    }
+    var btn = document.getElementById('btnModules');
+    if (btn) btn.innerHTML = '&#9881; Funzioni' + (count ? ' (' + count + ' attive)' : '');
+}
+function onModuleToggle(cb) {
+    var m = getModules();
+    m[cb.getAttribute('data-mod')] = cb.checked;
+    try { localStorage.setItem(MODULES_KEY, JSON.stringify(m)); } catch (e) {}
+    applyModules();
+}
+function toggleModulesPanel() {
+    var p = document.getElementById('modulesPanel');
+    if (p) p.style.display = (p.style.display === 'none') ? 'grid' : 'none';
+}
+window.onModuleToggle = onModuleToggle;
+window.toggleModulesPanel = toggleModulesPanel;
+(function () {
+    // Migrazione: chi usava "Avanzato" vedeva già tutto → non togliergli nulla.
+    try {
+        if (!localStorage.getItem(MODULES_KEY) &&
+            localStorage.getItem('cammes-analisi-mode') === 'advanced') {
+            localStorage.setItem(MODULES_KEY, JSON.stringify({
+                follower: true, molla: true, cinematica: true, dinamica: true,
+                race: true, anim: true, confronto: true
+            }));
+        }
+    } catch (e) {}
+    function apply() { applyModules(); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
+    else apply();
+})();
 
 function on2DofToggle() {
     var sel = document.getElementById('complianceModel');
