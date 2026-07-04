@@ -961,3 +961,27 @@ sono **moduli attivabili a spunta** — la schermata di default mostra solo l'es
   l'analisi popola anche forze/cinematica. 0 errori console.
 - Regressioni node tutte verdi (baseline, encoder_reindex, followers 13/13, 3dof, surge,
   clio, vw — l'estrazione delle funzioni non è toccata).
+
+---
+
+## Sessione 7 — 2026-07-04 — Revisione architetturale (fine ultimo: prodotto da distribuire)
+
+Assessment completo di fattura (2 referti: catena acquisizione + architettura web).
+Verdetto: motore di calcolo solido, firmware ben fatto ma orchestrato dal browser,
+web monolitico, consegna rotta. Piano in 4 fasi approvato dall'utente.
+
+### Fase 2 — Matematica fuori dall'HTML → `lib/cammes-math.js`
+- **16 funzioni di calcolo puro (~39 KB)** estratte con chirurgia scriptata (stesso
+  brace-matching dei test → copia esatta, zero drift) da analisi.html (15: baseline
+  _det3/_solve3/removeCamBaseline, follower stylusCompensate/convertPuntTo*, mapCamToCrank,
+  parseCamFile, compliance 1/2/3-DOF + detectValveFloat, surge freq+sim) e alzata.html
+  (reindexByEncoder).
+- **`lib/cammes-math.js` UMD**: nel browser aggancia le funzioni a `window` con gli stessi
+  nomi globali (pagine invariate); in node `module.exports`. Alias interno `window=root`
+  per lo stato diagnostico (`_lastBaselineAmp`, `_fingerSaturated`, ...).
+- Pagine: `<script src="lib/cammes-math.js">` prima dello script inline; definizioni
+  inline rimosse (verifica automatica: zero residui). `pkg.assets` copre già `lib/**`.
+- **Tutti e 7 i test migrati da eval-extraction a `require()`**: la classe di fragilità
+  (rinomina/marker → test rotti) sparisce per costruzione.
+- Verifica: suite 7/7 verde; browser: valori IDENTICI al check storico (alzata al PMS
+  2.175/1.706 su VW, bicchiere Ø35), alzata.html ok (reindex dalla lib), 0 errori console.

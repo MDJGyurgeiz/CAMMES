@@ -1,8 +1,8 @@
 // =============================================================
 //  test_followers.js — regressione per le conversioni follower virtuale
 // =============================================================
-// Estrae stylusCompensate + convertPuntToBicchiere/Roller/Finger direttamente
-// da analisi.html (niente copia-incolla che possa divergere) e verifica
+// Importa stylusCompensate + convertPuntToBicchiere/Roller/Finger da
+// lib/cammes-math.js (libreria condivisa col browser) e verifica
 // invarianti DERIVATE dal codice reale, non assunte:
 //
 //   PUNTALINO→ compensazione raggio sfera = offset NORMALE: ltrue = raw +
@@ -19,42 +19,12 @@
 //
 // Uso:  node cammes/tools/test_followers.js     (exit 0 = tutto ok)
 
-var fs   = require('fs');
 var path = require('path');
-var html = fs.readFileSync(path.join(__dirname, '..', 'analisi.html'), 'utf8');
-
-// Estrattore con brace-matching che ignora stringhe e commenti.
-function extractFn(src, name) {
-    var sig = 'function ' + name + '(';
-    var start = src.indexOf(sig);
-    if (start < 0) throw new Error('non trovo function ' + name);
-    var i = src.indexOf('{', start);
-    var depth = 0, inS = null, inLine = false, inBlock = false;
-    for (var j = i; j < src.length; j++) {
-        var c = src[j], n = src[j+1];
-        if (inLine) { if (c === '\n') inLine = false; continue; }
-        if (inBlock) { if (c === '*' && n === '/') { inBlock = false; j++; } continue; }
-        if (inS) { if (c === '\\') { j++; continue; } if (c === inS) inS = null; continue; }
-        if (c === '/' && n === '/') { inLine = true; j++; continue; }
-        if (c === '/' && n === '*') { inBlock = true; j++; continue; }
-        if (c === '"' || c === "'" || c === '`') { inS = c; continue; }
-        if (c === '{') depth++;
-        else if (c === '}') { depth--; if (depth === 0) return src.slice(start, j+1); }
-    }
-    throw new Error('brace non bilanciate in ' + name);
-}
-
-var names = ['stylusCompensate', 'convertPuntToBicchiere', 'convertPuntToRoller', 'convertPuntToFinger'];
-var bundle = names.map(function (n) { return extractFn(html, n); }).join('\n\n');
-
-// `window` stub: convertPuntToBicchiere referenzia window.cammesToast nel ramo
-// di warning. Definendolo evitiamo ReferenceError a prescindere dai parametri.
-// (usato dentro la stringa eval() qui sotto, invisibile al linter)
-// eslint-disable-next-line no-unused-vars
-var window = { cammesToast: null, _suppressBicchWarn: true };
-var stylusCompensate, convertPuntToBicchiere, convertPuntToRoller, convertPuntToFinger;
-// eslint-disable-next-line no-eval
-eval(bundle + '\n' + names.map(function (n) { return n + '=' + n + ';'; }).join('\n'));
+var M = require(path.join(__dirname, '..', 'lib', 'cammes-math.js'));
+var stylusCompensate = M.stylusCompensate;
+var convertPuntToBicchiere = M.convertPuntToBicchiere;
+var convertPuntToRoller = M.convertPuntToRoller;
+var convertPuntToFinger = M.convertPuntToFinger;
 
 // --- camma sintetica: bump liscio, picco 8 mm su [90,270]° (cam-degree) ---
 var PEAK = 8.0;

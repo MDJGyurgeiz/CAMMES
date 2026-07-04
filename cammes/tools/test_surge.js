@@ -1,8 +1,8 @@
 // =============================================================
 //  test_surge.js — regressione per il modello spring surge
 // =============================================================
-// Estrae springSurgeFreqHz + simulateSpringSurge da analisi.html (brace-matcher,
-// niente copia-incolla) e verifica:
+// Importa springSurgeFreqHz + simulateSpringSurge da lib/cammes-math.js
+// (libreria condivisa col browser) e verifica:
 //   1) FREQUENZA: springSurgeFreqHz = ½·√(k/m_spring); e la fondamentale della
 //      catena discreta a N masse converge a quel valore al crescere di N.
 //   2) RISONANZA: pilotando la molla con un lift sinusoidale, surgeRatio è
@@ -12,34 +12,10 @@
 //
 // Uso:  node cammes/tools/test_surge.js     (exit 0 = tutto ok)
 
-var fs = require('fs');
 var path = require('path');
-var html = fs.readFileSync(path.join(__dirname, '..', 'analisi.html'), 'utf8');
-
-function extractFn(src, name) {
-    var sig = 'function ' + name + '(';
-    var start = src.indexOf(sig);
-    if (start < 0) throw new Error('non trovo function ' + name);
-    var i = src.indexOf('{', start);
-    var depth = 0, inS = null, inLine = false, inBlock = false;
-    for (var j = i; j < src.length; j++) {
-        var c = src[j], n = src[j + 1];
-        if (inLine) { if (c === '\n') inLine = false; continue; }
-        if (inBlock) { if (c === '*' && n === '/') { inBlock = false; j++; } continue; }
-        if (inS) { if (c === '\\') { j++; continue; } if (c === inS) inS = null; continue; }
-        if (c === '/' && n === '/') { inLine = true; j++; continue; }
-        if (c === '/' && n === '*') { inBlock = true; j++; continue; }
-        if (c === '"' || c === "'" || c === '`') { inS = c; continue; }
-        if (c === '{') depth++;
-        else if (c === '}') { depth--; if (depth === 0) return src.slice(start, j + 1); }
-    }
-    throw new Error('brace non bilanciate in ' + name);
-}
-
-var springSurgeFreqHz, simulateSpringSurge;
-var bundle = extractFn(html, 'springSurgeFreqHz') + '\n' + extractFn(html, 'simulateSpringSurge');
-// eslint-disable-next-line no-eval
-eval(bundle + '\nspringSurgeFreqHz = springSurgeFreqHz;\nsimulateSpringSurge = simulateSpringSurge;');
+var M = require(path.join(__dirname, '..', 'lib', 'cammes-math.js'));
+var springSurgeFreqHz = M.springSurgeFreqHz;
+var simulateSpringSurge = M.simulateSpringSurge;
 
 var fails = 0;
 function check(label, cond, detail) {

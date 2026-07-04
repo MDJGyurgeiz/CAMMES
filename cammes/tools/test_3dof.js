@@ -1,8 +1,8 @@
 // =============================================================
 //  test_3dof.js — regressione per simulateCompliance3DOF
 // =============================================================
-// Estrae i solver 2-DOF e 3-DOF direttamente da analisi.html (niente
-// copia-incolla che possa divergere) e verifica:
+// Importa i solver 2-DOF e 3-DOF da lib/cammes-math.js (la libreria
+// condivisa usata anche dal browser) e verifica:
 //   1) LIMITE RIGIDO: con sede quasi-rigida (k_seat enorme, m3 piccola) il
 //      3-DOF deve coincidere col 2-DOF nella fase di alta alzata, dove il
 //      valve float è significativo. (La micro-oscillazione vicino alla sede
@@ -13,32 +13,13 @@
 // Uso:  node cammes/tools/test_3dof.js
 // Exit code 0 = tutti i check passano, 1 = fallimento.
 
-var fs   = require('fs');
 var path = require('path');
-
-var htmlPath = path.join(__dirname, '..', 'analisi.html');
-var html = fs.readFileSync(htmlPath, 'utf8');
-
-// Estrae lo slice che contiene 2-DOF + 3-DOF (entrambi self-contained, usano
-// solo Math). Marker di inizio: la def del 2-DOF; di fine: la riga del
-// detector di valve float che segue immediatamente il 3-DOF.
-var startMark = 'function simulateCompliance2DOF';
-var endMark   = '// Indicatore valve float:';
-var s = html.indexOf(startMark);
-var e = html.indexOf(endMark);
-if (s < 0 || e < 0 || e <= s) {
-    console.error('FAIL: non trovo i marker dei solver in analisi.html');
-    process.exit(1);
-}
-var slice = html.slice(s, e);
-
-var simulateCompliance2DOF, simulateCompliance3DOF;
-// eslint-disable-next-line no-eval
-eval(slice + '\nsimulateCompliance2DOF = simulateCompliance2DOF;'
-           + '\nsimulateCompliance3DOF = simulateCompliance3DOF;');
+var M = require(path.join(__dirname, '..', 'lib', 'cammes-math.js'));
+var simulateCompliance2DOF = M.simulateCompliance2DOF;
+var simulateCompliance3DOF = M.simulateCompliance3DOF;
 
 if (typeof simulateCompliance3DOF !== 'function') {
-    console.error('FAIL: simulateCompliance3DOF non definita dopo eval');
+    console.error('FAIL: simulateCompliance3DOF non esportata da lib/cammes-math.js');
     process.exit(1);
 }
 

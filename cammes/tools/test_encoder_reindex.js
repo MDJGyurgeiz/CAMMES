@@ -13,27 +13,11 @@
 //
 //  Uso:  node cammes/tools/test_encoder_reindex.js   (exit 0 = ok)
 
-var fs = require('fs'), path = require('path');
-var html = fs.readFileSync(path.join(__dirname, '..', 'alzata.html'), 'utf8');
-function ex(name) {
-    var s = html.indexOf('function ' + name + '(');
-    if (s < 0) throw new Error('non trovo ' + name);
-    var i = html.indexOf('{', s), d = 0, q = null, L = false, B = false;
-    for (var j = i; j < html.length; j++) {
-        var c = html[j], n = html[j + 1];
-        if (L) { if (c === '\n') L = false; continue; }
-        if (B) { if (c === '*' && n === '/') { B = false; j++; } continue; }
-        if (q) { if (c === '\\') { j++; continue; } if (c === q) q = null; continue; }
-        if (c === '/' && n === '/') { L = true; j++; continue; }
-        if (c === '/' && n === '*') { B = true; j++; continue; }
-        if (c === '"' || c === "'" || c === '`') { q = c; continue; }
-        if (c === '{') d++; else if (c === '}') { d--; if (d === 0) return html.slice(s, j + 1); }
-    }
-    throw new Error('brace non bilanciate in ' + name);
-}
-var window = {};
-var reindexByEncoder;
-eval(ex('reindexByEncoder') + '\nreindexByEncoder=reindexByEncoder;');
+var path = require('path');
+var M = require(path.join(__dirname, '..', 'lib', 'cammes-math.js'));
+var reindexByEncoder = M.reindexByEncoder;
+// la lib scrive lo stato diagnostico (_encReindexDivergence) sul global reale
+var window = global;
 
 var PEAK = 8.0;
 function bumpCam() {                       // bump liscio su step-gradi 150..210

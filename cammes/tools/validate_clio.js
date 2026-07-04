@@ -28,39 +28,12 @@
 
 var fs   = require('fs');
 var path = require('path');
-
-var html = fs.readFileSync(path.join(__dirname, '..', 'analisi.html'), 'utf8');
-
-// --- estrattore: ritorna il sorgente di `function NAME(...){...}` con
-//     brace-matching che ignora stringhe e commenti ---
-function extractFn(src, name) {
-    var sig = 'function ' + name + '(';
-    var start = src.indexOf(sig);
-    if (start < 0) throw new Error('non trovo function ' + name);
-    var i = src.indexOf('{', start);
-    var depth = 0, inS = null, inLine = false, inBlock = false;
-    for (var j = i; j < src.length; j++) {
-        var c = src[j], n = src[j+1];
-        if (inLine) { if (c === '\n') inLine = false; continue; }
-        if (inBlock) { if (c === '*' && n === '/') { inBlock = false; j++; } continue; }
-        if (inS) { if (c === '\\') { j++; continue; } if (c === inS) inS = null; continue; }
-        if (c === '/' && n === '/') { inLine = true; j++; continue; }
-        if (c === '/' && n === '*') { inBlock = true; j++; continue; }
-        if (c === '"' || c === "'" || c === '`') { inS = c; continue; }
-        if (c === '{') depth++;
-        else if (c === '}') { depth--; if (depth === 0) return src.slice(start, j+1); }
-    }
-    throw new Error('brace non bilanciate in ' + name);
-}
-
-var names = ['mapCamToCrank','parseCamFile','simulateCompliance',
-             'simulateCompliance2DOF','simulateCompliance3DOF','detectValveFloat'];
-var bundle = names.map(function(n){ return extractFn(html, n); }).join('\n\n');
-
-var mapCamToCrank, parseCamFile, simulateCompliance,
-    simulateCompliance2DOF, simulateCompliance3DOF, detectValveFloat;
-// eslint-disable-next-line no-eval
-eval(bundle + '\n' + names.map(function(n){ return n + '=' + n + ';'; }).join('\n'));
+var M = require(path.join(__dirname, '..', 'lib', 'cammes-math.js'));
+var mapCamToCrank = M.mapCamToCrank, parseCamFile = M.parseCamFile,
+    simulateCompliance = M.simulateCompliance,
+    simulateCompliance2DOF = M.simulateCompliance2DOF,
+    simulateCompliance3DOF = M.simulateCompliance3DOF,
+    detectValveFloat = M.detectValveFloat;
 
 // --- carica la scansione reale (normalizza EOL a CRLF: parseCamFile usa \r\n) ---
 var scrPath = path.join(__dirname, '..', 'prove', 'clio_test_1_alz.scr');

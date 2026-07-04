@@ -14,31 +14,8 @@
 // Uso:  node cammes/tools/validate_vw.js     (exit 0 = tutto ok)
 
 var fs = require('fs'), path = require('path');
-var html = fs.readFileSync(path.join(__dirname, '..', 'analisi.html'), 'utf8');
-
-function extractFn(src, name) {
-    var start = src.indexOf('function ' + name + '(');
-    if (start < 0) throw new Error('non trovo function ' + name);
-    var i = src.indexOf('{', start), depth = 0, inS = null, inL = false, inB = false;
-    for (var j = i; j < src.length; j++) {
-        var c = src[j], n = src[j + 1];
-        if (inL) { if (c === '\n') inL = false; continue; }
-        if (inB) { if (c === '*' && n === '/') { inB = false; j++; } continue; }
-        if (inS) { if (c === '\\') { j++; continue; } if (c === inS) inS = null; continue; }
-        if (c === '/' && n === '/') { inL = true; j++; continue; }
-        if (c === '/' && n === '*') { inB = true; j++; continue; }
-        if (c === '"' || c === "'" || c === '`') { inS = c; continue; }
-        if (c === '{') depth++; else if (c === '}') { depth--; if (depth === 0) return src.slice(start, j + 1); }
-    }
-    throw new Error('brace non bilanciate in ' + name);
-}
-
-// eslint-disable-next-line no-unused-vars
-var window = { cammesToast: null, _suppressBicchWarn: true };
-var stylusCompensate, convertPuntToBicchiere;
-// eslint-disable-next-line no-eval
-eval(extractFn(html, 'stylusCompensate') + '\n' + extractFn(html, 'convertPuntToBicchiere') +
-     '\nstylusCompensate=stylusCompensate;convertPuntToBicchiere=convertPuntToBicchiere;');
+var M = require(path.join(__dirname, '..', 'lib', 'cammes-math.js'));
+var convertPuntToBicchiere = M.convertPuntToBicchiere;
 
 function parseScr(fp) {
     var L = fs.readFileSync(fp, 'utf8').split(/\r?\n/), a = new Array(361);

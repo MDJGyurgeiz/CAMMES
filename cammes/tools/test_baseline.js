@@ -12,27 +12,10 @@
 //  Uso:  node cammes/tools/test_baseline.js     (exit 0 = ok)
 
 var fs = require('fs'), path = require('path');
-var html = fs.readFileSync(path.join(__dirname, '..', 'analisi.html'), 'utf8');
-function ex(name) {
-    var s = html.indexOf('function ' + name + '(');
-    if (s < 0) throw new Error('non trovo ' + name);
-    var i = html.indexOf('{', s), d = 0, q = null, L = false, B = false;
-    for (var j = i; j < html.length; j++) {
-        var c = html[j], n = html[j + 1];
-        if (L) { if (c === '\n') L = false; continue; }
-        if (B) { if (c === '*' && n === '/') { B = false; j++; } continue; }
-        if (q) { if (c === '\\') { j++; continue; } if (c === q) q = null; continue; }
-        if (c === '/' && n === '/') { L = true; j++; continue; }
-        if (c === '/' && n === '*') { B = true; j++; continue; }
-        if (c === '"' || c === "'" || c === '`') { q = c; continue; }
-        if (c === '{') d++; else if (c === '}') { d--; if (d === 0) return html.slice(s, j + 1); }
-    }
-    throw new Error('brace non bilanciate in ' + name);
-}
-var window = {};
-var _det3, _solve3, removeCamBaseline;
-eval(ex('_det3') + '\n' + ex('_solve3') + '\n' + ex('removeCamBaseline') +
-     '\n_det3=_det3;_solve3=_solve3;removeCamBaseline=removeCamBaseline;');
+var M = require(path.join(__dirname, '..', 'lib', 'cammes-math.js'));
+var removeCamBaseline = M.removeCamBaseline;
+// la lib scrive lo stato diagnostico (_lastBaselineAmp) sul global reale
+var window = global;
 
 var DEG = Math.PI / 180, PEAK = 8.0;
 function cleanCam() {
