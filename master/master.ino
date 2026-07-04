@@ -229,8 +229,8 @@ void stepperMove(int16_t units) {
 // =============================================================
 //  Lettura singolo frame: aspetta finestra di settle e restituisce mm
 // =============================================================
-float readSensorMmOnce() {
-  uint32_t deadline = millis() + SENSOR_SETTLE_MS;
+float readSensorMmOnceT(uint16_t timeoutMs) {
+  uint32_t deadline = millis() + timeoutMs;
   noInterrupts();
   sensorReady = false;
   interrupts();
@@ -243,6 +243,32 @@ float readSensorMmOnce() {
   interrupts();
   if (!ok) return NAN;
   return (float)raw / SENSOR_DIVIDER;
+}
+float readSensorMmOnce() { return readSensorMmOnceT(SENSOR_SETTLE_MS); }
+
+// =============================================================
+//  Lettura ADATTIVA (scan autonomo): legge frame finché due consecutivi
+//  coincidono entro SCAN_EPS_MM, con budget massimo complessivo.
+//  Sul cerchio base converge subito (veloce); sul fianco ripido insiste
+//  finché il tastatore si è davvero assestato (preciso). Se il budget
+//  scade, restituisce l'ultimo frame valido (NaN se mai visto un frame).
+// =============================================================
+const float    SCAN_EPS_MM         = 0.005f;   // due frame uguali entro 5 µm = stabile
+const uint16_t SCAN_FRAME_MS       = 400;      // attesa max per singolo frame
+const uint16_t SCAN_BUDGET_MS      = 1500;     // budget massimo per punto
+float readSensorStableMm() {
+  uint32_t tEnd = millis() + SCAN_BUDGET_MS;
+  float prev = readSensorMmOnceT(SCAN_FRAME_MS);
+  float last = prev;
+  while (millis() < tEnd) {
+    uint32_t remain = tEnd - millis();
+    float v = readSensorMmOnceT(remain > SCAN_FRAME_MS ? SCAN_FRAME_MS : (uint16_t)remain);
+    if (isnan(v)) continue;
+    if (!isnan(prev) && fabs(v - prev) <= SCAN_EPS_MM) return (v + prev) * 0.5f;
+    prev = v;
+    last = v;
+  }
+  return last;
 }
 
 // =============================================================
@@ -302,6 +328,44 @@ void emitEncoderQuery() {
 }
 
 // =============================================================
+//  SCAN AUTONOMO — comando 'S±NNNNN' (v3)
+// =============================================================
+//  Il ciclo di scansione gira QUI invece che nel browser: per ogni unità
+//  muove, legge il sensore con settle ADATTIVO e trasmette in streaming
+//    #i:enc:mm        (i = indice progressivo 1..N — funge da sequenza:
+//                      il browser rileva i buchi; enc = conteggio encoder;
+//                      mm = misura, "NaN" se il sensore non risponde)
+//  Fine: "*sdone" (completo) o "*sabort" (ricevuto 'x' dal PC).
+//  Vantaggi vs handshake p/q per punto: niente round-trip PC↔seriale per
+//  ogni grado (timing deterministico), settle adattivo (veloce sul cerchio
+//  base, paziente sul fianco ripido), abort pulito.
+//  I comandi p/q restano invariati per jog manuale e compatibilità.
+void autonomousScan(int8_t dir, uint16_t totalUnits) {
+  for (uint16_t i = 1; i <= totalUnits; i++) {
+    // abort: qualunque 'x' arrivato dal PC ferma la scansione
+    while (Serial.available() > 0) {
+      if (Serial.read() == 'x') {
+        Serial.println(F("*sabort"));
+        cmdLen = 0;
+        return;
+      }
+    }
+    stepperMove(dir);                    // include cfgSettleMs meccanico
+    float mm = readSensorStableMm();     // settle adattivo elettrico/meccanico
+    noInterrupts();
+    int32_t cnt = encoderCount;
+    interrupts();
+    Serial.print('#'); Serial.print(i);
+    Serial.print(':'); Serial.print(cnt);
+    Serial.print(':');
+    if (isnan(mm)) Serial.println(F("NaN"));
+    else           Serial.println(mm, 2);
+  }
+  while (Serial.available() > 0) Serial.read();   // drain comandi accodati
+  Serial.println(F("*sdone"));
+}
+
+// =============================================================
 //  Parser comandi seriali
 // =============================================================
 void executeCommand() {
@@ -325,6 +389,12 @@ void executeCommand() {
       Serial.println(F("*dbg"));
     }
     else if (c == '?') { emitEncoderQuery(); }
+    else if (c == 'v') {
+      // Versione/capacità firmware: il browser la usa per abilitare le
+      // funzioni disponibili (scan=1 → scan autonomo 'S' supportato).
+      Serial.println(F("ver=3.0 scan=1"));
+      Serial.println(F("*ver"));
+    }
     else if (c == '!') {
       noInterrupts();
       encoderCount = 0;
@@ -440,6 +510,13 @@ void executeCommand() {
       while (Serial.available() > 0) Serial.read();
       Serial.println(F("*tend"));
     }
+  } else if (cmdLen >= 2 && cmdBuf[0] == 'S') {
+    // S±NNNNN — scan autonomo: segno = direzione (come p/q), NNNNN = unità
+    int8_t dir = (cmdBuf[1] == '+') ? +1 : -1;
+    int value = atoi(&cmdBuf[(cmdBuf[1] == '+' || cmdBuf[1] == '-') ? 2 : 1]);
+    if (value > 0 && value <= 20000) {
+      autonomousScan(dir, (uint16_t)value);
+    }
   } else if (cmdLen >= 4 && cmdBuf[0] == '$') {
     // $+NNN o $-NNN
     int sign  = (cmdBuf[1] == '+') ? +1 : -1;
@@ -497,7 +574,7 @@ void loop() {
     } else if (cmdLen < sizeof(cmdBuf) - 1) {
       cmdBuf[cmdLen++] = c;
       // comandi a singolo carattere si eseguono immediatamente
-      if (cmdLen == 1 && (c == 'p' || c == 'q' || c == 'm' || c == 'd' || c == '?' || c == '!' || c == '@' || c == 'f' || c == 'l')) {
+      if (cmdLen == 1 && (c == 'p' || c == 'q' || c == 'm' || c == 'd' || c == '?' || c == '!' || c == '@' || c == 'f' || c == 'l' || c == 'v')) {
         executeCommand();
       }
     } else {

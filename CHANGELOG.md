@@ -985,3 +985,32 @@ web monolitico, consegna rotta. Piano in 4 fasi approvato dall'utente.
   (rinomina/marker → test rotti) sparisce per costruzione.
 - Verifica: suite 7/7 verde; browser: valori IDENTICI al check storico (alzata al PMS
   2.175/1.706 su VW, bicchiere Ø35), alzata.html ok (reindex dalla lib), 0 errori console.
+
+### Fase 3 — Livello acquisizione condiviso `cammes-scan.js`
+- Le 7 funzioni IDENTICHE tra alzata e polare (verifica automatica con confronto
+  normalizzato) escono in `cammes-scan.js`: connessione WS + auto-reconnect
+  (`_wsReady`/`connectEngine`/`_engineScheduleReconnect`), `onMoveProfileChange`,
+  jog `m1`/`p1`, inversione `rlb`, più lo stato condiviso. Contratto: la pagina
+  definisce `_engineOnOpen`/`_engineOnMessage` e chiama `connectEngine()`.
+  Script top-level → stessi nomi globali, zero modifiche al codice chiamante.
+- package.json: cammes-scan.js in pkg.assets e lint; `npm test` ora esegue TUTTE
+  e 7 le suite; `pkg` pinnato in devDependencies; version → 3.0.0.
+- Verifica browser: alzata e polare connesse via modulo condiviso, 0 errori console.
+
+### Fase 1 — Scan autonomo nel firmware (v3) + settle adattivo
+- **master.ino v3**: comando **`S±NNNNN`** — il ciclo di scansione gira nell'Arduino:
+  per ogni unità muove, legge con **settle ADATTIVO** (`readSensorStableMm`: frame
+  consecutivi entro 5 µm = stabile; budget 1.5 s/punto — veloce sul cerchio base,
+  paziente sul fianco ripido, mirato al problema del fianco sottostimato) e streama
+  `#i:enc:mm` (i = sequenza → i buchi si rilevano). Fine `*sdone`, abort con `x` →
+  `*sabort`. Query versione `v` → `ver=3.0 scan=1`. p/q invariati (jog/compatibilità).
+  Compila pulito: 8584 B flash (26%), 261 B RAM (12%).
+- **alzata.html**: selettore **"Motore scansione: Browser (classico, default) /
+  Firmware (autonomo, beta)"**. Integrazione a rischio minimo: ogni riga `#i:enc:mm`
+  viene riscritta nel formato classico "mm enc" e rientra nel flusso esistente →
+  gauge, binning, max, run ripetuti e 0-virtuale INVARIATI. STOP invia `x`. Guardia
+  firmware vecchio (nessun campione in 6 s → avviso "serve v3").
+- Verifica: simulazione streaming nel browser via gestore reale (10 campioni finti →
+  10/10 registrati, picco tracciato, pdEncoder riempito, completamento e chiusura ok),
+  0 errori console. **Validazione live al banco richiesta prima di adottarlo** (per
+  questo il default resta Browser).

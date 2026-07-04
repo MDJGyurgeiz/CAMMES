@@ -124,6 +124,15 @@
                 <span class="help-icon" data-tip="<strong>Encoder vs Passi</strong>Se lo stepper slitta sotto carico (molla del tastatore sui fianchi ripidi), i passi non corrispondono pi&ugrave; alla rotazione vera della camma e il profilo si deforma. L'indicizzazione su <b>encoder</b> ancora ogni punto a dove la camma &egrave; davvero. <b>Verifica una scansione al banco</b> la prima volta prima di adottarlo stabilmente." tabindex="0">?</span>
             </div>
 
+            <div class="controls-group">
+                <span class="toggle-label">Motore scansione</span>
+                <select id="scanEngine" class="input" style="width:175px;" data-tip="<strong>Chi esegue il ciclo di scansione</strong><b>Browser</b> (default): comportamento classico, un comando per grado via PC.<br><b>Firmware</b>: l'Arduino esegue l'intero giro in autonomia con <b>settle adattivo</b> (aspetta che il tastatore sia davvero fermo su ogni punto) e streama i campioni: timing deterministico, pi&ugrave; veloce, immune ai ritardi del PC. Richiede firmware v3 flashato.">
+                    <option value="browser" selected>Browser (classico)</option>
+                    <option value="firmware">Firmware (autonomo, beta)</option>
+                </select>
+                <span class="help-icon" data-tip="<strong>Scan autonomo (beta)</strong>Il firmware muove-attende-legge da solo e trasmette righe <code>#i:enc:mm</code> con numero di sequenza (i buchi vengono rilevati). Il settle &egrave; ADATTIVO: veloce sul cerchio base, paziente sul fianco ripido &mdash; indicato per il problema del fianco sottostimato. <b>Prima scansione: confronta col metodo classico.</b>" tabindex="0">?</span>
+            </div>
+
             <div class="separator"></div>
 
             <form name="mas">
@@ -252,6 +261,10 @@ var k = 0;
 var pdata = new Array();
 var pdindex = new Array();
 var pdEncoder = new Array();   // conteggio encoder cumulativo per grado (re-indicizzazione encoder)
+// Scan autonomo (firmware v3): stato dello streaming "#i:enc:mm"
+var autoScanActive = false;    // true mentre il firmware sta eseguendo 'S...'
+var _autoLastIdx   = 0;        // ultimo indice di sequenza ricevuto (rileva buchi)
+var _autoGapWarned = false;
 var msg = "";
 var startflag = 0;
 var stepflag = 0;
@@ -444,6 +457,50 @@ var _engineOnMessage = function(event) {
         clearTimeout(window._mv_fallback);
         if (window.CAMMES_DEBUG) console.log('[0V] *mv ricevuto, reload pagina');
         setTimeout(function(){ location.reload(true); }, 200);
+        return;
+    }
+
+    // --- SCAN AUTONOMO (firmware v3): righe streaming "#i:enc:mm" ---
+    // Il firmware esegue l'intero giro da solo. Ogni riga viene RISCRITTA nel
+    // formato classico "mm enc" e prosegue nel flusso standard: gauge, binning,
+    // tracking max, run ripetuti e 0-virtuale restano identici al percorso p/q.
+    if (autoScanActive && msg.charAt(0) === '#') {
+        var ap = msg.substring(1).split(':');
+        if (ap.length >= 3) {
+            var aIdx = parseInt(ap[0], 10);
+            if (!isNaN(aIdx)) {
+                if (aIdx > _autoLastIdx + 1 && !_autoGapWarned && window.cammesToast) {
+                    _autoGapWarned = true;
+                    window.cammesToast({ kind: 'warn', title: 'Campioni persi',
+                        body: 'Salto di sequenza nello streaming (' + _autoLastIdx + '&rarr;' + aIdx + '): possibile riga seriale persa.', duration: 5000 });
+                }
+                _autoLastIdx = aIdx;
+                i = aIdx;
+                // progresso (nel percorso classico lo fa il ramo '*se')
+                document.imp2.imp2.value = "  gradi  " + (i / currentMode.subStepsPerDeg).toFixed(2);
+                if (startflag === 1 && window.cammesScanProgress) {
+                    var aEta = scanEta.tick(i);
+                    window.cammesScanProgress.set(i, currentMode.totalSteps, aEta);
+                }
+                msg = ap[2] + ' ' + ap[1];   // → formato classico "mm enc"
+            }
+        }
+    }
+    if (autoScanActive && (msg === '*sdone' || msg === '*sabort')) {
+        var wasAborted = (msg === '*sabort');
+        autoScanActive = false;
+        if (wasAborted) {
+            startflag = 0;
+            if (window.cammesScanProgress) window.cammesScanProgress.set(0, currentMode.totalSteps, 0);
+            if (scanEta) scanEta.stop();
+            var smA = document.getElementById('scanMode');   if (smA) smA.disabled = false;
+            var rsA = document.getElementById('scanRepeat'); if (rsA) rsA.disabled = false;
+            if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Scansione interrotta', body: 'Scan autonomo fermato.', duration: 3500 });
+        } else if (startflag === 1 && i < currentMode.totalSteps) {
+            startflag = 0;
+            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Scansione incompleta',
+                body: 'Il firmware ha chiuso a ' + i + '/' + currentMode.totalSteps + ' campioni.', duration: 6000 });
+        }
         return;
     }
 
@@ -811,10 +868,28 @@ function _startSingleRun(firstRun) {
     _encChkBaseI = 0; _encChkBaseCount = null; _encAlarmed = false;
     if (config && config.data) { config.data.labels.length = 0; config.data.datasets.forEach(function(d){ d.data.length = 0; }); }
     if (window.myLine) { try { window.myLine.update(); } catch(e) {} }
-    i = i + 1;
-    document.imp2.imp2.value = "  gradi  " + (i / currentMode.subStepsPerDeg).toFixed(2);
-    if (rsign == 1) { sendSocket.send('p'); }
-    if (rsign == -1) { sendSocket.send('q'); }
+    var engSel = document.getElementById('scanEngine');
+    if (engSel && engSel.value === 'firmware') {
+        // SCAN AUTONOMO: il firmware esegue l'intero giro e streama i campioni.
+        // Direzione coerente col percorso classico: rsign 1 → 'p' (dir −).
+        autoScanActive = true; _autoLastIdx = 0; _autoGapWarned = false;
+        i = 0;
+        document.imp2.imp2.value = "  gradi  0.00";
+        sendSocket.send('S' + (rsign == 1 ? '-' : '+') + currentMode.totalSteps + '\n');
+        // Guardia firmware vecchio: se in 6s non arriva nessun campione,
+        // probabilmente il firmware non supporta 'S' (serve v3).
+        setTimeout(function () {
+            if (autoScanActive && _autoLastIdx === 0 && window.cammesToast) {
+                window.cammesToast({ kind: 'err', title: 'Nessun campione dal firmware',
+                    body: 'Il firmware potrebbe non supportare lo scan autonomo (serve v3). Torna a <b>Motore scansione = Browser</b> o ri-flasha master.ino.', duration: 8000 });
+            }
+        }, 6000);
+    } else {
+        i = i + 1;
+        document.imp2.imp2.value = "  gradi  " + (i / currentMode.subStepsPerDeg).toFixed(2);
+        if (rsign == 1) { sendSocket.send('p'); }
+        if (rsign == -1) { sendSocket.send('q'); }
+    }
     stepflag = 0;
     startflag = 1;
     scanEta.start(currentMode.totalSteps);
@@ -839,6 +914,10 @@ function stop() {
     // Ferma definitivamente la scansione: il prossimo START riparte da zero.
     // Niente più toggle implicito: per riprendere dallo stesso punto va
     // creato in futuro un bottone RIPRENDI dedicato.
+    // Scan autonomo in corso? Chiedi al firmware di fermarsi ('x').
+    if (autoScanActive && typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1) {
+        try { sendSocket.send('x'); } catch (e) {}
+    }
     stepflag  = 1;
     startflag = 0;
     labms     = 0;     // annulla anche un eventuale 0 virtuale in corso
