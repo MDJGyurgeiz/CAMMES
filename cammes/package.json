@@ -1,6 +1,6 @@
 {
   "name": "cammes",
-  "version": "1.0.0",
+  "version": "3.0.0",
   "description": "CAMMES - Sistema di misura profili alberi a camme",
   "main": "cammes_server.js",
   "bin": "cammes_server.js",
@@ -8,15 +8,16 @@
     "start": "node cammes_server.js",
     "start:no-browser": "node cammes_server.js --no-browser",
     "build": "pkg . --targets node18-win-x64 --output cammes.exe --compress GZip",
-    "lint": "eslint --config eslint.config.js cammes_server.js cammes-ui.js tools/*.js",
-    "test": "node tools/test_3dof.js && node tools/test_followers.js && node tools/validate_clio.js"
+    "lint": "eslint --config eslint.config.js cammes_server.js cammes-ui.js cammes-scan.js lib/cammes-math.js tools/*.js",
+    "test": "node tools/test_followers.js && node tools/test_3dof.js && node tools/test_surge.js && node tools/test_baseline.js && node tools/test_encoder_reindex.js && node tools/validate_clio.js && node tools/validate_vw.js"
   },
   "dependencies": {
     "ws": "^8.16.0",
     "serialport": "^12.0.0"
   },
   "devDependencies": {
-    "eslint": "^9.0.0"
+    "eslint": "^9.0.0",
+    "pkg": "^5.8.1"
   },
   "pkg": {
     "assets": [
@@ -27,6 +28,7 @@
       "analisi.html",
       "style.css",
       "cammes-ui.js",
+      "cammes-scan.js",
       "jspdf.umd.min.js",
       "responsivevoice.js",
       "lib/**/*",

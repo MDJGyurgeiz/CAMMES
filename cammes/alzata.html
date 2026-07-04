@@ -6,6 +6,7 @@
     <title>CAMMES - Alzata</title>
     <link rel="stylesheet" href="style.css">
     <script src="cammes-ui.js"></script>
+    <script src="cammes-scan.js"></script>
 </head>
 <body>
 
@@ -303,17 +304,6 @@ function onScanModeChange() {
     }
 }
 
-// Profilo movimento (anti-vibrazione): manda 'kN' al firmware che setta
-// pulse width + step rampa + extra delay. Default = standard (k1).
-function onMoveProfileChange() {
-    var sel = document.getElementById('moveProfile');
-    if (!sel) return;
-    var v = parseInt(sel.value, 10);
-    if (isNaN(v) || v < 0 || v > 3) v = 1;
-    if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1) {
-        try { sendSocket.send('k' + v + '\n'); } catch (e) {}
-    }
-}
 
 // Status indicators state
 var lastSensorRx     = 0;   // timestamp ultima misura numerica VALIDA
@@ -326,11 +316,6 @@ var ENCODER_FRESH_MS   = 8000;
 var NAN_TO_AUTOSTOP    = 3;
 
 var _pageLoadTs = Date.now();
-// WebSocket pronti (server raggiungibile)? Usato da LED, banner e guardie START.
-function _wsReady() {
-    return (typeof engineSocket !== 'undefined' && engineSocket.readyState === 1) &&
-           (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1);
-}
 
 function updateStatusLeds() {
     var ledSrv = document.getElementById('ledServer');
@@ -413,13 +398,6 @@ var pollSensorId = setInterval(function() {
     }
 }, 200);
 
-// Connessione WebSocket con AUTO-RECONNECT: se il server cade, il browser
-// ritenta da solo ogni 3s senza bisogno di ricaricare la pagina. I LED/banner
-// (updateStatusLeds) riflettono lo stato; alla riconnessione tornano verdi.
-var WS_URL = "ws://localhost:8080";
-var engineSocket = null;
-var _engineReconnectTimer = null;
-var _everConnected = false;
 
 var _engineOnOpen = function(event) {
     if (_everConnected && window.cammesToast) {
@@ -725,26 +703,7 @@ var _engineOnMessage = function(event) {
     }
 };
 
-// (Ri)connessione del socket engine. onclose/onerror programmano un retry
-// dopo 3s, salvo chiusura intenzionale (window._cammesClosing). Un solo
-// timer di retry alla volta.
-function _engineScheduleReconnect() {
-    if (window._cammesClosing) return;
-    if (_engineReconnectTimer) return;
-    _engineReconnectTimer = setTimeout(function () {
-        _engineReconnectTimer = null;
-        connectEngine();
-    }, 3000);
-}
-function connectEngine() {
-    try {
-        engineSocket = new WebSocket(WS_URL);
-        engineSocket.onopen    = _engineOnOpen;
-        engineSocket.onmessage = _engineOnMessage;
-        engineSocket.onclose   = _engineScheduleReconnect;
-        engineSocket.onerror   = function () { try { engineSocket.close(); } catch (e) {} };
-    } catch (e) { _engineScheduleReconnect(); }
-}
+
 connectEngine();
 </script>
 
@@ -1060,21 +1019,11 @@ function ruota() {
 </script>
 
 <script>
-function p1() {
-    oldg = Number(oldg) + 1;
-    if (rsign == 1) { sendSocket.send('$+001\n'); }
-    if (rsign == -1) { sendSocket.send('$-001\n'); }
-    document.getElementById("step").value = oldg;
-}
+
 </script>
 
 <script>
-function m1() {
-    oldg = Number(oldg) - 1;
-    if (rsign == 1) { sendSocket.send('$-001\n'); }
-    if (rsign == -1) { sendSocket.send('$+001\n'); }
-    document.getElementById("step").value = oldg;
-}
+
 </script>
 
 <script>
@@ -1400,18 +1349,7 @@ window.showLiveTrace = showLiveTrace;
 
 var rot = 0;
 var rsign = 1;
-function rlb() {
-    rot = rot + 1;
-    if (rot == 2) { rot = 0; }
-    if (rot == 0) {
-        document.getElementById("rlabel").innerHTML = "senso orario";
-        rsign = 1;
-    }
-    if (rot == 1) {
-        document.getElementById("rlabel").innerHTML = "senso antiorario";
-        rsign = -1;
-    }
-}
+
 </script>
 
 </body>
