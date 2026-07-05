@@ -1032,3 +1032,48 @@ web monolitico, consegna rotta. Piano in 4 fasi approvato dall'utente.
   da fare sul PC d'officina; il codice impacchettato è lo stesso verificato via node.
 - **GitHub Release v3.0.0** con `cammes.exe` allegato (i binari non stanno nel repo:
   `.gitignore` esclude *.exe/*.apk).
+
+---
+
+## Sessione 8 — 2026-07-05 — VALIDAZIONE AL BANCO (sistema completo, camma installata)
+
+Banco collegato (Arduino COM8 + stepper + encoder + Neoteck + albero montato).
+Campagna eseguita in autonomia: flash v3 → sanity → calibrazione → doppio-scan →
+analisi. Camma installata identificata per correlazione: **Renault Clio 1.8 16V**
+(RMS 0.074 mm vs la scansione d'archivio di 2 mesi fa → ripetibilità eccellente).
+
+### Risultati
+1. **Firmware v3 VALIDATO al banco**: flash ok, `v` → `ver=3.0 scan=1`.
+   **Scan autonomo `S-00360`**: 360/360 campioni, **0 buchi di sequenza, 0 NaN**,
+   76.6 s (213 ms/punto). Profilo = scan classico: picco 8.52 vs 8.51 mm,
+   shift 1°, RMS 0.079 mm, |Δ| medio 0.040 mm. **Settle adattivo attivo e
+   misurabile**: 193 ms/punto sul cerchio base vs 264 ms sul fianco ripido.
+2. **Calibrazione passi↔encoder (B1) CHIUSA**: nelle mosse di scansione (32 step)
+   il rapporto è **0.9986 °/unità** (praticamente esatto); nelle rotazioni lunghe
+   continue (`$+090` = 2880 step) c'è un overshoot di +0.83 % (90°→90.75°),
+   ripetibile e simmetrico, ritorno a casa esatto (0 backlash, 0 slittamento).
+   Divergenza passi↔encoder durante scan: **1°** su 360 → **slittamento ESCLUSO
+   sperimentalmente** su questo banco/camma.
+3. **Re-indicizzazione encoder VALIDATA su dati live**: `reindexByEncoder` sui
+   due scan reali → profilo coerente, divergenza max 1°.
+4. **BUG REALE SCOPERTO E CORRETTO — starvation RX FTDI**: su questo PC il
+   latency timer del convertitore USB-seriale non scatta: i byte ricevuti
+   restano nel chip finché il buffer non si riempie o finché l'host non
+   TRASMETTE. Sintomo: handshake di scansione browser a 30–50 s/passo (probe:
+   risposte consegnate SOLO all'istante di una TX; con kick TX ogni 100 ms:
+   20–200 ms). Lo streaming autonomo invece fluiva (riempie i pacchetti da 62 B).
+   **Fix in cammes_server.js**: keep-alive `'\n'` ogni 100 ms a porta aperta
+   (il firmware ignora le righe vuote). Verifica end-to-end: scan classico da
+   browser di nuovo completo in ~60–100 s (360/360, picco 8.510).
+   Nota: senza questo fix, su PC con driver FTDI configurati male il prodotto
+   sarebbe stato inutilizzabile in scansione — trovato solo grazie al banco.
+5. Dati salvati in `prove/`: `bench_classic_alz.scr`, `bench_auto_alz.scr`.
+
+### Cosa resta aperto
+- Il mistero del **fianco sottostimato VW** non era chiudibile oggi (montata la
+  Clio, non la VW). Però lo slittamento è ora ESCLUSO sperimentalmente: restano
+  dinamica del tastatore sui fianchi ripidi della VW (test: rimontare la VW e
+  scansionare in **autonomo** — il settle adattivo è il candidato-fix) o
+  eccentricità di montaggio di allora.
+- La posizione di riposo dell'albero è ~qualche grado diversa da inizio sessione
+  (irrilevante: ogni scansione è un giro completo e lo zero si fa col comparatore).

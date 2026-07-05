@@ -544,8 +544,18 @@ function openSerialPort(comPort) {
         // Buffer per assemblare i messaggi ricevuti
         var serialBuffer = '';
 
+        // KEEP-ALIVE RX (workaround FTDI): su alcuni PC il latency timer del
+        // convertitore USB-seriale non scatta e i byte RICEVUTI restano nel
+        // chip finché il buffer non si riempie o finché l'host non TRASMETTE
+        // qualcosa (verificato al banco: risposte consegnate solo al kick di
+        // TX, ritardi di 30-50 s nel handshake di scansione). Un '\n' ogni
+        // 100 ms scarica il buffer; il firmware ignora le righe vuote.
+        var _kickTimer = setInterval(function () {
+            try { if (serialPort && serialPort.isOpen) serialPort.write('\n'); } catch (e) {}
+        }, 100);
+
         serialPort.on('open', function () {
-            log('SERIAL', 'Connesso a ' + comPort + ' @ ' + SERIAL_BAUD + ' baud');
+            log('SERIAL', 'Connesso a ' + comPort + ' @ ' + SERIAL_BAUD + ' baud (keep-alive RX attivo)');
             _serialRetryLogged = false;   // prossima attesa hot-plug loggata di nuovo
         });
 
@@ -575,6 +585,7 @@ function openSerialPort(comPort) {
 
         serialPort.on('close', function () {
             log('SERIAL', 'Porta chiusa');
+            clearInterval(_kickTimer);
             serialPort = null;
 
             // Tenta riconnessione dopo 3 secondi
