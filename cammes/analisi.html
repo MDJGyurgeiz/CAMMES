@@ -514,6 +514,7 @@
             </div>
             <div class="flex gap-8" style="margin-top:8px;">
                 <button class="btn btn-secondary" id="btnSaveProfile" onclick="saveProfileToArchive();" style="flex:1;" disabled data-tip="<strong>Salva profilo in archivio (prove/)</strong>Salva la curva come file .scr accanto alle altre misure (visibile in Home). Il menu <b>Tipo follower</b> decide COSA salvi:<br>&bull; <b>Puntalino</b> &rarr; salva il GREZZO cos&igrave; misurato;<br>&bull; <b>Bicchiere/Rullo/Finger</b> &rarr; salva la curva GI&Agrave; CONVERTITA col follower scelto (marcata: al ricarico non verr&agrave; riconvertita).">&#128190; Salva profilo</button>
+                <button class="btn btn-secondary" id="btnCamCard" onclick="exportCamCard();" style="flex:1;" disabled data-tip="<strong>Scheda camma (cam card PDF)</strong>Esporta una scheda in stile rettificatore (A4 orizzontale): tabella asp/scarico (durate, alzata valvola e camma, angolo lobo, fasatura, alzata al PMS) + diagramma dei due lobi sui gradi motore. Dichiara il metodo: <i>rilevato col puntalino, presentato come</i> il follower scelto (bicchiere &Oslash;, rullo, finger con leva) &mdash; conversione validata fisicamente.">&#128196; Scheda camma</button>
             </div>
 
             <!-- RACE-GRADE: Sweep RPM + Optimizer molla + Mappa + Report -->
@@ -3109,6 +3110,7 @@ function analyze() {
     document.getElementById('btnExportCSV').disabled = false;
     document.getElementById('btnExportPDF').disabled = false;
     var bSv = document.getElementById('btnSaveProfile'); if (bSv) bSv.disabled = false;
+    var bCC = document.getElementById('btnCamCard'); if (bCC) bCC.disabled = false;
     var bSw = document.getElementById('btnSweepRpm'); if (bSw) bSw.disabled = false;
     var bOp = document.getElementById('btnOptimizeSpring'); if (bOp) bOp.disabled = false;
     var bMap = document.getElementById('btnSpringMap'); if (bMap) bMap.disabled = false;
@@ -4078,6 +4080,164 @@ function chartToPrintImage(chart) {
     return result;
 }
 
+// =============================================================
+// SCHEDA CAMMA (cam card) — PDF A4 orizzontale in stile scheda del
+// rettificatore: tabella dati asp/scarico + diagramma dei due lobi sui
+// gradi motore (PMI–PMS–PMI) + dichiarazione esplicita del metodo di
+// rilevazione (puntalino) e del follower con cui la curva è PRESENTATA
+// (grezzo / bicchiere Ø / rullo / finger con leva). testMode=true →
+// ritorna l'arraybuffer invece di scaricare (per la verifica automatica).
+// =============================================================
+function exportCamCard(testMode) {
+    if (!lastAnalysis) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Analisi mancante', body: 'Premi <b>Analizza</b> prima di esportare.', duration: 3500 });
+        return null;
+    }
+    var L = lastAnalysis, R = L.results, I = L.inputs, A = L.arrays;
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', compress: true });
+    var pageW = doc.internal.pageSize.getWidth();
+
+    // ---- descrizione follower (come viene PRESENTATA la curva) ----
+    var ft = (document.getElementById('followerType') || {}).value || 'punt';
+    var rPunt = Number((document.getElementById('rPunt') || {}).value) || 1.5;
+    var folDesc;
+    if (ft === 'bicch') folDesc = 'bicchiere piatto Ø ' + (Number(document.getElementById('diamBicch').value) || 0) + ' mm';
+    else if (ft === 'roller') folDesc = 'rullo R ' + (Number(document.getElementById('rRoll').value) || 0) + ' mm';
+    else if (ft === 'finger') folDesc = 'finger follower, leva ' + (Number(document.getElementById('lArm').value) || 0) + '/' + (Number(document.getElementById('lValve').value) || 0) + ' mm';
+    else folDesc = 'puntalino (curva grezza)';
+    var rockTxt = (I.rockerIntake !== 1 || I.rockerExhaust !== 1)
+        ? ' · bilanciere ' + I.rockerIntake.toFixed(2) + ' / ' + I.rockerExhaust.toFixed(2) : '';
+
+    // ---- alzata CAMMA (pre-bilanciere): picco dei profili follower ----
+    function pk360(arr) { var m = 0; if (!arr) return 0; for (var i = 1; i <= 360; i++) if (arr[i] > m) m = arr[i]; return m; }
+    var camPkIn = pk360(typeof folIntake !== 'undefined' ? folIntake : null) || R.maxLiftIn / (I.rockerIntake || 1);
+    var camPkEx = pk360(typeof folExhaust !== 'undefined' ? folExhaust : null) || R.maxLiftEx / (I.rockerExhaust || 1);
+
+    // ---- intestazione ----
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+    doc.text('SCHEDA CAMMA — CAM CARD', 12, 14);
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+    doc.text('CAMMES ' + (window.CAMMES_VERSION || '') + '  ·  ' + new Date().toISOString().substring(0, 10), pageW - 12, 10, { align: 'right' });
+    doc.text('Rilevazione: puntalino sferico R ' + rPunt + ' mm  ·  curva presentata come: ' + folDesc + rockTxt, pageW - 12, 15, { align: 'right' });
+    doc.setDrawColor(40); doc.setLineWidth(0.5); doc.line(12, 18, pageW - 12, 18);
+    doc.setFontSize(8.5); doc.setTextColor(90);
+    doc.text('ASP: ' + (I.intakeFile || '-') + '    SCA: ' + (I.exhaustFile || '-'), 12, 23);
+    doc.setTextColor(0);
+
+    // ---- tabella dati (colonna sinistra) ----
+    var x0 = 12, xI = 62, xE = 92, y = 32, lh = 6.4;
+    function row(lbl, vi, ve, bold) {
+        doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(9);
+        doc.text(lbl, x0, y);
+        doc.text(String(vi), xI, y);
+        doc.text(String(ve), xE, y);
+        y += lh;
+    }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+    doc.text('dati camma', x0, y); doc.text('aspirazione', xI, y); doc.text('scarico', xE, y); y += lh + 1;
+    row('gioco valvola', I.intakeClearance.toFixed(2) + ' mm', I.exhaustClearance.toFixed(2) + ' mm');
+    row('durata @ gioco', R.durIntake.toFixed(0) + '°', R.durExhaust.toFixed(0) + '°');
+    row('durata @ ' + I.durationRef.toFixed(2) + ' mm', R.durRefIn.toFixed(0) + '°', R.durRefEx.toFixed(0) + '°');
+    row('alzata valvola', R.maxLiftIn.toFixed(2) + ' mm', R.maxLiftEx.toFixed(2) + ' mm', true);
+    row('alzata camma', camPkIn.toFixed(2) + ' mm', camPkEx.toFixed(2) + ' mm');
+    row('angolo lobo', R.intakeCenter.toFixed(1) + '° ATDC', R.exhaustCenter.toFixed(1) + '° BTDC', true);
+    row('apre', R.intakeOpenBTC.toFixed(1) + '° BTDC', R.exOpenBBC.toFixed(1) + '° BBDC');
+    row('chiude', R.intakeCloseABC.toFixed(1) + '° ABDC', R.exCloseATC.toFixed(1) + '° ATDC');
+    row('alzata al PMS', R.liftInTDC.toFixed(2) + ' mm', R.liftExTDC.toFixed(2) + ' mm', true);
+    row('incrocio (overlap)', R.overlap.toFixed(1) + '°', '');
+    row('LSA', R.LSA.toFixed(1) + '°', '');
+
+    // ---- note metodo ----
+    y += 3;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text('REMARKS', x0, y); y += 5;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+    var remarks = [
+        '# misura CAMMES: scansione 360° col puntalino, conversione geometrica al follower dichiarato.',
+        '# conversione puntalino→follower VALIDATA fisicamente (piattello reale, RMS 0.046 mm).',
+        '# correzione baseline/eccentricità: ' + (typeof baselineEnabled === 'function' && baselineEnabled() ? 'ON' : 'OFF') + '.',
+        '# durate e fasatura riferite al gioco valvola indicato; angoli in gradi MOTORE.'
+    ];
+    remarks.forEach(function (r2) { doc.text(r2, x0, y, { maxWidth: 96 }); y += 4.6; });
+
+    // ---- diagramma lobi (canvas → immagine) ----
+    var cw = 1180, ch = 620;
+    var cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+    var g = cv.getContext('2d');
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, cw, ch);
+    var mL = 70, mR = 70, mT = 46, mB = 78;
+    var plotW = cw - mL - mR, plotH = ch - mT - mB;
+    var dMin = 91, dMax = 631;                       // finestra: PMI(181) PMS(361) PMI(541) ±90
+    var maxLift = Math.max(R.maxLiftIn, R.maxLiftEx) * 1.08 || 1;
+    function X(d) { return mL + (d - dMin) / (dMax - dMin) * plotW; }
+    function Y(v) { return mT + plotH - (v / maxLift) * plotH; }
+    // assi
+    g.strokeStyle = '#000'; g.lineWidth = 2;
+    g.strokeRect(mL, mT, plotW, plotH);
+    // verticali PMI/PMS/PMI
+    g.setLineDash([7, 6]); g.lineWidth = 1.5; g.strokeStyle = '#333';
+    [[181, 'PMI'], [361, 'PMS'], [541, 'PMI']].forEach(function (m) {
+        g.beginPath(); g.moveTo(X(m[0]), mT); g.lineTo(X(m[0]), mT + plotH); g.stroke();
+        g.setLineDash([]); g.fillStyle = '#000'; g.font = 'bold 22px Arial'; g.textAlign = 'center';
+        g.fillText(m[1], X(m[0]), mT - 12);
+        g.setLineDash([7, 6]);
+    });
+    g.setLineDash([]);
+    // curve
+    function drawCurve(arr, color, width) {
+        g.strokeStyle = color; g.lineWidth = width; g.beginPath();
+        var first = true;
+        for (var d = dMin; d <= dMax; d++) {
+            var v = arr && arr[d] ? arr[d] : 0;
+            if (first) { g.moveTo(X(d), Y(v)); first = false; } else g.lineTo(X(d), Y(v));
+        }
+        g.stroke();
+    }
+    drawCurve(A.anlEx, '#777777', 3);
+    drawCurve(A.anlIn, '#000000', 3);
+    // etichette lobi + centro
+    g.font = 'bold 22px Arial'; g.textAlign = 'center';
+    var exPkX = X(361 - R.exhaustCenter), inPkX = X(361 + R.intakeCenter);
+    g.fillStyle = '#777'; g.fillText('SCARICO', exPkX, Y(R.maxLiftEx) - 26);
+    g.fillStyle = '#000'; g.fillText('ASPIRAZIONE', inPkX, Y(R.maxLiftIn) - 26);
+    g.font = '20px Arial';
+    g.fillStyle = '#777'; g.fillText(R.exhaustCenter.toFixed(0) + '°', exPkX, Y(R.maxLiftEx) - 6);
+    g.fillStyle = '#000'; g.fillText(R.intakeCenter.toFixed(0) + '°', inPkX, Y(R.maxLiftIn) - 6);
+    // livello alzata al PMS
+    g.setLineDash([3, 5]); g.strokeStyle = '#000'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(X(361) - 90, Y(R.liftInTDC)); g.lineTo(X(361) + 90, Y(R.liftInTDC)); g.stroke();
+    g.setLineDash([]);
+    g.font = '18px Arial'; g.textAlign = 'left';
+    g.fillStyle = '#000';
+    g.fillText(R.liftInTDC.toFixed(2) + ' / ' + R.liftExTDC.toFixed(2) + ' mm @ PMS', X(361) + 96, Y(R.liftInTDC) + 6);
+    // scala alzata (sinistra) e asse gradi (sotto)
+    g.textAlign = 'right'; g.font = '18px Arial';
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (f) {
+        var v = maxLift / 1.08 * f;
+        g.fillText(v.toFixed(1), mL - 8, Y(v) + 6);
+        g.strokeStyle = '#ccc'; g.lineWidth = 1;
+        if (f > 0) { g.beginPath(); g.moveTo(mL, Y(v)); g.lineTo(mL + plotW, Y(v)); g.stroke(); }
+    });
+    g.textAlign = 'center';
+    g.fillText('mm', mL - 8, mT - 12);
+    for (var gd = 120; gd <= 600; gd += 60) {
+        g.fillText(String(gd - 361), X(gd), mT + plotH + 26);
+    }
+    g.fillText('gradi motore (0 = PMS incrocio)', mL + plotW / 2, mT + plotH + 52);
+    // fasatura testuale sotto
+    g.font = 'bold 19px Arial';
+    g.fillText('ASP  ' + R.intakeOpenBTC.toFixed(0) + '° BTDC – ' + R.intakeCloseABC.toFixed(0) + '° ABDC          SCA  ' + R.exOpenBBC.toFixed(0) + '° BBDC – ' + R.exCloseATC.toFixed(0) + '° ATDC          overlap ' + R.overlap.toFixed(0) + '°', mL + plotW / 2, ch - 8);
+    var img = cv.toDataURL('image/png');
+    var iw = 168, ih = iw * ch / cw;
+    doc.addImage(img, 'PNG', 117, 26, iw, ih);
+
+    if (testMode) return doc.output('arraybuffer');
+    var fname = 'cammes_scheda_camma_' + new Date().toISOString().substring(0, 10) + '.pdf';
+    doc.save(fname);
+    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Scheda camma esportata', body: fname, duration: 4500 });
+}
+window.exportCamCard = exportCamCard;
+
 function exportPDF() {
     if (!lastAnalysis) {
         if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Analisi mancante', body: 'Premi <b>Analizza</b> prima di esportare.', duration: 3500 });
@@ -4538,6 +4698,7 @@ function resetAll() {
     document.getElementById('btnExportCSV').disabled = true;
     document.getElementById('btnExportPDF').disabled = true;
     var bSvR = document.getElementById('btnSaveProfile'); if (bSvR) bSvR.disabled = true;
+    var bCCR = document.getElementById('btnCamCard'); if (bCCR) bCCR.disabled = true;
     var bSwR = document.getElementById('btnSweepRpm'); if (bSwR) bSwR.disabled = true;
     var bOpR = document.getElementById('btnOptimizeSpring'); if (bOpR) bOpR.disabled = true;
     var bMapR = document.getElementById('btnSpringMap'); if (bMapR) bMapR.disabled = true;

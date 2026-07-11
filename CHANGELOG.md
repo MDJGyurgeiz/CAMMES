@@ -1114,3 +1114,19 @@ autonoma v3 ×2, mediata 3 campioni ×1).
   zombie inchiodato sulla COM (non uccidibile senza admin); risolto con
   scollega/ricollega USB dell'utente + watcher automatico di ripartenza. Il driver
   ora rileva la porta dinamicamente e ritenta l'apertura.
+
+### Export "Scheda camma" (cam card PDF) — richiesta utente su modello Cat Cams
+- Nuovo bottone **📄 Scheda camma** in Analisi (abilitato dopo Analizza):
+  `exportCamCard()` genera un **PDF A4 orizzontale in stile scheda rettificatore**:
+  tabella asp/scarico (gioco, durata @gioco e @riferimento, **alzata valvola E alzata
+  camma**, angolo lobo, apre/chiude, alzata al PMS, overlap, LSA), diagramma dei due
+  lobi sui gradi motore (PMI–PMS–PMI, centri lobo annotati, livello alzata@PMS,
+  fasatura testuale) disegnato su canvas ed embeddato, sezione REMARKS.
+- **Dichiarazione esplicita del metodo**: "Rilevazione: puntalino sferico R x mm ·
+  curva presentata come: bicchiere Ø / rullo / finger con leva / grezzo (+ bilanciere)"
+  — esattamente il flusso chiesto dall'utente, forte della validazione fisica di oggi.
+- `compress: true` → PDF da 2,9 MB a **62 KB**. Modalità test (`exportCamCard(true)`
+  ritorna l'arraybuffer) per la verifica automatica.
+- Verifica browser: caso VW completo (bicchiere Ø35, rBase per lato, centri 106/104,
+  giochi 0,30/0,40) → PDF valido (%PDF, 62 KB), bottone gated correttamente,
+  0 errori console.
