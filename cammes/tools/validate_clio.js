@@ -36,7 +36,9 @@ var mapCamToCrank = M.mapCamToCrank, parseCamFile = M.parseCamFile,
     detectValveFloat = M.detectValveFloat;
 
 // --- carica la scansione reale (normalizza EOL a CRLF: parseCamFile usa \r\n) ---
-var scrPath = path.join(__dirname, '..', 'prove', 'clio_test_1_alz.scr');
+// Riferimento in tools/fixtures/ (prove/ è l'archivio utente, svuotabile dalla UI)
+var scrPath = path.join(__dirname, 'fixtures', 'clio_test_1_alz.scr');
+if (!fs.existsSync(scrPath)) scrPath = path.join(__dirname, '..', 'prove', 'clio_test_1_alz.scr');
 var raw  = fs.readFileSync(scrPath, 'utf8').replace(/\r?\n/g, '\r\n');
 var camLift = parseCamFile(raw);
 var crank   = mapCamToCrank(camLift, 0, 0, 'intake');   // fase 0, gioco 0 (curva grezza)

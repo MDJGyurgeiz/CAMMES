@@ -1,6 +1,6 @@
 {
   "name": "cammes",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "CAMMES - Sistema di misura profili alberi a camme",
   "main": "cammes_server.js",
   "bin": "cammes_server.js",
@@ -23,7 +23,6 @@
     "assets": [
       "home.html",
       "alzata.html",
-      "polare.html",
       "grafici.html",
       "analisi.html",
       "style.css",
@@ -32,6 +31,7 @@
       "jspdf.umd.min.js",
       "responsivevoice.js",
       "lib/**/*",
+      "fw/**/*",
       "fonts/**/*",
       "images/**/*",
       "prove/**/*"

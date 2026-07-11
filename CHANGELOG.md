@@ -1158,3 +1158,70 @@ autonoma v3 ×2, mediata 3 campioni ×1).
   scelta ricordata). Nessuna funzione rimossa.
 - **polare.html**: messaggio "mic out" → **"NO SENSORE"** (coerente con Alzata):
   significa lettura assente o fuori scala (>32 mm / NaN).
+
+## Sessione 9 — 2026-07-11 (sera): semplificazione UI data-driven + update remoto
+
+### Test al banco delle 6 modalità di scansione (decisione utente: "servono tutte?")
+- Driver usa-e-getta: scan classico completo per fast/std/race/ultra/hyper sulla
+  stessa camma (Clio + piattello Ø33), binning a 1°, confronto RMS dopo
+  allineamento. Risultati:
+  | modalità | tempo | picco | RMS vs fast |
+  |---|---|---|---|
+  | fast (1°, c1) | 44 s | 8.500 @116° | — |
+  | std (1°, c3) | 135 s | 8.500 @116° | 0,049 mm |
+  | race (0,5°, c3) | 276 s | 8.500 @117° | 0,049 mm |
+  | ultra (0,5°, c5) | 426 s | 8.510 @117° | 0,048 mm |
+  | hyper (0,125°) | 504 s | **@210°(!)** | 3,96 mm |
+- **fast≡std≡race≡ultra entro 0,05 mm RMS** (= ripetibilità run-to-run): Ultra non
+  aggiunge nulla e costa 10×.
+- **Hyper/Atomic erano rotte by design**: chiedono `r4`/`r1`, ma il firmware
+  accetta solo r∈{8,16,32,64} (master.ino:431) e ignora il comando → giravano col
+  passo residuo precedente percorrendo PIÙ GIRI per scansione (il picco a 210°
+  è la terza passata del lobo con r16 ereditata da ultra: 2880×0,5°=4 giri).
+- **Decisione: 6 → 3 modalità** — Veloce (1°, default), Precisione (1°, media 3),
+  Race (0,5°, media 3). Tempi dichiarati = misurati.
+
+### Alzata: rimozione "Sorgente angolo" + Motore scansione default Firmware
+- "Sorgente angolo" eliminata (UI): al banco passi≡encoder entro 1° su 360°,
+  la re-indicizzazione non corregge nulla nell'uso normale. `sav()` torna al
+  salvataggio semplice sui passi; `reindexByEncoder` resta in lib/cammes-math.js
+  (testata) e l'encoder resta in uso per zero virtuale, reset 180° e allarme
+  slittamento.
+- "Motore scansione": tenuto con 2 opzioni — **Firmware (autonomo, consigliato,
+  default)**, validato 07-05/07-11, e **Browser (compatibilità)** come riserva per
+  firmware pre-v3 (guardia 6 s già presente).
+- "Ripetizioni": tenuta in ⚙ Avanzate (default 1): è l'unico strumento che
+  quantifica la ripetibilità (σ per grado), usato per le validazioni stesse.
+
+### Pensionamento pagina Polare
+- `polare.html` → `legacy/` (git mv); link nav e tile Home rimossi ovunque;
+  tolta da pkg.assets; tour aggiornato ("Le 3 sezioni", step vista polare).
+- **Vista polare in Confronto da file `_alz`**: il campo "Vista polare" accetta
+  ora gli `_alz` (raggio = raggio base configurabile + alzata) e i vecchi `_pol`
+  restano leggibili (legacy). Loader riscritto (via il doppio FileReader binario).
+
+### Update software in-app (repo GitHub ora PUBBLICO) — punto 8
+- Server: **GET /api/update-check** → GitHub Releases `releases/latest`
+  (User-Agent, cache 1 h per il rate limit), confronto semver con package.json.
+- cammes-ui.js: check silenzioso a ogni avvio pagina, toast una volta per
+  sessione se c'è una versione più nuova, con link alla release.
+- Home, card **"Sistema & aggiornamenti"**: versione installata, "Controlla
+  aggiornamenti" manuale, link download quando disponibile.
+
+### Update firmware Arduino dall'app
+- `cammes/fw/`: `master.ino.hex` precompilato (arduino-cli, 8584 B) +
+  `avrdude.exe`/`.conf` (8.0.0-arduino1) + `version.json`; inclusi in pkg.assets.
+- Server: **GET /api/firmware-info** (versione inclusa, porta, stato seriale) e
+  **POST /api/flash-firmware**: chiude la seriale, estrae hex+avrdude su disco
+  reale (temp, per pkg), `avrdude -c arduino -P COMx -b 115200 -D -U flash:w:hex:i`
+  con fallback all'avrdude di Arduino15, poi riapre la seriale. L'hot-plug è
+  sospeso durante il flash (flag `flashInProgress`).
+- Home: bottone "⚡ Aggiorna firmware Arduino" con conferma, stato live e toast.
+- **TESTATO SUL FERRO**: flash reale via endpoint → 8584 byte scritti e
+  verificati in 8,5 s su COM8, seriale riaperta da sola, `v` → `ver=3.0 scan=1`.
+
+### Fixtures di validazione fuori dall'archivio utente
+- L'utente ha usato "Svuota archivio" → prove/ vuota, e `npm test` leggeva i file
+  reali da lì. I 3 file di riferimento (Clio + VW asp/sc) ora vivono in
+  `cammes/tools/fixtures/` (fallback a prove/); le 7 suite ripassano tutte.
+- I file di misura eliminati restano recuperabili dalla history git.

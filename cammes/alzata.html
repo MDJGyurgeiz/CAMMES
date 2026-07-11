@@ -21,7 +21,6 @@
         <div class="nav-links">
             <a href="home.html">Home</a>
             <a href="alzata.html" class="active">Alzata</a>
-            <a href="polare.html">Polare</a>
             <a href="grafici.html">Confronto</a>
             <a href="analisi.html">Analisi</a>
         </div>
@@ -83,15 +82,12 @@
 
             <div class="controls-group">
                 <span class="toggle-label">Modalit&agrave;</span>
-                <select id="scanMode" class="input" style="width:230px;" onchange="onScanModeChange();" data-tip="<strong>Modalit&agrave; di scansione</strong>Definisce densit&agrave; di campionamento, settle delay e numero di campioni per ogni grado camma. Modalit&agrave; alte = pi&ugrave; precisione ma scansione pi&ugrave; lunga.">
-                    <option value="fast" selected>Veloce &middot; ~1m (stradale)</option>
-                    <option value="std">Standard &middot; ~2m (mediana 3)</option>
-                    <option value="race">Race &middot; ~5m (0.5&deg; + settle 80ms)</option>
-                    <option value="ultra">Ultra &middot; ~7m30s (max precisione)</option>
-                    <option value="hyper">Hyper &middot; ~10m (8 sub/&deg;)</option>
-                    <option value="atomic">Atomic &middot; ~36m (passo motore minimo)</option>
+                <select id="scanMode" class="input" style="width:230px;" onchange="onScanModeChange();" data-tip="<strong>Modalit&agrave; di scansione</strong>Definisce densit&agrave; di campionamento, settle delay e numero di campioni per ogni grado camma. Al banco (07-11) le tre modalit&agrave; danno la stessa curva entro 0,05 mm RMS: Veloce basta quasi sempre.">
+                    <option value="fast" selected>Veloce &middot; ~45s &middot; 1&deg;</option>
+                    <option value="std">Precisione &middot; ~2m15s &middot; 1&deg;, media 3 letture</option>
+                    <option value="race">Race &middot; ~4m40s &middot; 0.5&deg;, media 3 letture</option>
                 </select>
-                <span class="help-icon" data-tip="<strong>Quale scegliere?</strong><b>Veloce</b>: cammette stradali, verifica rapida. <b>Standard</b>: default per profili stradali. <b>Race</b>: camme da competizione (alzate &gt; 10mm). <b>Ultra/Hyper/Atomic</b>: solo per studi metrologici, sensibili al rumore." tabindex="0">?</span>
+                <span class="help-icon" data-tip="<strong>Quale scegliere?</strong><b>Veloce</b>: uso normale, validata al banco (identica alle altre entro 0,05 mm RMS). <b>Precisione</b>: media 3 letture per grado, per ambienti con vibrazioni. <b>Race</b>: risoluzione 0,5&deg; per fianchi molto ripidi di camme spinte. Le vecchie Ultra/Hyper/Atomic sono state ritirate: al banco non miglioravano nulla (Ultra) o non erano supportate dal passo minimo del firmware (Hyper/Atomic, r4/r1 rifiutati)." tabindex="0">?</span>
             </div>
 
             <div class="separator"></div>
@@ -101,7 +97,7 @@
                  normale basta la Modalità: ripetizioni/profilo/sorgente/motore
                  sono strumenti di verifica e casi particolari. -->
             <div class="controls-group">
-                <button type="button" class="btn btn-secondary btn-sm" id="scanAdvBtn" onclick="toggleScanAdvanced();" data-tip="<strong>Impostazioni avanzate scansione</strong>Ripetizioni con statistiche, profilo anti-vibrazione, sorgente angolo (passi/encoder) e motore di scansione (browser/firmware). Per l'uso normale bastano Modalit&agrave; e START: al banco le varie combinazioni danno la stessa curva entro 0,05-0,07 mm.">&#9881; Avanzate</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="scanAdvBtn" onclick="toggleScanAdvanced();" data-tip="<strong>Impostazioni avanzate scansione</strong>Ripetizioni con statistiche, profilo anti-vibrazione e motore di scansione (firmware/browser). Per l'uso normale bastano Modalit&agrave; e START: al banco le varie combinazioni danno la stessa curva entro 0,05-0,07 mm.">&#9881; Avanzate</button>
             </div>
             <div id="scanAdvanced" style="display:none;">
 
@@ -125,21 +121,12 @@
             </div>
 
             <div class="controls-group">
-                <span class="toggle-label">Sorgente angolo</span>
-                <select id="angleSource" class="input" style="width:175px;" data-tip="<strong>Sorgente dell'asse angolare</strong><b>Passi</b> (default): l'angolo deriva dai passi comandati al motore (comportamento storico).<br><b>Encoder</b>: al salvataggio il profilo viene re-indicizzato sulla posizione REALE letta dall'encoder, immune a slittamento dello stepper e a errori di passi/grado. In mancanza di dati encoder torna automaticamente ai passi.">
-                    <option value="step" selected>Passi motore (default)</option>
-                    <option value="encoder">Encoder (reale)</option>
-                </select>
-                <span class="help-icon" data-tip="<strong>Encoder vs Passi</strong>Se lo stepper slitta sotto carico (molla del tastatore sui fianchi ripidi), i passi non corrispondono pi&ugrave; alla rotazione vera della camma e il profilo si deforma. L'indicizzazione su <b>encoder</b> ancora ogni punto a dove la camma &egrave; davvero. <b>Verifica una scansione al banco</b> la prima volta prima di adottarlo stabilmente." tabindex="0">?</span>
-            </div>
-
-            <div class="controls-group">
                 <span class="toggle-label">Motore scansione</span>
-                <select id="scanEngine" class="input" style="width:175px;" data-tip="<strong>Chi esegue il ciclo di scansione</strong><b>Browser</b> (default): comportamento classico, un comando per grado via PC.<br><b>Firmware</b>: l'Arduino esegue l'intero giro in autonomia con <b>settle adattivo</b> (aspetta che il tastatore sia davvero fermo su ogni punto) e streama i campioni: timing deterministico, pi&ugrave; veloce, immune ai ritardi del PC. Richiede firmware v3 flashato.">
-                    <option value="browser" selected>Browser (classico)</option>
-                    <option value="firmware">Firmware (autonomo, beta)</option>
+                <select id="scanEngine" class="input" style="width:175px;" data-tip="<strong>Chi esegue il ciclo di scansione</strong><b>Firmware</b> (consigliato, validato al banco): l'Arduino esegue l'intero giro in autonomia con <b>settle adattivo</b> (aspetta che il tastatore sia davvero fermo su ogni punto) e streama i campioni: timing deterministico, immune ai ritardi del PC.<br><b>Browser</b>: metodo classico un-comando-per-grado, utile come compatibilit&agrave; con firmware precedenti alla v3.">
+                    <option value="firmware" selected>Firmware (autonomo, consigliato)</option>
+                    <option value="browser">Browser (compatibilit&agrave;)</option>
                 </select>
-                <span class="help-icon" data-tip="<strong>Scan autonomo (beta)</strong>Il firmware muove-attende-legge da solo e trasmette righe <code>#i:enc:mm</code> con numero di sequenza (i buchi vengono rilevati). Il settle &egrave; ADATTIVO: veloce sul cerchio base, paziente sul fianco ripido &mdash; indicato per il problema del fianco sottostimato. <b>Prima scansione: confronta col metodo classico.</b>" tabindex="0">?</span>
+                <span class="help-icon" data-tip="<strong>Scan autonomo</strong>Validato al banco (07-05 e 07-11: profilo identico al classico entro 0,05 mm, 0 campioni persi). Se il firmware non &egrave; v3, entro 6 s compare l'avviso e puoi passare a Browser." tabindex="0">?</span>
             </div>
 
             </div><!-- /scanAdvanced -->
@@ -271,7 +258,6 @@ var max = 0;
 var k = 0;
 var pdata = new Array();
 var pdindex = new Array();
-var pdEncoder = new Array();   // conteggio encoder cumulativo per grado (re-indicizzazione encoder)
 // Scan autonomo (firmware v3): stato dello streaming "#i:enc:mm"
 var autoScanActive = false;    // true mentre il firmware sta eseguendo 'S...'
 var _autoLastIdx   = 0;        // ultimo indice di sequenza ricevuto (rileva buchi)
@@ -297,12 +283,14 @@ var _encAlarmed = false;       // allarme già emesso in questo run (una volta)
 // Smorza le vibrazioni meccaniche del puntalino del comparatore. Più alto =
 // curva di alzata più pulita ma scansione più lenta.
 var SCAN_MODES = {
-    fast:   { samples: 1, microsteps: 32, totalSteps: 360,   subStepsPerDeg: 1,  settleMs: 30,  label: 'Veloce',   timeSec: 60   },
-    std:    { samples: 3, microsteps: 32, totalSteps: 360,   subStepsPerDeg: 1,  settleMs: 50,  label: 'Standard', timeSec: 130  },
-    race:   { samples: 3, microsteps: 16, totalSteps: 720,   subStepsPerDeg: 2,  settleMs: 80,  label: 'Race',     timeSec: 280  },
-    ultra:  { samples: 5, microsteps: 16, totalSteps: 720,   subStepsPerDeg: 2,  settleMs: 120, label: 'Ultra',    timeSec: 450  },
-    hyper:  { samples: 1, microsteps: 4,  totalSteps: 2880,  subStepsPerDeg: 8,  settleMs: 50,  label: 'Hyper',    timeSec: 600  },
-    atomic: { samples: 1, microsteps: 1,  totalSteps: 11520, subStepsPerDeg: 32, settleMs: 30,  label: 'Atomic',   timeSec: 2160 }
+    // Ridotte da 6 a 3 dopo il test al banco del 07-11 (Clio + piattello Ø33):
+    // fast/std/race/ultra identiche entro 0,05 mm RMS (= ripetibilità run-to-run),
+    // quindi Ultra non aggiungeva nulla; Hyper (r4) e Atomic (r1) chiedevano passi
+    // che il firmware rifiuta (minimo r8) → giravano con il passo precedente
+    // percorrendo più giri per scansione. Tempi misurati: 44s / 135s / 276s.
+    fast:   { samples: 1, microsteps: 32, totalSteps: 360,   subStepsPerDeg: 1,  settleMs: 30,  label: 'Veloce',     timeSec: 50   },
+    std:    { samples: 3, microsteps: 32, totalSteps: 360,   subStepsPerDeg: 1,  settleMs: 50,  label: 'Precisione', timeSec: 140  },
+    race:   { samples: 3, microsteps: 16, totalSteps: 720,   subStepsPerDeg: 2,  settleMs: 80,  label: 'Race',       timeSec: 280  }
 };
 var currentMode = SCAN_MODES.fast;
 // Buffer di accumulo per modalità ad alta densità (chiave = grado camma 1..360)
@@ -623,8 +611,6 @@ var _engineOnMessage = function(event) {
                     pdata[deg]   = sum / subBuffer[deg].length;
                 }
             }
-            if (msgEncoder !== null) pdEncoder[deg] = msgEncoder;   // encoder reale per questo grado
-
             // Tracking massimo (su valore corrente del bin, anche se non ancora chiuso)
             var currentBinVal = (currentMode.subStepsPerDeg <= 1) ? pdata[deg]
                                 : (subBuffer[deg] ? subBuffer[deg].reduce(function(a,b){return a+b;}, 0)/subBuffer[deg].length : 0);
@@ -893,7 +879,7 @@ function _startSingleRun(firstRun) {
     i = 0;
     consecutiveNaN = 0;
     subBuffer = {};
-    pdata.length = 0; pdindex.length = 0; pdEncoder.length = 0;
+    pdata.length = 0; pdindex.length = 0;
     max = 0; maxg = 0; maxg_encoder = null;
     // Reset controllo divergenza stepper↔encoder per questo run
     _encChkBaseI = 0; _encChkBaseCount = null; _encAlarmed = false;
@@ -1055,12 +1041,6 @@ function reset() {
 
 <script>
 var stringa = "";
-// Vero se l'utente ha scelto di indicizzare il profilo sull'encoder reale.
-function angleSourceEncoder() {
-    var el = document.getElementById('angleSource');
-    return !!el && el.value === 'encoder';
-}
-
 function sav() {
     var nameEl = document.getElementById("nome");
     var rawName = (nameEl && nameEl.value || '').trim();
@@ -1075,30 +1055,19 @@ function sav() {
     }
     // Sanifica nome (no spazi/caratteri non sicuri per filesystem)
     var safeName = rawName.replace(/[^A-Za-z0-9_\-]/g, '_');
-    // Sorgente angolo: se 'encoder', re-indicizza il profilo sulla posizione
-    // reale (fallback automatico ai passi se i dati encoder sono insufficienti).
-    var wantEnc = angleSourceEncoder();
-    var reEnc = wantEnc ? reindexByEncoder(pdata, pdEncoder) : null;
-    var saveData = reEnc || pdata;
-    var nMax = reEnc ? 360 : (pdindex.length - 1);
+    // Asse angolare = passi motore: al banco (07-05) passi ed encoder coincidono
+    // entro 1° sull'intero giro, quindi l'opzione di re-indicizzazione encoder è
+    // stata ritirata dalla UI (l'encoder resta in uso per zero virtuale, reset
+    // e allarme slittamento; reindexByEncoder vive in lib/cammes-math.js).
     stringa = "";
-    for (t = 1; t <= nMax; t++) {
-        var idx = reEnc ? t : pdindex[t];
-        stringa = stringa + idx + "," + saveData[t] + "\r\n";
+    for (t = 1; t < pdindex.length; t++) {
+        stringa = stringa + pdindex[t] + "," + pdata[t] + "\r\n";
     }
     var fname = safeName + "_alz";
     var stringa2 = "*" + fname + "*" + "_pline" + "\r\n" + stringa;
     sendSocket.send(stringa2);
     document.salva.salva.value = " file salvato";
-    if (window.cammesToast) {
-        if (wantEnc && !reEnc) {
-            window.cammesToast({ kind: 'warn', title: 'Encoder non disponibile', body: 'Dati encoder insufficienti per la re-indicizzazione: salvato sui <b>passi motore</b>.', duration: 5500 });
-        } else if (reEnc) {
-            window.cammesToast({ kind: 'info', title: 'Indicizzato su encoder', body: fname + '.scr salvato (ancorato alla posizione reale; divergenza max dai passi: ' + (window._encReindexDivergence || 0).toFixed(1) + '&deg;).', duration: 5500 });
-        } else {
-            window.cammesToast({ kind: 'success', title: 'File salvato', body: fname + '.scr in cartella prove/.', duration: 4000 });
-        }
-    }
+    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'File salvato', body: fname + '.scr in cartella prove/.', duration: 4000 });
 }
 </script>
 

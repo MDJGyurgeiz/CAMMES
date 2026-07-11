@@ -27,7 +27,6 @@
         <div class="nav-links">
             <a href="home.html">Home</a>
             <a href="alzata.html">Alzata</a>
-            <a href="polare.html">Polare</a>
             <a href="grafici.html" class="active">Confronto</a>
             <a href="analisi.html">Analisi</a>
         </div>
@@ -62,10 +61,10 @@
         <!-- Right: Data table + File inputs -->
         <div class="card">
             <div class="card-title">Dati misurazione
-                <span class="help-icon" data-tip="<strong>Come usare il confronto</strong>Carica fino a 4 file '.scr' (alzata o polare) salvati dalle pagine Alzata/Polare. Il grafico li sovrappone con colori diversi. La tabella mostra grado e valore massimo di ciascuno. Utile per: <ul><li>verificare ripetibilit&agrave; sulla stessa camma</li><li>confrontare camme diverse (race vs stradale)</li><li>misurare usura tra prima e dopo</li></ul>" tabindex="0">?</span>
+                <span class="help-icon" data-tip="<strong>Come usare il confronto</strong>Carica fino a 4 file '.scr' salvati dalla pagina Alzata. Il grafico li sovrappone con colori diversi; la <b>Vista polare</b> in basso disegna la camma a 360&deg; (raggio base + alzata). Utile per: <ul><li>verificare ripetibilit&agrave; sulla stessa camma</li><li>confrontare camme diverse (race vs stradale)</li><li>misurare usura tra prima e dopo</li></ul>" tabindex="0">?</span>
             </div>
             <p style="font-size:11px; color:var(--text-muted); margin:4px 0 0; line-height:1.45;">
-                Scegli fino a 4 file <code>_alz</code> (e, se vuoi, un <code>_pol</code>) salvati da Alzata/Polare: le curve si sovrappongono nel grafico e le righe <b>grafico&nbsp;1–4</b> qui sotto si riempiono man mano. Finché non carichi nulla restano a 0.
+                Scegli fino a 4 file <code>_alz</code> salvati da Alzata: le curve si sovrappongono nel grafico e le righe <b>grafico&nbsp;1–4</b> qui sotto si riempiono man mano. La <b>Vista polare</b> accetta gli stessi <code>_alz</code> (e i vecchi <code>_pol</code>). Finch&eacute; non carichi nulla restano a 0.
             </p>
 
             <div class="flex items-center gap-8 mt-8">
@@ -106,8 +105,11 @@
             </table>
 
             <div class="flex items-center gap-8 mt-16">
-                <label style="font-size:13px;color:var(--text-muted);">File polare:</label>
+                <label style="font-size:13px;color:var(--text-muted);">Vista polare:</label>
                 <input type="file" id="fileinput2" class="file-input" onchange="loadFile2();">
+                <label style="font-size:13px;color:var(--text-muted);">Raggio base</label>
+                <input type="text" id="polRBase" class="input" style="width:64px;" value="16" data-tip="<strong>Raggio base (mm)</strong>Usato solo per i file <code>_alz</code>: la vista polare disegna raggio = raggio base + alzata. Per i vecchi file <code>_pol</code> il raggio &egrave; gi&agrave; nel file e questo campo viene ignorato.">
+                <span style="font-size:13px;color:var(--text-muted);">mm</span>
             </div>
 
             <div class="mt-16">
@@ -363,81 +365,40 @@ document.addEventListener('cammes:theme:change', function () {
 </script>
 
 <script type="text/javascript">
+// Vista polare: accetta file _alz (raggio = raggio base + alzata) e, per
+// retrocompatibilità, i vecchi _pol (raggio già assoluto come coppie cos,sin).
 var index2 = 0;
-var valori2 = new Array();
 var valori5 = new Array();
-var valori6;
-var locmax = 0;
-var locg = 0;
 function loadFile2() {
-    var input, file, fr;
-    input = document.getElementById('fileinput2');
-
-    if (!input) {
-        bodyAppend("p", "non riesco a trovare questo file");
-    } else if (!input.files) {
-        bodyAppend("p", "il browser non supporta la proprieta' file");
-    } else {
-        nom = input.files[0].name.split('.');
-        lmd = input.files[0].lastModifiedDate.toString();
-        nom = input.files[0].name.split('.');
-        lmd = input.files[0].lastModifiedDate.toString();
-        nomes = nom[0].split('_');
-        tfile = nomes[nomes.length - 1];
-        if (tfile != "pol") { alert('tipologia file non valida'); }
-
-        if (tfile == "pol") {
-            index2 = index2 + 1;
-            file = input.files[0];
-            fr = new FileReader();
-            fr.onload = receivedText;
-            fr.readAsText(file);
-        }
-
-        function receivedText() {
-            showResult2(fr, "Text");
-            fr = new FileReader();
-            fr.onload = receivedBinary;
-            fr.readAsBinaryString(file);
-        }
+    var input = document.getElementById('fileinput2');
+    if (!input || !input.files || !input.files[0]) return;
+    var nomes = input.files[0].name.split('.')[0].split('_');
+    var tfile = nomes[nomes.length - 1];
+    if (tfile !== 'alz' && tfile !== 'pol') {
+        alert('tipologia file non valida: servono file _alz (o _pol legacy)');
+        return;
     }
-
-    function showResult2(fr, label) {
-        var markup, result, n, aByte, byteStr;
-        var risultato = "";
-        result = fr.result;
-        for (n = 0; n < result.length; ++n) {
-            aByte = result.charCodeAt(n);
-            risultato = risultato + String.fromCharCode(aByte);
+    if (index2 >= 4) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Massimo 4 viste polari', body: 'Reset per caricarne altre.', duration: 3000 });
+        return;
+    }
+    var file = input.files[0];
+    var fr = new FileReader();
+    fr.onload = function () {
+        var risp = String(fr.result).split(/\r?\n/);
+        var rBase = Number((document.getElementById('polRBase') || {}).value) || 16;
+        for (var i = 1; i <= 360; i++) {
+            var risp2 = (risp[i] || '0,0').split(',');
+            var r = (tfile === 'pol')
+                ? Math.sqrt(risp2[0] * risp2[0] + risp2[1] * risp2[1])
+                : rBase + (Number(risp2[1]) || 0);
+            valori5[i] = r.toFixed(2);
         }
-
-        risp = risultato.split('\r\n');
-
-        for (i = 1; i <= 360; i++) {
-            risp2 = risp[i].split(',');
-            valori2[i] = Math.sqrt(risp2[0] * risp2[0] + risp2[1] * risp2[1]);
-
-            if (valori2[i] > locmax) {
-                locmax = valori2[i];
-                locg = i;
-            }
-
-            valori3 = valori2[i].toString();
-            if (valori3.length > 3) {
-                valori4 = valori3.split('.');
-                valori6 = valori4[1].substring(0, 2);
-                valori5[i] = valori4[0] + "." + valori6;
-                if (valori6 > 97) {
-                    ap = Number(valori4[0]) + 1;
-                    valori5[i] = ap + ".00";
-                }
-            }
-        }
-
-        locg = 0;
-        locmax = 0;
+        index2 = index2 + 1;
         update2();
-    }
+        if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Vista polare ' + index2, body: file.name + (tfile === 'alz' ? ' (raggio base ' + rBase + ' mm + alzata)' : ' (file polare legacy)'), duration: 3500 });
+    };
+    fr.readAsText(file);
 }
 </script>
 

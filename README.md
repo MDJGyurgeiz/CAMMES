@@ -12,7 +12,7 @@ Sistema completo per misurare e analizzare i profili degli alberi a camme: hardw
 
 ```
       ┌───────────────────────────┐
-      │    Browser (HTML+JS)      │   5 pagine: Home · Alzata · Polare ·
+      │    Browser (HTML+JS)      │   4 pagine: Home · Alzata ·
       │  Chart.js v4, no framework│   Confronto · Analisi
       └────────────┬──────────────┘
                    │ HTTP :3000  +  WebSocket :8080
@@ -37,8 +37,7 @@ CAMMES/
 │   ├── cammes_server.js          #   server HTTP + WebSocket + seriale (hot-plug)
 │   ├── home.html                 #   dashboard: archivio misure, tag, preferiti, backup
 │   ├── alzata.html               #   acquisizione alzata (scan classico o autonomo v3)
-│   ├── polare.html               #   acquisizione diagramma polare
-│   ├── grafici.html              #   confronto fino a 4 profili (sovrapposto/differenza)
+│   ├── grafici.html              #   confronto fino a 4 profili + vista polare da _alz
 │   ├── analisi.html              #   analisi camme: timing, follower virtuale, dinamica
 │   ├── cammes-ui.js              #   modulo condiviso UI (tema, toast, gauge, tour, versione)
 │   ├── cammes-scan.js            #   modulo condiviso acquisizione (WS, reconnect, jog)
@@ -47,8 +46,9 @@ CAMMES/
 │   ├── tools/                    #   test regressione + validazioni (npm test)
 │   ├── prove/                    #   archivio misure .scr (demo + reali)
 │   └── package.json              #   deps: ws, serialport · dev: eslint, pkg
+│   ├── fw/                       #   firmware precompilato (.hex) + avrdude per update in-app
 ├── master/master.ino             # firmware unificato v3 (1 Arduino Uno)
-├── legacy/                       # vecchia architettura 2-Arduino (dismessa)
+├── legacy/                       # vecchia architettura 2-Arduino + polare.html (dismessi)
 ├── cammes-android/               # app Android — SPERIMENTALE, non allineata (v1, marzo)
 ├── CAMMES_DIST/cammes.exe        # eseguibile standalone (build locale)
 ├── CHANGELOG.md                  # storia completa del progetto
@@ -63,9 +63,8 @@ CAMMES/
 | Pagina | Descrizione | Arduino |
 |--------|-------------|:-:|
 | **Home** | Archivio misure con ricerca, tag, preferiti, quick-view, backup/restore ZIP | No |
-| **Alzata** | Acquisizione profilo 0–360°: gauge live, modalità Veloce→Atomic, run ripetuti con statistiche, zero virtuale, sorgente angolo Passi/Encoder, motore scansione Browser/Firmware | Sì |
-| **Polare** | Acquisizione diagramma polare | Sì |
-| **Confronto** | Fino a 4 profili sovrapposti o in differenza (max/media/RMSE), replay animato | No |
+| **Alzata** | Acquisizione profilo 0–360°: gauge live, scelta modalità, zero virtuale; in ⚙ Avanzate: run ripetuti con statistiche, profilo movimento, motore scansione Firmware/Browser | Sì |
+| **Confronto** | Fino a 4 profili sovrapposti o in differenza (max/media/RMSE), replay animato, vista polare generata dai file `_alz` (raggio base + alzata) | No |
 | **Analisi** | Correlazione asp/scarico (durate, LSA, aperture/chiusure, alzata al PMS), follower virtuale (bicchiere Ø/rullo/finger), correzione baseline/eccentricità, cinematica, molla & forze, compliance 1/2/3-DOF, surge, strumenti race, export PDF/CSV, salva profilo (grezzo o convertito). Le funzioni extra si attivano dal pannello **⚙ Funzioni** | No |
 
 ---

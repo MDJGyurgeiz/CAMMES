@@ -1,0 +1,8 @@
+{
+  "firmware": "3.0",
+  "sketch": "master/master.ino",
+  "fqbn": "arduino:avr:uno",
+  "builtAt": "2026-07-11",
+  "avrdude": "8.0.0-arduino1",
+  "note": "Scan autonomo 'S' con settle adattivo; risposta attesa a 'v': ver=3.0 scan=1"
+}

@@ -57,8 +57,9 @@ check('base torna a ~0', baseMaxAbs(c2) < 0.03, 'base maxAbs ' + baseMaxAbs(c2).
 check('profilo recuperato ≈ camma pulita', recMax < 0.03, 'maxΔ vs pulita ' + recMax.toFixed(4) + ' mm');
 check('eccentricità stimata ≈ ' + ecc, Math.abs((window._lastBaselineAmp || 0) - ecc) < 0.03, 'stima ' + (window._lastBaselineAmp || 0).toFixed(3) + ' mm');
 
-// (3) file VW scarico reale
-var fp = path.join(__dirname, '..', 'prove', 'VW-kr1_8-SC_alz.scr');
+// (3) file VW scarico reale (riferimento in tools/fixtures/, fallback prove/)
+var fp = path.join(__dirname, 'fixtures', 'VW-kr1_8-SC_alz.scr');
+if (!fs.existsSync(fp)) fp = path.join(__dirname, '..', 'prove', 'VW-kr1_8-SC_alz.scr');
 if (fs.existsSync(fp)) {
     var L = fs.readFileSync(fp, 'utf8').split(/\r?\n/), raw = new Array(361);
     for (i = 1; i <= 360; i++) { var p = (L[i] || '').split(','); raw[i] = Number(p[1]) || 0; }

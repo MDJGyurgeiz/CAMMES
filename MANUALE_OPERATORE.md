@@ -11,15 +11,14 @@
 
 ## 2. Misurare una camma (Alzata)
 1. Monta l'albero, porta il tastatore sul **cerchio base** e azzera il comparatore.
-2. Pagina **Alzata** → scegli la **Modalità** (Veloce ~1 min per un controllo, Standard per una misura normale, Ultra/Atomic per la massima precisione).
+2. Pagina **Alzata** → scegli la **Modalità** (Veloce ~45 s per l'uso normale — al banco dà la stessa curva delle altre —, Precisione media 3 letture per ambienti rumorosi, Race 0,5° per fianchi molto ripidi).
 3. Premi **START** e aspetta il "giro" completo (barra di avanzamento + stima tempo).
 4. Scrivi il **nome** (es. `golf-asp`) e premi **Salva** → il file finisce nell'archivio (`prove/`), suffisso `_alz` automatico.
 
-Opzioni utili (menu sopra ai comandi):
-- **Ripetizioni**: 3–5 run consecutivi con statistica di ripetibilità (σ, CV) — usala per verificare il banco.
-- **Sorgente angolo = Encoder**: ancora ogni punto alla posizione reale della camma (consigliata dopo averla validata con un confronto).
-- **Motore scansione = Firmware (beta)**: l'Arduino esegue il giro da solo con attesa adattiva del tastatore — più veloce e più fedele sui fianchi ripidi. Richiede firmware v3; alla prima uscita confronta il risultato col metodo classico.
+Opzioni utili:
 - **Zero virtuale**: porta automaticamente il picco a +180° per confrontare alberi montati diversamente.
+- **⚙ Avanzate → Ripetizioni**: 3–5 run consecutivi con statistica di ripetibilità (σ, CV) — usala per verificare il banco.
+- **⚙ Avanzate → Motore scansione**: di default **Firmware** (l'Arduino esegue il giro da solo, validato al banco); **Browser** è il metodo classico di riserva per firmware più vecchi.
 
 ## 3. Analizzare (Analisi)
 1. Pagina **Analisi** → importa il file di **aspirazione** e quello di **scarico**.

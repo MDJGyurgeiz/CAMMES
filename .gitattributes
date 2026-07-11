@@ -11,3 +11,4 @@
 *.xlsm binary
 *.apk  binary
 *.exe  binary
+*.hex  binary

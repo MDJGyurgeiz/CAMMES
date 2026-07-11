@@ -12,10 +12,12 @@
  */
 
 var http = require('http');
+var https = require('https');
+var os = require('os');
 var fs = require('fs');
 var path = require('path');
 var WebSocket = require('ws');
-var { exec } = require('child_process');
+var { exec, spawn } = require('child_process');
 
 // ============================================================
 // Configurazione
@@ -45,6 +47,13 @@ var REAL_DIR = process.pkg ? path.dirname(process.execPath) : __dirname;
 
 // Directory per salvare i file di misura (sempre su disco reale)
 var PROVE_DIR = path.join(REAL_DIR, 'prove');
+
+// Versione dell'app (unica fonte: package.json, incluso nello snapshot pkg)
+var APP_VERSION = '0.0.0';
+try { APP_VERSION = require(path.join(__dirname, 'package.json')).version; } catch (e) {}
+
+// Repo GitHub pubblico per il controllo aggiornamenti
+var UPDATE_REPO = 'MDJGyurgeiz/CAMMES';
 
 // ============================================================
 // Utility - Log strutturato con livelli + colori ANSI
@@ -152,6 +161,201 @@ function listMisureFiles(cb) {
 }
 
 // ============================================================
+// Update check (GitHub Releases) + flash firmware Arduino
+// ============================================================
+
+// Confronto versioni "3.1.0" vs "3.0.0" → 1 / 0 / -1 (parti mancanti = 0)
+function compareVersions(a, b) {
+    var pa = String(a).replace(/^v/i, '').split('.');
+    var pb = String(b).replace(/^v/i, '').split('.');
+    for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+        var na = parseInt(pa[i], 10) || 0, nb = parseInt(pb[i], 10) || 0;
+        if (na > nb) return 1;
+        if (na < nb) return -1;
+    }
+    return 0;
+}
+
+// Cache 1h: il rate limit GitHub senza token è 60 richieste/ora per IP.
+var _updateCache = null;
+function apiUpdateCheck(res) {
+    if (_updateCache && (Date.now() - _updateCache.ts) < 3600 * 1000) {
+        return sendJson(res, 200, _updateCache.data);
+    }
+    var req = https.get({
+        hostname: 'api.github.com',
+        path: '/repos/' + UPDATE_REPO + '/releases/latest',
+        headers: { 'User-Agent': 'CAMMES-updater', 'Accept': 'application/vnd.github+json' },
+        timeout: 8000
+    }, function (r) {
+        var body = '';
+        r.on('data', function (c) { body += c; if (body.length > 500000) r.destroy(); });
+        r.on('end', function () {
+            try {
+                var rel = JSON.parse(body);
+                if (r.statusCode !== 200 || !rel.tag_name) {
+                    return sendJson(res, 502, { error: 'GitHub ha risposto ' + r.statusCode, current: APP_VERSION });
+                }
+                var latest = String(rel.tag_name).replace(/^v/i, '');
+                var data = {
+                    current: APP_VERSION,
+                    latest: latest,
+                    updateAvailable: compareVersions(latest, APP_VERSION) > 0,
+                    name: rel.name || rel.tag_name,
+                    url: rel.html_url,
+                    publishedAt: rel.published_at,
+                    notes: String(rel.body || '').substring(0, 2000)
+                };
+                _updateCache = { ts: Date.now(), data: data };
+                log('API', 'update-check: installata ' + APP_VERSION + ', ultima ' + latest +
+                    (data.updateAvailable ? ' → AGGIORNAMENTO DISPONIBILE' : ' (aggiornato)'));
+                sendJson(res, 200, data);
+            } catch (e) {
+                sendJson(res, 502, { error: 'Risposta GitHub non valida: ' + e.message, current: APP_VERSION });
+            }
+        });
+    });
+    req.on('timeout', function () { req.destroy(new Error('timeout')); });
+    req.on('error', function (e) {
+        sendJson(res, 502, { error: 'GitHub non raggiungibile: ' + e.message, current: APP_VERSION });
+    });
+}
+
+// --- Firmware Arduino: hex + avrdude inclusi in fw/ --------------------
+// Sotto pkg i file dello snapshot non sono eseguibili/leggibili da avrdude:
+// vengono estratti in una cartella temporanea reale al primo flash.
+
+var FW_DIR = path.join(STATIC_DIR, 'fw');
+var flashInProgress = false;
+
+function readFwInfo() {
+    try { return JSON.parse(fs.readFileSync(path.join(FW_DIR, 'version.json'), 'utf8')); }
+    catch (e) { return null; }
+}
+
+// Materializza un file dello snapshot pkg (o della cartella dev) su disco
+// reale. In dev il file è già reale: si riusa direttamente.
+function materializeFwFile(name, destDir) {
+    var src = path.join(FW_DIR, name);
+    if (!process.pkg) return src;
+    var dest = path.join(destDir, name);
+    fs.writeFileSync(dest, fs.readFileSync(src));
+    return dest;
+}
+
+// Trova avrdude: prima quello in fw/, poi l'installazione Arduino15 locale
+// (fallback utile se un filtro tipo WDAC blocca la copia estratta).
+function resolveAvrdude(tmpDir) {
+    var candidates = [];
+    try {
+        var exe = materializeFwFile('avrdude.exe', tmpDir);
+        var conf = materializeFwFile('avrdude.conf', tmpDir);
+        if (fs.existsSync(exe) && fs.existsSync(conf)) candidates.push({ exe: exe, conf: conf, source: 'fw/' });
+    } catch (e) {}
+    try {
+        var base = path.join(process.env.LOCALAPPDATA || '', 'Arduino15', 'packages', 'arduino', 'tools', 'avrdude');
+        fs.readdirSync(base).forEach(function (v) {
+            var exe2 = path.join(base, v, 'bin', 'avrdude.exe');
+            var conf2 = path.join(base, v, 'etc', 'avrdude.conf');
+            if (fs.existsSync(exe2) && fs.existsSync(conf2)) candidates.push({ exe: exe2, conf: conf2, source: 'Arduino15/' + v });
+        });
+    } catch (e) {}
+    return candidates;
+}
+
+function currentSerialPath() {
+    if (serialPort && serialPort.path) return serialPort.path;
+    return lastComPort || SERIAL_COM || null;
+}
+
+function apiFlashFirmware(res) {
+    if (flashInProgress) return sendJson(res, 409, { error: 'Flash già in corso' });
+    var info = readFwInfo();
+    if (!info || !fs.existsSync(path.join(FW_DIR, 'master.ino.hex'))) {
+        return sendJson(res, 500, { error: 'Firmware non incluso in questa build (manca fw/master.ino.hex)' });
+    }
+    var port = currentSerialPath();
+    if (!port) {
+        return sendJson(res, 400, { error: 'Nessuna porta Arduino nota: collega l\'Arduino e riprova' });
+    }
+
+    flashInProgress = true;
+    log('FLASH', 'Avvio flash firmware ' + (info.firmware || '?') + ' su ' + port);
+
+    var tmpDir = path.join(os.tmpdir(), 'cammes-fw');
+    try { fs.mkdirSync(tmpDir, { recursive: true }); } catch (e) {}
+
+    var hexPath, tools;
+    try {
+        hexPath = materializeFwFile('master.ino.hex', tmpDir);
+        tools = resolveAvrdude(tmpDir);
+    } catch (e) {
+        flashInProgress = false;
+        return sendJson(res, 500, { error: 'Estrazione firmware fallita: ' + e.message });
+    }
+    if (!tools.length) {
+        flashInProgress = false;
+        return sendJson(res, 500, { error: 'avrdude non trovato (né in fw/ né in Arduino15)' });
+    }
+
+    // Chiudi la seriale (il bootloader va parlato da avrdude, in esclusiva).
+    // flashInProgress sospende l'auto-riconnessione hot-plug.
+    var proceed = function () { runAvrdude(res, tools, 0, port, hexPath, Date.now()); };
+    if (serialPort && serialPort.isOpen) {
+        serialPort.close(function () { setTimeout(proceed, 500); });
+    } else {
+        proceed();
+    }
+}
+
+function runAvrdude(res, tools, idx, port, hexPath, t0) {
+    var tool = tools[idx];
+    var args = ['-C', tool.conf, '-c', 'arduino', '-p', 'atmega328p',
+                '-P', port, '-b', '115200', '-D', '-U', 'flash:w:' + hexPath + ':i'];
+    log('FLASH', 'avrdude (' + tool.source + ') ' + args.join(' '));
+    var out = '';
+    var child;
+    try {
+        child = spawn(tool.exe, args, { windowsHide: true });
+    } catch (e) {
+        return avrdudeDone(res, tools, idx, port, hexPath, t0, -1, out + '\nspawn: ' + e.message);
+    }
+    var killer = setTimeout(function () { try { child.kill(); } catch (e) {} }, 90000);
+    child.stdout.on('data', function (d) { out += d; if (out.length > 200000) out = out.slice(-100000); });
+    child.stderr.on('data', function (d) { out += d; if (out.length > 200000) out = out.slice(-100000); });
+    child.on('error', function (e) {
+        clearTimeout(killer);
+        avrdudeDone(res, tools, idx, port, hexPath, t0, -1, out + '\nerrore: ' + e.message);
+    });
+    child.on('close', function (code) {
+        clearTimeout(killer);
+        avrdudeDone(res, tools, idx, port, hexPath, t0, code, out);
+    });
+}
+
+function avrdudeDone(res, tools, idx, port, hexPath, t0, code, out) {
+    var ok = code === 0 && /bytes of flash (written|verified)/i.test(out);
+    if (!ok && idx + 1 < tools.length) {
+        log.warn('FLASH', 'Tentativo con ' + tools[idx].source + ' fallito (exit ' + code + '), provo ' + tools[idx + 1].source);
+        return runAvrdude(res, tools, idx + 1, port, hexPath, t0);
+    }
+    flashInProgress = false;
+    var ms = Date.now() - t0;
+    if (ok) log('FLASH', 'Firmware scritto e verificato in ' + (ms / 1000).toFixed(1) + 's');
+    else log.error('FLASH', 'Flash fallito (exit ' + code + ')');
+    // Riapri la seriale in ogni caso (il firmware v3 fa boot in ~2 s)
+    setTimeout(function () { if (!serialPort) autoDetectSerial(); }, 2000);
+    sendJson(res, ok ? 200 : 500, {
+        ok: ok,
+        exitCode: code,
+        durationMs: ms,
+        port: port,
+        tool: tools[Math.min(idx, tools.length - 1)].source,
+        output: String(out).slice(-3000)
+    });
+}
+
+// ============================================================
 // 1. HTTP Server Statico (porta 3000)
 // ============================================================
 
@@ -173,6 +377,32 @@ var mimeTypes = {
 
 var httpServer = http.createServer(function (req, res) {
     var urlPath = req.url.split('?')[0]; // Rimuovi query string
+
+    // API: controllo aggiornamenti software (GitHub Releases, cache 1h)
+    if (urlPath === '/api/update-check') {
+        apiUpdateCheck(res);
+        return;
+    }
+
+    // API: info firmware incluso nella build + stato collegamento
+    if (urlPath === '/api/firmware-info') {
+        var fwInfo = readFwInfo();
+        sendJson(res, 200, {
+            bundled: fwInfo,
+            appVersion: APP_VERSION,
+            port: currentSerialPath(),
+            serialConnected: !!(serialPort && serialPort.isOpen),
+            flashInProgress: flashInProgress,
+            avrdudeSources: resolveAvrdude(path.join(os.tmpdir(), 'cammes-fw-probe')).map(function (t) { return t.source; })
+        });
+        return;
+    }
+
+    // API: flash del firmware incluso sull'Arduino collegato
+    if (urlPath === '/api/flash-firmware' && req.method === 'POST') {
+        apiFlashFirmware(res);
+        return;
+    }
 
     // API: lista file misure (JSON)
     if (urlPath === '/api/files') {
@@ -393,6 +623,7 @@ function handleFileSave(msg) {
 
 var serialPort = null;
 var SerialPort = null;
+var lastComPort = null;        // ultima porta aperta con successo (per il flash firmware)
 var serialApiVersion = 'none'; // 'legacy' (v7-v8), 'v9' (v9), 'modern' (v10+), 'none'
 
 // Tenta di caricare il modulo serialport da vari percorsi
@@ -471,6 +702,7 @@ function scheduleSerialRetry() {
 function autoDetectSerial() {
     if (!SerialPort) return;
     if (serialPort) return;   // già connessi
+    if (flashInProgress) return;   // avrdude sta usando la porta: non toccarla
 
     // Usa il metodo list() per trovare le porte
     var listFn = SerialPort.list;
@@ -556,6 +788,7 @@ function openSerialPort(comPort) {
 
         serialPort.on('open', function () {
             log('SERIAL', 'Connesso a ' + comPort + ' @ ' + SERIAL_BAUD + ' baud (keep-alive RX attivo)');
+            lastComPort = comPort;        // memorizza per il flash firmware
             _serialRetryLogged = false;   // prossima attesa hot-plug loggata di nuovo
         });
 
@@ -587,6 +820,10 @@ function openSerialPort(comPort) {
             log('SERIAL', 'Porta chiusa');
             clearInterval(_kickTimer);
             serialPort = null;
+
+            // Durante il flash è avrdude a possedere la porta: la riapertura
+            // la programma avrdudeDone() a fine scrittura.
+            if (flashInProgress) return;
 
             // Tenta riconnessione dopo 3 secondi
             setTimeout(function () {

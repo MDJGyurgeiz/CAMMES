@@ -42,7 +42,9 @@ var CASES = [
 ];
 
 CASES.forEach(function (cfg) {
-    var fp = path.join(__dirname, '..', 'prove', cfg.file);
+    // Riferimento in tools/fixtures/ (prove/ è l'archivio utente, svuotabile dalla UI)
+    var fp = path.join(__dirname, 'fixtures', cfg.file);
+    if (!fs.existsSync(fp)) fp = path.join(__dirname, '..', 'prove', cfg.file);
     if (!fs.existsSync(fp)) { check(cfg.name + ': file presente', false, fp); return; }
     var raw = parseScr(fp);
     var rawPk = peakOf(raw);

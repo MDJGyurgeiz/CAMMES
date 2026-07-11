@@ -674,7 +674,6 @@
         <div class="nav-links">
             <a href="home.html" class="active">Home</a>
             <a href="alzata.html">Alzata</a>
-            <a href="polare.html">Polare</a>
             <a href="grafici.html">Confronto</a>
             <a href="analisi.html">Analisi</a>
         </div>
@@ -719,7 +718,7 @@
         </div>
     </div>
 
-    <!-- Tiles (4 funzionalità principali) -->
+    <!-- Tiles (3 funzionalità principali) -->
     <div class="card">
         <div class="card-title">Funzionalit&agrave;</div>
         <div class="home-tiles">
@@ -728,15 +727,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>
                 </div>
                 <div class="home-tile-title">Alzata</div>
-                <div class="home-tile-desc">Scansione cartesiana del profilo di alzata in tempo reale. Modalit&agrave; da Veloce ad Atomic per ogni esigenza.</div>
-                <span class="home-tile-arrow">&rarr;</span>
-            </a>
-            <a href="polare.html" class="home-tile" style="--tile-accent: var(--accent-2);">
-                <div class="home-tile-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg>
-                </div>
-                <div class="home-tile-title">Polare</div>
-                <div class="home-tile-desc">Profilo polare 360&deg; con diametro a riposo come riferimento. Visualizzazione grafica della camma completa.</div>
+                <div class="home-tile-desc">Scansione del profilo di alzata in tempo reale. La vista polare della camma &egrave; in Confronto.</div>
                 <span class="home-tile-arrow">&rarr;</span>
             </a>
             <a href="grafici.html" class="home-tile" style="--tile-accent: var(--accent-3);">
@@ -755,6 +746,28 @@
                 <div class="home-tile-desc">Cinematica completa, fasatura 720&deg;, forze inerziali, RPM critico. Preset motore + export CSV/PDF.</div>
                 <span class="home-tile-arrow">&rarr;</span>
             </a>
+        </div>
+    </div>
+
+    <!-- Sistema & aggiornamenti: versione software (GitHub) + firmware Arduino -->
+    <div class="card" id="updatesCard">
+        <div class="card-title">Sistema &amp; aggiornamenti
+            <span class="help-icon" data-tip="<strong>Aggiornamenti</strong>Il software controlla da solo le nuove versioni sulle <b>GitHub Releases</b> del progetto (serve internet). Il <b>firmware Arduino</b> incluso nella build si carica sulla scheda direttamente da qui: nessun Arduino IDE necessario." tabindex="0">?</span>
+        </div>
+        <div class="flex items-center gap-8" style="flex-wrap:wrap;">
+            <div style="min-width:230px;">
+                <div style="font-size:12px;color:var(--text-muted);">Software</div>
+                <div id="updSwStatus" style="font-size:13px;">versione installata: <b id="updSwCurrent">&ndash;</b></div>
+            </div>
+            <button class="home-action-btn" id="updCheckBtn" onclick="checkUpdatesNow();" data-tip="<strong>Controlla ora</strong>Interroga GitHub Releases e confronta con la versione installata.">&#8635; Controlla aggiornamenti</button>
+            <a class="home-action-btn" id="updDownloadLink" href="#" target="_blank" rel="noopener" style="display:none;color:var(--success);font-weight:600;">&#8595; Scarica nuova versione</a>
+            <div class="separator" style="height:28px;"></div>
+            <div style="min-width:230px;">
+                <div style="font-size:12px;color:var(--text-muted);">Firmware Arduino</div>
+                <div style="font-size:13px;">incluso: <b id="fwBundled">&ndash;</b> &middot; porta: <b id="fwPort">&ndash;</b></div>
+            </div>
+            <button class="home-action-btn" id="fwFlashBtn" onclick="flashFirmware();" data-tip="<strong>Aggiorna firmware</strong>Scrive il firmware incluso in questa versione sull'Arduino collegato (via avrdude, ~15 s). La seriale viene chiusa e riaperta da sola. <b>Non scollegare l'USB durante la scrittura.</b>">&#9889; Aggiorna firmware Arduino</button>
+            <span id="fwFlashStatus" style="font-size:12px;color:var(--text-muted);"></span>
         </div>
     </div>
 
@@ -1354,7 +1367,7 @@ function renderRecentsTable() {
     if (filtered.length === 0) {
         var emptyMsg;
         if (files.length === 0) {
-            emptyMsg = 'Nessun file misura ancora salvato. Salva la prima scansione dalla pagina <a href="alzata.html">Alzata</a> o <a href="polare.html">Polare</a>.';
+            emptyMsg = 'Nessun file misura ancora salvato. Salva la prima scansione dalla pagina <a href="alzata.html">Alzata</a>.';
         } else if (searchQuery || typeFilter !== 'all' || dateFilter !== 'all' || filterOnlyBookmarks) {
             emptyMsg = 'Nessun file corrisponde ai filtri correnti. <a href="javascript:void(0)" onclick="resetAllFilters();" style="color:var(--accent);">Azzera tutti i filtri</a>.';
         } else {
@@ -2427,6 +2440,72 @@ function exportSinglePDF(fileName, fileType) {
     });
 }
 window.exportSinglePDF = exportSinglePDF;
+</script>
+
+<!-- ===== Sistema & aggiornamenti: check GitHub + flash firmware ===== -->
+<script>
+// Popola la card all'avvio: versione software + info firmware incluso.
+function initUpdatesCard() {
+    var cur = document.getElementById('updSwCurrent');
+    if (cur && window.CAMMES_VERSION) cur.textContent = window.CAMMES_VERSION;
+    fetch('/api/firmware-info').then(function (r) { return r.json(); }).then(function (d) {
+        var b = document.getElementById('fwBundled'), p = document.getElementById('fwPort');
+        if (b) b.textContent = (d.bundled && d.bundled.firmware) ? 'v' + d.bundled.firmware + ' (' + d.bundled.builtAt + ')' : 'non incluso';
+        if (p) p.textContent = d.port || 'nessuna';
+        var btn = document.getElementById('fwFlashBtn');
+        if (btn && (!d.bundled || !d.port)) btn.disabled = true;
+    }).catch(function () {});
+}
+
+// Bottone "Controlla aggiornamenti": interroga il server (cache GitHub 1h).
+function checkUpdatesNow() {
+    var st = document.getElementById('updSwStatus');
+    var link = document.getElementById('updDownloadLink');
+    if (st) st.innerHTML = 'controllo in corso&hellip;';
+    fetch('/api/update-check').then(function (r) { return r.json(); }).then(function (d) {
+        if (d.error) {
+            if (st) st.innerHTML = 'versione installata: <b>' + (d.current || '?') + '</b> &middot; <span style="color:var(--warn,orange);">controllo non riuscito (' + d.error + ')</span>';
+            return;
+        }
+        if (d.updateAvailable) {
+            if (st) st.innerHTML = 'installata <b>v' + d.current + '</b> &rarr; disponibile <b style="color:var(--success);">v' + d.latest + '</b>';
+            if (link) { link.href = d.url; link.style.display = ''; }
+            if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Aggiornamento disponibile: v' + d.latest, body: 'Scaricalo dal link nella card Sistema.', duration: 6000 });
+        } else {
+            if (st) st.innerHTML = 'versione installata: <b>v' + d.current + '</b> &middot; <span style="color:var(--success);">&#10003; aggiornato (ultima: v' + d.latest + ')</span>';
+            if (link) link.style.display = 'none';
+        }
+    }).catch(function (e) {
+        if (st) st.innerHTML = 'versione installata: <b>' + (window.CAMMES_VERSION || '?') + '</b> &middot; <span style="color:var(--warn,orange);">server non raggiungibile</span>';
+    });
+}
+
+// Flash del firmware incluso sull'Arduino collegato. Doppia conferma; durante
+// la scrittura (~15 s) la seriale è di avrdude: non scollegare l'USB.
+function flashFirmware() {
+    if (!confirm('Aggiornare il firmware dell\'Arduino collegato?\n\nLa scrittura dura circa 15 secondi. NON scollegare l\'USB.')) return;
+    var btn = document.getElementById('fwFlashBtn');
+    var st = document.getElementById('fwFlashStatus');
+    if (btn) btn.disabled = true;
+    if (st) { st.textContent = 'scrittura in corso… non scollegare'; st.style.color = 'var(--warn, orange)'; }
+    fetch('/api/flash-firmware', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (d) {
+        if (btn) btn.disabled = false;
+        if (d.ok) {
+            if (st) { st.textContent = '✓ firmware scritto e verificato in ' + (d.durationMs / 1000).toFixed(1) + ' s su ' + d.port; st.style.color = 'var(--success, green)'; }
+            if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Firmware aggiornato', body: 'Scritto e verificato su ' + d.port + ' in ' + (d.durationMs / 1000).toFixed(1) + ' s. La connessione seriale si ripristina da sola.', duration: 7000 });
+        } else {
+            if (st) { st.textContent = '✗ flash fallito: ' + (d.error || 'exit ' + d.exitCode); st.style.color = 'var(--danger, red)'; }
+            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Flash fallito', body: (d.error || 'avrdude exit ' + d.exitCode) + '. Controlla il cavo USB e riprova.', duration: 9000 });
+            console.warn('avrdude output:', d.output);
+        }
+    }).catch(function (e) {
+        if (btn) btn.disabled = false;
+        if (st) { st.textContent = '✗ errore di rete: ' + e.message; st.style.color = 'var(--danger, red)'; }
+    });
+}
+window.checkUpdatesNow = checkUpdatesNow;
+window.flashFirmware = flashFirmware;
+window.addEventListener('DOMContentLoaded', initUpdatesCard);
 </script>
 
 </body>

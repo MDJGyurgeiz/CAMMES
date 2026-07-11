@@ -9,7 +9,7 @@
   // -------- VERSIONE ------------------------------------------------------
   // Unico punto di verità della versione mostrata nella UI (badge in basso a
   // destra su ogni pagina). Allineala a package.json/tag quando rilasci.
-  var CAMMES_VERSION = 'v3.0.0';
+  var CAMMES_VERSION = 'v3.1.0';
   window.CAMMES_VERSION = CAMMES_VERSION;
 
   // -------- THEME (dark/light) -------------------------------------------
@@ -365,11 +365,11 @@
     {
       title: '1. Acquisisci il profilo',
       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>',
-      body: 'Vai su <b>Alzata</b> (cartesiana) o <b>Polare</b> (curva).<br><br>' +
-            '&bull; Seleziona la <b>modalit&agrave; di scansione</b> (Veloce per stradale, Race per camme da pista, ' +
-            'Atomic per studi metrologici).<br>' +
+      body: 'Vai su <b>Alzata</b>.<br><br>' +
+            '&bull; Seleziona la <b>modalit&agrave; di scansione</b> (Veloce per stradale, Race per camme da pista).<br>' +
             '&bull; Premi <b>START</b>: il motore ruota 360&deg; e registra l\'alzata grado per grado.<br>' +
-            '&bull; A fine scansione, scrivi il <b>nome file</b> e premi <b>Salva</b> (auto-suffisso _alz o _pol).'
+            '&bull; A fine scansione, scrivi il <b>nome file</b> e premi <b>Salva</b> (auto-suffisso _alz).<br><br>' +
+            'La <b>vista polare</b> della camma si genera in Confronto da qualsiasi file _alz.'
     },
     {
       title: '2. Zero virtuale (opzionale)',
@@ -511,7 +511,6 @@
     var t = document.title || '';
     if (/Home/i.test(t))      return 'home';
     if (/Alzata/i.test(t))    return 'alzata';
-    if (/Polare/i.test(t))    return 'polare';
     if (/Confronto/i.test(t)) return 'grafici';
     if (/Analisi/i.test(t))   return 'analisi';
     return null;
@@ -520,25 +519,21 @@
   // selettore non esiste sulla pagina vengono saltati automaticamente.
   var TOUR_STEPS = {
     home: [
-      { sel: '.home-tiles',     title: 'Le 4 sezioni', body: 'Da qui entri in <b>Alzata</b>, <b>Polare</b>, <b>Confronto</b> e <b>Analisi</b>. È il punto di partenza.' },
+      { sel: '.home-tiles',     title: 'Le 3 sezioni', body: 'Da qui entri in <b>Alzata</b>, <b>Confronto</b> e <b>Analisi</b>. È il punto di partenza.' },
       { sel: '#homeStats',      title: 'Stato archivio', body: 'Quante misure hai salvato e qual è l\'ultima. Un colpo d\'occhio sui dati.' },
       { sel: '#recentsSearch',  title: 'Cerca e filtra', body: 'Trova le misure per nome; sotto puoi filtrare per tipo, data e tag.' },
       { sel: '#concert-toggle', title: 'Concerto col motore', body: 'Un extra: fai &ldquo;suonare&rdquo; lo stepper con brani famosi. 🎵' }
     ],
     alzata: [
-      { sel: '#scanMode',  title: 'Modalità scansione', body: 'Scegli la precisione: da <b>Veloce</b> (~1 min) ad <b>Atomic</b> (massima risoluzione). Il tempo stimato è indicato.' },
+      { sel: '#scanMode',  title: 'Modalità scansione', body: 'Scegli tra <b>Veloce</b> (~45 s, uso normale), <b>Precisione</b> (media 3 letture) e <b>Race</b> (risoluzione 0,5°). Il tempo stimato è indicato.' },
       { sel: 'button[onclick^="start"]', title: 'Avvia', body: 'START esegue una scansione completa 360° del profilo di alzata.' },
       { sel: '#msBtn',     title: 'Zero virtuale', body: 'Porta in automatico il picco di alzata a un riferimento fisso (+180°), così alberi montati diversamente restano confrontabili.' },
       { sel: '#freeBtn',   title: 'Sblocca motore', body: 'Libera l\'albero per girarlo a mano leggendo encoder e comparatore dal vivo.' },
       { sel: '#nome',      title: 'Salva', body: 'Dai un nome e salva: il suffisso <code>_alz</code> è aggiunto in automatico.' }
     ],
-    polare: [
-      { sel: 'input[id="diam"], #diam', title: 'Diametro a riposo', body: 'Inserisci il diametro base dell\'albero: il profilo polare lo usa come riferimento.' },
-      { sel: 'button[onclick^="start"]', title: 'Avvia', body: 'START esegue la scansione polare 360°.' },
-      { sel: '#freeBtn',   title: 'Sblocca motore', body: 'Come in Alzata: gira l\'albero a mano leggendo i sensori dal vivo.' }
-    ],
     grafici: [
-      { sel: '#fileinput1', title: 'Carica i profili', body: 'Scegli fino a 4 file <code>_alz</code>/<code>_pol</code>: le curve si sovrappongono nel grafico.' },
+      { sel: '#fileinput1', title: 'Carica i profili', body: 'Scegli fino a 4 file <code>_alz</code>: le curve si sovrappongono nel grafico.' },
+      { sel: '#fileinput2', title: 'Vista polare', body: 'Genera la vista polare della camma da un file <code>_alz</code> (raggio base + alzata). Accetta anche i vecchi <code>_pol</code>.' },
       { sel: '#viewMode',   title: 'Sovrapposto / Differenza', body: 'Confronta le curve sovrapposte oppure mostra la differenza (con statistiche max/media/RMSE).' },
       { sel: '#replayBtn',  title: 'Replay', body: 'Ridisegna le curve da 0° a 360° per un confronto animato.' }
     ],
@@ -850,6 +845,28 @@
         'color:var(--text-muted,#8888aa);opacity:.65;pointer-events:none;user-select:none;';
       document.body.appendChild(vb);
     }
+    checkForUpdates();
+  }
+
+  // -------- UPDATE CHECK ---------------------------------------------------
+  // Interroga il server (che a sua volta chiede a GitHub Releases, cache 1h)
+  // e avvisa con un toast se esiste una versione più nuova. Non bloccante,
+  // silenzioso se offline; l'avviso appare una sola volta per sessione.
+  function checkForUpdates() {
+    try { if (sessionStorage.getItem('cammes-upd-notified')) return; } catch (e) {}
+    if (!window.fetch) return;
+    fetch('/api/update-check').then(function (r) { return r.json(); }).then(function (d) {
+      if (!d || !d.updateAvailable) return;
+      try { sessionStorage.setItem('cammes-upd-notified', '1'); } catch (e) {}
+      if (window.cammesToast) window.cammesToast({
+        kind: 'info',
+        title: 'Aggiornamento disponibile: v' + d.latest,
+        body: 'Stai usando la ' + CAMMES_VERSION + '. Scaricalo da <a href="' + d.url +
+              '" target="_blank" rel="noopener" style="color:var(--accent);">GitHub Releases</a>. ' +
+              'Dalla Home puoi anche aggiornare il firmware Arduino.',
+        duration: 12000
+      });
+    }).catch(function () {});
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
