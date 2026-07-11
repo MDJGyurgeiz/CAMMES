@@ -1141,3 +1141,20 @@ autonoma v3 ×2, mediata 3 campioni ×1).
   percorso ANNULLA → zero cancellazioni (19 file prima e dopo), testo conferma
   corretto, 0 errori console. Il loop di cancellazione riusa l'endpoint DELETE
   già collaudato nelle sessioni di banco.
+
+### Fix da feedback utente (banco) + razionalizzazione controlli scansione
+- **BUGFIX encoder live (alzata.html)**: `currentEncoderCount` veniva aggiornato SOLO
+  dalle misure di scansione ("X.XX N"), mai dalle risposte `encoder=N deg=` del
+  polling '?'. Fuori scansione restava `null` → tre sintomi riportati dall'utente
+  con una sola radice: **meccanismo live fermo a "cam 0°"**, **traccia live vuota**
+  in free-spin, **"Salva pos" impossibile** ("aspetta il prossimo polling" per
+  sempre). Fix: parse di `encoder=(-?\d+)` nel ramo polling. Verificato AL BANCO:
+  encoder popolato dal polling idle, comando +5° → angolo live aggiornato,
+  Salva pos sbloccato.
+- **Controlli scansione razionalizzati (alzata.html)**: dati i test (07-05/07-11:
+  classico ≡ autonomo ≡ mediato entro 0,05-0,07 mm), per l'uso normale bastano
+  Modalità + START. Ripetizioni / Profilo / Sorgente angolo / Motore scansione
+  spostati in un pannello **"⚙ Avanzate"** richiudibile (chiuso di default,
+  scelta ricordata). Nessuna funzione rimossa.
+- **polare.html**: messaggio "mic out" → **"NO SENSORE"** (coerente con Alzata):
+  significa lettura assente o fuori scala (>32 mm / NaN).

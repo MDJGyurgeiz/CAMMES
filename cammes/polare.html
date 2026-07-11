@@ -231,8 +231,10 @@ var _engineOnMessage = function(event) {
             gaugemicrom.value = msg;
             gaugemicrom.draw();
         } else {
+            // lettura assente o fuori scala (>32 mm / NaN): sensore muto.
+            // Stesso messaggio della pagina Alzata per coerenza.
             msg = "0.00";
-            document.cpot.cpot.value = "mic out";
+            document.cpot.cpot.value = "NO SENSORE";
         }
 
         diametro = document.getElementById("diam").value;

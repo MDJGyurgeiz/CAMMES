@@ -96,6 +96,15 @@
 
             <div class="separator"></div>
 
+            <!-- Impostazioni avanzate di scansione: raccolte e chiuse di default.
+                 I test al banco (07-05 e 07-11) hanno mostrato che per l'uso
+                 normale basta la Modalità: ripetizioni/profilo/sorgente/motore
+                 sono strumenti di verifica e casi particolari. -->
+            <div class="controls-group">
+                <button type="button" class="btn btn-secondary btn-sm" id="scanAdvBtn" onclick="toggleScanAdvanced();" data-tip="<strong>Impostazioni avanzate scansione</strong>Ripetizioni con statistiche, profilo anti-vibrazione, sorgente angolo (passi/encoder) e motore di scansione (browser/firmware). Per l'uso normale bastano Modalit&agrave; e START: al banco le varie combinazioni danno la stessa curva entro 0,05-0,07 mm.">&#9881; Avanzate</button>
+            </div>
+            <div id="scanAdvanced" style="display:none;">
+
             <div class="controls-group">
                 <span class="toggle-label">Ripetizioni</span>
                 <select id="scanRepeat" class="input" style="width:170px;" data-tip="<strong>Scansioni ripetute</strong>Ripete N volte la stessa scansione e calcola media + deviazione standard per ogni grado camma. Utile per stimare la ripetibilit&agrave; del sistema o ridurre il rumore di misura. Il file salvato contiene la media."><option value="1" selected>1 (singola)</option><option value="2">2 run + medie</option><option value="3">3 run + medie</option><option value="5">5 run + statistiche</option></select>
@@ -132,6 +141,8 @@
                 </select>
                 <span class="help-icon" data-tip="<strong>Scan autonomo (beta)</strong>Il firmware muove-attende-legge da solo e trasmette righe <code>#i:enc:mm</code> con numero di sequenza (i buchi vengono rilevati). Il settle &egrave; ADATTIVO: veloce sul cerchio base, paziente sul fianco ripido &mdash; indicato per il problema del fianco sottostimato. <b>Prima scansione: confronta col metodo classico.</b>" tabindex="0">?</span>
             </div>
+
+            </div><!-- /scanAdvanced -->
 
             <div class="separator"></div>
 
@@ -370,6 +381,19 @@ function updateStatusLeds() {
 }
 setInterval(updateStatusLeds, 700);
 
+// Impostazioni avanzate scansione: pannello richiudibile, scelta ricordata.
+function toggleScanAdvanced(force) {
+    var box = document.getElementById('scanAdvanced');
+    var btn = document.getElementById('scanAdvBtn');
+    if (!box) return;
+    var open = (typeof force === 'boolean') ? force : (box.style.display === 'none');
+    box.style.display = open ? '' : 'none';
+    if (btn) btn.innerHTML = open ? '&#9881; Avanzate &#9652;' : '&#9881; Avanzate';
+    try { localStorage.setItem('cammes-scan-adv', open ? '1' : '0'); } catch (e) {}
+}
+window.toggleScanAdvanced = toggleScanAdvanced;
+try { if (localStorage.getItem('cammes-scan-adv') === '1') toggleScanAdvanced(true); } catch (e) {}
+
 // Meccanismo live (~10 fps): mostra "cosa fa la macchina ORA" — camma orientata
 // all'angolo encoder reale + follower (puntalino) alla quota del comparatore.
 // Se è stata acquisita una scansione, disegna il profilo reale che ruota.
@@ -536,6 +560,13 @@ var _engineOnMessage = function(event) {
     }
     if (msg.indexOf('encoder=') >= 0 || msg === '*pos') {
         lastEncoderRx = Date.now();
+        // BUGFIX: aggiorna la posizione encoder ANCHE dal polling '?'
+        // ("encoder=N deg=X"), non solo dalle misure di scansione. Senza
+        // questo, fuori scansione currentEncoderCount restava null →
+        // meccanismo live fermo a 0°, traccia live vuota in free-spin e
+        // "Salva pos" impossibile.
+        var mCnt = msg.match(/encoder=(-?\d+)/);
+        if (mCnt) currentEncoderCount = parseInt(mCnt[1], 10);
         // Durante free-spin (motore sbloccato) mostra il grado encoder
         // LIVE nel display imp2 (sostituisce il contatore di scansione
         // che non avanza più). Format atteso: "encoder=N deg=XX.XX"
