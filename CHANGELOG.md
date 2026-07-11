@@ -1077,3 +1077,40 @@ analisi. Camma installata identificata per correlazione: **Renault Clio 1.8 16V*
   eccentricità di montaggio di allora.
 - La posizione di riposo dell'albero è ~qualche grado diversa da inizio sessione
   (irrilevante: ogni scansione è un giro completo e lo zero si fa col comparatore).
+
+---
+
+## Sessione 9 — 2026-07-11 — VALIDAZIONE FISICA del metodo puntalino→bicchiere (Clio + piattello Ø33)
+
+Esperimento decisivo proposto dall'utente: stessa camma (Clio 1.8) misurata prima col
+**puntalino sferico** (+ conversione matematica a bicchiere Ø33), poi con un **piattello
+Ø33 fisico** montato al posto del puntalino. Se coincidono, il metodo è validato.
+Protocollo: **reset a 180° dal picco prima di OGNI scansione** (richiesto dall'utente;
+implementato via encoder, errore sempre ≤0,75°), 5 scansioni per fase (classica ×2,
+autonoma v3 ×2, mediata 3 campioni ×1).
+
+### Risultato — METODO VALIDATO
+- **Fase 1 (puntalino)**: 5 scan, picchi 8,52-8,53 (±0,01 mm), σ media/grado 0,025 mm;
+  classico ≡ autonomo (RMS 0,055 mm). Previsione bicchiere Ø33 calcolata dalla mediana
+  per raggio base 14-20 mm.
+- **Fase 2 (piattello Ø33 fisico)**: 5 scan, picchi tutti 8,500, stessa ripetibilità.
+- **CONFRONTO**: miglior accordo a **raggio base 19 mm** → **RMS 0,046 mm, max|Δ| 0,19 mm**
+  su tutto il profilo; scarti ±0,13 mm sui fianchi senza pattern sistematico (residuo da
+  quantizzazione 1° dell'allineamento). Controllo di fisica: il piattello legge
+  **+2,5…+3,3 mm più del puntalino sui fianchi** e ~uguale al naso — esattamente come
+  previsto dalla conversione (funzione di supporto). **Autocalibrazione: raggio base
+  reale della camma Clio ≈ 19 mm.**
+- Conseguenza per il caso VW: metodo/matematica/strumento ora validati fisicamente
+  end-to-end → per il fianco VW −35% resta un solo indiziato: il **setup
+  dell'acquisizione VW originale** (centraggio/eccentricità — coerente con l'ondulazione
+  di base 0,21 mm di quel file). Test finale: ri-scansione della camma VW su questo banco.
+
+### Note operative
+- Driver di campagna promosso a strumento permanente: **`tools/bench_campaign.js`**
+  (5 scansioni + reset 180° via encoder, etichetta libera, porta auto-rilevata,
+  keep-alive FTDI, retry apertura). Analisi one-off rimossa.
+- 10 file misura salvati: `prove/cliobench_punt_*` e `prove/cliobench_bicch33_*`.
+- Incidente driver FTDI: un errore di scrittura (error 31) ha lasciato un processo
+  zombie inchiodato sulla COM (non uccidibile senza admin); risolto con
+  scollega/ricollega USB dell'utente + watcher automatico di ripartenza. Il driver
+  ora rileva la porta dinamicamente e ritenta l'apertura.
