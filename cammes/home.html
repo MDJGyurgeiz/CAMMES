@@ -787,6 +787,7 @@
                 <button class="home-action-btn" onclick="document.getElementById('importMetaInput').click();" title="Ripristina tag/bookmark da un file JSON" data-tip="<strong>Import metadati</strong>Carica un file JSON di backup esportato precedentemente. Ripristina tag, bookmark e posizioni salvate (sovrascrive quelli correnti).">&#128229; Import</button>
                 <input type="file" id="importMetaInput" accept=".json,application/json" style="display:none;" onchange="importMetadataFile(event);">
                 <button class="home-action-btn" onclick="loadRecents();" title="Ricarica lista">&#8634; Aggiorna</button>
+                <button class="home-action-btn" onclick="clearArchive();" title="Elimina TUTTI i file di misura dall'archivio (doppia conferma)" style="color:var(--danger);" data-tip="<strong>Svuota archivio</strong>Elimina DEFINITIVAMENTE tutti i file di misura (.scr) dalla cartella prove/, inclusi i file demo. Chiede doppia conferma e ripulisce anche tag e preferiti associati. <b>Prima di usarlo</b>: scarica i file che vuoi conservare (&darr; sulla riga) o copia la cartella prove/.">&#128465; Svuota archivio</button>
             </span>
         </div>
 
@@ -1497,6 +1498,51 @@ function doDelete(fileName) {
                 kind: 'err', title: 'Errore di rete', body: err.message, duration: 4000
             });
         });
+}
+
+// ===== SVUOTA ARCHIVIO: elimina TUTTI i file di misura (doppia conferma) =====
+// Cancella ogni .scr in prove/ via l'API DELETE già esistente, poi ripulisce
+// tag e preferiti dei file eliminati. Irreversibile: per questo chiede due
+// conferme esplicite con il conteggio reale.
+async function clearArchive() {
+    var files = [];
+    try {
+        var resp = await fetch('/api/files', { cache: 'no-store' });
+        files = ((await resp.json()).files || []).map(function (f) { return f.name; });
+    } catch (e) {
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Errore di rete', body: e.message, duration: 4000 });
+        return;
+    }
+    if (files.length === 0) {
+        if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Archivio già vuoto', body: 'Nessun file di misura da eliminare.', duration: 3000 });
+        return;
+    }
+    if (!window.confirm('Stai per eliminare TUTTI i ' + files.length + ' file di misura dall\'archivio (cartella prove/), inclusi i file demo.\n\nPrima di continuare: hai scaricato/copiato i file che vuoi conservare?\n\nOK per continuare, Annulla per fermarti.')) return;
+    if (!window.confirm('CONFERMA DEFINITIVA\n\nEliminare per sempre ' + files.length + ' file? L\'operazione NON è reversibile.')) return;
+
+    var okCount = 0, failed = [];
+    for (var i = 0; i < files.length; i++) {
+        try {
+            var r = await fetch('/api/file/' + encodeURIComponent(files[i]), { method: 'DELETE' });
+            if (r.ok) okCount++; else failed.push(files[i]);
+        } catch (e2) { failed.push(files[i]); }
+    }
+    // ripulisci tag e preferiti dei file eliminati (le altre preferenze restano)
+    try {
+        var tags = loadAllTags();
+        files.forEach(function (n) { if (tags[n]) delete tags[n]; });
+        saveAllTags(tags);
+        var bm = loadBookmarks().filter(function (n) { return files.indexOf(n) === -1; });
+        saveBookmarks(bm);
+    } catch (e3) {}
+    loadRecents();
+    if (window.cammesToast) {
+        if (failed.length === 0) {
+            window.cammesToast({ kind: 'success', title: 'Archivio svuotato', body: okCount + ' file eliminati (tag e preferiti ripuliti).', duration: 5000 });
+        } else {
+            window.cammesToast({ kind: 'warn', title: 'Svuotato con errori', body: okCount + ' eliminati, ' + failed.length + ' falliti: ' + failed.slice(0, 3).join(', ') + (failed.length > 3 ? '…' : ''), duration: 7000 });
+        }
+    }
 }
 window.confirmDelete = confirmDelete;
 window.closeConfirm  = closeConfirm;

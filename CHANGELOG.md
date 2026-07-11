@@ -1130,3 +1130,14 @@ autonoma v3 ×2, mediata 3 campioni ×1).
 - Verifica browser: caso VW completo (bicchiere Ø35, rBase per lato, centri 106/104,
   giochi 0,30/0,40) → PDF valido (%PDF, 62 KB), bottone gated correttamente,
   0 errori console.
+
+### Home: bottone "🗑 Svuota archivio" (richiesta utente)
+- Nella toolbar dell'archivio: `clearArchive()` elimina TUTTI i file di misura via
+  l'API DELETE esistente, con **doppia conferma esplicita** (conteggio reale nel
+  testo + avviso di scaricare prima ciò che si vuole conservare) e pulizia dei
+  tag/preferiti dei file eliminati (le altre preferenze restano). Toast di esito
+  con eventuali falliti.
+- Verifica browser (senza toccare l'archivio reale): bottone presente e cablato,
+  percorso ANNULLA → zero cancellazioni (19 file prima e dopo), testo conferma
+  corretto, 0 errori console. Il loop di cancellazione riusa l'endpoint DELETE
+  già collaudato nelle sessioni di banco.
