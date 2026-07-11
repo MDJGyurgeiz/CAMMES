@@ -678,7 +678,7 @@
             <a href="analisi.html">Analisi</a>
         </div>
         <div class="header-spacer"></div>
-        <button id="concert-toggle" class="help-toggle" type="button" onclick="openHomeConcert();" aria-label="Concerto col motore" title="Concerto col motore" data-tip="<strong>Concerto col motore</strong>Lo stepper esegue brani modulando la frequenza dei pulsi. 4 brani curati: Inno di Mameli, Per Elisa, Tetris, Vivaldi Primavera.">&#127932;</button>
+        <button id="concert-toggle" class="help-toggle" type="button" onclick="openHomeConcert();" aria-label="Concerto col motore" title="Concerto col motore" data-tip="<strong>Concerto col motore</strong>Lo stepper esegue brani modulando la frequenza dei pulsi. 7 brani curati (Inno di Mameli, Per Elisa, Tetris, La Primavera, Bella Ciao, 'O Sole Mio, Va' pensiero) pi&ugrave; il <b>compositore custom</b> per scrivere melodie tue.">&#127932;</button>
         <button id="help-toggle" class="help-toggle" type="button" aria-label="Guida rapida" title="Apri la guida rapida">?</button>
         <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambia tema" title="Cambia tema chiaro/scuro">
             <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -791,7 +791,7 @@
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
             <span>Misurazioni</span>
             <span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                <label class="filter-toggle" id="filterBookmarkedLabel" onclick="toggleBookmarkFilter();">
+                <label class="filter-toggle" id="filterBookmarkedLabel" onclick="toggleBookmarkFilter();" data-tip="<strong>Solo preferiti</strong>Mostra soltanto i file contrassegnati con la stella. Riclicca per tornare a vedere tutto.">
                     <span id="filterBookmarkedIcon">&#9734;</span> Solo preferiti
                 </label>
                 <button class="home-action-btn" onclick="applyAutoTagAll();" title="Suggerisce tag in base al nome (ducati, race, v8, ecc.)" data-tip="<strong>Auto-tag</strong>Scansiona i nomi dei file e applica tag automatici se riconosce brand (Ducati, Honda, Yamaha&hellip;), tipologia (race, stradale, test-bench), configurazione motore (V8, V6, inline-4). Non sovrascrive tag esistenti, solo aggiunge.">&#128269; Auto-tag</button>
@@ -812,16 +812,16 @@
                 <button class="recents-search-clear" id="recentsSearchClear" onclick="clearSearch();" title="Cancella" type="button">&times;</button>
             </div>
             <div class="chip-filters" id="typeFilters" role="tablist" aria-label="Filtra per tipo file">
-                <button class="chip-filter active" data-filter="all"   onclick="setTypeFilter('all');"   type="button">Tutti</button>
-                <button class="chip-filter"        data-filter="alz"   onclick="setTypeFilter('alz');"   type="button">Alzata</button>
-                <button class="chip-filter"        data-filter="pol"   onclick="setTypeFilter('pol');"   type="button">Polare</button>
-                <button class="chip-filter"        data-filter="other" onclick="setTypeFilter('other');" type="button">Altri</button>
+                <button class="chip-filter active" data-filter="all"   onclick="setTypeFilter('all');"   type="button" title="Mostra tutti i file">Tutti</button>
+                <button class="chip-filter"        data-filter="alz"   onclick="setTypeFilter('alz');"   type="button" title="Solo profili alzata (_alz)">Alzata</button>
+                <button class="chip-filter"        data-filter="pol"   onclick="setTypeFilter('pol');"   type="button" title="Solo vecchi file polari (_pol)">Polare</button>
+                <button class="chip-filter"        data-filter="other" onclick="setTypeFilter('other');" type="button" title="File senza suffisso _alz/_pol">Altri</button>
             </div>
             <div class="chip-filters" id="dateFilters" role="tablist" aria-label="Filtra per intervallo date">
-                <button class="chip-filter active" data-date="all"     onclick="setDateFilter('all');"   type="button">Sempre</button>
-                <button class="chip-filter"        data-date="today"   onclick="setDateFilter('today');" type="button">Oggi</button>
-                <button class="chip-filter"        data-date="week"    onclick="setDateFilter('week');"  type="button">7 g</button>
-                <button class="chip-filter"        data-date="month"   onclick="setDateFilter('month');" type="button">30 g</button>
+                <button class="chip-filter active" data-date="all"     onclick="setDateFilter('all');"   type="button" title="Qualsiasi data">Sempre</button>
+                <button class="chip-filter"        data-date="today"   onclick="setDateFilter('today');" type="button" title="Solo misure di oggi">Oggi</button>
+                <button class="chip-filter"        data-date="week"    onclick="setDateFilter('week');"  type="button" title="Ultimi 7 giorni">7 g</button>
+                <button class="chip-filter"        data-date="month"   onclick="setDateFilter('month');" type="button" title="Ultimi 30 giorni">30 g</button>
             </div>
             <span class="recents-count" id="recentsCount"></span>
         </div>

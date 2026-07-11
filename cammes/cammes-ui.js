@@ -522,10 +522,12 @@
       { sel: '.home-tiles',     title: 'Le 3 sezioni', body: 'Da qui entri in <b>Alzata</b>, <b>Confronto</b> e <b>Analisi</b>. È il punto di partenza.' },
       { sel: '#homeStats',      title: 'Stato archivio', body: 'Quante misure hai salvato e qual è l\'ultima. Un colpo d\'occhio sui dati.' },
       { sel: '#recentsSearch',  title: 'Cerca e filtra', body: 'Trova le misure per nome; sotto puoi filtrare per tipo, data e tag.' },
+      { sel: '#updatesCard',    title: 'Sistema & aggiornamenti', body: 'Controlla se c\'è una nuova versione su GitHub e aggiorna il <b>firmware Arduino</b> direttamente da qui (~15 s, senza Arduino IDE). Non scollegare l\'USB durante la scrittura.' },
       { sel: '#concert-toggle', title: 'Concerto col motore', body: 'Un extra: fai &ldquo;suonare&rdquo; lo stepper con brani famosi. 🎵' }
     ],
     alzata: [
       { sel: '#scanMode',  title: 'Modalità scansione', body: 'Scegli tra <b>Veloce</b> (~45 s, uso normale), <b>Precisione</b> (media 3 letture) e <b>Race</b> (risoluzione 0,5°). Il tempo stimato è indicato.' },
+      { sel: '#scanAdvBtn', title: 'Impostazioni avanzate', body: 'Apre le opzioni extra: <b>ripetizioni</b> con statistiche di ripetibilità, profilo <b>anti-vibrazione</b> e motore di scansione (<b>Firmware</b> consigliato / Browser di riserva). Per l\'uso normale non servono.' },
       { sel: 'button[onclick^="start"]', title: 'Avvia', body: 'START esegue una scansione completa 360° del profilo di alzata.' },
       { sel: '#msBtn',     title: 'Zero virtuale', body: 'Porta in automatico il picco di alzata a un riferimento fisso (+180°), così alberi montati diversamente restano confrontabili.' },
       { sel: '#freeBtn',   title: 'Sblocca motore', body: 'Libera l\'albero per girarlo a mano leggendo encoder e comparatore dal vivo.' },
@@ -538,12 +540,10 @@
       { sel: '#replayBtn',  title: 'Replay', body: 'Ridisegna le curve da 0° a 360° per un confronto animato.' }
     ],
     analisi: [
-      { sel: '#btnModules',        title: 'Funzioni aggiuntive', body: 'Di default vedi solo il flusso essenziale. Da qui attivi i moduli extra: <b>molla</b>, <b>dinamica valvole</b>, <b>strumenti race</b>, <b>animazione</b>, <b>confronto A/B</b>. La scelta viene ricordata.' },
+      { sel: '#btnModules',        title: 'Funzioni aggiuntive', body: 'Di default vedi solo il flusso essenziale. Da qui attivi i moduli extra: <b>molla</b>, <b>dinamica valvole</b>, <b>strumenti race</b>, <b>animazione</b>, <b>confronto A/B</b>. Col modulo Dinamica valvole compaiono anche <b>Compliance treno valvole</b> (valve float, modelli 1/2/3-DOF) e <b>Surge molla</b> (risonanza spire ad alto regime). La scelta viene ricordata.' },
       { sel: '#modeBaseBtn',       title: 'Base / Avanzato', body: 'In <b>Base</b> vedi i campi minimi; <b>Avanzato</b> aggiunge i parametri fini (anticipo, bilancieri, smoothing, baseline).' },
       { sel: '#fileIntake',        title: 'Importa la camma', body: 'Carica i file di aspirazione e scarico, poi premi Analizza.' },
-      { sel: 'button[onclick^="analyze"]', title: 'Analizza', body: 'Calcola durata, LSA, alzata, velocità/accelerazione, forze e RPM critico.' },
-      { sel: '#complianceEnabled', title: 'Compliance (race)', body: 'Simulazione dinamica del treno valvole: valve float, bounce, modelli 1/2/3-DOF.' },
-      { sel: '#surgeEnabled',      title: 'Surge molla', body: 'Modella la molla a massa distribuita per stimare la <b>risonanza delle spire</b> ad alto regime.' }
+      { sel: 'button[onclick^="analyze"]', title: 'Analizza', body: 'Calcola durata, LSA, alzata, velocità/accelerazione, forze e RPM critico.' }
     ]
   };
 
@@ -657,7 +657,13 @@
     defs.forEach(function (s) {
       var el = null;
       try { el = document.querySelector(s.sel); } catch (e) {}
-      if (el && el.offsetParent !== null) steps.push({ el: el, title: s.title, body: s.body });
+      if (el && el.offsetParent !== null) {
+        steps.push({ el: el, title: s.title, body: s.body });
+      } else if (el) {
+        // Elemento presente ma nascosto (modulo/pannello chiuso): lo step va
+        // riscritto su un target sempre visibile — avvisa in sviluppo.
+        console.warn('Tour: step "' + s.title + '" saltato, elemento nascosto: ' + s.sel);
+      }
     });
     if (!steps.length) {
       showToast({ kind: 'info', title: 'Tour non disponibile', body: 'Nessun elemento da mostrare su questa pagina.', duration: 3000 });

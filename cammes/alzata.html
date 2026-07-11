@@ -48,10 +48,10 @@
             <div class="card-title">Misura in tempo reale</div>
             <div id="microm" class="gauge-svg-host"></div>
             <form name="cpot">
-                <input type="text" name="cpot" readonly class="gauge-value">
+                <input type="text" name="cpot" readonly class="gauge-value" data-tip="<strong>Lettura comparatore</strong>Valore live del tastatore in mm. Durante la scansione mostra l'ultima misura acquisita.">
             </form>
             <form name="imp2">
-                <input type="text" name="imp2" readonly class="gauge-degrees">
+                <input type="text" name="imp2" readonly class="gauge-degrees" data-tip="<strong>Posizione angolare</strong>Grado camma corrente durante la scansione (0-360&deg; dal punto di partenza).">
             </form>
             <!-- Meccanismo live: cosa sta facendo la macchina ORA -->
             <div style="margin-top:10px; text-align:center;">
@@ -141,7 +141,7 @@
 
             <div class="controls-group">
                 <input type="text" id="nome" placeholder="nome file" class="input" data-tip="<strong>Nome file</strong>Suffisso '_alz' viene aggiunto automaticamente. Es: 'duc916_a' &rarr; 'duc916_a_alz'.">
-                <input type="submit" value="Salva" class="btn btn-accent" onclick="sav();">
+                <input type="submit" value="Salva" class="btn btn-accent" onclick="sav();" data-tip="<strong>Salva misura</strong>Scrive la scansione nell'archivio (cartella prove/) col nome scelto: il suffisso <code>_alz</code> viene aggiunto da solo.">
             </div>
             <form name="salva" style="display:inline;">
                 <input type="text" name="salva" readonly class="status-text" style="background:transparent;border:none;" size="12">
@@ -165,7 +165,7 @@
             <span class="live-trace-title">&#127922; Traccia LIVE &mdash; ruota a mano per disegnare la camma</span>
             <span>
                 <span class="live-trace-count" id="liveTraceCount">0 punti</span>
-                <button class="btn btn-secondary btn-sm" style="margin-left:8px;" onclick="clearLiveTrace();" title="Pulisci traccia">&times; Pulisci</button>
+                <button class="btn btn-secondary btn-sm" style="margin-left:8px;" onclick="clearLiveTrace();" data-tip="<strong>Pulisci traccia</strong>Svuota i punti raccolti nella traccia live. Non tocca le scansioni salvate.">&times; Pulisci</button>
             </span>
         </div>
         <div class="live-trace-canvas-wrap"><canvas id="liveTraceCanvas"></canvas></div>

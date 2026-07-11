@@ -51,7 +51,7 @@
                         <option value="diff">Differenza vs file 1</option>
                     </select>
                     <button id="replayBtn" class="btn btn-secondary btn-sm" onclick="replayAnimation();" data-tip="<strong>Replay animazione</strong>Ridipinge le curve caricate da 0&deg; a 360&deg; in 4 secondi.">&#9658; Replay</button>
-                    <button id="replayStopBtn" class="btn btn-secondary btn-sm" onclick="stopReplay();" style="display:none;">&#10074;&#10074; Stop</button>
+                    <button id="replayStopBtn" class="btn btn-secondary btn-sm" onclick="stopReplay();" style="display:none;" title="Ferma il replay e mostra subito le curve complete">&#10074;&#10074; Stop</button>
                 </span>
             </div>
             <div id="diffStats" class="diff-stats" style="display:none;"></div>
@@ -113,7 +113,7 @@
             </div>
 
             <div class="mt-16">
-                <button class="btn btn-secondary" onclick="document.location.reload(true)">&#8634; Reset</button>
+                <button class="btn btn-secondary" onclick="document.location.reload(true)" data-tip="<strong>Reset confronto</strong>Ricarica la pagina e scarica tutte le curve e le viste polari caricate: il confronto in corso va perso. I file sul disco non vengono toccati.">&#8634; Reset</button>
             </div>
         </div>
 

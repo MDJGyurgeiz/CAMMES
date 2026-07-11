@@ -1220,6 +1220,31 @@ autonoma v3 ×2, mediata 3 campioni ×1).
 - **TESTATO SUL FERRO**: flash reale via endpoint → 8584 byte scritti e
   verificati in 8,5 s su COM8, seriale riaperta da sola, `v` → `ver=3.0 scan=1`.
 
+### Revisione QA su richiesta utente: tour, tooltip, scheda camma PDF
+Audit multi-agente (4 revisori + verifica avversariale: 12 problemi confermati,
+3 confutati, 19 minori) + verifica live nel browser e sul PDF renderizzato.
+- **Scheda camma PDF (analisi.html)** — fix verificati rigenerando il PDF reale:
+  - remarks: righe wrappate si SOVRAPPONEVANO (maxWidth con avanzamento fisso)
+    → splitTextToSize con avanzamento per riga; carattere '→' corrompeva la
+    spaziatura (non è WinAnsi) → '->'.
+  - asse del diagramma lobi: off-by-one (PMS=indice 361 invece di 360, tick a
+    -241…-1…239) → allineato alla convenzione dell'app (tick -240…0…240).
+  - la dichiarazione follower/baseline veniva letta dal DOM all'export: se si
+    cambiava follower dopo Analizza senza rianalizzare, il PDF dichiarava un
+    metodo diverso dai numeri → snapshot in lastAnalysis.inputs (followerType,
+    Ø/R/leve, rPunt, baselineOn) + picchi camma congelati in results.
+  - nomi file lunghi sforavano il bordo pagina → troncamento a 80 char;
+    etichette lobo con clamp per non uscire dal riquadro.
+- **Tour guidato**: step nuovi per la card "Sistema & aggiornamenti" (Home) e
+  "⚙ Avanzate" (Alzata); gli step Compliance/Surge di Analisi (INVISIBILI per
+  chi ha i moduli off: venivano saltati in silenzio) accorpati nello step
+  ⚙ Funzioni; startTour ora logga in console gli step con target nascosto.
+- **Tooltip**: tip Concerto correggeva 4 brani → 7+custom (fuorviante);
+  aggiunti tip su Confronto A/B (angolo/gioco/bottoni, era l'unica sezione
+  senza help), Reset e Stop replay in Confronto, gauge live e Salva/Pulisci in
+  Alzata, "Solo preferiti" e chip filtri in Home. Copertura verificata live:
+  su tutte le pagine ogni controllo visibile ha spiegazione (hover o ?).
+
 ### Fixtures di validazione fuori dall'archivio utente
 - L'utente ha usato "Svuota archivio" → prove/ vuota, e `npm test` leggeva i file
   reali da lì. I 3 file di riferimento (Clio + VW asp/sc) ora vivono in

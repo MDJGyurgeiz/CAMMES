@@ -860,12 +860,12 @@
                     </div>
                     <div class="param-row">
                         <span class="param-label" style="min-width:60px;">Ang. lobo</span>
-                        <input type="number" id="abA_angle" value="100" class="input" style="width:65px;" step="0.5">
+                        <input type="number" id="abA_angle" value="100" class="input" style="width:65px;" step="0.5" data-tip="<strong>Angolo lobo (gradi MOTORE)</strong>Centro del lobo rispetto al PMS, in gradi manovella: come il campo omonimo del pannello parametri principale.">
                         <span class="param-unit">&deg;</span>
                     </div>
                     <div class="param-row">
                         <span class="param-label" style="min-width:60px;">Gioco</span>
-                        <input type="number" id="abA_clear" value="0.50" class="input" style="width:65px;" step="0.01">
+                        <input type="number" id="abA_clear" value="0.50" class="input" style="width:65px;" step="0.01" data-tip="<strong>Gioco valvola (mm)</strong>Gioco a freddo del set A: viene sottratto alla curva prima del confronto.">
                         <span class="param-unit">mm</span>
                     </div>
                 </div>
@@ -882,19 +882,19 @@
                     </div>
                     <div class="param-row">
                         <span class="param-label" style="min-width:60px;">Ang. lobo</span>
-                        <input type="number" id="abB_angle" value="100" class="input" style="width:65px;" step="0.5">
+                        <input type="number" id="abB_angle" value="100" class="input" style="width:65px;" step="0.5" data-tip="<strong>Angolo lobo (gradi MOTORE)</strong>Centro del lobo rispetto al PMS, in gradi manovella: come il campo omonimo del pannello parametri principale.">
                         <span class="param-unit">&deg;</span>
                     </div>
                     <div class="param-row">
                         <span class="param-label" style="min-width:60px;">Gioco</span>
-                        <input type="number" id="abB_clear" value="0.50" class="input" style="width:65px;" step="0.01">
+                        <input type="number" id="abB_clear" value="0.50" class="input" style="width:65px;" step="0.01" data-tip="<strong>Gioco valvola (mm)</strong>Gioco a freddo del set B: viene sottratto alla curva prima del confronto.">
                         <span class="param-unit">mm</span>
                     </div>
                 </div>
             </div>
             <div class="flex gap-8" style="margin-top:12px;">
-                <button class="btn btn-success" onclick="runABComparison();" style="flex:1;">&#9654; Confronta A vs B</button>
-                <button class="btn btn-secondary" onclick="resetAB();">&#8634; Reset</button>
+                <button class="btn btn-success" onclick="runABComparison();" style="flex:1;" data-tip="<strong>Confronta A vs B</strong>Analizza i due set (anche solo aspirazione) e mostra KPI affiancati, curve sovrapposte e differenze: utile per prima/dopo rettifica o due alberi diversi.">&#9654; Confronta A vs B</button>
+                <button class="btn btn-secondary" onclick="resetAB();" data-tip="<strong>Reset A/B</strong>Svuota i file e i risultati del confronto A vs B. Non tocca l'analisi principale n&eacute; i file su disco.">&#8634; Reset</button>
             </div>
 
             <!-- AB Results (hidden until comparison) -->
@@ -3047,6 +3047,14 @@ function analyze() {
     updateChartWithData(anlIn, anlEx);
 
     // Save snapshot for CSV/PDF export
+    // Picchi camma (pre-bilanciere) congelati con l'analisi: folIntake/folExhaust
+    // sono globali riscritti da ogni import, la scheda camma non deve rileggerli.
+    var _camPkIn = 0, _camPkEx = 0;
+    for (var _d = 1; _d <= 360; _d++) {
+        if (folIntake && folIntake[_d] > _camPkIn) _camPkIn = folIntake[_d];
+        if (folExhaust && folExhaust[_d] > _camPkEx) _camPkEx = folExhaust[_d];
+    }
+
     lastAnalysis = {
         timestamp: new Date().toISOString(),
         inputs: {
@@ -3060,7 +3068,17 @@ function analyze() {
             springK: springK, springPreload: springF0,
             massEqIntake: mEqIn, massEqExhaust: mEqEx,
             intakeFile: document.getElementById('intakeStatus').textContent,
-            exhaustFile: document.getElementById('exhaustStatus').textContent
+            exhaustFile: document.getElementById('exhaustStatus').textContent,
+            // Snapshot del metodo di presentazione: la scheda camma dichiara
+            // QUESTI valori (quelli usati dai calcoli), non il DOM al momento
+            // dell'export, che l'utente può aver cambiato senza rianalizzare.
+            followerType: (document.getElementById('followerType') || {}).value || 'punt',
+            rPunt: Number((document.getElementById('rPunt') || {}).value) || 1.5,
+            diamBicch: Number((document.getElementById('diamBicch') || {}).value) || 0,
+            rRoll: Number((document.getElementById('rRoll') || {}).value) || 0,
+            lArm: Number((document.getElementById('lArm') || {}).value) || 0,
+            lValve: Number((document.getElementById('lValve') || {}).value) || 0,
+            baselineOn: (typeof baselineEnabled === 'function') ? baselineEnabled() : false
         },
         results: {
             durIntake: durIntake, durExhaust: durExhaust,
@@ -3071,6 +3089,7 @@ function analyze() {
             overlap: overlap, liftInTDC: liftInTDC, liftExTDC: liftExTDC,
             maxLiftIn: mxIn.lift, maxLiftEx: mxEx.lift,
             maxPosIn: mxIn.pos, maxPosEx: mxEx.pos,
+            camPkIn: _camPkIn, camPkEx: _camPkEx,
             areaIn: areaIn, areaEx: areaEx, areaDelta: areaDelta,
             asymIn: asymIn, asymEx: asymEx,
             fInertiaMaxIn: forcesIn.fInertiaMax, fInertiaMaxEx: forcesEx.fInertiaMax,
@@ -4097,21 +4116,22 @@ function exportCamCard(testMode) {
     var doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', compress: true });
     var pageW = doc.internal.pageSize.getWidth();
 
-    // ---- descrizione follower (come viene PRESENTATA la curva) ----
-    var ft = (document.getElementById('followerType') || {}).value || 'punt';
-    var rPunt = Number((document.getElementById('rPunt') || {}).value) || 1.5;
+    // ---- descrizione follower: dallo SNAPSHOT dell'analisi (I.*), non dal
+    // DOM: se l'utente cambia follower dopo Analizza senza rianalizzare, la
+    // scheda deve dichiarare il metodo con cui i numeri sono stati calcolati.
+    var ft = I.followerType || 'punt';
+    var rPunt = I.rPunt || 1.5;
     var folDesc;
-    if (ft === 'bicch') folDesc = 'bicchiere piatto Ø ' + (Number(document.getElementById('diamBicch').value) || 0) + ' mm';
-    else if (ft === 'roller') folDesc = 'rullo R ' + (Number(document.getElementById('rRoll').value) || 0) + ' mm';
-    else if (ft === 'finger') folDesc = 'finger follower, leva ' + (Number(document.getElementById('lArm').value) || 0) + '/' + (Number(document.getElementById('lValve').value) || 0) + ' mm';
+    if (ft === 'bicch') folDesc = 'bicchiere piatto Ø ' + (I.diamBicch || 0) + ' mm';
+    else if (ft === 'roller') folDesc = 'rullo R ' + (I.rRoll || 0) + ' mm';
+    else if (ft === 'finger') folDesc = 'finger follower, leva ' + (I.lArm || 0) + '/' + (I.lValve || 0) + ' mm';
     else folDesc = 'puntalino (curva grezza)';
     var rockTxt = (I.rockerIntake !== 1 || I.rockerExhaust !== 1)
         ? ' · bilanciere ' + I.rockerIntake.toFixed(2) + ' / ' + I.rockerExhaust.toFixed(2) : '';
 
-    // ---- alzata CAMMA (pre-bilanciere): picco dei profili follower ----
-    function pk360(arr) { var m = 0; if (!arr) return 0; for (var i = 1; i <= 360; i++) if (arr[i] > m) m = arr[i]; return m; }
-    var camPkIn = pk360(typeof folIntake !== 'undefined' ? folIntake : null) || R.maxLiftIn / (I.rockerIntake || 1);
-    var camPkEx = pk360(typeof folExhaust !== 'undefined' ? folExhaust : null) || R.maxLiftEx / (I.rockerExhaust || 1);
+    // ---- alzata CAMMA (pre-bilanciere): picchi congelati dall'analisi ----
+    var camPkIn = R.camPkIn || R.maxLiftIn / (I.rockerIntake || 1);
+    var camPkEx = R.camPkEx || R.maxLiftEx / (I.rockerExhaust || 1);
 
     // ---- intestazione ----
     doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
@@ -4121,7 +4141,9 @@ function exportCamCard(testMode) {
     doc.text('Rilevazione: puntalino sferico R ' + rPunt + ' mm  ·  curva presentata come: ' + folDesc + rockTxt, pageW - 12, 15, { align: 'right' });
     doc.setDrawColor(40); doc.setLineWidth(0.5); doc.line(12, 18, pageW - 12, 18);
     doc.setFontSize(8.5); doc.setTextColor(90);
-    doc.text('ASP: ' + (I.intakeFile || '-') + '    SCA: ' + (I.exhaustFile || '-'), 12, 23);
+    // Tronca: jsPDF non va a capo da solo e nomi file lunghi sforerebbero il bordo
+    function _trunc(s, n) { s = String(s || '-'); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+    doc.text('ASP: ' + _trunc(I.intakeFile, 80) + '    SCA: ' + _trunc(I.exhaustFile, 80), 12, 23);
     doc.setTextColor(0);
 
     // ---- tabella dati (colonna sinistra) ----
@@ -4151,13 +4173,20 @@ function exportCamCard(testMode) {
     y += 3;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text('REMARKS', x0, y); y += 5;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+    // NB: solo caratteri WinAnsi (niente '→': i font standard jsPDF lo corrompono)
     var remarks = [
         '# misura CAMMES: scansione 360° col puntalino, conversione geometrica al follower dichiarato.',
-        '# conversione puntalino→follower VALIDATA fisicamente (piattello reale, RMS 0.046 mm).',
-        '# correzione baseline/eccentricità: ' + (typeof baselineEnabled === 'function' && baselineEnabled() ? 'ON' : 'OFF') + '.',
+        '# conversione puntalino->follower VALIDATA fisicamente (piattello reale, RMS 0.046 mm).',
+        '# correzione baseline/eccentricità: ' + (I.baselineOn ? 'ON' : 'OFF') + '.',
         '# durate e fasatura riferite al gioco valvola indicato; angoli in gradi MOTORE.'
     ];
-    remarks.forEach(function (r2) { doc.text(r2, x0, y, { maxWidth: 96 }); y += 4.6; });
+    remarks.forEach(function (r2) {
+        // splitTextToSize per far scendere y di TUTTE le righe del wrap (con
+        // maxWidth+incremento fisso le note lunghe si sovrapponevano)
+        var rl = doc.splitTextToSize(r2, 96);
+        doc.text(rl, x0, y);
+        y += rl.length * 3.6 + 1.2;
+    });
 
     // ---- diagramma lobi (canvas → immagine) ----
     var cw = 1180, ch = 620;
@@ -4166,7 +4195,7 @@ function exportCamCard(testMode) {
     g.fillStyle = '#ffffff'; g.fillRect(0, 0, cw, ch);
     var mL = 70, mR = 70, mT = 46, mB = 78;
     var plotW = cw - mL - mR, plotH = ch - mT - mB;
-    var dMin = 91, dMax = 631;                       // finestra: PMI(181) PMS(361) PMI(541) ±90
+    var dMin = 90, dMax = 630;                       // finestra: PMI(180) PMS(360) PMI(540) ±90 — gradi = indice-360 come nel resto dell'app
     var maxLift = Math.max(R.maxLiftIn, R.maxLiftEx) * 1.08 || 1;
     function X(d) { return mL + (d - dMin) / (dMax - dMin) * plotW; }
     function Y(v) { return mT + plotH - (v / maxLift) * plotH; }
@@ -4175,7 +4204,7 @@ function exportCamCard(testMode) {
     g.strokeRect(mL, mT, plotW, plotH);
     // verticali PMI/PMS/PMI
     g.setLineDash([7, 6]); g.lineWidth = 1.5; g.strokeStyle = '#333';
-    [[181, 'PMI'], [361, 'PMS'], [541, 'PMI']].forEach(function (m) {
+    [[180, 'PMI'], [360, 'PMS'], [540, 'PMI']].forEach(function (m) {
         g.beginPath(); g.moveTo(X(m[0]), mT); g.lineTo(X(m[0]), mT + plotH); g.stroke();
         g.setLineDash([]); g.fillStyle = '#000'; g.font = 'bold 22px Arial'; g.textAlign = 'center';
         g.fillText(m[1], X(m[0]), mT - 12);
@@ -4196,19 +4225,21 @@ function exportCamCard(testMode) {
     drawCurve(A.anlIn, '#000000', 3);
     // etichette lobi + centro
     g.font = 'bold 22px Arial'; g.textAlign = 'center';
-    var exPkX = X(361 - R.exhaustCenter), inPkX = X(361 + R.intakeCenter);
-    g.fillStyle = '#777'; g.fillText('SCARICO', exPkX, Y(R.maxLiftEx) - 26);
-    g.fillStyle = '#000'; g.fillText('ASPIRAZIONE', inPkX, Y(R.maxLiftIn) - 26);
+    var exPkX = X(360 - R.exhaustCenter), inPkX = X(360 + R.intakeCenter);
+    // baseline etichette con clamp: mai sopra il bordo del riquadro
+    var exLblY = Math.max(mT + 22, Y(R.maxLiftEx) - 26), inLblY = Math.max(mT + 22, Y(R.maxLiftIn) - 26);
+    g.fillStyle = '#777'; g.fillText('SCARICO', exPkX, exLblY);
+    g.fillStyle = '#000'; g.fillText('ASPIRAZIONE', inPkX, inLblY);
     g.font = '20px Arial';
-    g.fillStyle = '#777'; g.fillText(R.exhaustCenter.toFixed(0) + '°', exPkX, Y(R.maxLiftEx) - 6);
-    g.fillStyle = '#000'; g.fillText(R.intakeCenter.toFixed(0) + '°', inPkX, Y(R.maxLiftIn) - 6);
+    g.fillStyle = '#777'; g.fillText(R.exhaustCenter.toFixed(0) + '°', exPkX, exLblY + 20);
+    g.fillStyle = '#000'; g.fillText(R.intakeCenter.toFixed(0) + '°', inPkX, inLblY + 20);
     // livello alzata al PMS
     g.setLineDash([3, 5]); g.strokeStyle = '#000'; g.lineWidth = 1;
-    g.beginPath(); g.moveTo(X(361) - 90, Y(R.liftInTDC)); g.lineTo(X(361) + 90, Y(R.liftInTDC)); g.stroke();
+    g.beginPath(); g.moveTo(X(360) - 90, Y(R.liftInTDC)); g.lineTo(X(360) + 90, Y(R.liftInTDC)); g.stroke();
     g.setLineDash([]);
     g.font = '18px Arial'; g.textAlign = 'left';
     g.fillStyle = '#000';
-    g.fillText(R.liftInTDC.toFixed(2) + ' / ' + R.liftExTDC.toFixed(2) + ' mm @ PMS', X(361) + 96, Y(R.liftInTDC) + 6);
+    g.fillText(R.liftInTDC.toFixed(2) + ' / ' + R.liftExTDC.toFixed(2) + ' mm @ PMS', X(360) + 96, Y(R.liftInTDC) + 6);
     // scala alzata (sinistra) e asse gradi (sotto)
     g.textAlign = 'right'; g.font = '18px Arial';
     [0, 0.25, 0.5, 0.75, 1].forEach(function (f) {
@@ -4220,7 +4251,7 @@ function exportCamCard(testMode) {
     g.textAlign = 'center';
     g.fillText('mm', mL - 8, mT - 12);
     for (var gd = 120; gd <= 600; gd += 60) {
-        g.fillText(String(gd - 361), X(gd), mT + plotH + 26);
+        g.fillText(String(gd - 360), X(gd), mT + plotH + 26);
     }
     g.fillText('gradi motore (0 = PMS incrocio)', mL + plotW / 2, mT + plotH + 52);
     // fasatura testuale sotto
