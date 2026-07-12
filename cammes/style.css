@@ -425,6 +425,8 @@ body {
 .led.ok   { background: var(--success); box-shadow: 0 0 6px var(--success-glow), 0 0 0 2px rgba(0, 230, 118, 0.15); animation: led-pulse 2.4s var(--ease) infinite; color: var(--success); }
 .led.warn { background: var(--warning); box-shadow: 0 0 6px var(--warning-glow), 0 0 0 2px rgba(255, 215, 64, 0.15); animation: led-pulse 1.5s var(--ease) infinite; color: var(--warning); }
 .led.err  { background: var(--danger);  box-shadow: 0 0 6px var(--danger-glow),  0 0 0 2px rgba(255, 56, 56, 0.18);  animation: led-pulse 0.8s var(--ease) infinite; color: var(--danger); }
+/* Motore in movimento: blu che lampeggia veloce */
+.led.run  { background: var(--accent);  box-shadow: 0 0 8px var(--accent),       0 0 0 2px rgba(0, 212, 255, 0.20);  animation: led-pulse 0.5s var(--ease) infinite; color: var(--accent); }
 
 /* ---------- THEME TOGGLE BUTTON ------------------------------------------ */
 

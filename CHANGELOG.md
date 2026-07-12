@@ -1159,6 +1159,24 @@ autonoma v3 ×2, mediata 3 campioni ×1).
 - **polare.html**: messaggio "mic out" → **"NO SENSORE"** (coerente con Alzata):
   significa lettura assente o fuori scala (>32 mm / NaN).
 
+## Sessione 10d — 2026-07-12: barra di stato a 4 LED (richiesta utente)
+
+LED collegati ESATTAMENTE ai componenti, nell'ordine chiesto:
+**Comparatore · Motore · Encoder · Server**, ognuno con tooltip-legenda.
+- **Comparatore** (ex "Sensore", rinominato ovunque): verde = misure valide;
+  giallo = risponde ma letture assenti/fuori scala; rosso = firmware muto.
+- **Motore** (NUOVO): verde = pronto (bloccato) · **blu lampeggiante = in
+  movimento** (scansione, zero virtuale E rotazioni manuali "Ruota") ·
+  giallo = sbloccato (girabile a mano) · rosso = Arduino non risponde
+  (nuovo tracking lastFirmwareRx su qualsiasi riga). Il blu si spegne
+  all'arrivo di *mv/*mabort, non a tempo.
+- **Encoder**: ora alimentato anche dallo streaming di scansione (non
+  ingiallisce più a metà misura) e rosso quando i conteggi sono fermi.
+- CSS: nuova classe .led.run (blu, pulsazione veloce). Manuale aggiornato
+  con la legenda dei 4 LED.
+- VERIFICATO live: idle tutti verdi; sbloccato→giallo; scan→blu; Arduino
+  muto→rosso; rotazione REALE di 45° → blu durante, verde al *mv.
+
 ## Sessione 10c — 2026-07-12: encoder scollegato in scansione (precisazione utente)
 
 Il test dell'utente era con l'ENCODER staccato (non il comparatore): l'avviso

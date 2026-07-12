@@ -5,7 +5,11 @@
 ## 1. Avvio
 1. Doppio click su **`cammes.exe`** → si apre il browser sulla **Home**.
 2. Collega l'**Arduino via USB** (prima o dopo l'avvio: il programma lo trova da solo entro pochi secondi).
-3. In alto nella pagina Alzata i **LED di stato** dicono: Server (verde = programma ok), Sensore (verde = comparatore risponde), Encoder.
+3. In alto nella pagina Alzata i **4 LED di stato** (passaci sopra col mouse per la legenda):
+   - **Comparatore** — verde: misure valide · giallo: scollegato/spento · rosso: nessun dato
+   - **Motore** — verde: pronto · blu lampeggiante: in movimento · giallo: sbloccato (a mano) · rosso: Arduino muto
+   - **Encoder** — verde: conteggi ok · rosso: fermo durante una scansione (scollegato)
+   - **Server** — verde: programma connesso · rosso: avvia cammes.exe
 
 **Se il browser non si apre da solo**: aprilo tu e vai su `http://localhost:3000`.
 

@@ -25,10 +25,11 @@
             <a href="analisi.html">Analisi</a>
         </div>
         <div class="header-spacer"></div>
-        <div class="status-leds" aria-label="Stato connessioni">
-            <span class="status-led"><span id="ledServer" class="led"></span>Server</span>
-            <span class="status-led"><span id="ledSensor" class="led"></span>Sensore</span>
-            <span class="status-led"><span id="ledEncoder" class="led"></span>Encoder</span>
+        <div class="status-leds" aria-label="Stato hardware">
+            <span class="status-led" data-tip="<strong>Comparatore</strong><span style='color:var(--success)'>&#9679;</span> verde: misure valide e fresche<br><span style='color:var(--warning)'>&#9679;</span> giallo: risponde ma letture assenti o fuori scala (scollegato/spento)<br><span style='color:var(--danger)'>&#9679;</span> rosso: nessun dato dal firmware"><span id="ledSensor" class="led"></span>Comparatore</span>
+            <span class="status-led" data-tip="<strong>Motore</strong><span style='color:var(--success)'>&#9679;</span> verde: pronto (bloccato in posizione)<br><span style='color:var(--accent)'>&#9679;</span> blu lampeggiante: in movimento (scansione o rotazione)<br><span style='color:var(--warning)'>&#9679;</span> giallo: SBLOCCATO, ruotabile a mano<br><span style='color:var(--danger)'>&#9679;</span> rosso: Arduino non risponde"><span id="ledMotor" class="led"></span>Motore</span>
+            <span class="status-led" data-tip="<strong>Encoder</strong><span style='color:var(--success)'>&#9679;</span> verde: conteggi freschi (e in movimento quando comandato)<br><span style='color:var(--warning)'>&#9679;</span> giallo: nessun dato recente<br><span style='color:var(--danger)'>&#9679;</span> rosso: conteggi FERMI durante una scansione = scollegato o guasto"><span id="ledEncoder" class="led"></span>Encoder</span>
+            <span class="status-led" data-tip="<strong>Server</strong><span style='color:var(--success)'>&#9679;</span> verde: programma CAMMES connesso (WebSocket)<br><span style='color:var(--danger)'>&#9679;</span> rosso: server non raggiungibile — avvia cammes.exe"><span id="ledServer" class="led"></span>Server</span>
         </div>
         <button id="help-toggle" class="help-toggle" type="button" aria-label="Guida rapida" title="Apri la guida rapida">?</button>
         <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambia tema" title="Cambia tema chiaro/scuro">
@@ -378,6 +379,7 @@ function onScanModeChange() {
 var lastSensorRx     = 0;   // timestamp ultima misura numerica VALIDA
 var lastSensorAnyRx  = 0;   // timestamp ultima risposta dal firmware (anche NaN)
 var lastEncoderRx    = 0;
+var lastFirmwareRx   = 0;   // timestamp ultima riga QUALSIASI dall'Arduino (LED Motore)
 var consecutiveNaN   = 0;   // contatore NaN consecutivi → auto-stop scan
 var SENSOR_FRESH_MS    = 3000;
 var SENSOR_DEAD_MS     = 5000;   // oltre questo: rosso (nessun frame dal firmware)
@@ -390,10 +392,24 @@ function updateStatusLeds() {
     var ledSrv = document.getElementById('ledServer');
     var ledSen = document.getElementById('ledSensor');
     var ledEnc = document.getElementById('ledEncoder');
+    var ledMot = document.getElementById('ledMotor');
     if (!ledSrv) return;
     var wsOk = _wsReady();
     var now = Date.now();
     ledSrv.className = 'led ' + (wsOk ? 'ok' : 'err');
+    // Motore: verde = pronto (bloccato) · blu lampeggiante = in movimento ·
+    // giallo = SBLOCCATO (girabile a mano) · rosso = Arduino non risponde
+    if (ledMot) {
+        var fwAlive = lastFirmwareRx > 0 && (now - lastFirmwareRx) < SENSOR_DEAD_MS;
+        var motClass;
+        if (!wsOk || lastFirmwareRx === 0)  motClass = '';       // mai visto l'Arduino
+        else if (!fwAlive)                  motClass = 'err';    // Arduino muto
+        else if (typeof motorFree !== 'undefined' && motorFree) motClass = 'warn';  // sbloccato
+        else if (startflag === 1 || autoScanActive || window._waiting_mv ||
+                 (window._motorMovingUntil && now < window._motorMovingUntil)) motClass = 'run';  // in movimento
+        else                                motClass = 'ok';     // pronto
+        ledMot.className = 'led ' + motClass;
+    }
     // Sensore: verde se misure valide fresche, giallo se NaN o nessuna misura valida ma firmware risponde, rosso se firmware morto
     var senClass = '';
     if (lastSensorAnyRx === 0)                            senClass = '';        // mai ricevuto nulla
@@ -408,7 +424,7 @@ function updateStatusLeds() {
     if (senClass !== window._senPrev && (now - _pageLoadTs) > 4000 && window.cammesToast) {
         if (senClass === 'ok' && (window._senPrev === 'warn' || window._senPrev === 'err')) {
             window.cammesToast({ kind: 'success', title: 'Comparatore rilevato',
-                body: 'Le misure sono di nuovo valide: LED Sensore verde.', duration: 4000 });
+                body: 'Le misure sono di nuovo valide: LED Comparatore verde.', duration: 4000 });
         } else if (senClass === 'warn' && window._senPrev === 'ok') {
             window.cammesToast({ kind: 'warn', title: 'Comparatore non risponde',
                 body: 'Letture assenti o fuori scala: controlla collegamento e accensione.', duration: 6000 });
@@ -435,7 +451,7 @@ function updateStatusLeds() {
                    'Nel frattempo puoi usare Home e Analisi sui file già salvati.';
         } else if (wsOk && noArduino) {
             bmsg = '⚠ Server connesso, ma nessun dato dall’Arduino. Controlla il cavo USB e che il firmware sia caricato: ' +
-                   'la scansione non produrrà misure finché i LED Sensore/Encoder non diventano verdi.';
+                   'la scansione non produrrà misure finché i LED Comparatore/Motore/Encoder non diventano verdi.';
         }
         if (bmsg) { banner.textContent = bmsg; banner.style.display = ''; }
         else      { banner.style.display = 'none'; }
@@ -534,6 +550,7 @@ var _engineOnOpen = function(event) {
 
 var _engineOnMessage = function(event) {
     msg = event.data;
+    lastFirmwareRx = Date.now();   // qualsiasi riga = Arduino vivo (LED Motore)
 
     // Ack di fine movimento ($+/$- terminato dal firmware): se stiamo
     // attendendo per un 0 virtuale, il motore ha appena finito il
@@ -572,6 +589,9 @@ var _engineOnMessage = function(event) {
             }
         }
     }
+    // Fine movimento manuale: spegni subito il blu del LED Motore
+    if (msg === '*mv' || msg === '*mabort') window._motorMovingUntil = 0;
+
     // STOP di emergenza confermato dal firmware (movimento interrotto a metà)
     if (msg === '*mabort') {
         if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Movimento interrotto',
@@ -934,7 +954,7 @@ function start() {
     if (Date.now() - lastSensorRx > 2500) {
         if (window.cammesToast) window.cammesToast({
             kind: 'err', title: 'Comparatore non risponde: scansione NON avviata',
-            body: 'Nessuna misura valida negli ultimi secondi. Controlla che il comparatore sia collegato e acceso: il LED <b>Sensore</b> in alto deve essere verde, e il display deve mostrare la quota.',
+            body: 'Nessuna misura valida negli ultimi secondi. Controlla che il comparatore sia collegato e acceso: il LED <b>Comparatore</b> in alto deve essere verde, e il display deve mostrare la quota.',
             duration: 9000
         });
         return;
@@ -1307,7 +1327,13 @@ function ruota() {
         if (rsign == 1) { crot = "$+" + (dif); }
         if (rsign == -1) { crot = "$-" + (dif); }
     }
-    if (dg - oldg != 0) { sendSocket.send(crot + '\n'); }
+    if (dg - oldg != 0) {
+        sendSocket.send(crot + '\n');
+        // LED Motore blu "in movimento" per la durata stimata della rotazione
+        // (≈4 ms/grado a passo pieno + margine); spento in anticipo da *mv/*mabort.
+        var degMove = Math.abs(dg - oldg);
+        window._motorMovingUntil = Date.now() + Math.max(800, degMove * 15 + 500);
+    }
     oldg = dg;
 }
 </script>
