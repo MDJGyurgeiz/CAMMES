@@ -522,7 +522,8 @@
       { sel: '.home-tiles',     title: 'Le 3 sezioni', body: 'Da qui entri in <b>Alzata</b>, <b>Confronto</b> e <b>Analisi</b>. È il punto di partenza.' },
       { sel: '#homeStats',      title: 'Stato archivio', body: 'Quante misure hai salvato e qual è l\'ultima. Un colpo d\'occhio sui dati.' },
       { sel: '#recentsSearch',  title: 'Cerca e filtra', body: 'Trova le misure per nome; sotto puoi filtrare per tipo, data e tag.' },
-      { sel: '#updatesCard',    title: 'Sistema & aggiornamenti', body: 'Controlla se c\'è una nuova versione su GitHub e aggiorna il <b>firmware Arduino</b> direttamente da qui (~15 s, senza Arduino IDE). Non scollegare l\'USB durante la scrittura.' },
+      { sel: '#trashBtn',       title: 'Cestino', body: 'I file eliminati non spariscono: restano qui 30 giorni e si ripristinano con un click.' },
+      { sel: '#updatesCard',    title: 'Sistema & aggiornamenti', body: 'Nuove versioni da GitHub, <b>firmware Arduino</b> aggiornabile da qui (~15 s, senza Arduino IDE), intestazione officina per i referti, diagnostica per l\'assistenza e <b>manuale</b>.' },
       { sel: '#concert-toggle', title: 'Concerto col motore', body: 'Un extra: fai &ldquo;suonare&rdquo; lo stepper con brani famosi. 🎵' }
     ],
     alzata: [
@@ -536,6 +537,7 @@
     grafici: [
       { sel: '#fileinput1', title: 'Carica i profili', body: 'Scegli fino a 4 file <code>_alz</code>: le curve si sovrappongono nel grafico.' },
       { sel: '#fileinput2', title: 'Vista polare', body: 'Genera la vista polare della camma da un file <code>_alz</code> (raggio base + alzata). Accetta anche i vecchi <code>_pol</code>.' },
+      { sel: '#fileNominal', title: 'Collaudo nominale', body: 'Carica il profilo di riferimento (camma nuova o CSV di progetto) e imposta la tolleranza: ogni curva riceve il verdetto <b>CONFORME / NON CONFORME</b> e sul grafico compare la banda ±tol.' },
       { sel: '#viewMode',   title: 'Sovrapposto / Differenza', body: 'Confronta le curve sovrapposte oppure mostra la differenza (con statistiche max/media/RMSE).' },
       { sel: '#replayBtn',  title: 'Replay', body: 'Ridisegna le curve da 0° a 360° per un confronto animato.' }
     ],
