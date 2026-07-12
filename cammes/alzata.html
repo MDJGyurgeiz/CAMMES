@@ -141,7 +141,7 @@
 
             <div class="controls-group">
                 <input type="text" id="nome" placeholder="nome file" class="input" data-tip="<strong>Nome file</strong>Suffisso '_alz' viene aggiunto automaticamente. Es: 'duc916_a' &rarr; 'duc916_a_alz'.">
-                <input type="submit" value="Salva" class="btn btn-accent" onclick="sav();" data-tip="<strong>Salva misura</strong>Scrive la scansione nell'archivio (cartella prove/) col nome scelto: il suffisso <code>_alz</code> viene aggiunto da solo.">
+                <input type="button" value="Salva" class="btn btn-accent" onclick="sav();" data-tip="<strong>Salva misura</strong>Scrive la scansione nell'archivio (cartella prove/) col nome scelto: il suffisso <code>_alz</code> viene aggiunto da solo. Il messaggio di conferma arriva SOLO dopo che il server ha scritto il file.">
             </div>
             <form name="salva" style="display:inline;">
                 <input type="text" name="salva" readonly class="status-text" style="background:transparent;border:none;" size="12">
@@ -1064,10 +1064,38 @@ function sav() {
         stringa = stringa + pdindex[t] + "," + pdata[t] + "\r\n";
     }
     var fname = safeName + "_alz";
-    var stringa2 = "*" + fname + "*" + "_pline" + "\r\n" + stringa;
-    sendSocket.send(stringa2);
-    document.salva.salva.value = " file salvato";
-    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'File salvato', body: fname + '.scr in cartella prove/.', duration: 4000 });
+    // Salvataggio via HTTP POST con ACK REALE dal server: il vecchio invio
+    // WebSocket era fire-and-forget e il toast "salvato" mentiva se la
+    // scrittura falliva (disco pieno, permessi). Stesso formato file di
+    // sempre: prima riga "_pline", poi le righe grado,alzata.
+    var body = "_pline\r\n" + stringa;
+    var doSave = function () {
+        document.salva.salva.value = " salvataggio…";
+        fetch('/api/file/' + encodeURIComponent(fname + '.scr'), { method: 'POST', body: body })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d && d.ok) {
+                    document.salva.salva.value = " file salvato";
+                    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'File salvato', body: fname + '.scr scritto in prove/ (confermato dal server).', duration: 4000 });
+                } else {
+                    document.salva.salva.value = " ERRORE!";
+                    if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Salvataggio FALLITO', body: (d && (d.error || d.detail)) || 'risposta inattesa dal server', duration: 9000 });
+                }
+            })
+            .catch(function (e) {
+                document.salva.salva.value = " ERRORE!";
+                if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Salvataggio FALLITO', body: 'Server non raggiungibile: ' + e.message, duration: 9000 });
+            });
+    };
+    // Guardia sovrascrittura: se esiste già una misura con questo nome, chiedi
+    fetch('/api/files').then(function (r) { return r.json(); }).then(function (d) {
+        var exists = (d.files || []).some(function (f) { return f.name === fname + '.scr'; });
+        if (exists && !confirm('Esiste già una misura "' + fname + '.scr".\n\nSovrascriverla?')) {
+            document.salva.salva.value = " annullato";
+            return;
+        }
+        doSave();
+    }).catch(function () { doSave(); });
 }
 </script>
 

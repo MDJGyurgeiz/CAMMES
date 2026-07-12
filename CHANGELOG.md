@@ -1245,6 +1245,40 @@ Audit multi-agente (4 revisori + verifica avversariale: 12 problemi confermati,
   Alzata, "Solo preferiti" e chip filtri in Home. Copertura verificata live:
   su tutte le pagine ogni controllo visibile ha spiegazione (hover o ?).
 
+### Robustezza da officina + assistenza remota (suggerimenti 2-11 approvati)
+Tutti testati live al banco (il n.1, bind 127.0.0.1, scartato dall'utente).
+- **(2) Backup ZIP vero**: GET /api/backup-zip — ZIP "stored" costruito a mano
+  (CRC32 + central directory, zero dipendenze) con tutti i .scr di prove/;
+  bottone 📦 in Home. Verificato con unzip reale (CRC ok). Il MANUALE ora dice
+  il vero.
+- **(3) Salvataggio con ACK reale**: sav() di Alzata ora POSTa su /api/file e
+  il toast "salvato" arriva SOLO dopo la conferma del server (prima l'invio WS
+  era fire-and-forget: disco pieno = file perso in silenzio). In più guardia
+  sovrascrittura con conferma. Testati: nuovo/annulla/sovrascrivi.
+- **(4) Doppio avvio**: handler EADDRINUSE su HTTP e WS — banner "CAMMES è già
+  in esecuzione", apertura del browser sull'istanza attiva, uscita dopo 8 s
+  (prima: istanza zombie).
+- **(5) Log su file + diagnostica**: ogni riga di log anche in cammes.log
+  (rotazione 1 MB); GET /api/diagnostics scarica versioni+stato+coda log;
+  bottone 🩺 in Home. cammes.log in .gitignore.
+- **(6) Versione firmware REALE**: probe 'v' a ogni apertura seriale; la card
+  Sistema mostra "sull'Arduino: v3.0" accanto a "incluso" (arancione se
+  diversi), /api/firmware-info espone deviceFirmware. Retry lato pagina.
+- **(7) Auto-detect con probe**: se nessuna porta ha manufacturer noto, si
+  apre in sequenza e si TIENE solo quella che risponde a 'v' (prima: "ultima
+  COM qualsiasi" + keep-alive sparato a dispositivi altrui).
+- **(8) Download diretto**: update-check ritorna l'asset .exe della release
+  (browser_download_url + dimensione); toast e card puntano all'exe, non alla
+  pagina release. Verificato: cammes.exe v3.0.0, 36,8 MB.
+- **(9) Release via GitHub Actions**: .github/workflows/release.yml — su tag
+  v* runner Windows: npm test (gate) → pkg build → SHA256 → asset allegati;
+  con check tag==package.json. Aggira anche il blocco WDAC del PC di sviluppo.
+- **(10) Versione unica**: banner server usa package.json (diceva "v1.0.0");
+  nuovo tools/test_version.js in npm test fallisce se cammes-ui.js diverge.
+- **(11) Flash bloccato durante scansione**: il server traccia l'attività di
+  scansione (#i:/*se) e /api/flash-firmware risponde 409 se attiva da <10 s.
+  Testato sul ferro: scan avviato → flash → 409 → abort 'x' pulito.
+
 ### Fixtures di validazione fuori dall'archivio utente
 - L'utente ha usato "Svuota archivio" → prove/ vuota, e `npm test` leggeva i file
   reali da lì. I 3 file di riferimento (Clio + VW asp/sc) ora vivono in

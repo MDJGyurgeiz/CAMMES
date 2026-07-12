@@ -764,10 +764,12 @@
             <div class="separator" style="height:28px;"></div>
             <div style="min-width:230px;">
                 <div style="font-size:12px;color:var(--text-muted);">Firmware Arduino</div>
-                <div style="font-size:13px;">incluso: <b id="fwBundled">&ndash;</b> &middot; porta: <b id="fwPort">&ndash;</b></div>
+                <div style="font-size:13px;">sull'Arduino: <b id="fwDevice">&ndash;</b> &middot; incluso: <b id="fwBundled">&ndash;</b> &middot; porta: <b id="fwPort">&ndash;</b></div>
             </div>
-            <button class="home-action-btn" id="fwFlashBtn" onclick="flashFirmware();" data-tip="<strong>Aggiorna firmware</strong>Scrive il firmware incluso in questa versione sull'Arduino collegato (via avrdude, ~15 s). La seriale viene chiusa e riaperta da sola. <b>Non scollegare l'USB durante la scrittura.</b>">&#9889; Aggiorna firmware Arduino</button>
+            <button class="home-action-btn" id="fwFlashBtn" onclick="flashFirmware();" data-tip="<strong>Aggiorna firmware</strong>Scrive il firmware incluso in questa versione sull'Arduino collegato (via avrdude, ~15 s). La seriale viene chiusa e riaperta da sola. Rifiutato se c'&egrave; una scansione in corso. <b>Non scollegare l'USB durante la scrittura.</b>">&#9889; Aggiorna firmware Arduino</button>
             <span id="fwFlashStatus" style="font-size:12px;color:var(--text-muted);"></span>
+            <div class="separator" style="height:28px;"></div>
+            <a class="home-action-btn" href="/api/diagnostics" data-tip="<strong>Scarica diagnostica</strong>File di testo con versioni, stato seriale e la coda del log del server: &egrave; quello da mandare all'assistenza quando qualcosa non va.">&#129658; Diagnostica</a>
         </div>
     </div>
 
@@ -796,7 +798,8 @@
                 </label>
                 <button class="home-action-btn" onclick="applyAutoTagAll();" title="Suggerisce tag in base al nome (ducati, race, v8, ecc.)" data-tip="<strong>Auto-tag</strong>Scansiona i nomi dei file e applica tag automatici se riconosce brand (Ducati, Honda, Yamaha&hellip;), tipologia (race, stradale, test-bench), configurazione motore (V8, V6, inline-4). Non sovrascrive tag esistenti, solo aggiunge.">&#128269; Auto-tag</button>
                 <button class="home-action-btn" onclick="openBookmarksInCompare();" title="Apre Confronto coi primi 4 file alzata fra i preferiti">&#9733; Confronta preferiti</button>
-                <button class="home-action-btn" onclick="exportMetadata();" title="Scarica un backup JSON dei tuoi tag, bookmark e posizioni salvate" data-tip="<strong>Export metadati</strong>Scarica un file JSON con tutti i tuoi tag, bookmark, posizioni salvate e impostazioni preferenze. Utile per backup periodico o spostare le tue etichette su un altro PC. NON contiene i file .scr (quelli copia la cartella prove/).">&#128190; Export</button>
+                <a class="home-action-btn" href="/api/backup-zip" data-tip="<strong>Backup ZIP</strong>Scarica TUTTO l'archivio misure (i file .scr di prove/) in un unico ZIP. Da fare prima di formattare o cambiare PC; per tag e preferiti usa anche Export.">&#128230; Backup ZIP</a>
+                <button class="home-action-btn" onclick="exportMetadata();" title="Scarica un backup JSON dei tuoi tag, bookmark e posizioni salvate" data-tip="<strong>Export metadati</strong>Scarica un file JSON con tutti i tuoi tag, bookmark, posizioni salvate e impostazioni preferenze. Utile per backup periodico o spostare le tue etichette su un altro PC. NON contiene i file .scr: per quelli usa <b>Backup ZIP</b>.">&#128190; Export</button>
                 <button class="home-action-btn" onclick="document.getElementById('importMetaInput').click();" title="Ripristina tag/bookmark da un file JSON" data-tip="<strong>Import metadati</strong>Carica un file JSON di backup esportato precedentemente. Ripristina tag, bookmark e posizioni salvate (sovrascrive quelli correnti).">&#128229; Import</button>
                 <input type="file" id="importMetaInput" accept=".json,application/json" style="display:none;" onchange="importMetadataFile(event);">
                 <button class="home-action-btn" onclick="loadRecents();" title="Ricarica lista">&#8634; Aggiorna</button>
@@ -2445,13 +2448,27 @@ window.exportSinglePDF = exportSinglePDF;
 <!-- ===== Sistema & aggiornamenti: check GitHub + flash firmware ===== -->
 <script>
 // Popola la card all'avvio: versione software + info firmware incluso.
-function initUpdatesCard() {
+// retry: al primo avvio il probe 'v' del server impiega ~2-4 s, quindi se la
+// seriale è connessa ma la versione non è ancora arrivata si riprova.
+function initUpdatesCard(attempt) {
+    attempt = attempt || 0;
     var cur = document.getElementById('updSwCurrent');
     if (cur && window.CAMMES_VERSION) cur.textContent = window.CAMMES_VERSION;
     fetch('/api/firmware-info').then(function (r) { return r.json(); }).then(function (d) {
-        var b = document.getElementById('fwBundled'), p = document.getElementById('fwPort');
+        if (!d.deviceFirmware && d.serialConnected && attempt < 3) {
+            setTimeout(function () { initUpdatesCard(attempt + 1); }, 4000);
+        }
+        var b = document.getElementById('fwBundled'), p = document.getElementById('fwPort'), dv = document.getElementById('fwDevice');
         if (b) b.textContent = (d.bundled && d.bundled.firmware) ? 'v' + d.bundled.firmware + ' (' + d.bundled.builtAt + ')' : 'non incluso';
         if (p) p.textContent = d.port || 'nessuna';
+        if (dv) {
+            dv.textContent = d.deviceFirmware ? 'v' + d.deviceFirmware
+                           : (d.serialConnected ? 'non risponde (pre-v3?)' : 'non collegato');
+            if (d.deviceFirmware && d.bundled && d.bundled.firmware && d.deviceFirmware !== d.bundled.firmware) {
+                dv.style.color = 'var(--warn, orange)';
+                dv.title = 'Diverso dal firmware incluso: considera "Aggiorna firmware Arduino"';
+            }
+        }
         var btn = document.getElementById('fwFlashBtn');
         if (btn && (!d.bundled || !d.port)) btn.disabled = true;
     }).catch(function () {});
@@ -2469,7 +2486,11 @@ function checkUpdatesNow() {
         }
         if (d.updateAvailable) {
             if (st) st.innerHTML = 'installata <b>v' + d.current + '</b> &rarr; disponibile <b style="color:var(--success);">v' + d.latest + '</b>';
-            if (link) { link.href = d.url; link.style.display = ''; }
+            if (link) {
+                link.href = d.downloadUrl || d.url;
+                link.textContent = d.downloadUrl ? ('↓ Scarica ' + (d.downloadName || 'cammes.exe') + ' v' + d.latest + (d.downloadSizeMB ? ' (' + d.downloadSizeMB + ' MB)' : '')) : '↓ Apri pagina release v' + d.latest;
+                link.style.display = '';
+            }
             if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Aggiornamento disponibile: v' + d.latest, body: 'Scaricalo dal link nella card Sistema.', duration: 6000 });
         } else {
             if (st) st.innerHTML = 'versione installata: <b>v' + d.current + '</b> &middot; <span style="color:var(--success);">&#10003; aggiornato (ultima: v' + d.latest + ')</span>';

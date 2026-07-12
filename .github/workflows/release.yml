@@ -1,0 +1,55 @@
+# Build della release: su ogni tag v* compila cammes.exe su runner Windows,
+# fa girare la suite di test come gate, e allega exe + SHA256 alla release.
+# Coerenza garantita tra tag, versione e binario (l'update-check in-app punta
+# all'asset .exe dell'ultima release).
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: cammes
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Installa dipendenze
+        run: npm install
+
+      - name: Verifica che il tag corrisponda a package.json
+        shell: pwsh
+        run: |
+          $pkg = (Get-Content package.json | ConvertFrom-Json).version
+          $tag = "${{ github.ref_name }}".TrimStart('v')
+          if ($pkg -ne $tag) { Write-Error "Tag v$tag ma package.json dice $pkg"; exit 1 }
+
+      - name: Test (gate di pubblicazione)
+        run: npm test
+
+      - name: Build exe (pkg)
+        run: npm run build
+
+      - name: SHA256
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash cammes.exe -Algorithm SHA256).Hash.ToLower()
+          "$h  cammes.exe" | Out-File -Encoding ascii cammes.exe.sha256
+          Get-Content cammes.exe.sha256
+
+      - name: Allega alla release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            cammes/cammes.exe
+            cammes/cammes.exe.sha256

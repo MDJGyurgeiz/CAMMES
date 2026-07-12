@@ -40,5 +40,8 @@ Tutto il resto (molla e forze, dinamica valvole, strumenti race, animazione, con
 | "Nessun campione dal firmware" (scan autonomo) | Il firmware sull'Arduino non è v3: ri-flasha `master.ino` o torna a Motore scansione = Browser. |
 | Valori strani sul fianco / fondo che non torna a 0 | In Analisi lascia **Corr. baseline = ON**; verifica il centraggio dell'albero sul banco. |
 
-## 5. Backup
-Home → **Backup ZIP** scarica tutto l'archivio misure. Conservalo prima di aggiornare il PC.
+## 5. Backup e assistenza
+- Home → **📦 Backup ZIP** scarica tutto l'archivio misure (.scr). Conservalo prima di aggiornare il PC.
+- Home → **💾 Export** salva tag, preferiti e posizioni (file JSON, si ripristina con Import).
+- Se qualcosa non va: Home → **🩺 Diagnostica** scarica un file di testo con versioni e log — è quello da mandare all'assistenza.
+- Home → card **Sistema & aggiornamenti**: controlla nuove versioni su GitHub e aggiorna il **firmware Arduino** con un click (senza Arduino IDE).

@@ -867,8 +867,9 @@
       if (window.cammesToast) window.cammesToast({
         kind: 'info',
         title: 'Aggiornamento disponibile: v' + d.latest,
-        body: 'Stai usando la ' + CAMMES_VERSION + '. Scaricalo da <a href="' + d.url +
-              '" target="_blank" rel="noopener" style="color:var(--accent);">GitHub Releases</a>. ' +
+        body: 'Stai usando la ' + CAMMES_VERSION + '. <a href="' + (d.downloadUrl || d.url) +
+              '" target="_blank" rel="noopener" style="color:var(--accent);">' +
+              (d.downloadUrl ? 'Scarica ' + (d.downloadName || 'cammes.exe') : 'Apri la pagina release') + '</a>. ' +
               'Dalla Home puoi anche aggiornare il firmware Arduino.',
         duration: 12000
       });

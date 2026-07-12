@@ -72,9 +72,27 @@ var ANSI = process.stdout.isTTY ? {
     cyan:  '\x1b[36m'
 } : { reset: '', dim: '', blue: '', green: '', yellow: '', red: '', cyan: '' };
 
+// Log persistente su file (per la diagnostica di assistenza): stesse righe
+// della console, senza colori. Rotazione: sopra 1 MB si tiene la coda.
+var LOG_FILE = path.join(REAL_DIR, 'cammes.log');
+var _logWrites = 0, _logFileBroken = false;
+function logToFile(line) {
+    if (_logFileBroken) return;
+    try {
+        fs.appendFileSync(LOG_FILE, line + '\r\n');
+        if (++_logWrites % 500 === 0) {
+            var st = fs.statSync(LOG_FILE);
+            if (st.size > 1024 * 1024) {
+                fs.writeFileSync(LOG_FILE, fs.readFileSync(LOG_FILE, 'utf8').slice(-512 * 1024));
+            }
+        }
+    } catch (e) { _logFileBroken = true; }
+}
+
 function logAt(level, tag, msg) {
     if ((LOG_LEVELS[level] || 0) < LOG_THRESHOLD) return;
     var now = new Date().toLocaleTimeString('it-IT');
+    logToFile('[' + now + '] [' + tag + '] ' + (level !== 'info' ? level.toUpperCase() + ': ' : '') + msg);
     var colorByTag = {
         HTTP: ANSI.blue, WS: ANSI.cyan, SERIAL: ANSI.green,
         CMD:  ANSI.dim,  FILE: ANSI.yellow, API:  ANSI.cyan
@@ -197,12 +215,21 @@ function apiUpdateCheck(res) {
                     return sendJson(res, 502, { error: 'GitHub ha risposto ' + r.statusCode, current: APP_VERSION });
                 }
                 var latest = String(rel.tag_name).replace(/^v/i, '');
+                // Asset .exe della release: link di download DIRETTO (per un
+                // non tecnico la pagina release con zip/tarball è un labirinto)
+                var exeAsset = null;
+                (rel.assets || []).forEach(function (a) {
+                    if (!exeAsset && /\.exe$/i.test(a.name || '')) exeAsset = a;
+                });
                 var data = {
                     current: APP_VERSION,
                     latest: latest,
                     updateAvailable: compareVersions(latest, APP_VERSION) > 0,
                     name: rel.name || rel.tag_name,
                     url: rel.html_url,
+                    downloadUrl: exeAsset ? exeAsset.browser_download_url : null,
+                    downloadName: exeAsset ? exeAsset.name : null,
+                    downloadSizeMB: exeAsset ? Math.round(exeAsset.size / 1048576 * 10) / 10 : null,
                     publishedAt: rel.published_at,
                     notes: String(rel.body || '').substring(0, 2000)
                 };
@@ -219,6 +246,99 @@ function apiUpdateCheck(res) {
     req.on('error', function (e) {
         sendJson(res, 502, { error: 'GitHub non raggiungibile: ' + e.message, current: APP_VERSION });
     });
+}
+
+// --- Backup ZIP dell'archivio misure ------------------------------------
+// ZIP "stored" (senza compressione: i .scr sono file di pochi KB) costruito a
+// mano — niente dipendenze. Formato: local headers + central directory + EOCD.
+
+var _crcTable = null;
+function crc32(buf) {
+    if (!_crcTable) {
+        _crcTable = [];
+        for (var n = 0; n < 256; n++) {
+            var c = n;
+            for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+            _crcTable[n] = c >>> 0;
+        }
+    }
+    var crc = 0xFFFFFFFF;
+    for (var i = 0; i < buf.length; i++) crc = _crcTable[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8);
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function buildZip(entries) {   // entries: [{ name, data(Buffer), mtime(Date) }]
+    var locals = [], centrals = [], offset = 0;
+    entries.forEach(function (e) {
+        var nameB = Buffer.from(e.name, 'utf8');
+        var crc = crc32(e.data);
+        var d = e.mtime || new Date();
+        var dosTime = ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)) & 0xFFFF;
+        var dosDate = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xFFFF;
+        var lh = Buffer.alloc(30);
+        lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0x0800, 6);
+        lh.writeUInt16LE(0, 8); lh.writeUInt16LE(dosTime, 10); lh.writeUInt16LE(dosDate, 12);
+        lh.writeUInt32LE(crc, 14); lh.writeUInt32LE(e.data.length, 18); lh.writeUInt32LE(e.data.length, 22);
+        lh.writeUInt16LE(nameB.length, 26); lh.writeUInt16LE(0, 28);
+        locals.push(lh, nameB, e.data);
+        var ch = Buffer.alloc(46);
+        ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6);
+        ch.writeUInt16LE(0x0800, 8); ch.writeUInt16LE(0, 10); ch.writeUInt16LE(dosTime, 12); ch.writeUInt16LE(dosDate, 14);
+        ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(e.data.length, 20); ch.writeUInt32LE(e.data.length, 24);
+        ch.writeUInt16LE(nameB.length, 28); ch.writeUInt32LE(offset, 42);
+        centrals.push(Buffer.concat([ch, nameB]));
+        offset += 30 + nameB.length + e.data.length;
+    });
+    var centralBuf = Buffer.concat(centrals);
+    var eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x06054b50, 0);
+    eocd.writeUInt16LE(entries.length, 8); eocd.writeUInt16LE(entries.length, 10);
+    eocd.writeUInt32LE(centralBuf.length, 12); eocd.writeUInt32LE(offset, 16);
+    return Buffer.concat(locals.concat([centralBuf, eocd]));
+}
+
+function apiBackupZip(res) {
+    listMisureFiles(function (err, files) {
+        if (err) return sendJson(res, 500, { error: err.message });
+        var entries = [];
+        files.forEach(function (f) {
+            try {
+                entries.push({ name: f.name, data: fs.readFileSync(path.join(PROVE_DIR, f.name)), mtime: new Date(f.mtime) });
+            } catch (e) { log.warn('API', 'backup-zip: salto ' + f.name + ' (' + e.message + ')'); }
+        });
+        var zip = buildZip(entries);
+        var fname = 'cammes_backup_' + new Date().toISOString().substring(0, 10) + '.zip';
+        log('API', 'backup-zip: ' + entries.length + ' file, ' + zip.length + ' B');
+        res.writeHead(200, {
+            'Content-Type': 'application/zip',
+            'Content-Disposition': 'attachment; filename="' + fname + '"',
+            'Cache-Control': 'no-store'
+        });
+        res.end(zip);
+    });
+}
+
+// --- Diagnostica per l'assistenza: stato + coda del log ------------------
+function apiDiagnostics(res) {
+    var head = [
+        'CAMMES — diagnostica ' + new Date().toISOString(),
+        'versione software: ' + APP_VERSION,
+        'firmware Arduino (probe v): ' + (deviceFw || 'nessuna risposta / non collegato'),
+        'firmware incluso nella build: ' + JSON.stringify(readFwInfo()),
+        'porta seriale: ' + (currentSerialPath() || 'nessuna') + ' · connessa: ' + !!(serialPort && serialPort.isOpen),
+        'piattaforma: ' + process.platform + ' · node ' + process.version + ' · pkg: ' + !!process.pkg,
+        'cartella archivio: ' + PROVE_DIR,
+        '',
+        '================ CODA DEL LOG (max ~200 KB) ================'
+    ].join('\r\n');
+    var tail = '';
+    try { tail = fs.readFileSync(LOG_FILE, 'utf8').slice(-200 * 1024); } catch (e) { tail = '(log non disponibile: ' + e.message + ')'; }
+    res.writeHead(200, {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="cammes_diagnostica_' + new Date().toISOString().substring(0, 10) + '.txt"',
+        'Cache-Control': 'no-store'
+    });
+    res.end(head + '\r\n' + tail);
 }
 
 // --- Firmware Arduino: hex + avrdude inclusi in fw/ --------------------
@@ -270,6 +390,11 @@ function currentSerialPath() {
 
 function apiFlashFirmware(res) {
     if (flashInProgress) return sendJson(res, 409, { error: 'Flash già in corso' });
+    // Guardia: mai riflashare con una scansione attiva (la ucciderebbe a metà
+    // e riavvierebbe l'Arduino con l'albero in movimento)
+    if (Date.now() - lastScanActivity < 10000) {
+        return sendJson(res, 409, { error: 'Scansione in corso: attendi la fine del giro (o annullala) e riprova' });
+    }
     var info = readFwInfo();
     if (!info || !fs.existsSync(path.join(FW_DIR, 'master.ino.hex'))) {
         return sendJson(res, 500, { error: 'Firmware non incluso in questa build (manca fw/master.ino.hex)' });
@@ -387,14 +512,29 @@ var httpServer = http.createServer(function (req, res) {
     // API: info firmware incluso nella build + stato collegamento
     if (urlPath === '/api/firmware-info') {
         var fwInfo = readFwInfo();
+        var devVer = deviceFw ? (deviceFw.match(/ver=([\d.]+)/) || [])[1] || null : null;
         sendJson(res, 200, {
             bundled: fwInfo,
             appVersion: APP_VERSION,
+            deviceFirmware: devVer,          // versione REALE sull'Arduino (probe 'v'), null se muto
+            deviceFirmwareRaw: deviceFw,
             port: currentSerialPath(),
             serialConnected: !!(serialPort && serialPort.isOpen),
             flashInProgress: flashInProgress,
             avrdudeSources: resolveAvrdude(path.join(os.tmpdir(), 'cammes-fw-probe')).map(function (t) { return t.source; })
         });
+        return;
+    }
+
+    // API: backup ZIP dell'intero archivio misure
+    if (urlPath === '/api/backup-zip') {
+        apiBackupZip(res);
+        return;
+    }
+
+    // API: diagnostica testuale per l'assistenza (stato + coda log)
+    if (urlPath === '/api/diagnostics') {
+        apiDiagnostics(res);
         return;
     }
 
@@ -511,6 +651,27 @@ var httpServer = http.createServer(function (req, res) {
     });
 });
 
+// Doppio avvio (scenario tipico: secondo doppio click sull'exe): messaggio
+// chiaro invece di un'istanza zombie, e apertura del browser su quella attiva.
+httpServer.on('error', function (err) {
+    if (err.code === 'EADDRINUSE') {
+        log.error('SERVER', '==========================================================');
+        log.error('SERVER', ' CAMMES E\' GIA\' IN ESECUZIONE (porta ' + HTTP_PORT + ' occupata).');
+        log.error('SERVER', ' Usa la finestra del browser gia\' aperta: http://localhost:' + HTTP_PORT);
+        log.error('SERVER', ' Questa finestra si chiude da sola tra 8 secondi.');
+        log.error('SERVER', '==========================================================');
+        if (OPEN_BROWSER) {
+            var url = 'http://localhost:' + HTTP_PORT;
+            var cmd = process.platform === 'win32' ? 'start ' + url
+                    : process.platform === 'darwin' ? 'open ' + url : 'xdg-open ' + url;
+            try { exec(cmd); } catch (e) {}
+        }
+        setTimeout(function () { process.exit(1); }, 8000);
+    } else {
+        log.error('HTTP', 'Errore server HTTP: ' + err.message);
+    }
+});
+
 httpServer.listen(HTTP_PORT, function () {
     log('HTTP', 'Server statico avviato su http://localhost:' + HTTP_PORT);
     log('HTTP', 'Directory: ' + STATIC_DIR);
@@ -522,6 +683,10 @@ httpServer.listen(HTTP_PORT, function () {
 
 var wsServer = new WebSocket.Server({ port: WS_PORT }, function () {
     log('WS', 'WebSocket server avviato su ws://localhost:' + WS_PORT);
+});
+wsServer.on('error', function (err) {
+    if (err.code === 'EADDRINUSE') log.error('WS', 'Porta ' + WS_PORT + ' occupata (istanza gia\' attiva).');
+    else log.error('WS', 'Errore server WS: ' + err.message);
 });
 
 // Tutti i client WebSocket connessi
@@ -624,6 +789,8 @@ function handleFileSave(msg) {
 var serialPort = null;
 var SerialPort = null;
 var lastComPort = null;        // ultima porta aperta con successo (per il flash firmware)
+var deviceFw = null;           // risposta 'v' del firmware collegato (es. "ver=3.0 scan=1")
+var lastScanActivity = 0;      // timestamp ultima riga di scansione vista (guardia flash)
 var serialApiVersion = 'none'; // 'legacy' (v7-v8), 'v9' (v9), 'modern' (v10+), 'none'
 
 // Tenta di caricare il modulo serialport da vari percorsi
@@ -703,6 +870,7 @@ function autoDetectSerial() {
     if (!SerialPort) return;
     if (serialPort) return;   // già connessi
     if (flashInProgress) return;   // avrdude sta usando la porta: non toccarla
+    if (_probing) return;          // probe in corso: non sovrapporsi
 
     // Usa il metodo list() per trovare le porte
     var listFn = SerialPort.list;
@@ -733,15 +901,14 @@ function autoDetectSerial() {
             }
         }
 
-        if (!arduinoPort && ports.length > 0) {
-            // Se non trova Arduino specifico, prova l'ultima porta COM
-            var lastPort = ports[ports.length - 1];
-            arduinoPort = lastPort.path || lastPort.comName;
-            log('SERIAL', 'Arduino non identificato, uso ultima porta: ' + arduinoPort);
-        }
-
         if (arduinoPort) {
             openSerialPort(arduinoPort);
+        } else if (ports.length > 0) {
+            // Nessun manufacturer riconosciuto: PROBE in sequenza — si apre la
+            // porta, si manda 'v' e la si tiene SOLO se il firmware CAMMES
+            // risponde. (Prima si prendeva "l'ultima COM qualsiasi": su PC con
+            // altri dispositivi seriali si sparava il keep-alive a chi capitava.)
+            probePorts(ports.map(function (p) { return p.path || p.comName; }), 0);
         } else {
             scheduleSerialRetry();
         }
@@ -749,6 +916,33 @@ function autoDetectSerial() {
         log.error('SERIAL', 'Errore elencando porte: ' + err.message);
         scheduleSerialRetry();
     });
+}
+
+// Probe sequenziale delle porte NON identificate: tiene la prima che risponde
+// a 'v' (il write parte dall'handler 'open', la verifica avviene qui a 4,5 s).
+var _probing = false;
+function probePorts(candidates, idx) {
+    if (idx >= candidates.length) {
+        log('SERIAL', 'Nessuna porta ha risposto al probe CAMMES: ricontrollo tra 5s (hot-plug)');
+        scheduleSerialRetry();
+        return;
+    }
+    var portName = candidates[idx];
+    log('SERIAL', 'Porta non identificata: probe di ' + portName + ' (comando v, attesa 4,5s)...');
+    _probing = true;
+    openSerialPort(portName);
+    setTimeout(function () {
+        if (deviceFw) {
+            _probing = false;
+            log('SERIAL', portName + ' ha risposto al probe: ' + deviceFw);
+            return;
+        }
+        log('SERIAL', portName + ' non risponde al probe: la lascio libera');
+        var sp = serialPort;
+        serialPort = null;   // il close che segue non è una disconnessione da ricollegare
+        var next = function () { _probing = false; probePorts(candidates, idx + 1); };
+        try { if (sp && sp.isOpen) sp.close(next); else next(); } catch (e) { next(); }
+    }, 4500);
 }
 
 function openSerialPort(comPort) {
@@ -790,6 +984,13 @@ function openSerialPort(comPort) {
             log('SERIAL', 'Connesso a ' + comPort + ' @ ' + SERIAL_BAUD + ' baud (keep-alive RX attivo)');
             lastComPort = comPort;        // memorizza per il flash firmware
             _serialRetryLogged = false;   // prossima attesa hot-plug loggata di nuovo
+            // Probe versione firmware: 'v' dopo il boot (v3 risponde "ver=3.0 scan=1").
+            // Serve alla card Sistema (versione REALE sull'Arduino) e al probe
+            // delle porte non identificate.
+            deviceFw = null;
+            setTimeout(function () {
+                try { if (serialPort && serialPort.isOpen) serialPort.write('v\n'); } catch (e) {}
+            }, 1800);
         });
 
         serialPort.on('data', function (data) {
@@ -805,6 +1006,11 @@ function openSerialPort(comPort) {
             lines.forEach(function (line) {
                 line = line.trim();
                 if (line.length > 0) {
+                    // Versione firmware (risposta al probe 'v')
+                    if (line.indexOf('ver=') === 0) deviceFw = line;
+                    // Attività di scansione: righe streaming '#i:...' (autonomo)
+                    // o ack misura '*se' (classico) → guardia anti-flash
+                    if (line.charAt(0) === '#' || line === '*se') lastScanActivity = Date.now();
                     // Invia al browser via WebSocket
                     wsBroadcast(line);
                     log('DATA', 'Arduino -> Browser: "' + line + '"');
@@ -820,10 +1026,12 @@ function openSerialPort(comPort) {
             log('SERIAL', 'Porta chiusa');
             clearInterval(_kickTimer);
             serialPort = null;
+            deviceFw = null;
 
             // Durante il flash è avrdude a possedere la porta: la riapertura
-            // la programma avrdudeDone() a fine scrittura.
-            if (flashInProgress) return;
+            // la programma avrdudeDone() a fine scrittura. Durante il probe è
+            // probePorts() a decidere la prossima mossa.
+            if (flashInProgress || _probing) return;
 
             // Tenta riconnessione dopo 3 secondi
             setTimeout(function () {
@@ -890,7 +1098,7 @@ process.on('SIGINT', function () {
 
 // Banner di avvio
 log('SERVER', '========================================');
-log('SERVER', '  CAMMES Server Unificato v1.0.0');
+log('SERVER', '  CAMMES Server Unificato v' + APP_VERSION);
 log('SERVER', '  HTTP:   http://localhost:' + HTTP_PORT);
 log('SERVER', '  WS:     ws://localhost:' + WS_PORT);
 log('SERVER', '  Serial: ' + (SERIAL_COM || 'auto-detect'));
