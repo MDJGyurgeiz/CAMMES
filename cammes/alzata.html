@@ -372,9 +372,23 @@ function updateStatusLeds() {
     var senClass = '';
     if (lastSensorAnyRx === 0)                            senClass = '';        // mai ricevuto nulla
     else if ((now - lastSensorAnyRx) > SENSOR_DEAD_MS)    senClass = 'err';     // firmware non risponde
-    else if ((now - lastSensorRx) > SENSOR_FRESH_MS)      senClass = 'warn';    // sensore scollegato (NaN)
+    else if ((now - lastSensorRx) > SENSOR_FRESH_MS)      senClass = 'warn';    // sensore scollegato (NaN/fuori scala)
     else                                                  senClass = 'ok';      // tutto bene
     ledSen.className = 'led ' + senClass;
+    // Toast sulle TRANSIZIONI del sensore (una volta per cambio stato):
+    // prima scollegare/ricollegare il comparatore cambiava solo il colore
+    // del LED, senza alcun messaggio.
+    if (window._senPrev === undefined) window._senPrev = senClass;
+    if (senClass !== window._senPrev && (now - _pageLoadTs) > 4000 && window.cammesToast) {
+        if (senClass === 'ok' && (window._senPrev === 'warn' || window._senPrev === 'err')) {
+            window.cammesToast({ kind: 'success', title: 'Comparatore rilevato',
+                body: 'Le misure sono di nuovo valide: LED Sensore verde.', duration: 4000 });
+        } else if (senClass === 'warn' && window._senPrev === 'ok') {
+            window.cammesToast({ kind: 'warn', title: 'Comparatore non risponde',
+                body: 'Letture assenti o fuori scala: controlla collegamento e accensione.', duration: 6000 });
+        }
+    }
+    window._senPrev = senClass;
     var encOk = (now - lastEncoderRx) < ENCODER_FRESH_MS;
     ledEnc.className = 'led ' + (encOk ? 'ok' : (lastEncoderRx === 0 ? '' : 'warn'));
 
@@ -585,14 +599,19 @@ var _engineOnMessage = function(event) {
     }
     var isNumericMeasure = /^-?\d+(\.\d+)?$|^NaN$/.test(msg);
 
-    // Tracking timestamps per indicatori stato sensori
+    // Tracking timestamps per indicatori stato sensori.
+    // "Sensore ok" = misura numerica E in scala (0–32 mm): con il comparatore
+    // scollegato l'ingresso del LM339N flotta e può produrre NUMERI CASUALI
+    // fuori scala — prima azzeravano il contatore guasti e acceccavano
+    // l'auto-stop (scansione completata piena di zeri, visto al banco).
     if (isNumericMeasure) {
         lastSensorAnyRx = Date.now();
-        if (msg !== 'NaN') {
+        var nChk = Number(msg);
+        if (msg !== 'NaN' && nChk >= 0 && nChk < 32) {
             lastSensorRx = Date.now();
             consecutiveNaN = 0;
         } else {
-            consecutiveNaN++;
+            consecutiveNaN++;   // NaN O fuori scala: sensore inaffidabile
         }
     }
     if (msg.indexOf('encoder=') >= 0 || msg === '*pos') {
@@ -632,11 +651,17 @@ var _engineOnMessage = function(event) {
         } else {
             msg = "0.00";
             document.cpot.cpot.value = "NO SENSORE";
-            // Auto-stop scan dopo N NaN consecutivi
+            // Auto-stop dopo N misure INVALIDE consecutive (NaN o fuori scala):
+            // ferma anche il firmware ('x' dentro stop()) e lo dice CHIARO.
             if (typeof startflag !== 'undefined' && startflag === 1 && consecutiveNaN >= NAN_TO_AUTOSTOP) {
                 startflag = 0;
+                if (window.cammesToast) window.cammesToast({
+                    kind: 'err', title: 'Scansione FERMATA: comparatore non risponde',
+                    body: consecutiveNaN + ' letture invalide consecutive. Controlla cavo e accensione del comparatore, riazzera sul cerchio base e riparti: questa misura NON &egrave; valida.',
+                    duration: 12000
+                });
                 if (typeof stop === 'function') { try { stop(); } catch(e) {} }
-                console.warn('Auto-stop scan: sensore non risponde (' + consecutiveNaN + ' NaN consecutivi)');
+                console.warn('Auto-stop scan: sensore non risponde (' + consecutiveNaN + ' letture invalide consecutive)');
             }
         }
 
@@ -866,6 +891,18 @@ function start() {
     if (!_wsReady()) {
         if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Server non connesso',
             body: 'Avvia cammes_server.js e collega l’Arduino prima di scansionare.', duration: 4500 });
+        return;
+    }
+    // PRE-FLIGHT SENSORE: il probe idle interroga il comparatore a 5 Hz,
+    // quindi se è vivo lastSensorRx è fresco. Senza misura valida recente
+    // NON si parte: prima la scansione partiva anche a comparatore staccato
+    // e arrivava in fondo piena di zeri (visto al banco dall'utente).
+    if (Date.now() - lastSensorRx > 2500) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'err', title: 'Comparatore non risponde: scansione NON avviata',
+            body: 'Nessuna misura valida negli ultimi secondi. Controlla che il comparatore sia collegato e acceso: il LED <b>Sensore</b> in alto deve essere verde, e il display deve mostrare la quota.',
+            duration: 9000
+        });
         return;
     }
     // Legge target ripetizioni dalla UI all'avvio (poi non cambia per la

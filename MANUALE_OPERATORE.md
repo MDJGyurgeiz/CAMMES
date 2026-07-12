@@ -43,8 +43,9 @@ Tutto il resto (molla e forze, dinamica valvole, strumenti race, animazione, con
 |---|---|
 | LED Server rosso | `cammes.exe` non è in esecuzione: avvialo. Se già avviato, chiudi e riapri. |
 | LED Sensore spento/giallo | Controlla cavo USB e alimentazione del comparatore; il firmware deve essere caricato sull'Arduino. |
-| "NO SENSORE" sul display | Il comparatore non trasmette: spegni/riaccendi il comparatore, controlla il cablaggio LM339N. |
-| La scansione si ferma da sola | 3 letture NaN consecutive → sensore muto (vedi sopra). |
+| "NO SENSORE" sul display | Il comparatore non trasmette: spegni/riaccendi il comparatore, controlla il cablaggio LM339N. Quando torna a rispondere compare il messaggio "Comparatore rilevato" e il LED torna verde. |
+| La scansione non parte ("Comparatore non risponde") | Controllo pre-partenza: serve una misura valida recente. Collega/accendi il comparatore e aspetta il LED Sensore verde. |
+| La scansione si ferma da sola | 3 letture invalide consecutive (assenti o fuori scala) → sensore scollegato o disturbato. La misura interrotta NON va usata. |
 | Il motore non gira | Verifica alimentazione 36V del driver e il comando **Sblocca/Blocca motore**. |
 | "Nessun campione dal firmware" (scan autonomo) | Il firmware sull'Arduino non è v3: ri-flasha `master.ino` o torna a Motore scansione = Browser. |
 | Valori strani sul fianco / fondo che non torna a 0 | In Analisi lascia **Corr. baseline = ON**; verifica il centraggio dell'albero sul banco. |

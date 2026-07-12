@@ -1159,6 +1159,27 @@ autonoma v3 ×2, mediata 3 campioni ×1).
 - **polare.html**: messaggio "mic out" → **"NO SENSORE"** (coerente con Alzata):
   significa lettura assente o fuori scala (>32 mm / NaN).
 
+## Sessione 10b — 2026-07-12: scansione senza comparatore (bug trovato dall'utente al banco)
+
+Test utente: scansione avviata SENZA comparatore → "segnalato qualcosa ma è
+andata avanti"; ricollegato mid-scan → nessun messaggio, LED resta giallo.
+CAUSA: l'auto-stop contava solo i NaN consecutivi, ma con il connettore
+staccato l'ingresso del LM339N flotta e produce NUMERI CASUALI (spesso fuori
+scala) che azzeravano il contatore e rinfrescavano perfino il timestamp
+"sensore ok". E non esisteva alcun pre-controllo alla partenza.
+- **Pre-flight in start()**: senza una misura valida negli ultimi 2,5 s la
+  scansione NON parte (toast esplicito). Copre anche 0-virtuale e verifica
+  banco. VERIFICATO live.
+- **"Valido" = numerico E in scala 0–32 mm**: i numeri-spazzatura del pin
+  flottante ora contano come guasto (LED giallo, contatore invalide).
+- **Auto-stop su 3 letture INVALIDE consecutive** (NaN o fuori scala) con
+  toast err "misura NON valida" + stop del firmware. VERIFICATO sul ferro:
+  scan reale avviato, 3 letture spazzatura iniettate → toast + *sabort.
+- **Toast di transizione sensore**: "Comparatore non risponde" quando le
+  letture spariscono, "Comparatore rilevato" quando tornano (prima cambiava
+  solo il colore del LED, in silenzio). VERIFICATO simulando stacco/riattacco.
+- Manuale: righe problemi frequenti aggiornate.
+
 ## Sessione 10 — 2026-07-12: piano "cosa manca" completo (15 punti) + firmware 3.1
 
 ### App Android ELIMINATA
