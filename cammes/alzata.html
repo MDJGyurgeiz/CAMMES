@@ -286,21 +286,47 @@ var _encChkBaseCount = null;   // conteggio encoder all'inizio della finestra
 function checkEncoderDivergence() {
     if (startflag !== 1 || currentEncoderCount === null) return;
     if (_encChkBaseCount === null) { _encChkBaseCount = currentEncoderCount; _encChkBaseI = i; return; }
-    if (_encAlarmed || (i - _encChkBaseI) < 10 * currentMode.subStepsPerDeg) return;
+    if ((i - _encChkBaseI) < 10 * currentMode.subStepsPerDeg) return;
     var degAdv   = (i - _encChkBaseI) / currentMode.subStepsPerDeg;
     var expected = 4 * degAdv;                     // conteggi attesi
     var d = (currentEncoderCount - _encChkBaseCount) % 1440;  // wrap-safe
     if (d >  720) d -= 1440;
     if (d < -720) d += 1440;
     var actual = Math.abs(d);
-    if (expected >= 16 && actual < 0.25 * expected) {
-        _encAlarmed = true;
-        if (window.cammesToast) window.cammesToast({
-            kind: 'warn', title: 'Possibile slittamento stepper',
-            body: 'Encoder mosso ' + actual + ' conteggi (~' + (actual/4).toFixed(1) +
-                  '°) su ' + Math.round(degAdv) + '° comandati. Verifica accoppiamento motore/albero e corrente driver.',
-            duration: 8000
-        });
+    if (expected >= 16) {
+        if (actual === 0) {
+            // Conteggi ESATTAMENTE fermi = encoder scollegato o guasto (i
+            // canali hanno pull-up: staccato non produce nemmeno rumore).
+            // Non è un errore di misura: la scansione viaggia sui passi
+            // motore (validati al banco) — ma senza encoder niente zero
+            // virtuale né controllo slittamento, e va detto chiaro.
+            if (!window._encStuck) {
+                window._encStuck = true;
+                if (window.cammesToast) window.cammesToast({
+                    kind: 'err', title: 'Encoder scollegato o fermo',
+                    body: 'Conteggi immobili da ' + Math.round(degAdv) + '° comandati. La scansione continua sui passi motore (misura valida), ma <b>zero virtuale e allarme slittamento non sono disponibili</b>. Controlla il connettore dell\'encoder.',
+                    duration: 10000
+                });
+            }
+        } else {
+            if (window._encStuck) {
+                // L'encoder è ripartito (ricollegato a scansione in corso)
+                window._encStuck = false;
+                if (window.cammesToast) window.cammesToast({
+                    kind: 'success', title: 'Encoder di nuovo attivo',
+                    body: 'I conteggi si muovono di nuovo: protezioni encoder ripristinate.', duration: 5000
+                });
+            }
+            if (!_encAlarmed && actual < 0.25 * expected) {
+                _encAlarmed = true;
+                if (window.cammesToast) window.cammesToast({
+                    kind: 'warn', title: 'Possibile slittamento stepper',
+                    body: 'Encoder mosso ' + actual + ' conteggi (~' + (actual/4).toFixed(1) +
+                          '°) su ' + Math.round(degAdv) + '° comandati. Verifica accoppiamento motore/albero e corrente driver.',
+                    duration: 8000
+                });
+            }
+        }
     }
     _encChkBaseCount = currentEncoderCount; _encChkBaseI = i;
 }
@@ -390,7 +416,10 @@ function updateStatusLeds() {
     }
     window._senPrev = senClass;
     var encOk = (now - lastEncoderRx) < ENCODER_FRESH_MS;
-    ledEnc.className = 'led ' + (encOk ? 'ok' : (lastEncoderRx === 0 ? '' : 'warn'));
+    // Encoder FERMO durante una scansione (scollegato/guasto) = rosso: i dati
+    // arrivano ma non si muovono — più grave del semplice "nessuna risposta".
+    if (window._encStuck)      ledEnc.className = 'led err';
+    else                       ledEnc.className = 'led ' + (encOk ? 'ok' : (lastEncoderRx === 0 ? '' : 'warn'));
 
     // Banner guida: distingue "server giù" da "server ok ma Arduino assente".
     // Grazia iniziale per non lampeggiare durante l'handshake WebSocket.
@@ -594,6 +623,11 @@ var _engineOnMessage = function(event) {
         if (/^-?\d+(\.\d+)?$|^NaN$/.test(headPart) && /^-?\d+$/.test(tailPart)) {
             msgEncoder = parseInt(tailPart, 10);
             currentEncoderCount = msgEncoder;
+            // Il LED encoder si nutre ANCHE dai dati di scansione: il polling
+            // '?' è in pausa durante lo scan e prima il LED ingialliva sempre
+            // a metà misura (la veridicità sul "si muove davvero" la dà il
+            // flag _encStuck di checkEncoderDivergence).
+            lastEncoderRx = Date.now();
             msg = headPart;  // d'ora in poi msg è solo la misura
         }
     }
@@ -1003,6 +1037,7 @@ function _startSingleRun(firstRun) {
     window._lastRepeatStats = null;   // le statistiche valgono solo per il run corrente
     // Reset controllo divergenza stepper↔encoder per questo run
     _encChkBaseI = 0; _encChkBaseCount = null; _encAlarmed = false;
+    window._encStuck = false;
     if (config && config.data) { config.data.labels.length = 0; config.data.datasets.forEach(function(d){ d.data.length = 0; }); }
     if (window.myLine) { try { window.myLine.update(); } catch(e) {} }
     var engSel = document.getElementById('scanEngine');

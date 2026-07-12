@@ -1159,6 +1159,24 @@ autonoma v3 ×2, mediata 3 campioni ×1).
 - **polare.html**: messaggio "mic out" → **"NO SENSORE"** (coerente con Alzata):
   significa lettura assente o fuori scala (>32 mm / NaN).
 
+## Sessione 10c — 2026-07-12: encoder scollegato in scansione (precisazione utente)
+
+Il test dell'utente era con l'ENCODER staccato (non il comparatore): l'avviso
+visto era il nuovo allarme slittamento (testo fuorviante per quel caso), che
+scattava UNA volta e taceva; al ricollegamento nessun messaggio e LED encoder
+giallo (il polling '?' che lo alimenta è in pausa durante le scansioni).
+NB: proseguire senza encoder è CORRETTO (la misura viaggia sui passi motore,
+l'encoder è il controllore) — ma va detto chiaramente.
+- checkEncoderDivergence ora DISTINGUE: conteggi esattamente fermi →
+  "Encoder scollegato o fermo" (err, spiega che la misura resta valida ma
+  zero virtuale/allarme slittamento non sono disponibili); conteggi ridotti
+  ma presenti → allarme slittamento come prima. Il caso "fermo" non è più
+  latchato: al ricollegamento mid-scan → "Encoder di nuovo attivo".
+- LED encoder: alimentato anche dai dati di scansione (prima ingialliva
+  sempre a metà misura) e ROSSO quando i conteggi sono fermi in scansione.
+- VERIFICATO live: 13 misure a conteggio fermo → toast err + LED rosso;
+  conteggi di nuovo in moto → toast success + LED verdi.
+
 ## Sessione 10b — 2026-07-12: scansione senza comparatore (bug trovato dall'utente al banco)
 
 Test utente: scansione avviata SENZA comparatore → "segnalato qualcosa ma è
