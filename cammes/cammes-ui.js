@@ -9,7 +9,7 @@
   // -------- VERSIONE ------------------------------------------------------
   // Unico punto di verità della versione mostrata nella UI (badge in basso a
   // destra su ogni pagina). Allineala a package.json/tag quando rilasci.
-  var CAMMES_VERSION = 'v3.1.0';
+  var CAMMES_VERSION = 'v3.2.0';
   window.CAMMES_VERSION = CAMMES_VERSION;
 
   // -------- THEME (dark/light) -------------------------------------------
