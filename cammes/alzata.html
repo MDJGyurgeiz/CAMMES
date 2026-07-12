@@ -129,6 +129,10 @@
                 <span class="help-icon" data-tip="<strong>Scan autonomo</strong>Validato al banco (07-05 e 07-11: profilo identico al classico entro 0,05 mm, 0 campioni persi). Se il firmware non &egrave; v3, entro 6 s compare l'avviso e puoi passare a Browser." tabindex="0">?</span>
             </div>
 
+            <div class="controls-group">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="benchVerifyStart();" data-tip="<strong>Verifica banco</strong>Controllo periodico della salute del banco: monta un <b>pezzo cilindrico rettificato</b> (alzata attesa = 0 ovunque), azzera il comparatore e premi. Una scansione Veloce misura il residuo: entro 0,02 mm RMS il banco &egrave; OK. L'esito (con data) compare in Home.">&#129514; Verifica banco</button>
+            </div>
+
             </div><!-- /scanAdvanced -->
 
             <div class="separator"></div>
@@ -273,6 +277,33 @@ var currentEncoderCount = null;   // ultimo conteggio encoder ricevuto (con la m
 // (accoppiamento lasco, cinghia, stallo). Encoder = 4 conteggi/grado camma.
 var _encChkBaseI = 0;          // indice sub-step all'inizio della finestra
 var _encChkBaseCount = null;   // conteggio encoder all'inizio della finestra
+
+// Controllo divergenza stepper↔encoder (finestra 10° camma). Atteso:
+// 4 conteggi/grado → 40 conteggi ogni 10°. Se l'encoder si è mosso meno
+// del 25% dell'atteso, il motore sta probabilmente slittando. Allarme
+// una sola volta per run, non blocca la scansione. Chiamata per OGNI
+// misura di scansione (percorso classico e autonomo).
+function checkEncoderDivergence() {
+    if (startflag !== 1 || currentEncoderCount === null) return;
+    if (_encChkBaseCount === null) { _encChkBaseCount = currentEncoderCount; _encChkBaseI = i; return; }
+    if (_encAlarmed || (i - _encChkBaseI) < 10 * currentMode.subStepsPerDeg) return;
+    var degAdv   = (i - _encChkBaseI) / currentMode.subStepsPerDeg;
+    var expected = 4 * degAdv;                     // conteggi attesi
+    var d = (currentEncoderCount - _encChkBaseCount) % 1440;  // wrap-safe
+    if (d >  720) d -= 1440;
+    if (d < -720) d += 1440;
+    var actual = Math.abs(d);
+    if (expected >= 16 && actual < 0.25 * expected) {
+        _encAlarmed = true;
+        if (window.cammesToast) window.cammesToast({
+            kind: 'warn', title: 'Possibile slittamento stepper',
+            body: 'Encoder mosso ' + actual + ' conteggi (~' + (actual/4).toFixed(1) +
+                  '°) su ' + Math.round(degAdv) + '° comandati. Verifica accoppiamento motore/albero e corrente driver.',
+            duration: 8000
+        });
+    }
+    _encChkBaseCount = currentEncoderCount; _encChkBaseI = i;
+}
 var _encAlarmed = false;       // allarme già emesso in questo run (una volta)
 
 // Modalità scansione: ogni preset definisce campioni media, micropassi per unità,
@@ -498,6 +529,24 @@ var _engineOnMessage = function(event) {
             }
         }
     }
+    // STOP di emergenza confermato dal firmware (movimento interrotto a metà)
+    if (msg === '*mabort') {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Movimento interrotto',
+            body: 'Il motore si &egrave; fermato su richiesta. La posizione &egrave; a met&agrave; movimento: usa l\'encoder o lo Zero virtuale per riorientarti.', duration: 6000 });
+        return;
+    }
+
+    // RESET INATTESO DELL'ARDUINO (brownout, glitch USB, riflash): il firmware
+    // stampa "CAMMES Uno ready" al boot. Se arriva a pagina già avviata da un
+    // po', encoder e configurazione sono stati azzerati: avvisa forte.
+    if (msg.indexOf('CAMMES Uno ready') !== -1 && (Date.now() - _pageLoadTs) > 12000) {
+        currentEncoderCount = null;
+        if (startflag === 1 || autoScanActive) { try { stop(); } catch (e) {} }
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Arduino riavviato!',
+            body: 'La scheda si &egrave; resettata: <b>riferimento zero e configurazione persi</b>. Se stavi misurando, la scansione non &egrave; pi&ugrave; valida: rifai lo Zero virtuale e riparti.', duration: 12000 });
+        return;
+    }
+
     if (autoScanActive && (msg === '*sdone' || msg === '*sabort')) {
         var wasAborted = (msg === '*sabort');
         autoScanActive = false;
@@ -592,6 +641,11 @@ var _engineOnMessage = function(event) {
         }
 
         if (startflag === 1 && i <= currentMode.totalSteps && stepflag === 0) {
+            // Controllo slittamento stepper↔encoder: qui passa OGNI misura di
+            // scansione (sia classica sia autonoma riscritta da "#i:enc:mm"),
+            // quindi l'allarme copre anche il motore Firmware — prima viveva
+            // solo nel ramo '*se' che lo scan autonomo non emette mai.
+            checkEncoderDivergence();
             // Bin angolare 1..360 (grado camma reale). Se subStepsPerDeg>1 aggreghiamo
             // più letture nello stesso bin con media filtrata di NaN.
             var deg = Math.floor((i - 1) / currentMode.subStepsPerDeg) + 1;
@@ -641,6 +695,56 @@ var _engineOnMessage = function(event) {
             if (window.cammesScanProgress) window.cammesScanProgress.set(currentMode.totalSteps, currentMode.totalSteps, 0);
             if (scanEta) scanEta.stop();
 
+            // CONTROLLO DI CHIUSURA DEL GIRO (sanità metrologica): il cerchio
+            // base tocca sempre entrambe le metà del giro e deve stare alla
+            // stessa quota (~0) in tutte e due. Se il minimo della prima metà
+            // e quello della seconda divergono, lo zero del comparatore è
+            // derivato o il pezzo si è mosso durante la misura.
+            // (Indipendente dal punto di partenza: non confronta angoli
+            // adiacenti, che su un fianco ripido differirebbero legittimamente.)
+            if (labms !== 1) {
+                var _m1 = Infinity, _m2 = Infinity;
+                for (var _d = 1; _d <= 180; _d++)    { var _v1 = Number(pdata[_d]);  if (isFinite(_v1) && _v1 < _m1) _m1 = _v1; }
+                for (var _d2 = 181; _d2 <= 360; _d2++) { var _v2 = Number(pdata[_d2]); if (isFinite(_v2) && _v2 < _m2) _m2 = _v2; }
+                if (isFinite(_m1) && isFinite(_m2)) {
+                    var _drift = Math.abs(_m2 - _m1);
+                    if (_drift > 0.03 && window.cammesToast) {
+                        window.cammesToast({
+                            kind: 'warn', title: 'Misura sospetta: giro non chiuso',
+                            body: 'Il cerchio base non torna alla stessa quota tra inizio e fine giro (differenza ' + _drift.toFixed(3) + ' mm, attesa ~0): possibile deriva dello zero del comparatore o pezzo mosso. Riazzerare sul cerchio base e ripetere.',
+                            duration: 10000
+                        });
+                    }
+                }
+            }
+            // === VERIFICA BANCO: pezzo cilindrico → il residuo È l'errore del banco ===
+            if (labms !== 1 && window._benchVerify) {
+                window._benchVerify = false;
+                var _bvArr = new Array(361);
+                for (var _b = 1; _b <= 360; _b++) _bvArr[_b] = Number(pdata[_b]) || 0;
+                // togli l'eccentricità di montaggio (non è colpa del banco)
+                try { if (typeof removeCamBaseline === 'function') _bvArr = removeCamBaseline(_bvArr); } catch (eBv) {}
+                var _bvSq = 0, _bvMax = 0, _bvN = 0;
+                for (var _b2 = 1; _b2 <= 360; _b2++) {
+                    var _bv = Math.abs(Number(_bvArr[_b2]) || 0);
+                    _bvSq += _bv * _bv; _bvN++;
+                    if (_bv > _bvMax) _bvMax = _bv;
+                }
+                var _bvRms = Math.sqrt(_bvSq / (_bvN || 1));
+                var _bvPass = _bvRms <= 0.02 && _bvMax <= 0.05;
+                fetch('/api/settings', { method: 'POST', body: JSON.stringify({ verificaBanco: {
+                    date: new Date().toISOString(), rms: Number(_bvRms.toFixed(4)), max: Number(_bvMax.toFixed(4)), pass: _bvPass } }) }).catch(function () {});
+                if (window.cammesToast) window.cammesToast({
+                    kind: _bvPass ? 'success' : 'err',
+                    title: _bvPass ? 'Verifica banco: SUPERATA' : 'Verifica banco: NON SUPERATA',
+                    body: 'Residuo sul cilindro (tolta l\'eccentricit&agrave;): RMS ' + _bvRms.toFixed(3) + ' mm, max ' + _bvMax.toFixed(3) +
+                          ' mm (soglie: 0,020 / 0,050).' + (_bvPass ? ' Esito salvato: lo vedi in Home.' : ' Controlla gioco supporti, squadra comparatore, corrente driver.'),
+                    duration: 12000
+                });
+                startflag = 0;
+                var _bvSm = document.getElementById('scanMode'); if (_bvSm) _bvSm.disabled = false;
+                return;
+            }
             // === Scansione ripetuta: salva questo run e decide se ripartire ===
             if (labms !== 1 && repeatRunsTarget > 1) {
                 // Snapshot pdata (deep copy della parte 1..360)
@@ -744,31 +848,6 @@ var _engineOnMessage = function(event) {
             var etaSec = scanEta.tick(i);
             window.cammesScanProgress.set(i, currentMode.totalSteps, etaSec);
         }
-        // Controllo divergenza stepper↔encoder (finestra 10° camma). Atteso:
-        // 4 conteggi/grado → 40 conteggi ogni 10°. Se l'encoder si è mosso meno
-        // del 25% dell'atteso, il motore sta probabilmente slittando. Allarme
-        // una sola volta per run, non blocca la scansione.
-        if (startflag === 1 && currentEncoderCount !== null) {
-            if (_encChkBaseCount === null) { _encChkBaseCount = currentEncoderCount; _encChkBaseI = i; }
-            else if (!_encAlarmed && (i - _encChkBaseI) >= 10 * currentMode.subStepsPerDeg) {
-                var degAdv   = (i - _encChkBaseI) / currentMode.subStepsPerDeg;
-                var expected = 4 * degAdv;                     // conteggi attesi
-                var d = (currentEncoderCount - _encChkBaseCount) % 1440;  // wrap-safe
-                if (d >  720) d -= 1440;
-                if (d < -720) d += 1440;
-                var actual = Math.abs(d);
-                if (expected >= 16 && actual < 0.25 * expected) {
-                    _encAlarmed = true;
-                    if (window.cammesToast) window.cammesToast({
-                        kind: 'warn', title: 'Possibile slittamento stepper',
-                        body: 'Encoder mosso ' + actual + ' conteggi (~' + (actual/4).toFixed(1) +
-                              '°) su ' + Math.round(degAdv) + '° comandati. Verifica accoppiamento motore/albero e corrente driver.',
-                        duration: 8000
-                    });
-                }
-                _encChkBaseCount = currentEncoderCount; _encChkBaseI = i;
-            }
-        }
         if (startflag == 1 && i < currentMode.totalSteps && stepflag == 0) {
             if (rsign == 1) { sendSocket.send('p'); }
             if (rsign == -1) { sendSocket.send('q'); }
@@ -842,6 +921,9 @@ function _showRepeatedRunsStats() {
     }
     max = maxAvg; maxg = maxAvgDeg;
     document.mas.mas.value = " max  " + maxg + " gradi       " + max.toFixed(3) + " (n=" + N + ")";
+    // Statistiche di ripetibilità per i metadati del file salvato (sav):
+    // sono la prova documentale della misura, prima vivevano solo nel toast.
+    window._lastRepeatStats = { runs: N, sigmaMax: maxStd, sigmaPeak: peakStdAtMaxg, cvMax: maxCv };
 
     if (config && config.data) {
         config.data.labels.length = 0;
@@ -881,6 +963,7 @@ function _startSingleRun(firstRun) {
     subBuffer = {};
     pdata.length = 0; pdindex.length = 0;
     max = 0; maxg = 0; maxg_encoder = null;
+    window._lastRepeatStats = null;   // le statistiche valgono solo per il run corrente
     // Reset controllo divergenza stepper↔encoder per questo run
     _encChkBaseI = 0; _encChkBaseCount = null; _encAlarmed = false;
     if (config && config.data) { config.data.labels.length = 0; config.data.datasets.forEach(function(d){ d.data.length = 0; }); }
@@ -927,17 +1010,35 @@ function _startSingleRun(firstRun) {
 
 <script>
 var stepflag = 0;
+// Verifica banco: scansione Veloce su un cilindro rettificato, il residuo
+// (tolta l'eccentricità di montaggio) misura la salute del banco.
+function benchVerifyStart() {
+    if (startflag === 1 || autoScanActive) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Scansione in corso', body: 'Aspetta la fine (o premi STOP) prima della verifica banco.', duration: 4000 });
+        return;
+    }
+    if (!confirm('VERIFICA BANCO\n\n1. Monta un pezzo CILINDRICO rettificato (no camma)\n2. Porta il tastatore a contatto e AZZERA il comparatore\n\nParte una scansione Veloce (~45 s). Procedere?')) return;
+    var sm = document.getElementById('scanMode');
+    if (sm) { sm.value = 'fast'; if (typeof onScanModeChange === 'function') onScanModeChange(); }
+    window._benchVerify = true;
+    start();
+}
+window.benchVerifyStart = benchVerifyStart;
+
 function stop() {
     // Ferma definitivamente la scansione: il prossimo START riparte da zero.
     // Niente più toggle implicito: per riprendere dallo stesso punto va
     // creato in futuro un bottone RIPRENDI dedicato.
-    // Scan autonomo in corso? Chiedi al firmware di fermarsi ('x').
-    if (autoScanActive && typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1) {
+    // 'x' viene inviato SEMPRE (non solo con scan autonomo attivo): dal
+    // firmware 3.1 interrompe anche i movimenti lunghi in corso ($±NNN,
+    // p/q a metà passo) — è lo STOP di emergenza del banco.
+    if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1) {
         try { sendSocket.send('x'); } catch (e) {}
     }
     stepflag  = 1;
     startflag = 0;
     labms     = 0;     // annulla anche un eventuale 0 virtuale in corso
+    window._benchVerify = false;   // annulla anche una verifica banco in corso
     // Riabilita selector modalità e ripetizioni
     var sm = document.getElementById('scanMode'); if (sm) sm.disabled = false;
     var rs = document.getElementById('scanRepeat'); if (rs) rs.disabled = false;
@@ -1068,7 +1169,21 @@ function sav() {
     // WebSocket era fire-and-forget e il toast "salvato" mentiva se la
     // scrittura falliva (disco pieno, permessi). Stesso formato file di
     // sempre: prima riga "_pline", poi le righe grado,alzata.
-    var body = "_pline\r\n" + stringa;
+    // Metadati IN CODA al file (dopo le 360 righe dati): i parser vecchi
+    // leggono solo le righe 1..360 e li ignorano, quelli nuovi li leggono
+    // da parseCamFile().meta. Un file trovato su una chiavetta tra 2 anni
+    // così dice da solo quando/come è stato misurato.
+    var metaTail = '#data=' + new Date().toISOString() + '\r\n' +
+                   '#sw=' + (window.CAMMES_VERSION || '?') + '\r\n' +
+                   '#modalita=' + ((document.getElementById('scanMode') || {}).value || '?') + '\r\n' +
+                   '#motore=' + ((document.getElementById('scanEngine') || {}).value || '?') + '\r\n' +
+                   '#picco=' + Number(max).toFixed(3) + '@' + maxg + '\r\n';
+    if (window._lastRepeatStats && window._lastRepeatStats.runs > 1) {
+        metaTail += '#runs=' + window._lastRepeatStats.runs + '\r\n' +
+                    '#sigmaMax=' + window._lastRepeatStats.sigmaMax.toFixed(4) + '\r\n' +
+                    '#sigmaPicco=' + window._lastRepeatStats.sigmaPeak.toFixed(4) + '\r\n';
+    }
+    var body = "_pline\r\n" + stringa + metaTail;
     var doSave = function () {
         document.salva.salva.value = " salvataggio…";
         fetch('/api/file/' + encodeURIComponent(fname + '.scr'), { method: 'POST', body: body })

@@ -770,6 +770,15 @@
             <span id="fwFlashStatus" style="font-size:12px;color:var(--text-muted);"></span>
             <div class="separator" style="height:28px;"></div>
             <a class="home-action-btn" href="/api/diagnostics" data-tip="<strong>Scarica diagnostica</strong>File di testo con versioni, stato seriale e la coda del log del server: &egrave; quello da mandare all'assistenza quando qualcosa non va.">&#129658; Diagnostica</a>
+            <a class="home-action-btn" href="/manuale" target="_blank" data-tip="<strong>Manuale operatore</strong>La guida in una pagina: misurare, analizzare, backup, problemi frequenti. Stampabile.">&#128214; Manuale</a>
+        </div>
+        <div class="flex items-center gap-8 mt-8" style="flex-wrap:wrap;">
+            <div style="min-width:230px;">
+                <div style="font-size:12px;color:var(--text-muted);">La mia officina <span class="help-icon" data-tip="<strong>Intestazione referti</strong>Il nome compare nell'intestazione della <b>Scheda camma PDF</b>: &egrave; il documento che consegni al cliente. Salvato sul server (non nel browser)." tabindex="0">?</span></div>
+                <input type="text" id="setOfficina" class="input" style="width:280px;" placeholder="Ragione sociale (per i referti PDF)">
+            </div>
+            <button class="home-action-btn" onclick="saveOfficina();">&#128190; Salva intestazione</button>
+            <span id="benchBadge" style="font-size:12px;color:var(--text-muted);"></span>
         </div>
     </div>
 
@@ -803,7 +812,8 @@
                 <button class="home-action-btn" onclick="document.getElementById('importMetaInput').click();" title="Ripristina tag/bookmark da un file JSON" data-tip="<strong>Import metadati</strong>Carica un file JSON di backup esportato precedentemente. Ripristina tag, bookmark e posizioni salvate (sovrascrive quelli correnti).">&#128229; Import</button>
                 <input type="file" id="importMetaInput" accept=".json,application/json" style="display:none;" onchange="importMetadataFile(event);">
                 <button class="home-action-btn" onclick="loadRecents();" title="Ricarica lista">&#8634; Aggiorna</button>
-                <button class="home-action-btn" onclick="clearArchive();" title="Elimina TUTTI i file di misura dall'archivio (doppia conferma)" style="color:var(--danger);" data-tip="<strong>Svuota archivio</strong>Elimina DEFINITIVAMENTE tutti i file di misura (.scr) dalla cartella prove/, inclusi i file demo. Chiede doppia conferma e ripulisce anche tag e preferiti associati. <b>Prima di usarlo</b>: scarica i file che vuoi conservare (&darr; sulla riga) o copia la cartella prove/.">&#128465; Svuota archivio</button>
+                <button class="home-action-btn" onclick="clearArchive();" title="Sposta TUTTI i file di misura nel cestino (doppia conferma)" style="color:var(--danger);" data-tip="<strong>Svuota archivio</strong>Sposta tutti i file di misura (.scr) nel <b>cestino</b>, da cui restano ripristinabili per 30 giorni. Chiede doppia conferma e ripulisce anche tag e preferiti associati.">&#128465; Svuota archivio</button>
+                <button class="home-action-btn" id="trashBtn" onclick="toggleTrash();" data-tip="<strong>Cestino</strong>I file eliminati restano qui per 30 giorni e si possono ripristinare con un click. Dopo 30 giorni vengono eliminati definitivamente.">&#9851; Cestino</button>
             </span>
         </div>
 
@@ -851,9 +861,46 @@ var BOOKMARK_KEY = 'cammes-bookmarks-v1';
 function loadBookmarks() {
     try { return JSON.parse(localStorage.getItem(BOOKMARK_KEY)) || []; } catch (e) { return []; }
 }
-function saveBookmarks(arr) {
+function saveBookmarksLocal(arr) {
     try { localStorage.setItem(BOOKMARK_KEY, JSON.stringify(arr)); } catch (e) {}
 }
+function saveBookmarks(arr) {
+    saveBookmarksLocal(arr);
+    scheduleMetaSync();   // replica sul server: sopravvive a cambio browser/PC
+}
+
+// ===== Anagrafica sul SERVER: tag e preferiti non vivono più solo nel
+// localStorage del browser (cambio PC/browser = catalogazione persa).
+// Ogni modifica viene replicata (debounce) in settings.json accanto all'exe;
+// all'avvio si fa l'UNIONE di server e locale.
+var _metaSyncTimer = null;
+function scheduleMetaSync() {
+    clearTimeout(_metaSyncTimer);
+    _metaSyncTimer = setTimeout(function () {
+        fetch('/api/settings', { method: 'POST', body: JSON.stringify({ anagrafica: {
+            tags: loadAllTags(), bookmarks: loadBookmarks() } }) }).catch(function () {});
+    }, 800);
+}
+function initMetaFromServer() {
+    fetch('/api/settings').then(function (r) { return r.json(); }).then(function (s) {
+        var a = s.anagrafica;
+        if (!a) { scheduleMetaSync(); return; }   // prima volta: pubblica il locale
+        var tags = loadAllTags(), changed = false;
+        Object.keys(a.tags || {}).forEach(function (f) {
+            var set = {};
+            (tags[f] || []).concat(a.tags[f] || []).forEach(function (t) { set[t] = 1; });
+            var merged = Object.keys(set);
+            if (merged.length !== (tags[f] || []).length) changed = true;
+            tags[f] = merged;
+        });
+        saveAllTagsLocal(tags);
+        var bm = loadBookmarks();
+        (a.bookmarks || []).forEach(function (b) { if (bm.indexOf(b) === -1) { bm.push(b); changed = true; } });
+        saveBookmarksLocal(bm);
+        if (changed && typeof loadRecents === 'function') loadRecents();
+    }).catch(function () {});
+}
+window.addEventListener('DOMContentLoaded', initMetaFromServer);
 function isBookmarked(name) { return loadBookmarks().indexOf(name) !== -1; }
 function toggleBookmark(name, ev) {
     if (ev) { ev.preventDefault(); ev.stopPropagation(); }
@@ -890,8 +937,12 @@ var TAGS_KEY = 'cammes-tags-v1';
 function loadAllTags() {
     try { return JSON.parse(localStorage.getItem(TAGS_KEY)) || {}; } catch (e) { return {}; }
 }
-function saveAllTags(obj) {
+function saveAllTagsLocal(obj) {
     try { localStorage.setItem(TAGS_KEY, JSON.stringify(obj)); } catch (e) {}
+}
+function saveAllTags(obj) {
+    saveAllTagsLocal(obj);
+    scheduleMetaSync();   // replica sul server: sopravvive a cambio browser/PC
 }
 function getTagsForFile(name) {
     var all = loadAllTags();
@@ -2458,6 +2509,17 @@ function initUpdatesCard(attempt) {
         if (!d.deviceFirmware && d.serialConnected && attempt < 3) {
             setTimeout(function () { initUpdatesCard(attempt + 1); }, 4000);
         }
+        // MODALITÀ DEMO: driver seriali non caricati → banner rosso ben visibile
+        if (d.serialModule === false && !document.getElementById('demoModeBanner')) {
+            var bn = document.createElement('div');
+            bn.id = 'demoModeBanner';
+            bn.style.cssText = 'position:sticky;top:0;z-index:200;background:#c0392b;color:#fff;' +
+                'padding:10px 16px;font-size:14px;font-weight:600;border-radius:8px;margin:8px 0;';
+            bn.innerHTML = '&#9888; MODALIT&Agrave; DEMO: driver seriali non disponibili, l\'Arduino non pu&ograve; essere collegato. ' +
+                'Riavvia il programma; se il problema resta, scarica la <b>Diagnostica</b> e contatta l\'assistenza.';
+            var hdr = document.querySelector('.header');
+            hdr.parentNode.insertBefore(bn, hdr.nextSibling);
+        }
         var b = document.getElementById('fwBundled'), p = document.getElementById('fwPort'), dv = document.getElementById('fwDevice');
         if (b) b.textContent = (d.bundled && d.bundled.firmware) ? 'v' + d.bundled.firmware + ' (' + d.bundled.builtAt + ')' : 'non incluso';
         if (p) p.textContent = d.port || 'nessuna';
@@ -2527,6 +2589,73 @@ function flashFirmware() {
 window.checkUpdatesNow = checkUpdatesNow;
 window.flashFirmware = flashFirmware;
 window.addEventListener('DOMContentLoaded', initUpdatesCard);
+
+// ===== Impostazioni officina + badge verifica banco =====
+function initSettingsUI() {
+    fetch('/api/settings').then(function (r) { return r.json(); }).then(function (s) {
+        var inp = document.getElementById('setOfficina');
+        if (inp && s.officina && s.officina.nome) inp.value = s.officina.nome;
+        var badge = document.getElementById('benchBadge');
+        if (badge && s.verificaBanco && s.verificaBanco.date) {
+            var days = Math.floor((Date.now() - new Date(s.verificaBanco.date).getTime()) / 86400000);
+            var old = days > 30;
+            badge.innerHTML = (s.verificaBanco.pass ? '&#10003;' : '&#10007;') + ' banco verificato il ' +
+                new Date(s.verificaBanco.date).toLocaleDateString('it-IT') +
+                (old ? ' — <b style="color:var(--warn, orange);">più di 30 giorni fa: rifai la verifica</b>' : '');
+            badge.style.color = s.verificaBanco.pass && !old ? 'var(--success, green)' : 'var(--warn, orange)';
+        } else if (badge) {
+            badge.textContent = 'banco mai verificato (Alzata → ⚙ Avanzate → Verifica banco)';
+        }
+    }).catch(function () {});
+}
+function saveOfficina() {
+    var nome = (document.getElementById('setOfficina') || {}).value || '';
+    fetch('/api/settings', { method: 'POST', body: JSON.stringify({ officina: { nome: nome.trim() } }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (window.cammesToast) window.cammesToast({ kind: d.ok ? 'success' : 'err', title: d.ok ? 'Intestazione salvata' : 'Errore', body: d.ok ? 'Compare sui prossimi referti PDF.' : (d.error || '?'), duration: 4000 });
+        }).catch(function () {});
+}
+window.saveOfficina = saveOfficina;
+window.addEventListener('DOMContentLoaded', initSettingsUI);
+
+// ===== Cestino: lista + ripristino =====
+function toggleTrash() {
+    var box = document.getElementById('trashBox');
+    if (box) { box.remove(); return; }
+    fetch('/api/trash').then(function (r) { return r.json(); }).then(function (d) {
+        box = document.createElement('div');
+        box.id = 'trashBox';
+        box.className = 'card';
+        var rows = (d.files || []).map(function (f) {
+            return '<div style="display:flex;align-items:center;gap:10px;padding:4px 0;font-size:13px;">' +
+                '<span style="flex:1;">' + f.original + '</span>' +
+                '<span style="color:var(--text-muted);font-size:11px;">eliminato ' + f.deletedAt + '</span>' +
+                '<button class="home-action-btn" onclick="restoreTrash(\'' + f.trashName + '\')">&#8617; Ripristina</button></div>';
+        }).join('');
+        box.innerHTML = '<div class="card-title">&#9851; Cestino (' + (d.files || []).length + ')' +
+            '<span style="font-size:11px;color:var(--text-muted);font-weight:normal;margin-left:10px;">i file si eliminano da soli dopo 30 giorni</span></div>' +
+            (rows || '<div style="font-size:13px;color:var(--text-muted);">Vuoto.</div>');
+        var anchor = document.getElementById('trashBtn').closest('.card');
+        anchor.parentNode.insertBefore(box, anchor);
+    }).catch(function () {});
+}
+function restoreTrash(tname) {
+    fetch('/api/trash/restore', { method: 'POST', body: JSON.stringify({ name: tname }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (d.ok) {
+                if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'File ripristinato', body: d.restored + ' &egrave; tornato nell\'archivio.', duration: 4000 });
+                var box = document.getElementById('trashBox'); if (box) box.remove();
+                toggleTrash();
+                if (typeof loadRecents === 'function') loadRecents();
+            } else if (window.cammesToast) {
+                window.cammesToast({ kind: 'err', title: 'Ripristino fallito', body: d.error || '?', duration: 6000 });
+            }
+        }).catch(function () {});
+}
+window.toggleTrash = toggleTrash;
+window.restoreTrash = restoreTrash;
 </script>
 
 </body>

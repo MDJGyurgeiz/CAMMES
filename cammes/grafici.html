@@ -105,11 +105,32 @@
             </table>
 
             <div class="flex items-center gap-8 mt-16">
-                <label style="font-size:13px;color:var(--text-muted);">Vista polare:</label>
-                <input type="file" id="fileinput2" class="file-input" onchange="loadFile2();">
-                <label style="font-size:13px;color:var(--text-muted);">Raggio base</label>
+                <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;">Vista polare:</label>
+                <input type="file" id="fileinput2" class="file-input" onchange="loadFile2();" style="flex:1;min-width:0;">
+            </div>
+            <div class="flex items-center gap-8 mt-8">
+                <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;">Raggio base</label>
                 <input type="text" id="polRBase" class="input" style="width:64px;" value="16" data-tip="<strong>Raggio base (mm)</strong>Usato solo per i file <code>_alz</code>: la vista polare disegna raggio = raggio base + alzata. Per i vecchi file <code>_pol</code> il raggio &egrave; gi&agrave; nel file e questo campo viene ignorato.">
                 <span style="font-size:13px;color:var(--text-muted);">mm</span>
+            </div>
+
+            <div class="separator" style="margin-top:14px;"></div>
+
+            <div style="margin-top:10px;">
+                <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Collaudo su profilo nominale
+                    <span class="help-icon" data-tip="<strong>Collaudo PASS/FAIL</strong>Carica il profilo <b>nominale</b> (di progetto o di una camma nuova) e imposta la tolleranza: ogni curva caricata sopra viene confrontata punto-punto (dopo allineamento automatico al picco) e giudicata <b>CONFORME</b> o <b>NON CONFORME</b>. La banda grigia sul grafico mostra nominale &plusmn; tolleranza." tabindex="0">?</span>
+                </div>
+                <div class="flex items-center gap-8">
+                    <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;">Nominale:</label>
+                    <input type="file" id="fileNominal" class="file-input" onchange="loadNominal();" style="flex:1;min-width:0;">
+                </div>
+                <div class="flex items-center gap-8 mt-8">
+                    <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;">Tolleranza &plusmn;</label>
+                    <input type="text" id="tolMm" class="input" style="width:64px;" value="0.10" onchange="evalNominal();">
+                    <span style="font-size:13px;color:var(--text-muted);">mm</span>
+                    <button class="btn btn-secondary btn-sm" onclick="evalNominal();" data-tip="<strong>Rivaluta</strong>Ricalcola i verdetti (da usare dopo aver caricato altre curve).">&#8635; Rivaluta</button>
+                </div>
+                <div id="verdictBox" class="mt-8"></div>
             </div>
 
             <div class="mt-16">
@@ -419,6 +440,107 @@ function update2() {
     }
     ch.update('none');
 }
+</script>
+
+<!-- ===== Collaudo su profilo nominale: banda ±tol + verdetto PASS/FAIL ===== -->
+<script>
+var _nominal = null;   // [1..360] profilo nominale
+
+// Parser tollerante: righe "grado,alzata" (o ';' con virgola decimale),
+// salta intestazioni (_pline) e metadati (#k=v). Ritorna null se irriconoscibile.
+function _parseProfile(text) {
+    var arr = new Array(361), valid = 0;
+    for (var z = 1; z <= 360; z++) arr[z] = 0;
+    String(text).split(/\r?\n/).forEach(function (line) {
+        line = line.trim();
+        if (!line || line.charAt(0) === '#' || line.charAt(0) === '_' || line.charAt(0) === '*') return;
+        var parts = line.indexOf(';') !== -1 ? line.split(';').map(function (s) { return s.replace(',', '.'); }) : line.split(',');
+        if (parts.length < 2) return;
+        var deg = Math.round(Number(parts[0])), val = Number(parts[1]);
+        if (isFinite(deg) && isFinite(val) && deg >= 1 && deg <= 360) { arr[deg] = val; valid++; }
+    });
+    return valid >= 30 ? arr : null;
+}
+
+function _nomAt(shift, d) { var k = ((d - 1 + shift) % 360 + 360) % 360 + 1; return _nominal[k]; }
+
+// Allinea il nominale alla curva misurata: aggancio al picco + rifinitura ±8° per SSE
+function _alignShift(meas) {
+    var pkM = 0, pkMi = 1, pkN = 0, pkNi = 1;
+    for (var d = 1; d <= 360; d++) {
+        var m = Number(meas[d - 1]); if (isFinite(m) && m > pkM) { pkM = m; pkMi = d; }
+        if (_nominal[d] > pkN) { pkN = _nominal[d]; pkNi = d; }
+    }
+    var base = pkNi - pkMi, best = base, bestE = Infinity;
+    for (var s = base - 8; s <= base + 8; s++) {
+        var e = 0;
+        for (var d2 = 1; d2 <= 360; d2 += 2) {
+            var mv = Number(meas[d2 - 1]); if (!isFinite(mv)) continue;
+            var diff = mv - _nomAt(s, d2); e += diff * diff;
+        }
+        if (e < bestE) { bestE = e; best = s; }
+    }
+    return best;
+}
+
+function loadNominal() {
+    var input = document.getElementById('fileNominal');
+    if (!input || !input.files || !input.files[0]) return;
+    var fr = new FileReader();
+    fr.onload = function () {
+        _nominal = _parseProfile(fr.result);
+        if (!_nominal) {
+            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Nominale non riconosciuto', body: 'Servono righe "grado,alzata" (file _alz o CSV).', duration: 6000 });
+            return;
+        }
+        evalNominal();
+    };
+    fr.readAsText(input.files[0]);
+}
+
+function evalNominal() {
+    var box = document.getElementById('verdictBox');
+    if (!_nominal) { if (box) box.innerHTML = ''; return; }
+    var tol = Math.abs(Number(document.getElementById('tolMm').value)) || 0.10;
+    if (!window.myLine) return;
+    var ds = window.myLine.data.datasets;
+    // labels: se il nominale arriva prima di qualunque curva, crea l'asse
+    if (!window.myLine.data.labels.length) for (var L = 1; L <= 360; L++) window.myLine.data.labels.push(L);
+
+    // banda nominale ± tol: allineata alla PRIMA curva caricata (o shift 0)
+    var firstMeas = null;
+    for (var k = 0; k < 4; k++) if (ds[k] && ds[k].data.length) { firstMeas = ds[k].data; break; }
+    var bandShift = firstMeas ? _alignShift(firstMeas) : 0;
+    var plus = [], minus = [];
+    for (var d = 1; d <= 360; d++) { var nv = _nomAt(bandShift, d); plus.push(nv + tol); minus.push(Math.max(0, nv - tol)); }
+    while (ds.length < 6) ds.push({});
+    ds[4] = { label: 'Nominale +' + tol, data: plus,  borderColor: 'rgba(140,140,140,0.7)', borderDash: [5, 4], borderWidth: 1, pointRadius: 0, fill: false, tension: 0 };
+    ds[5] = { label: 'Nominale -' + tol, data: minus, borderColor: 'rgba(140,140,140,0.7)', borderDash: [5, 4], borderWidth: 1, pointRadius: 0, fill: '-1', backgroundColor: 'rgba(140,140,140,0.12)', tension: 0 };
+    window.myLine.update('none');
+
+    // verdetto per ogni curva caricata (ognuna col PROPRIO allineamento)
+    var rows = '';
+    for (var c = 0; c < 4; c++) {
+        if (!ds[c] || !ds[c].data.length) continue;
+        var sh = _alignShift(ds[c].data);
+        var maxDev = 0, maxDeg = 0;
+        for (var d3 = 1; d3 <= 360; d3++) {
+            var mv2 = Number(ds[c].data[d3 - 1]); if (!isFinite(mv2)) continue;
+            var dev = Math.abs(mv2 - _nomAt(sh, d3));
+            if (dev > maxDev) { maxDev = dev; maxDeg = d3; }
+        }
+        var pass = maxDev <= tol;
+        var name = (document.getElementById('lb' + (c + 1)) || {}).textContent || ('grafico' + (c + 1));
+        rows += '<div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;">' +
+            '<span style="font-weight:700;color:' + (pass ? 'var(--success, #2ecc71)' : 'var(--danger, #e74c3c)') + ';">' +
+            (pass ? '&#10003; CONFORME' : '&#10007; NON CONFORME') + '</span>' +
+            '<span style="flex:1;">' + name + '</span>' +
+            '<span style="color:var(--text-muted);">max ' + maxDev.toFixed(3) + ' mm @ ' + maxDeg + '&deg;</span></div>';
+    }
+    if (box) box.innerHTML = rows || '<div style="font-size:12px;color:var(--text-muted);">Carica almeno una curva misurata qui sopra per avere il verdetto.</div>';
+}
+window.loadNominal = loadNominal;
+window.evalNominal = evalNominal;
 </script>
 
 <!-- URL loader: ?files=nome1.scr,nome2.scr precarica i file dalla Home.

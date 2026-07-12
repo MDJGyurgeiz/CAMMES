@@ -1159,6 +1159,70 @@ autonoma v3 ×2, mediata 3 campioni ×1).
 - **polare.html**: messaggio "mic out" → **"NO SENSORE"** (coerente con Alzata):
   significa lettura assente o fuori scala (>32 mm / NaN).
 
+## Sessione 10 — 2026-07-12: piano "cosa manca" completo (15 punti) + firmware 3.1
+
+### App Android ELIMINATA
+cammes-android/ e CAMMES.apk rimossi dal repo (ferma alla UI v1, fuorviante).
+
+### ⚠️ Critiche di prodotto risolte
+- **Exe UNICO autosufficiente**: i driver seriali (serialport+prebuilds) viaggiano
+  dentro l'exe (pkg assets); pkg estrae i .node da solo al require, con
+  estrazione manuale di riserva accanto all'exe/%LOCALAPPDATA%. VERIFICATO:
+  exe di prova eseguito in cartella vergine → seriale caricata, COM8 trovata.
+  In più la CI allega anche cammes-completo.zip (exe+LEGGIMI+manuale) e la Home
+  mostra un banner rosso se i driver mancano (modalità demo).
+- **STOP di emergenza reale (firmware 3.1)**: stepperMove interrompibile —
+  ogni 16 passi consuma il buffer RX cercando 'x' → *mabort (prima un Ruota
+  300° sbagliato non era fermabile). Prima versione col peek si fermava al
+  primo char non-x e il polling della pagina la accecava: scoperto e corretto
+  AL BANCO (200° comandati → fermato a ~100°, *mabort a +362ms via server).
+  p/q e scan autonomo coordinati (misura saltata / *sabort). stop() della UI
+  invia 'x' sempre. NB: i test via Browser-pane fallivano per il timer
+  throttling dei tab in background (x partiva a movimento finito), non per il
+  sistema.
+- **Allarme slittamento anche in scan autonomo**: il check passi↔encoder
+  girava solo nel ramo '*se' (browser) mentre il default è Firmware →
+  estratto in checkEncoderDivergence() chiamata per OGNI misura di scansione.
+- **Cestino**: DELETE e Svuota archivio spostano in prove/.trash (ripristino
+  1-click da Home, purge automatico 30 giorni). Prima: unlink irreversibile.
+
+### Sanità metrologica
+- **Controllo chiusura giro**: a fine scansione il minimo del cerchio base
+  della 1ª metà giro deve coincidere con quello della 2ª (indipendente dal
+  punto di partenza): oltre 0,03 mm → "misura sospetta, riazzerare".
+- **Reset Arduino rilevato**: "CAMMES Uno ready" a pagina avviata → toast
+  rosso "riferimento zero perso", stop scansione, encoder invalidato.
+- **Verifica banco periodica**: ⚙ Avanzate → scansione di un cilindro
+  rettificato, residuo post-eccentricità RMS/max vs soglie 0,02/0,05 →
+  esito PASS/FAIL salvato in settings.json, badge con data in Home.
+
+### Dati e referti
+- **Metadati nel .scr (IN CODA, retro-compatibile)**: #data/#sw/#modalita/
+  #motore/#picco (+#runs/#sigmaMax/#sigmaPicco per le ripetizioni): i vecchi
+  parser leggono solo le righe 1..360 e li ignorano.
+- **parseCamFile robusto**: \r?\n, colonna grado (non più riga i=grado i),
+  righe #, CSV Excel italiano (';' e virgola decimale), validCount →
+  import rifiuta i file irriconoscibili invece di caricare 360 zeri muti.
+- **Ripetibilità sul referto**: la scheda camma dichiara "media di N scansioni,
+  sigma max X mm" (dai metadati) o "misura singola". Footer con disclaimer.
+- **Intestazione officina** sui referti (impostata in Home, salvata sul server).
+
+### Collaudo PASS/FAIL (Confronto)
+Profilo nominale (misura o CSV) + tolleranza ±mm → banda sul grafico,
+scostamento max e verdetto CONFORME/NON CONFORME per ogni curva (allineamento
+automatico al picco). Verificato: file identico → 0,000 CONFORME; nominale
+alterato +0,3 sul naso → NON CONFORME 0,300 @109°.
+
+### Prodotto
+- LICENSE (tutti i diritti riservati + limitazione responsabilità).
+- **Manuale servito dall'app**: /manuale (markdown→HTML, stampabile), link in
+  Home; incluso nell'exe.
+- **Anagrafica sul server**: tag e preferiti replicati in settings.json
+  (debounce) con unione all'avvio: sopravvivono a cambio browser/PC.
+- Layout: colonna parametri di Analisi allineata (label a larghezza fissa);
+  riga Vista polare di Confronto su due righe (sbordava dalla card).
+- Firmware 3.1 flashato via endpoint in-app (8,4 s) — deviceFirmware=3.1.
+
 ## Sessione 9 — 2026-07-11 (sera): semplificazione UI data-driven + update remoto
 
 ### Test al banco delle 6 modalità di scansione (decisione utente: "servono tutte?")

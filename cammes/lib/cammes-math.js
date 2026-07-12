@@ -773,18 +773,46 @@ function mapCamToCrank(camLift, angle, clearance, type) {
     return crank;
 }
 
-// Parse .scr file text to 360-element cam lift array
+// Parse .scr file text to 360-element cam lift array.
+// ROBUSTO (v3.2): accetta \n e \r\n, ignora l'intestazione e le righe di
+// metadati '#chiave=valore', usa la COLONNA GRADO invece di assumere che la
+// riga i sia il grado i, accetta ';' come separatore e la virgola decimale
+// (CSV di Excel italiano). Restituisce anche i metadati in camLift.meta e il
+// numero di punti validi in camLift.validCount (0 = file non riconosciuto:
+// prima riempiva di zeri IN SILENZIO).
 function parseCamFile(text) {
-    var risp = text.split('\r\n');
+    var righe = String(text).split(/\r?\n/);
     var camLift = new Array(361);
-    for (var i = 1; i <= 360; i++) {
-        if (risp[i]) {
-            var parts = risp[i].split(',');
-            camLift[i] = Number(parts[1]);
-        } else {
-            camLift[i] = 0;
+    var meta = {};
+    var valid = 0;
+    for (var z = 1; z <= 360; z++) camLift[z] = 0;
+    for (var r = 0; r < righe.length; r++) {
+        var line = righe[r].trim();
+        if (!line) continue;
+        if (line.charAt(0) === '#') {                       // metadato "#chiave=valore"
+            var eq = line.indexOf('=');
+            if (eq > 1) meta[line.substring(1, eq).trim()] = line.substring(eq + 1).trim();
+            continue;
         }
+        if (line.charAt(0) === '_' || line.charAt(0) === '*') continue;   // intestazione (_pline)
+        // separatore: ',' classico oppure ';' (Excel IT, con ',' decimale)
+        var parts;
+        if (line.indexOf(';') !== -1) {
+            parts = line.split(';');
+            for (var p = 0; p < parts.length; p++) parts[p] = parts[p].replace(',', '.');
+        } else {
+            parts = line.split(',');
+        }
+        if (parts.length < 2) continue;
+        var deg = Math.round(Number(parts[0]));
+        var val = Number(parts[1]);
+        if (!isFinite(deg) || !isFinite(val)) continue;
+        if (deg < 1 || deg > 360) continue;
+        camLift[deg] = val;
+        valid++;
     }
+    camLift.meta = meta;
+    camLift.validCount = valid;
     return camLift;
 }
 

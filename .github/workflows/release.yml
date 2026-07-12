@@ -47,9 +47,18 @@ jobs:
           "$h  cammes.exe" | Out-File -Encoding ascii cammes.exe.sha256
           Get-Content cammes.exe.sha256
 
+      # L'exe è autosufficiente (driver seriali imbarcati, estratti al primo
+      # avvio); lo zip aggiunge manuale e istruzioni per chi preferisce tutto insieme.
+      - name: Pacchetto completo (zip)
+        shell: pwsh
+        run: |
+          "CAMMES v${{ github.ref_name }}`r`n`r`n1. Copia cammes.exe in una cartella qualsiasi (es. C:\CAMMES)`r`n2. Doppio click su cammes.exe: al primo avvio estrae i driver seriali da solo`r`n3. Collega l'Arduino via USB (prima o dopo l'avvio, fa lo stesso)`r`n4. Il browser si apre da solo su http://localhost:3000`r`n`r`nManuale completo: MANUALE_OPERATORE.md (apribile con qualsiasi editor)" | Out-File -Encoding utf8 LEGGIMI.txt
+          Compress-Archive -Path cammes.exe, LEGGIMI.txt, ..\MANUALE_OPERATORE.md -DestinationPath cammes-completo.zip
+
       - name: Allega alla release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             cammes/cammes.exe
             cammes/cammes.exe.sha256
+            cammes/cammes-completo.zip

@@ -49,7 +49,6 @@ CAMMES/
 │   ├── fw/                       #   firmware precompilato (.hex) + avrdude per update in-app
 ├── master/master.ino             # firmware unificato v3 (1 Arduino Uno)
 ├── legacy/                       # vecchia architettura 2-Arduino + polare.html (dismessi)
-├── cammes-android/               # app Android — SPERIMENTALE, non allineata (v1, marzo)
 ├── CAMMES_DIST/cammes.exe        # eseguibile standalone (build locale)
 ├── CHANGELOG.md                  # storia completa del progetto
 ├── salva.bat / aggiorna.bat      # push / pull GitHub
@@ -122,9 +121,6 @@ npm run build      :: genera cammes.exe (pkg, node18-win-x64)
 ### Firmware
 Compilare/flashare `master/master.ino` su Arduino Uno (Arduino IDE o `arduino-cli compile --fqbn arduino:avr:uno master`). Lo **scan autonomo** richiede firmware **v3** (verifica col comando `v`).
 
-### App Android — SPERIMENTALE
-`CAMMES.apk` e `cammes-android/` sono fermi alla UI v1 (marzo): **non includono** Home, analisi race-grade, follower, baseline, encoder, salva profilo. Utilizzabile solo per acquisizione base; da ricostruire prima di distribuirla.
-
 ---
 
 ## Qualità e test
@@ -139,4 +135,4 @@ Compilare/flashare `master/master.ino` su Arduino Uno (Arduino IDE o `arduino-cl
 
 ## Tecnologie
 
-HTML5/CSS3/JS (no framework, offline-first) · Chart.js v4 · Node.js (ws, serialport) · pkg → exe · Arduino C/C++ (ISR encoder x4, bit-bang sensore) · Kotlin/WebView (Android, sperimentale)
+HTML5/CSS3/JS (no framework, offline-first) · Chart.js v4 · Node.js (ws, serialport) · pkg → exe · Arduino C/C++ (ISR encoder x4, bit-bang sensore)

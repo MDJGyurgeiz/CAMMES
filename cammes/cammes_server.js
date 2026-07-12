@@ -318,6 +318,86 @@ function apiBackupZip(res) {
     });
 }
 
+// --- Impostazioni persistenti lato server (officina, verifiche banco) ----
+// Vivono in settings.json ACCANTO all'exe: sopravvivono a cambio browser/PC
+// (a differenza del localStorage) e finiscono nei backup della cartella.
+var SETTINGS_FILE = path.join(REAL_DIR, 'settings.json');
+function readSettings() {
+    try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); } catch (e) { return {}; }
+}
+function apiSettings(req, res) {
+    if (req.method === 'GET') return sendJson(res, 200, readSettings());
+    if (req.method === 'POST') {
+        var body = '';
+        req.on('data', function (c) { body += c; if (body.length > 200000) req.destroy(); });
+        req.on('end', function () {
+            var patch;
+            try { patch = JSON.parse(body); } catch (e) { return sendJson(res, 400, { error: 'JSON non valido' }); }
+            var cur = readSettings();
+            Object.keys(patch).forEach(function (k) { cur[k] = patch[k]; });   // merge shallow
+            try {
+                fs.writeFileSync(SETTINGS_FILE, JSON.stringify(cur, null, 2));
+                sendJson(res, 200, { ok: true });
+            } catch (e) { sendJson(res, 500, { error: 'Scrittura fallita: ' + e.message }); }
+        });
+        return;
+    }
+    sendJson(res, 405, { error: 'Metodo non supportato' });
+}
+
+// --- Manuale operatore servito dal server ---------------------------------
+// Render markdown MINIMO (titoli, grassetto, code, liste, tabelle): abbastanza
+// per MANUALE_OPERATORE.md senza dipendenze.
+function mdToHtml(md) {
+    var esc = function (s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+    var out = [], inList = false, inTable = false;
+    md.split(/\r?\n/).forEach(function (line) {
+        var t = line.trim();
+        var inline = function (s) {
+            return s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>');
+        };
+        if (inList && !/^[-*] /.test(t)) { out.push('</ul>'); inList = false; }
+        if (inTable && t.charAt(0) !== '|') { out.push('</table>'); inTable = false; }
+        if (/^### /.test(t)) out.push('<h3>' + inline(esc(t.substring(4))) + '</h3>');
+        else if (/^## /.test(t)) out.push('<h2>' + inline(esc(t.substring(3))) + '</h2>');
+        else if (/^# /.test(t)) out.push('<h1>' + inline(esc(t.substring(2))) + '</h1>');
+        else if (/^---/.test(t)) out.push('<hr>');
+        else if (/^[-*] /.test(t)) {
+            if (!inList) { out.push('<ul>'); inList = true; }
+            out.push('<li>' + inline(esc(t.substring(2))) + '</li>');
+        } else if (t.charAt(0) === '|') {
+            if (/^\|[\s:-|]+\|$/.test(t)) return;   // riga separatore
+            if (!inTable) { out.push('<table border="1" cellpadding="6" style="border-collapse:collapse;">'); inTable = true; }
+            var cells = t.split('|').slice(1, -1).map(function (c) { return '<td>' + inline(esc(c.trim())) + '</td>'; });
+            out.push('<tr>' + cells.join('') + '</tr>');
+        } else if (t) out.push('<p>' + inline(esc(t)) + '</p>');
+    });
+    if (inList) out.push('</ul>');
+    if (inTable) out.push('</table>');
+    return out.join('\n');
+}
+function apiManuale(res) {
+    var candidates = [
+        path.join(__dirname, '..', 'MANUALE_OPERATORE.md'),   // dev (repo) e snapshot pkg
+        path.join(EXE_DIR, 'MANUALE_OPERATORE.md')            // accanto all'exe (dallo zip)
+    ];
+    var md = null;
+    for (var i = 0; i < candidates.length && md === null; i++) {
+        try { md = fs.readFileSync(candidates[i], 'utf8'); } catch (e) {}
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    if (md === null) {
+        res.end('<h1>Manuale non incluso in questa build</h1><p>Lo trovi nel pacchetto zip della release su GitHub.</p>');
+        return;
+    }
+    res.end('<!doctype html><html lang="it"><head><meta charset="utf-8"><title>CAMMES — Manuale operatore</title>' +
+        '<style>body{font-family:system-ui,sans-serif;max-width:820px;margin:24px auto;padding:0 16px;line-height:1.55;}' +
+        'code{background:#eee;padding:1px 5px;border-radius:3px;} h1,h2{border-bottom:1px solid #ccc;padding-bottom:4px;}' +
+        '@media print{a{display:none}}</style></head><body>' +
+        '<p><a href="home.html">&larr; Torna a CAMMES</a> · <a href="javascript:print()">Stampa</a></p>' +
+        mdToHtml(md) + '</body></html>');
+}
+
 // --- Diagnostica per l'assistenza: stato + coda del log ------------------
 function apiDiagnostics(res) {
     var head = [
@@ -516,6 +596,7 @@ var httpServer = http.createServer(function (req, res) {
         sendJson(res, 200, {
             bundled: fwInfo,
             appVersion: APP_VERSION,
+            serialModule: !!SerialPort,      // false = modalità demo (driver mancanti)
             deviceFirmware: devVer,          // versione REALE sull'Arduino (probe 'v'), null se muto
             deviceFirmwareRaw: deviceFw,
             port: currentSerialPath(),
@@ -532,9 +613,63 @@ var httpServer = http.createServer(function (req, res) {
         return;
     }
 
+    // API: contenuto del cestino
+    if (urlPath === '/api/trash') {
+        var trashDir2 = path.join(PROVE_DIR, '.trash');
+        fs.readdir(trashDir2, function (err, files) {
+            if (err) return sendJson(res, 200, { files: [] });   // niente cestino = vuoto
+            var items = [];
+            files.forEach(function (f) {
+                var m = f.match(/^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})__(.+)$/);
+                try {
+                    var st = fs.statSync(path.join(trashDir2, f));
+                    items.push({ trashName: f, original: m ? m[2] : f, deletedAt: m ? m[1].replace(/T(\d{2})-(\d{2})-(\d{2})/, ' $1:$2:$3') : '', size: st.size });
+                } catch (e) {}
+            });
+            items.sort(function (a, b) { return b.trashName.localeCompare(a.trashName); });
+            sendJson(res, 200, { files: items });
+        });
+        return;
+    }
+
+    // API: ripristina un file dal cestino
+    if (urlPath === '/api/trash/restore' && req.method === 'POST') {
+        var rbody = '';
+        req.on('data', function (c) { rbody += c; if (rbody.length > 10000) req.destroy(); });
+        req.on('end', function () {
+            var tname;
+            try { tname = JSON.parse(rbody).name; } catch (e) { return sendJson(res, 400, { error: 'Body non valido' }); }
+            if (!isSafeFilename(tname)) return sendJson(res, 400, { error: 'Nome non valido' });
+            var m = tname.match(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}__(.+)$/);
+            var orig = m ? m[1] : tname;
+            if (!isSafeFilename(orig)) return sendJson(res, 400, { error: 'Nome originale non valido' });
+            var src = path.join(PROVE_DIR, '.trash', tname);
+            var dest = path.join(PROVE_DIR, orig);
+            if (fs.existsSync(dest)) dest = path.join(PROVE_DIR, orig.replace(/(\.scr)?$/i, '_ripristinato$1'));
+            fs.rename(src, dest, function (err) {
+                if (err) return sendJson(res, 500, { error: 'Ripristino fallito: ' + err.message });
+                log('API', 'Cestino → ripristinato: ' + path.basename(dest));
+                sendJson(res, 200, { ok: true, restored: path.basename(dest) });
+            });
+        });
+        return;
+    }
+
     // API: diagnostica testuale per l'assistenza (stato + coda log)
     if (urlPath === '/api/diagnostics') {
         apiDiagnostics(res);
+        return;
+    }
+
+    // API: impostazioni persistenti (officina, verifiche banco, anagrafica)
+    if (urlPath === '/api/settings') {
+        apiSettings(req, res);
+        return;
+    }
+
+    // Manuale operatore in HTML
+    if (urlPath === '/manuale' || urlPath === '/manuale.html') {
+        apiManuale(res);
         return;
     }
 
@@ -593,14 +728,20 @@ var httpServer = http.createServer(function (req, res) {
         }
 
         if (req.method === 'DELETE') {
-            fs.unlink(fpath, function (err) {
+            // CESTINO invece di cancellazione definitiva: il file va in
+            // prove/.trash/ con timestamp e si può ripristinare da Home.
+            // Svuotamento automatico dopo 30 giorni (purgeTrash all'avvio).
+            var trashDir = path.join(PROVE_DIR, '.trash');
+            try { fs.mkdirSync(trashDir, { recursive: true }); } catch (eMk) {}
+            var stamp = new Date().toISOString().substring(0, 19).replace(/[:]/g, '-');
+            fs.rename(fpath, path.join(trashDir, stamp + '__' + fname), function (err) {
                 if (err) {
                     if (err.code === 'ENOENT') return sendJson(res, 404, { error: 'File non trovato', name: fname });
                     log('API', 'DELETE errore: ' + err.message);
                     return sendJson(res, 500, { error: 'Errore eliminazione', detail: err.message });
                 }
-                log('API', 'DELETE ok: ' + fname);
-                sendJson(res, 200, { ok: true, deleted: fname });
+                log('API', 'DELETE → cestino: ' + fname);
+                sendJson(res, 200, { ok: true, deleted: fname, trashed: true });
             });
             return;
         }
@@ -798,6 +939,40 @@ var serialApiVersion = 'none'; // 'legacy' (v7-v8), 'v9' (v9), 'modern' (v10+), 
 // ma i moduli nativi (.node) devono essere nella cartella reale dell'exe
 var EXE_DIR = process.pkg ? path.dirname(process.execPath) : __dirname;
 
+// EXE SINGOLO AUTOSUFFICIENTE: i pacchetti serialport viaggiano DENTRO l'exe
+// (pkg assets), ma i moduli nativi .node devono stare su disco reale per
+// essere caricati. Al primo avvio si estraggono accanto all'exe (o in
+// %LOCALAPPDATA%\CAMMES se la cartella non è scrivibile) e da lì in poi
+// loadSerialPort li trova come un normale node_modules.
+function copyTreeFromSnapshot(src, dest) {
+    fs.mkdirSync(dest, { recursive: true });
+    fs.readdirSync(src).forEach(function (name) {
+        var s = path.join(src, name), d = path.join(dest, name);
+        if (fs.statSync(s).isDirectory()) copyTreeFromSnapshot(s, d);
+        else fs.writeFileSync(d, fs.readFileSync(s));
+    });
+}
+function extractSerialFromSnapshot() {
+    var PKGS = ['serialport', '@serialport', 'node-gyp-build', 'debug', 'ms'];
+    var snapNM = path.join(__dirname, 'node_modules');
+    if (!fs.existsSync(path.join(snapNM, 'serialport'))) return null;   // build senza asset
+    var candidates = [
+        path.join(EXE_DIR, 'node_modules'),
+        path.join(process.env.LOCALAPPDATA || os.tmpdir(), 'CAMMES', 'node_modules')
+    ];
+    for (var i = 0; i < candidates.length; i++) {
+        try {
+            var destNM = candidates[i];
+            if (!fs.existsSync(path.join(destNM, 'serialport', 'package.json'))) {
+                PKGS.forEach(function (p) { copyTreeFromSnapshot(path.join(snapNM, p), path.join(destNM, p)); });
+                log('SERIAL', 'Driver seriale estratto dall\'exe in: ' + destNM);
+            }
+            return destNM;
+        } catch (e) { /* destinazione non scrivibile: prova la prossima */ }
+    }
+    return null;
+}
+
 function loadSerialPort() {
     var paths = [
         'serialport',                                                    // node_modules locale (dev)
@@ -827,11 +1002,29 @@ function loadSerialPort() {
         }
     }
 
-    log('SERIAL', 'Modulo serialport non trovato - modalita\' demo (senza Arduino)');
+    // Ultima risorsa (solo exe pkg): estrai i driver imbarcati nell'exe
     if (process.pkg) {
-        log('SERIAL', 'Per abilitare: copiare node_modules/ accanto a cammes.exe');
+        try {
+            var extractedNM = extractSerialFromSnapshot();
+            if (extractedNM) {
+                var mod2 = require(path.join(extractedNM, 'serialport'));
+                if (mod2.SerialPort) {
+                    SerialPort = mod2.SerialPort;
+                    serialApiVersion = 'modern';
+                    log('SERIAL', 'Modulo serialport caricato dai driver estratti: ' + extractedNM);
+                    return;
+                }
+            }
+        } catch (e) {
+            log.warn('SERIAL', 'Estrazione driver dall\'exe fallita: ' + e.message);
+        }
+    }
+
+    log.error('SERIAL', 'Modulo serialport non trovato - MODALITA\' DEMO (senza Arduino)');
+    if (process.pkg) {
+        log.error('SERIAL', 'Per abilitare: copiare node_modules/ accanto a cammes.exe');
     } else {
-        log('SERIAL', 'Per abilitare: npm install serialport');
+        log.error('SERIAL', 'Per abilitare: npm install serialport');
     }
 }
 
@@ -1049,6 +1242,23 @@ function openSerialPort(comPort) {
 
 // Avvia la seriale
 initSerial();
+
+// Cestino: svuota le voci più vecchie di 30 giorni (all'avvio, best-effort)
+(function purgeTrash() {
+    var trashDir = path.join(PROVE_DIR, '.trash');
+    fs.readdir(trashDir, function (err, files) {
+        if (err) return;
+        var cutoff = Date.now() - 30 * 24 * 3600 * 1000;
+        var purged = 0;
+        files.forEach(function (f) {
+            try {
+                var st = fs.statSync(path.join(trashDir, f));
+                if (st.mtimeMs < cutoff) { fs.unlinkSync(path.join(trashDir, f)); purged++; }
+            } catch (e) {}
+        });
+        if (purged) log('FILE', 'Cestino: eliminate ' + purged + ' voci più vecchie di 30 giorni');
+    });
+})();
 
 // ============================================================
 // 5. Apertura automatica del browser

@@ -184,8 +184,12 @@ ISR(PCINT0_vect)   { encoderUpdate(); }              // PCINT0 (D8 CHANGE)
 // Effetto pratico: lo "step più lento" agli estremi del movimento ha un
 // delay aggiuntivo di cfgRampExtraUs μs. Lo step centrale usa solo
 // cfgPulseUs. Il jolt iniziale/finale (che eccita le risonanze) sparisce.
-void stepperMove(int16_t units) {
-  if (units == 0) return;
+// INTERROMPIBILE: ogni 16 passi controlla la seriale — 'x' ferma il movimento
+// (STOP di emergenza: prima un "Ruota 300°" sbagliato non era fermabile se non
+// staccando la corrente). Ritorna false se interrotto; i '\n' del keep-alive
+// vengono scartati per non intasare il buffer RX durante i movimenti lunghi.
+bool stepperMove(int16_t units) {
+  if (units == 0) return true;
   digitalWrite(PIN_ENA, HIGH);
   digitalWrite(PIN_DIR, units > 0 ? HIGH : LOW);
   uint16_t steps = (uint16_t)abs(units) * cfgStepsPerUnit;
@@ -196,6 +200,21 @@ void stepperMove(int16_t units) {
   uint32_t rampExtra = cfgRampExtraUs;  // promosso a 32-bit per i prodotti
 
   for (uint16_t s = 0; s < steps; s++) {
+    if ((s & 15) == 0) {
+      // Consuma TUTTO il buffer cercando 'x': durante il movimento possono
+      // accodarsi keep-alive e polling ('?') PRIMA dello stop — fermarsi al
+      // primo char non-x renderebbe lo STOP cieco (visto al banco col
+      // polling della pagina attivo). Gli altri comandi vengono scartati:
+      // il gestore '$' li scartava comunque in blocco a fine movimento.
+      while (Serial.available()) {
+        char cc = (char)Serial.read();
+        if (cc == 'x') {
+          Serial.println(F("*mabort"));
+          if (cfgSettleMs) delay(cfgSettleMs);
+          return false;
+        }
+      }
+    }
     // Delay extra in funzione della posizione nella rampa
     uint16_t extraUs = 0;
     if (rampN > 0) {
@@ -224,6 +243,7 @@ void stepperMove(int16_t units) {
   }
   // Settle time: smorza vibrazioni residue prima della lettura sensore.
   if (cfgSettleMs) delay(cfgSettleMs);
+  return true;
 }
 
 // =============================================================
@@ -350,7 +370,11 @@ void autonomousScan(int8_t dir, uint16_t totalUnits) {
         return;
       }
     }
-    stepperMove(dir);                    // include cfgSettleMs meccanico
+    if (!stepperMove(dir)) {             // 'x' arrivato DURANTE il movimento
+      Serial.println(F("*sabort"));
+      cmdLen = 0;
+      return;
+    }
     float mm = readSensorStableMm();     // settle adattivo elettrico/meccanico
     noInterrupts();
     int32_t cnt = encoderCount;
@@ -372,8 +396,8 @@ void executeCommand() {
   cmdBuf[cmdLen] = '\0';
   if (cmdLen == 1) {
     char c = cmdBuf[0];
-    if (c == 'p')      { stepperMove(-1); emitMeasureScan(readSensorMm()); }
-    else if (c == 'q') { stepperMove(+1); emitMeasureScan(readSensorMm()); }
+    if (c == 'p')      { if (stepperMove(-1)) emitMeasureScan(readSensorMm()); }
+    else if (c == 'q') { if (stepperMove(+1)) emitMeasureScan(readSensorMm()); }
     else if (c == 'm') { emitMeasureOnly(readSensorMm()); }
     else if (c == 'd') {
       // debug: dump raw sensor value (16 bit utili)
@@ -392,7 +416,7 @@ void executeCommand() {
     else if (c == 'v') {
       // Versione/capacità firmware: il browser la usa per abilitare le
       // funzioni disponibili (scan=1 → scan autonomo 'S' supportato).
-      Serial.println(F("ver=3.0 scan=1"));
+      Serial.println(F("ver=3.1 scan=1"));
       Serial.println(F("*ver"));
     }
     else if (c == '!') {
@@ -522,12 +546,12 @@ void executeCommand() {
     int sign  = (cmdBuf[1] == '+') ? +1 : -1;
     int value = atoi(&cmdBuf[2]);
     if (value > 0) {
-      stepperMove(sign * value);
+      bool completed = stepperMove(sign * value);
       // Drain del buffer seriale: durante il movimento il PC potrebbe aver
       // accodato altri comandi (polling encoder, ecc.) che ora sono accumulati.
       // Li scartiamo per non andare fuori sequenza nello stato del parser.
       while (Serial.available() > 0) Serial.read();
-      Serial.println(F("*mv"));   // notifica fine movimento al PC
+      if (completed) Serial.println(F("*mv"));   // fine movimento (se interrotto ha già emesso *mabort)
     }
   }
   cmdLen = 0;

@@ -17,8 +17,17 @@
 
 Opzioni utili:
 - **Zero virtuale**: porta automaticamente il picco a +180° per confrontare alberi montati diversamente.
-- **⚙ Avanzate → Ripetizioni**: 3–5 run consecutivi con statistica di ripetibilità (σ, CV) — usala per verificare il banco.
+- **STOP**: ferma qualsiasi movimento, anche a metà rotazione (firmware 3.1+).
+- **⚙ Avanzate → Ripetizioni**: 3–5 run consecutivi; media e σ finiscono anche nel file e sul referto PDF.
 - **⚙ Avanzate → Motore scansione**: di default **Firmware** (l'Arduino esegue il giro da solo, validato al banco); **Browser** è il metodo classico di riserva per firmware più vecchi.
+- **⚙ Avanzate → 🧪 Verifica banco**: ogni tanto (o dopo un urto) monta un cilindro rettificato e lancia la verifica: entro 0,02 mm RMS il banco è sano. L'esito con data compare in Home.
+
+Controlli automatici: se il cerchio base non torna alla stessa quota a fine giro, se l'encoder vede meno rotazione dei passi comandati o se l'Arduino si riavvia a metà misura, compare un avviso: **quella misura non va usata**.
+
+## 2b. Collaudo su profilo nominale (Confronto)
+1. Pagina **Confronto** → carica fino a 4 misure.
+2. In **Collaudo su profilo nominale** carica il profilo di riferimento (una misura della camma nuova o un CSV di progetto) e imposta la tolleranza (es. 0,10 mm).
+3. Ogni curva riceve il verdetto **CONFORME / NON CONFORME** con lo scostamento massimo e il grado dove capita; sul grafico compare la banda nominale ± tolleranza.
 
 ## 3. Analizzare (Analisi)
 1. Pagina **Analisi** → importa il file di **aspirazione** e quello di **scarico**.
@@ -42,6 +51,8 @@ Tutto il resto (molla e forze, dinamica valvole, strumenti race, animazione, con
 
 ## 5. Backup e assistenza
 - Home → **📦 Backup ZIP** scarica tutto l'archivio misure (.scr). Conservalo prima di aggiornare il PC.
-- Home → **💾 Export** salva tag, preferiti e posizioni (file JSON, si ripristina con Import).
+- Home → **♻ Cestino**: i file eliminati restano ripristinabili per 30 giorni.
+- Home → **💾 Export** salva tag, preferiti e posizioni (file JSON, si ripristina con Import). Tag e preferiti sono comunque replicati sul server (settings.json accanto all'exe).
 - Se qualcosa non va: Home → **🩺 Diagnostica** scarica un file di testo con versioni e log — è quello da mandare all'assistenza.
-- Home → card **Sistema & aggiornamenti**: controlla nuove versioni su GitHub e aggiorna il **firmware Arduino** con un click (senza Arduino IDE).
+- Home → card **Sistema & aggiornamenti**: controlla nuove versioni su GitHub, aggiorna il **firmware Arduino** con un click (senza Arduino IDE), imposta **la tua intestazione** per i referti PDF.
+- Questo manuale è sempre disponibile da Home → **📖 Manuale**.

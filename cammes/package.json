@@ -32,6 +32,12 @@
       "responsivevoice.js",
       "lib/**/*",
       "fw/**/*",
+      "node_modules/serialport/**/*",
+      "node_modules/@serialport/**/*",
+      "node_modules/node-gyp-build/**/*",
+      "node_modules/debug/**/*",
+      "node_modules/ms/**/*",
+      "../MANUALE_OPERATORE.md",
       "fonts/**/*",
       "images/**/*",
       "prove/**/*"

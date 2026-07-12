@@ -1,11 +1,6 @@
 # Dipendenze Node.js (si ricreano con: npm install)
 node_modules/
 
-# Build Android (si ricrea con: gradlew.bat assembleDebug)
-cammes-android/app/build/
-cammes-android/.gradle/
-cammes-android/gen_icon.js
-
 # File spazzatura Windows
 nul
 Thumbs.db
@@ -14,6 +9,10 @@ Desktop.ini
 # File temporanei
 *.log
 .DS_Store
+
+# Impostazioni runtime locali (officina, verifiche banco, anagrafica)
+cammes/settings.json
+settings.json
 
 # Eseguibili e binari di build: distribuiti via GitHub Releases
 *.exe

@@ -11,7 +11,10 @@
     .section-intake { border-left: 3px solid var(--accent); padding-left: 12px; margin-top: 12px; }
     .section-exhaust { border-left: 3px solid var(--danger); padding-left: 12px; margin-top: 16px; }
     .param-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-    .param-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; min-width: 90px; }
+    /* label a larghezza FISSA: così tutti i campi partono alla stessa x
+       (prima min-width:90 lasciava colonne sfalsate riga per riga) */
+    .param-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; flex: 0 0 132px; min-width: 0; }
+    .ab-set .param-label { flex: 0 0 68px; }   /* card A/B: colonne strette */
     .param-unit { font-size: 12px; color: var(--text-muted); }
     .section-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
     .result-grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; align-items: start; }
@@ -2259,6 +2262,13 @@ function importIntake() {
         intakeFileBase = nom[0];
         detectConvertedFile(fr.result);                    // se già follower → forza punt
         var camLift = parseCamFile(fr.result);
+        if (!camLift.validCount || camLift.validCount < 30) {
+            // prima un file malformato caricava 360 zeri IN SILENZIO
+            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'File non riconosciuto',
+                body: 'Solo ' + (camLift.validCount || 0) + ' righe valide "grado,alzata": il file non sembra una misura CAMMES.', duration: 8000 });
+            return;
+        }
+        window._metaIn = camLift.meta || {};               // metadati #k=v (data, runs, sigma…)
         rawIntake = camLift.slice();                       // grezzo gradi-camma (sorgente)
         camLift = applyVirtualFollower(camLift, 'intake');
         folIntake = camLift.slice();
@@ -2295,6 +2305,12 @@ function importExhaust() {
         exhaustFileBase = nom[0];
         detectConvertedFile(fr.result);                    // se già follower → forza punt
         var camLift = parseCamFile(fr.result);
+        if (!camLift.validCount || camLift.validCount < 30) {
+            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'File non riconosciuto',
+                body: 'Solo ' + (camLift.validCount || 0) + ' righe valide "grado,alzata": il file non sembra una misura CAMMES.', duration: 8000 });
+            return;
+        }
+        window._metaEx = camLift.meta || {};               // metadati #k=v (data, runs, sigma…)
         rawExhaust = camLift.slice();                      // grezzo gradi-camma (sorgente)
         camLift = applyVirtualFollower(camLift, 'exhaust');
         folExhaust = camLift.slice();
@@ -3078,7 +3094,9 @@ function analyze() {
             rRoll: Number((document.getElementById('rRoll') || {}).value) || 0,
             lArm: Number((document.getElementById('lArm') || {}).value) || 0,
             lValve: Number((document.getElementById('lValve') || {}).value) || 0,
-            baselineOn: (typeof baselineEnabled === 'function') ? baselineEnabled() : false
+            baselineOn: (typeof baselineEnabled === 'function') ? baselineEnabled() : false,
+            metaIn: window._metaIn || {},   // metadati del file misura (data, runs, sigma…)
+            metaEx: window._metaEx || {}
         },
         results: {
             durIntake: durIntake, durExhaust: durExhaust,
@@ -4136,6 +4154,12 @@ function exportCamCard(testMode) {
     // ---- intestazione ----
     doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
     doc.text('SCHEDA CAMMA — CAM CARD', 12, 14);
+    // Intestazione officina (impostata in Home → Sistema & aggiornamenti)
+    if (window._officina) {
+        doc.setFontSize(10); doc.setTextColor(60);
+        doc.text(String(window._officina).substring(0, 60), 12, 8);
+        doc.setTextColor(0);
+    }
     doc.setFontSize(9); doc.setFont('helvetica', 'normal');
     doc.text('CAMMES ' + (window.CAMMES_VERSION || '') + '  ·  ' + new Date().toISOString().substring(0, 10), pageW - 12, 10, { align: 'right' });
     doc.text('Rilevazione: puntalino sferico R ' + rPunt + ' mm  ·  curva presentata come: ' + folDesc + rockTxt, pageW - 12, 15, { align: 'right' });
@@ -4174,9 +4198,17 @@ function exportCamCard(testMode) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text('REMARKS', x0, y); y += 5;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
     // NB: solo caratteri WinAnsi (niente '→': i font standard jsPDF lo corrompono)
+    // Ripetibilità: dichiarata dai metadati del file (scansioni ripetute in Alzata)
+    function ripetTxt(meta, lato) {
+        if (meta && meta.runs && Number(meta.runs) > 1) {
+            return lato + ': media di ' + meta.runs + ' scansioni, sigma max ' + (Number(meta.sigmaMax) || 0).toFixed(3) + ' mm.';
+        }
+        return lato + ': misura singola (ripetibilità non valutata).';
+    }
     var remarks = [
         '# misura CAMMES: scansione 360° col puntalino, conversione geometrica al follower dichiarato.',
         '# conversione puntalino->follower VALIDATA fisicamente (piattello reale, RMS 0.046 mm).',
+        '# ripetibilità - ' + ripetTxt(I.metaIn, 'ASP') + ' ' + ripetTxt(I.metaEx, 'SCA'),
         '# correzione baseline/eccentricità: ' + (I.baselineOn ? 'ON' : 'OFF') + '.',
         '# durate e fasatura riferite al gioco valvola indicato; angoli in gradi MOTORE.'
     ];
@@ -4261,12 +4293,23 @@ function exportCamCard(testMode) {
     var iw = 168, ih = iw * ch / cw;
     doc.addImage(img, 'PNG', 117, 26, iw, ih);
 
+    // ---- footer: disclaimer di responsabilità ----
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(130);
+    doc.text('Misura a carattere indicativo generata da CAMMES ' + (window.CAMMES_VERSION || '') +
+             ': non sostituisce un collaudo metrologico certificato.', 12, 205);
+    doc.setTextColor(0);
+
     if (testMode) return doc.output('arraybuffer');
     var fname = 'cammes_scheda_camma_' + new Date().toISOString().substring(0, 10) + '.pdf';
     doc.save(fname);
     if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Scheda camma esportata', body: fname, duration: 4500 });
 }
 window.exportCamCard = exportCamCard;
+
+// Intestazione officina per i referti (impostata in Home, salvata sul server)
+fetch('/api/settings').then(function (r) { return r.json(); }).then(function (s) {
+    if (s.officina && s.officina.nome) window._officina = s.officina.nome;
+}).catch(function () {});
 
 function exportPDF() {
     if (!lastAnalysis) {
