@@ -1159,6 +1159,25 @@ autonoma v3 ×2, mediata 3 campioni ×1).
 - **polare.html**: messaggio "mic out" → **"NO SENSORE"** (coerente con Alzata):
   significa lettura assente o fuori scala (>32 mm / NaN).
 
+## Sessione 11d — 2026-07-13: "e se l'elettronica ripete lo stesso dato mentre l'ago si muove?" (domanda utente)
+
+Esperimento di falsificazione diretta: 90 punti consecutivi da 1° (fianco
+incluso, escursione 0→2,42 mm); dopo ogni passo letti TUTTI i frame per
+2,6 s. Confronto: valore che il criterio "2 frame concordi ≤5 µm"
+AVREBBE accettato vs valore vero dopo 2,6 s.
+- Periodo reale tra frame del Neoteck: 58-128 ms (mediana 95, ~10 Hz —
+  più veloce di quanto stimato: la coppia concorde copre ~0,2 s reali).
+- |accettato − verità|: mediana 0,000 · p90 0,000 · MAX 0,010 mm.
+  Un ritardo di assestamento da ~1 s è ESCLUSO: aspettare 13× di più
+  cambia il valore al massimo di 1 tacca.
+- Il fenomeno temuto ESISTE ma alla scala della RISOLUZIONE dello
+  strumento: su 10/90 punti un frame successivo alla coppia concorde
+  flicka di esattamente ±0,010 mm (1 tacca del comparatore centesimale,
+  ago al confine di quantizzazione); solo 2/90 punti finiscono a 1 tacca
+  dal valore accettato. Non riducibile senza uno strumento più risoluto;
+  già dentro l'accuratezza dichiarata (±0,05 mm) e filtrato da
+  Ripetizioni/smoothing. Nessuna modifica necessaria: limite documentato.
+
 ## Sessione 11c — 2026-07-13: "il comparatore ha tempo di assestarsi?" (domanda utente)
 
 Risposta con i numeri. Premessa di design: NESSUNA lettura avviene in
