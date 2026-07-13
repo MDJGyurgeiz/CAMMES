@@ -192,14 +192,17 @@ bool stepperMove(int16_t units) {
   if (units == 0) return true;
   digitalWrite(PIN_ENA, HIGH);
   digitalWrite(PIN_DIR, units > 0 ? HIGH : LOW);
-  uint16_t steps = (uint16_t)abs(units) * cfgStepsPerUnit;
+  // 32 bit: con r32 già 2048 unità (2048°) superano i 65535 µstep e un
+  // contatore a 16 bit ANDAVA IN OVERFLOW (movimento imprevedibile —
+  // scoperto al banco il 2026-07-13 con $+5760: girati ~1484° invece di 5760).
+  uint32_t steps = (uint32_t)abs(units) * cfgStepsPerUnit;
 
   // Calcola rampa effettiva: max metà del movimento per lato
-  uint16_t rampN = cfgAccelSteps;
+  uint32_t rampN = cfgAccelSteps;
   if (rampN > steps / 2) rampN = steps / 2;
   uint32_t rampExtra = cfgRampExtraUs;  // promosso a 32-bit per i prodotti
 
-  for (uint16_t s = 0; s < steps; s++) {
+  for (uint32_t s = 0; s < steps; s++) {
     if ((s & 15) == 0) {
       // Consuma TUTTO il buffer cercando 'x': durante il movimento possono
       // accodarsi keep-alive e polling ('?') PRIMA dello stop — fermarsi al
@@ -416,7 +419,7 @@ void executeCommand() {
     else if (c == 'v') {
       // Versione/capacità firmware: il browser la usa per abilitare le
       // funzioni disponibili (scan=1 → scan autonomo 'S' supportato).
-      Serial.println(F("ver=3.1 scan=1"));
+      Serial.println(F("ver=3.2 scan=1"));
       Serial.println(F("*ver"));
     }
     else if (c == '!') {

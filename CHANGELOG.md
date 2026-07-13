@@ -1159,6 +1159,23 @@ autonoma v3 ×2, mediata 3 campioni ×1).
 - **polare.html**: messaggio "mic out" → **"NO SENSORE"** (coerente con Alzata):
   significa lettura assente o fuori scala (>32 mm / NaN).
 
+## Sessione 11b — 2026-07-13: profili a bassa velocità (domanda utente) + BUG overflow firmware
+
+Domanda utente: "hai provato lo stesso test a velocità inferiore?" — giusto:
+il primo test copriva solo la scansione (scatti da 1°, rampa quasi inerte).
+Test ROTAZIONI LUNGHE continue per k0..k3 (180° a/r, verifica encoder):
+tutti percorrono lo STESSO angolo (5934-5936 cnt, coerenza 0,05%), ritorno
+esatto al punto di partenza → **zero passi persi a qualunque velocità**
+(k0 249°/s → k3 74°/s). Cambia solo il tempo (6,0/9,2/13,5/20,0 s per 180°...
+misurati su corsa lunga). Conferma definitiva: profilo fisso Standard.
+
+**BUG TROVATO DAL TEST**: il contatore passi di stepperMove era uint16 —
+oltre ~2047° in un colpo solo andava in OVERFLOW (girati ~1484° su 5760
+chiesti). Mai colpito dall'UI (max 360°), ma blindato: **firmware 3.2**
+(steps uint32), flashato e VERIFICATO al banco: $+3000 → 2999,5° misurati
+dall'encoder (err 0,017%), ritorno netto −1 cnt.
+Nota per i futuri driver di test: $±N prende UNITÀ (gradi con r32), non µstep.
+
 ## Sessione 11 — 2026-07-13: profili movimento testati, motore scansione automatico, layout
 
 ### Test al banco dei 4 profili movimento (domanda utente: "che senso ha averne 4?")
