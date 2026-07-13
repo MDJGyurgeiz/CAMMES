@@ -1159,6 +1159,22 @@ autonoma v3 ×2, mediata 3 campioni ×1).
 - **polare.html**: messaggio "mic out" → **"NO SENSORE"** (coerente con Alzata):
   significa lettura assente o fuori scala (>32 mm / NaN).
 
+## Sessione 11c — 2026-07-13: "il comparatore ha tempo di assestarsi?" (domanda utente)
+
+Risposta con i numeri. Premessa di design: NESSUNA lettura avviene in
+movimento — ogni grado il motore si ferma e la lettura è accettata solo
+quando DUE frame consecutivi del comparatore coincidono entro 5 µm.
+- **Misura al banco** (scan autonomo completo, 360 punti, timestamp per
+  campione): assestamento min 161 ms · mediana 202 · p90 297 · p99 314 ·
+  **max 328 ms** contro un budget di 1500 → margine 4,6× anche sul punto
+  peggiore, zero punti oltre 1 s.
+- **Chiuso il buco residuo**: a budget scaduto il punto veniva accettato
+  IN SILENZIO. **Firmware 3.3**: audit `*sstat u=N` a fine scansione =
+  numero di punti accettati senza stabilizzazione; UI: toast warn se N>0
+  ("controlla vibrazioni/fissaggio") e `#puntiInstabili=N` nei metadati
+  del file. Flashato e verificato: scansione reale → `*sstat u=0`
+  (ogni punto certificato stabile).
+
 ## Sessione 11b — 2026-07-13: profili a bassa velocità (domanda utente) + BUG overflow firmware
 
 Domanda utente: "hai provato lo stesso test a velocità inferiore?" — giusto:

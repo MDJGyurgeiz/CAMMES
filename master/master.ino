@@ -279,7 +279,9 @@ float readSensorMmOnce() { return readSensorMmOnceT(SENSOR_SETTLE_MS); }
 const float    SCAN_EPS_MM         = 0.005f;   // due frame uguali entro 5 µm = stabile
 const uint16_t SCAN_FRAME_MS       = 400;      // attesa max per singolo frame
 const uint16_t SCAN_BUDGET_MS      = 1500;     // budget massimo per punto
+bool g_lastReadStable = true;                  // esito stabilità dell'ultima lettura adattiva
 float readSensorStableMm() {
+  g_lastReadStable = true;
   uint32_t tEnd = millis() + SCAN_BUDGET_MS;
   float prev = readSensorMmOnceT(SCAN_FRAME_MS);
   float last = prev;
@@ -291,6 +293,10 @@ float readSensorStableMm() {
     prev = v;
     last = v;
   }
+  // Budget scaduto SENZA due frame concordi entro 5 µm: il punto viene
+  // accettato lo stesso (ultimo frame) ma va DICHIARATO — l'audit *sstat
+  // a fine scansione rende impossibile un'instabilità silenziosa.
+  g_lastReadStable = false;
   return last;
 }
 
@@ -364,6 +370,7 @@ void emitEncoderQuery() {
 //  base, paziente sul fianco ripido), abort pulito.
 //  I comandi p/q restano invariati per jog manuale e compatibilità.
 void autonomousScan(int8_t dir, uint16_t totalUnits) {
+  uint16_t unstable = 0;   // punti accettati a budget scaduto (non stabilizzati)
   for (uint16_t i = 1; i <= totalUnits; i++) {
     // abort: qualunque 'x' arrivato dal PC ferma la scansione
     while (Serial.available() > 0) {
@@ -379,6 +386,7 @@ void autonomousScan(int8_t dir, uint16_t totalUnits) {
       return;
     }
     float mm = readSensorStableMm();     // settle adattivo elettrico/meccanico
+    if (!g_lastReadStable && !isnan(mm)) unstable++;
     noInterrupts();
     int32_t cnt = encoderCount;
     interrupts();
@@ -389,6 +397,9 @@ void autonomousScan(int8_t dir, uint16_t totalUnits) {
     else           Serial.println(mm, 2);
   }
   while (Serial.available() > 0) Serial.read();   // drain comandi accodati
+  // Audit di stabilità: quanti punti sono stati accettati SENZA i due frame
+  // concordi entro 5 µm. 0 = ogni lettura era davvero assestata.
+  Serial.print(F("*sstat u=")); Serial.println(unstable);
   Serial.println(F("*sdone"));
 }
 
@@ -419,7 +430,7 @@ void executeCommand() {
     else if (c == 'v') {
       // Versione/capacità firmware: il browser la usa per abilitare le
       // funzioni disponibili (scan=1 → scan autonomo 'S' supportato).
-      Serial.println(F("ver=3.2 scan=1"));
+      Serial.println(F("ver=3.3 scan=1"));
       Serial.println(F("*ver"));
     }
     else if (c == '!') {

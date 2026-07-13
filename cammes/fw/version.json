@@ -1,8 +1,8 @@
 {
-  "firmware": "3.2",
+  "firmware": "3.3",
   "sketch": "master/master.ino",
   "fqbn": "arduino:avr:uno",
   "builtAt": "2026-07-13",
   "avrdude": "8.0.0-arduino1",
-  "note": "3.2: fix overflow contatore passi su rotazioni >2047° (uint16->uint32). 3.1: stepperMove interrompibile con 'x' (*mabort). Risposta a 'v': ver=3.2 scan=1"
+  "note": "3.3: audit stabilità (*sstat u=N a fine scan = punti accettati a budget scaduto). 3.2: fix overflow rotazioni >2047°. 3.1: STOP interrompibile ('x'->*mabort). Risposta a 'v': ver=3.3 scan=1"
 }

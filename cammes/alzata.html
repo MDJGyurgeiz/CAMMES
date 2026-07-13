@@ -590,6 +590,21 @@ var _engineOnMessage = function(event) {
         return;
     }
 
+    // Audit stabilità del firmware (3.3+): punti accettati a budget scaduto.
+    // 0 = ogni lettura aveva due frame concordi entro 5 µm (davvero assestata).
+    if (autoScanActive && msg.indexOf('*sstat') === 0) {
+        var mU = msg.match(/u=(\d+)/);
+        window._lastUnstable = mU ? parseInt(mU[1], 10) : 0;
+        if (window._lastUnstable > 0 && window.cammesToast) {
+            window.cammesToast({
+                kind: 'warn', title: window._lastUnstable + ' punti non stabilizzati',
+                body: 'Il comparatore non si &egrave; assestato entro 1,5 s su ' + window._lastUnstable + ' punti (accettato l\'ultimo valore letto). Possibili vibrazioni o fissaggio lasco: controlla il banco o usa Ripetizioni per verificare. Il conteggio finisce nei metadati del file.',
+                duration: 10000
+            });
+        }
+        return;
+    }
+
     if (autoScanActive && (msg === '*sdone' || msg === '*sabort')) {
         var wasAborted = (msg === '*sabort');
         autoScanActive = false;
@@ -1035,6 +1050,7 @@ function _startSingleRun(firstRun) {
     pdata.length = 0; pdindex.length = 0;
     max = 0; maxg = 0; maxg_encoder = null;
     window._lastRepeatStats = null;   // le statistiche valgono solo per il run corrente
+    window._lastUnstable = 0;         // audit stabilità del run corrente
     // Reset controllo divergenza stepper↔encoder per questo run
     _encChkBaseI = 0; _encChkBaseCount = null; _encAlarmed = false;
     window._encStuck = false;
@@ -1261,6 +1277,9 @@ function sav() {
         metaTail += '#runs=' + window._lastRepeatStats.runs + '\r\n' +
                     '#sigmaMax=' + window._lastRepeatStats.sigmaMax.toFixed(4) + '\r\n' +
                     '#sigmaPicco=' + window._lastRepeatStats.sigmaPeak.toFixed(4) + '\r\n';
+    }
+    if (window._lastUnstable > 0) {
+        metaTail += '#puntiInstabili=' + window._lastUnstable + '\r\n';
     }
     var body = "_pline\r\n" + stringa + metaTail;
     var doSave = function () {
