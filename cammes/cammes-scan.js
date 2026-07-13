@@ -48,17 +48,11 @@ function connectEngine() {
     } catch (e) { _engineScheduleReconnect(); }
 }
 
-// Profilo movimento (anti-vibrazione): manda 'kN' al firmware che setta
-// pulse width + step rampa + extra delay. Default = standard (k1).
-function onMoveProfileChange() {
-    var sel = document.getElementById('moveProfile');
-    if (!sel) return;
-    var v = parseInt(sel.value, 10);
-    if (isNaN(v) || v < 0 || v > 3) v = 1;
-    if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1) {
-        try { sendSocket.send('k' + v + '\n'); } catch (e) {}
-    }
-}
+// Profilo movimento: FISSO a Standard (k1), inviato da alzata all'apertura
+// del socket. Il selettore a 4 profili è stato rimosso dopo il test al banco
+// del 2026-07-13: k0/k1/k2/k3 danno la stessa curva entro la ripetibilità
+// (RMS 0,06-0,08 mm) e tempi quasi uguali (46-57 s) — una scelta senza
+// criterio per l'utente.
 
 function m1() {
     oldg = Number(oldg) - 1;

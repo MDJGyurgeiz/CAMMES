@@ -22,9 +22,10 @@
 Opzioni utili:
 - **Zero virtuale**: porta automaticamente il picco a +180° per confrontare alberi montati diversamente.
 - **STOP**: ferma qualsiasi movimento, anche a metà rotazione (firmware 3.1+).
-- **⚙ Avanzate → Ripetizioni**: 3–5 run consecutivi; media e σ finiscono anche nel file e sul referto PDF.
-- **⚙ Avanzate → Motore scansione**: di default **Firmware** (l'Arduino esegue il giro da solo, validato al banco); **Browser** è il metodo classico di riserva per firmware più vecchi.
+- **⚙ Avanzate → Ripetizioni**: misuratore di **ripetibilità** — N scansioni identiche di fila, poi verdetto (eccellente/buona/sufficiente/scadente) con σ massima. Se σ è alta c'è qualcosa di lasco o che vibra. Il file salvato è la MEDIA e la σ finisce sul referto.
 - **⚙ Avanzate → 🧪 Verifica banco**: ogni tanto (o dopo un urto) monta un cilindro rettificato e lancia la verifica: entro 0,02 mm RMS il banco è sano. L'esito con data compare in Home.
+
+Il ciclo di scansione lo esegue l'Arduino in autonomia (validato al banco); se il firmware è vecchio il programma passa da solo al metodo classico e ti suggerisce l'aggiornamento (un click dalla Home).
 
 Controlli automatici: se il cerchio base non torna alla stessa quota a fine giro, se l'encoder vede meno rotazione dei passi comandati o se l'Arduino si riavvia a metà misura, compare un avviso: **quella misura non va usata**.
 

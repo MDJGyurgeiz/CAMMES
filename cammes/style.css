@@ -428,6 +428,10 @@ body {
 /* Motore in movimento: blu che lampeggia veloce */
 .led.run  { background: var(--accent);  box-shadow: 0 0 8px var(--accent),       0 0 0 2px rgba(0, 212, 255, 0.20);  animation: led-pulse 0.5s var(--ease) infinite; color: var(--accent); }
 
+/* Pannello ⚙ Avanzate (alzata): righe allineate con etichetta a larghezza fissa */
+#scanAdvanced .adv-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+#scanAdvanced .toggle-label { flex: 0 0 110px; }
+
 /* ---------- THEME TOGGLE BUTTON ------------------------------------------ */
 
 .theme-toggle {

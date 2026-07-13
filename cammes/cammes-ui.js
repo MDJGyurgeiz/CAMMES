@@ -528,7 +528,7 @@
     ],
     alzata: [
       { sel: '#scanMode',  title: 'Modalità scansione', body: 'Scegli tra <b>Veloce</b> (~45 s, uso normale), <b>Precisione</b> (media 3 letture) e <b>Race</b> (risoluzione 0,5°). Il tempo stimato è indicato.' },
-      { sel: '#scanAdvBtn', title: 'Impostazioni avanzate', body: 'Apre le opzioni extra: <b>ripetizioni</b> con statistiche di ripetibilità, profilo <b>anti-vibrazione</b> e motore di scansione (<b>Firmware</b> consigliato / Browser di riserva). Per l\'uso normale non servono.' },
+      { sel: '#scanAdvBtn', title: 'Impostazioni avanzate', body: 'Apre gli strumenti di controllo qualità: <b>Ripetizioni</b> (misura la ripetibilità del banco con N scansioni di fila) e <b>Verifica banco</b> (test periodico con un cilindro rettificato). Per l\'uso normale non servono.' },
       { sel: 'button[onclick^="start"]', title: 'Avvia', body: 'START esegue una scansione completa 360° del profilo di alzata.' },
       { sel: '#msBtn',     title: 'Zero virtuale', body: 'Porta in automatico il picco di alzata a un riferimento fisso (+180°), così alberi montati diversamente restano confrontabili.' },
       { sel: '#freeBtn',   title: 'Sblocca motore', body: 'Libera l\'albero per girarlo a mano leggendo encoder e comparatore dal vivo.' },

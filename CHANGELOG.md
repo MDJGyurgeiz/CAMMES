@@ -1159,6 +1159,39 @@ autonoma v3 ×2, mediata 3 campioni ×1).
 - **polare.html**: messaggio "mic out" → **"NO SENSORE"** (coerente con Alzata):
   significa lettura assente o fuori scala (>32 mm / NaN).
 
+## Sessione 11 — 2026-07-13: profili movimento testati, motore scansione automatico, layout
+
+### Test al banco dei 4 profili movimento (domanda utente: "che senso ha averne 4?")
+Scansione Veloce completa per k0/k1/k2/k3 sulla stessa camma (Clio):
+| profilo | tempo | picco | RMS vs Standard |
+|---|---|---|---|
+| k0 Scattoso | 46,4 s | 8,550 @223° | 0,076 mm |
+| k1 Standard | 50,6 s | 8,550 @223° | — |
+| k2 Morbido | 57,2 s | 8,560 @223° | 0,065 mm |
+| k3 Extra-morbido | 56,9 s | 8,550 @223° | 0,060 mm |
+Differenze = ripetibilità run-to-run (0,05-0,08 mm), tempi quasi uguali
+(±5 s su ~50 s): il profilo NON cambia la misura. **Selettore ELIMINATO**,
+profilo fisso Standard k1 (quello di tutte le validazioni), inviato
+automaticamente all'apertura del socket.
+
+### Motore scansione: selettore ELIMINATO, fallback automatico
+L'utente (giustamente) non capiva il senso della scelta Firmware/Browser.
+Ora: sempre scan autonomo del firmware; se il firmware è pre-v3 e non
+risponde entro 6 s, il programma passa DA SOLO al metodo classico, riavvia
+la scansione e suggerisce l'aggiornamento firmware (un click dalla Home).
+
+### Layout (segnalazioni utente)
+- Analisi: con 5 moduli attivi "⚙ Funzioni (5 attive)" spingeva Base/Avanzato
+  fuori dalla card (381 px in 355) → etichetta compatta "(5)" + header con
+  flex-wrap; tendina Preset motore non tocca più il bordo (era a −1 px).
+- Alzata: il pannello ⚙ Avanzate si incastrava a destra della toolbar con i
+  gruppi impilati e disallineati → ora blocco a TUTTA LARGHEZZA sotto i
+  comandi (flex-basis:100%), righe .adv-row con etichetta a larghezza fissa,
+  bordo tratteggiato. Restano Ripetizioni e Verifica banco.
+- Tooltip Ripetizioni riscritto: è il misuratore di RIPETIBILITÀ (N scansioni
+  → σ max + verdetto eccellente/buona/sufficiente/scadente; σ alta = qualcosa
+  di lasco o che vibra); la taratura la copre la Verifica banco.
+
 ## Sessione 10d — 2026-07-12: barra di stato a 4 LED (richiesta utente)
 
 LED collegati ESATTAMENTE ai componenti, nell'ordine chiesto:

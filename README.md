@@ -69,7 +69,7 @@ anagrafica tag/preferiti) e cammes.log (diagnostica).
 | Pagina | Descrizione | Arduino |
 |--------|-------------|:-:|
 | **Home** | Archivio misure con ricerca, tag e preferiti (replicati sul server), quick-view, **backup ZIP**, **cestino** (30 gg), card **Sistema & aggiornamenti** (update-check, flash firmware, intestazione officina, diagnostica, manuale) | No |
-| **Alzata** | Acquisizione profilo 0–360°: gauge live, scelta modalità, zero virtuale, **STOP di emergenza** (ferma anche i movimenti a metà), controlli automatici (chiusura giro, slittamento, reset Arduino); in ⚙ Avanzate: run ripetuti con statistiche, profilo movimento, motore scansione Firmware/Browser, **verifica banco** con cilindro | Sì |
+| **Alzata** | Acquisizione profilo 0–360° (scan autonomo firmware, fallback automatico su firmware pre-v3): gauge live, scelta modalità, zero virtuale, **STOP di emergenza**, controlli automatici (chiusura giro, slittamento, encoder fermo, reset Arduino, sensore muto); in ⚙ Avanzate: **Ripetizioni** (ripetibilità) e **verifica banco** con cilindro | Sì |
 | **Confronto** | Fino a 4 profili sovrapposti o in differenza (max/media/RMSE), replay animato, vista polare dai file `_alz`, **collaudo su profilo nominale** con tolleranza ±mm e verdetto CONFORME/NON CONFORME | No |
 | **Analisi** | Correlazione asp/scarico (durate, LSA, aperture/chiusure, alzata al PMS), follower virtuale (bicchiere Ø/rullo/finger), correzione baseline/eccentricità, cinematica, molla & forze, compliance 1/2/3-DOF, surge, strumenti race, export PDF/CSV, salva profilo (grezzo o convertito). Le funzioni extra si attivano dal pannello **⚙ Funzioni** | No |
 

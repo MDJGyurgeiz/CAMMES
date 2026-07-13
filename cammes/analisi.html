@@ -192,9 +192,9 @@
 
         <!-- Right: Parameters panel -->
         <div class="card" id="paramCard">
-            <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
                 <span>Parametri</span>
-                <span style="display:inline-flex; gap:8px; align-items:center;">
+                <span style="display:inline-flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
                     <button type="button" class="modules-btn" id="btnModules" onclick="toggleModulesPanel();" data-tip="<strong>Funzioni aggiuntive</strong>Attiva solo i moduli che ti servono: molla, dinamica valvole, strumenti race, animazione&hellip; Il resto della schermata rimane pulito. La scelta viene ricordata.">&#9881; Funzioni</button>
                     <span class="mode-toggle" role="group" aria-label="Livello di dettaglio">
                         <button type="button" id="modeBaseBtn" onclick="setAnalysisMode('base');">Base</button>
@@ -218,7 +218,7 @@
             <!-- Preset rapido -->
             <div class="param-row" style="margin-bottom:12px;">
                 <span class="param-label">Preset motore <span class="help-icon" data-tip="<strong>Preset rapido</strong>Carica un set di valori tipici per la classe motore selezionata: tipologia treno valvole, angoli lobo, gioco valvola, RPM tipico, bilanciere, molla, masse. Puoi sempre rifinire ogni singolo campo dopo." tabindex="0">?</span></span>
-                <select id="enginePreset" class="input" style="width:200px;" onchange="applyEnginePreset();">
+                <select id="enginePreset" class="input" style="flex:1;min-width:0;max-width:200px;" onchange="applyEnginePreset();">
                     <option value="custom" selected>Personalizzato</option>
                     <option value="moto_street">Moto stradale 600 cc</option>
                     <option value="moto_race">Moto race 1000 cc</option>
@@ -1960,7 +1960,7 @@ function applyModules() {
         if (m[key]) count++;
     }
     var btn = document.getElementById('btnModules');
-    if (btn) btn.innerHTML = '&#9881; Funzioni' + (count ? ' (' + count + ' attive)' : '');
+    if (btn) btn.innerHTML = '&#9881; Funzioni' + (count ? ' (' + count + ')' : '');
 }
 function onModuleToggle(cb) {
     var m = getModules();

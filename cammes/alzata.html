@@ -95,42 +95,22 @@
 
             <!-- Impostazioni avanzate di scansione: raccolte e chiuse di default.
                  I test al banco (07-05 e 07-11) hanno mostrato che per l'uso
-                 normale basta la Modalità: ripetizioni/profilo/sorgente/motore
-                 sono strumenti di verifica e casi particolari. -->
+                 normale basta la Modalità: ripetizioni e verifica banco sono
+                 strumenti di controllo qualità. Il pannello occupa una riga
+                 INTERA sotto la toolbar (flex-basis:100%), con etichette a
+                 larghezza fissa: prima si incastrava a destra disallineato. -->
             <div class="controls-group">
-                <button type="button" class="btn btn-secondary btn-sm" id="scanAdvBtn" onclick="toggleScanAdvanced();" data-tip="<strong>Impostazioni avanzate scansione</strong>Ripetizioni con statistiche, profilo anti-vibrazione e motore di scansione (firmware/browser). Per l'uso normale bastano Modalit&agrave; e START: al banco le varie combinazioni danno la stessa curva entro 0,05-0,07 mm.">&#9881; Avanzate</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="scanAdvBtn" onclick="toggleScanAdvanced();" data-tip="<strong>Impostazioni avanzate scansione</strong>Ripetizioni con statistiche di ripetibilit&agrave; e verifica periodica del banco. Per l'uso normale bastano Modalit&agrave; e START.">&#9881; Avanzate</button>
             </div>
-            <div id="scanAdvanced" style="display:none;">
+            <div id="scanAdvanced" style="display:none; flex-basis:100%; width:100%; margin-top:10px; padding:10px 14px; border:1px dashed var(--border-card, #2a2a4a); border-radius:8px;">
 
-            <div class="controls-group">
+            <div class="adv-row">
                 <span class="toggle-label">Ripetizioni</span>
-                <select id="scanRepeat" class="input" style="width:170px;" data-tip="<strong>Scansioni ripetute</strong>Ripete N volte la stessa scansione e calcola media + deviazione standard per ogni grado camma. Utile per stimare la ripetibilit&agrave; del sistema o ridurre il rumore di misura. Il file salvato contiene la media."><option value="1" selected>1 (singola)</option><option value="2">2 run + medie</option><option value="3">3 run + medie</option><option value="5">5 run + statistiche</option></select>
-                <span class="help-icon" data-tip="<strong>Quando ripetere?</strong>Stesso albero, stessa modalit&agrave;: dovresti ottenere la stessa curva. Se la dev. std. &egrave; alta (&gt; 5%), il sistema ha rumore meccanico/elettronico da indagare. Tempo totale = N × tempo singolo." tabindex="0">?</span>
+                <select id="scanRepeat" class="input" style="width:180px;" data-tip="<strong>Scansioni ripetute = misuratore di RIPETIBILIT&Agrave;</strong>Esegue N scansioni identiche di fila e confronta le curve punto per punto. Ti dice: <b>picco medio</b>, <b>&sigma; massima</b> (quanto ballano le letture tra un giro e l'altro) e un <b>verdetto</b> (eccellente &lt;1% &middot; buona &lt;3% &middot; sufficiente &lt;7% &middot; scadente). Se la &sigma; &egrave; alta c'&egrave; qualcosa di lasco o che vibra: NON &egrave; una taratura (per quella c'&egrave; Verifica banco), &egrave; un controllo di stabilit&agrave;. Il file salvato contiene la MEDIA delle N curve e la &sigma; finisce nei metadati e sul referto PDF."><option value="1" selected>1 (singola)</option><option value="2">2 run + medie</option><option value="3">3 run + medie</option><option value="5">5 run + statistiche</option></select>
+                <span class="help-icon" data-tip="<strong>Quando usarla?</strong>Alla prima installazione, dopo un urto/trasporto del banco, o su una misura che deve andare su un referto importante: 3 run e guardi il verdetto. Tempo totale = N &times; tempo di una scansione." tabindex="0">?</span>
             </div>
 
-            <div class="separator"></div>
-
-            <div class="controls-group">
-                <span class="toggle-label">Profilo</span>
-                <select id="moveProfile" class="input" style="width:170px;" onchange="onMoveProfileChange();" data-tip="<strong>Profilo movimento stepper</strong>Controlla quanto &egrave; morbida la partenza/arrivo di ogni passo. Riduce vibrazioni meccaniche e risonanze del treno motore→albero. Pi&ugrave; morbido = pi&ugrave; lento (50-80% in pi&ugrave;) ma curva pi&ugrave; pulita.">
-                    <option value="0">Scattoso (rapido)</option>
-                    <option value="1" selected>Standard</option>
-                    <option value="2">Morbido</option>
-                    <option value="3">Extra-morbido (silenzioso)</option>
-                </select>
-                <span class="help-icon" data-tip="<strong>Anti-vibrazione</strong><b>Scattoso</b>: comportamento originale, max velocit&agrave;. Vibra a basse RPM.<br><b>Standard</b>: rampa accelerazione 4 step, +60% tempo, vibrazioni dimezzate. Consigliato per acquisizione.<br><b>Morbido</b>: rampa 8 step + pulse 120μs. Per camme delicate o sistemi rigidi che propagano risonanze.<br><b>Extra-morbido</b>: rampa 16 step + pulse 180μs. Per cogliere ogni dettaglio metrologico, sacrifica velocit&agrave;." tabindex="0">?</span>
-            </div>
-
-            <div class="controls-group">
-                <span class="toggle-label">Motore scansione</span>
-                <select id="scanEngine" class="input" style="width:175px;" data-tip="<strong>Chi esegue il ciclo di scansione</strong><b>Firmware</b> (consigliato, validato al banco): l'Arduino esegue l'intero giro in autonomia con <b>settle adattivo</b> (aspetta che il tastatore sia davvero fermo su ogni punto) e streama i campioni: timing deterministico, immune ai ritardi del PC.<br><b>Browser</b>: metodo classico un-comando-per-grado, utile come compatibilit&agrave; con firmware precedenti alla v3.">
-                    <option value="firmware" selected>Firmware (autonomo, consigliato)</option>
-                    <option value="browser">Browser (compatibilit&agrave;)</option>
-                </select>
-                <span class="help-icon" data-tip="<strong>Scan autonomo</strong>Validato al banco (07-05 e 07-11: profilo identico al classico entro 0,05 mm, 0 campioni persi). Se il firmware non &egrave; v3, entro 6 s compare l'avviso e puoi passare a Browser." tabindex="0">?</span>
-            </div>
-
-            <div class="controls-group">
+            <div class="adv-row">
                 <button type="button" class="btn btn-secondary btn-sm" onclick="benchVerifyStart();" data-tip="<strong>Verifica banco</strong>Controllo periodico della salute del banco: monta un <b>pezzo cilindrico rettificato</b> (alzata attesa = 0 ovunque), azzera il comparatore e premi. Una scansione Veloce misura il residuo: entro 0,02 mm RMS il banco &egrave; OK. L'esito (con data) compare in Home.">&#129514; Verifica banco</button>
             </div>
 
@@ -534,9 +514,9 @@ var _engineOnOpen = function(event) {
             sendSocket.send('c' + currentMode.samples + '\n');
             sendSocket.send('r' + currentMode.microsteps + '\n');
             sendSocket.send('w' + currentMode.settleMs + '\n');
-            // Invia anche il profilo movimento corrente (default k1=standard)
-            var moveSel = document.getElementById('moveProfile');
-            if (moveSel) sendSocket.send('k' + (parseInt(moveSel.value, 10) || 1) + '\n');
+            // Profilo movimento FISSO: Standard (k1). Il selettore a 4 profili
+            // è stato rimosso: era una scelta senza criterio per l'utente.
+            sendSocket.send('k1\n');
             // Ping immediato sensore + encoder per accendere subito i LED
             // (senza aspettare il prossimo tick di polling).
             setTimeout(function(){
@@ -1060,20 +1040,27 @@ function _startSingleRun(firstRun) {
     window._encStuck = false;
     if (config && config.data) { config.data.labels.length = 0; config.data.datasets.forEach(function(d){ d.data.length = 0; }); }
     if (window.myLine) { try { window.myLine.update(); } catch(e) {} }
-    var engSel = document.getElementById('scanEngine');
-    if (engSel && engSel.value === 'firmware') {
+    // MOTORE DI SCANSIONE AUTOMATICO (il selettore non esiste più): si usa
+    // sempre lo scan autonomo del firmware (validato al banco); se il
+    // firmware è pre-v3 e non risponde entro 6 s, si passa DA SOLI al
+    // metodo classico via browser e la scelta vale per tutta la sessione.
+    if (!window._engineFallback) {
         // SCAN AUTONOMO: il firmware esegue l'intero giro e streama i campioni.
         // Direzione coerente col percorso classico: rsign 1 → 'p' (dir −).
         autoScanActive = true; _autoLastIdx = 0; _autoGapWarned = false;
         i = 0;
         document.imp2.imp2.value = "  gradi  0.00";
         sendSocket.send('S' + (rsign == 1 ? '-' : '+') + currentMode.totalSteps + '\n');
-        // Guardia firmware vecchio: se in 6s non arriva nessun campione,
-        // probabilmente il firmware non supporta 'S' (serve v3).
+        // Guardia firmware vecchio: nessun campione in 6 s → fallback
+        // AUTOMATICO al metodo classico e scansione riavviata da capo.
         setTimeout(function () {
-            if (autoScanActive && _autoLastIdx === 0 && window.cammesToast) {
-                window.cammesToast({ kind: 'err', title: 'Nessun campione dal firmware',
-                    body: 'Il firmware potrebbe non supportare lo scan autonomo (serve v3). Torna a <b>Motore scansione = Browser</b> o ri-flasha master.ino.', duration: 8000 });
+            if (autoScanActive && _autoLastIdx === 0) {
+                autoScanActive = false;
+                startflag = 0;
+                window._engineFallback = true;
+                if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Firmware senza scan autonomo',
+                    body: 'Nessun campione in 6 s: passo al metodo classico (pi&ugrave; lento ma compatibile) e riparto. Consiglio: aggiorna il firmware dalla Home (&#9889; Aggiorna firmware Arduino).', duration: 9000 });
+                setTimeout(function () { _startSingleRun(true); }, 800);
             }
         }, 6000);
     } else {
@@ -1268,7 +1255,7 @@ function sav() {
     var metaTail = '#data=' + new Date().toISOString() + '\r\n' +
                    '#sw=' + (window.CAMMES_VERSION || '?') + '\r\n' +
                    '#modalita=' + ((document.getElementById('scanMode') || {}).value || '?') + '\r\n' +
-                   '#motore=' + ((document.getElementById('scanEngine') || {}).value || '?') + '\r\n' +
+                   '#motore=' + (window._engineFallback ? 'browser' : 'firmware') + '\r\n' +
                    '#picco=' + Number(max).toFixed(3) + '@' + maxg + '\r\n';
     if (window._lastRepeatStats && window._lastRepeatStats.runs > 1) {
         metaTail += '#runs=' + window._lastRepeatStats.runs + '\r\n' +
