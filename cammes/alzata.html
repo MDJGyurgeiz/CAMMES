@@ -247,6 +247,30 @@ var pdindex = new Array();
 var autoScanActive = false;    // true mentre il firmware sta eseguendo 'S...'
 var _autoLastIdx   = 0;        // ultimo indice di sequenza ricevuto (rileva buchi)
 var _autoGapWarned = false;
+
+// AUDIT MOT-01: registro dei timer di scansione + generation token.
+// Prima i setTimeout (riavvio run ripetuto a 1,5 s, fallback firmware a
+// 6 s + 800 ms) non erano salvati da nessuna parte: STOP azzerava i flag ma
+// il timer sopravviveva e faceva RIPARTIRE il motore da solo ~8 s dopo.
+// Ora: ogni timer di scansione passa da _scanTimeout() e viene sia
+// cancellato da stop() sia disinnescato dal token (doppia protezione).
+var _scanTimers = [];
+var _runGen = 0;
+function _scanTimeout(fn, ms) {
+    var gen = _runGen;
+    var id = setTimeout(function () {
+        var k = _scanTimers.indexOf(id); if (k >= 0) _scanTimers.splice(k, 1);
+        if (gen !== _runGen) return;   // STOP nel frattempo: callback morto
+        fn();
+    }, ms);
+    _scanTimers.push(id);
+    return id;
+}
+function _clearScanTimers() {
+    _runGen++;
+    for (var _ti = 0; _ti < _scanTimers.length; _ti++) clearTimeout(_scanTimers[_ti]);
+    _scanTimers.length = 0;
+}
 var msg = "";
 var startflag = 0;
 var stepflag = 0;
@@ -880,7 +904,8 @@ var _engineOnMessage = function(event) {
                         });
                     }
                     startflag = 0;
-                    setTimeout(function () { _startSingleRun(false); }, 1500);
+                    // timer registrato + token: STOP lo cancella (audit MOT-01)
+                    _scanTimeout(function () { _startSingleRun(false); }, 1500);
                     return;
                 }
 
@@ -1113,14 +1138,16 @@ function _startSingleRun(firstRun) {
         sendSocket.send('S' + (rsign == 1 ? '-' : '+') + currentMode.totalSteps + '\n');
         // Guardia firmware vecchio: nessun campione in 6 s → fallback
         // AUTOMATICO al metodo classico e scansione riavviata da capo.
-        setTimeout(function () {
+        // Timer registrati + token (audit MOT-01): uno STOP tra l'invio di 'S'
+        // e questi callback li disinnesca — prima riavviavano il motore da soli.
+        _scanTimeout(function () {
             if (autoScanActive && _autoLastIdx === 0) {
                 autoScanActive = false;
                 startflag = 0;
                 window._engineFallback = true;
                 if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Firmware senza scan autonomo',
                     body: 'Nessun campione in 6 s: passo al metodo classico (pi&ugrave; lento ma compatibile) e riparto. Consiglio: aggiorna il firmware dalla Home (&#9889; Aggiorna firmware Arduino).', duration: 9000 });
-                setTimeout(function () { _startSingleRun(true); }, 800);
+                _scanTimeout(function () { _startSingleRun(true); }, 800);
             }
         }, 6000);
     } else {
@@ -1174,6 +1201,11 @@ function stop() {
     if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1) {
         try { sendSocket.send('x'); } catch (e) {}
     }
+    // AUDIT MOT-01: cancella TUTTI i timer di scansione armati (riavvio run
+    // ripetuto, fallback firmware) e invalida il generation token — senza
+    // questo il motore poteva ripartire da solo ~8 s dopo lo STOP.
+    _clearScanTimers();
+    autoScanActive = false;   // niente *sabort se il firmware era già idle
     stepflag  = 1;
     startflag = 0;
     labms     = 0;     // annulla anche un eventuale 0 virtuale in corso

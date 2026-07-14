@@ -1,8 +1,8 @@
 {
-  "firmware": "3.3",
+  "firmware": "3.4",
   "sketch": "master/master.ino",
   "fqbn": "arduino:avr:uno",
-  "builtAt": "2026-07-13",
+  "builtAt": "2026-07-14",
   "avrdude": "8.0.0-arduino1",
-  "note": "3.3: audit stabilità (*sstat u=N a fine scan = punti accettati a budget scaduto). 3.2: fix overflow rotazioni >2047°. 3.1: STOP interrompibile ('x'->*mabort). Risposta a 'v': ver=3.3 scan=1"
+  "note": "3.4 (audit sicurezza moto): watchdog host durante i movimenti (nessun byte per 5s -> *wdt+abort; il server manda '\n' ogni 100ms), Concerto interrompibile con 'x' (*tabort, prima 10000 passi ciechi e STOP ingoiato), 'x' a motore fermo consumato subito (prima avvelenava cmdBuf). 3.3: audit stabilità (*sstat u=N a fine scan = punti accettati a budget scaduto). 3.2: fix overflow rotazioni >2047°. 3.1: STOP interrompibile ('x'->*mabort). Risposta a 'v': ver=3.4 scan=1"
 }

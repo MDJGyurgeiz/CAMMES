@@ -119,6 +119,15 @@ volatile uint8_t encoderState  = 0;   // (A<<1)|B
 char    cmdBuf[16];
 uint8_t cmdLen = 0;
 
+// AUDIT FW-03: watchdog dell'host. Il server invia un keep-alive '\n' ogni
+// secondo; se durante un MOVIMENTO non arriva alcun byte per WDT_TIMEOUT_MS
+// (cavo USB staccato, PC/server morto) il moto viene abortito ("*wdt").
+// A motore fermo il watchdog non agisce. Nota per l'uso con terminale
+// seriale manuale: durante un movimento lungo va inviato un carattere
+// qualsiasi entro 5 s, altrimenti il firmware ferma per sicurezza.
+uint32_t lastRxMs = 0;
+const uint32_t WDT_TIMEOUT_MS = 5000;
+
 // ---- Config runtime ----
 uint8_t  cfgSamples       = 1;   // campioni per misura (1..9)
 uint8_t  cfgStepsPerUnit  = DEFAULT_STEPS_PER_UNIT;  // micropassi per p/q
@@ -211,11 +220,20 @@ bool stepperMove(int16_t units) {
       // il gestore '$' li scartava comunque in blocco a fine movimento.
       while (Serial.available()) {
         char cc = (char)Serial.read();
+        lastRxMs = millis();
         if (cc == 'x') {
           Serial.println(F("*mabort"));
           if (cfgSettleMs) delay(cfgSettleMs);
           return false;
         }
+      }
+      // AUDIT FW-03: host muto durante il moto (cavo/PC/server morti) →
+      // abort di sicurezza. Il server invia '\n' ogni secondo, quindi in
+      // esercizio normale qui non si arriva mai.
+      if ((uint32_t)(millis() - lastRxMs) > WDT_TIMEOUT_MS) {
+        Serial.println(F("*wdt"));
+        Serial.println(F("*mabort"));
+        return false;
       }
     }
     // Delay extra in funzione della posizione nella rampa
@@ -374,7 +392,9 @@ void autonomousScan(int8_t dir, uint16_t totalUnits) {
   for (uint16_t i = 1; i <= totalUnits; i++) {
     // abort: qualunque 'x' arrivato dal PC ferma la scansione
     while (Serial.available() > 0) {
-      if (Serial.read() == 'x') {
+      char sc = (char)Serial.read();
+      lastRxMs = millis();
+      if (sc == 'x') {
         Serial.println(F("*sabort"));
         cmdLen = 0;
         return;
@@ -412,6 +432,13 @@ void executeCommand() {
     char c = cmdBuf[0];
     if (c == 'p')      { if (stepperMove(-1)) emitMeasureScan(readSensorMm()); }
     else if (c == 'q') { if (stepperMove(+1)) emitMeasureScan(readSensorMm()); }
+    else if (c == 'x') {
+      // STOP ricevuto a motore FERMO: niente da fermare, ma va consumato.
+      // Scoperto in verifica audit: prima 'x' non era un comando riconosciuto
+      // e restava in cmdBuf AVVELENANDO la riga successiva ("xS-360" veniva
+      // scartata) → il browser scambiava il silenzio per firmware vecchio e
+      // degradava PER SEMPRE al motore di scansione classico.
+    }
     else if (c == 'm') { emitMeasureOnly(readSensorMm()); }
     else if (c == 'd') {
       // debug: dump raw sensor value (16 bit utili)
@@ -430,7 +457,7 @@ void executeCommand() {
     else if (c == 'v') {
       // Versione/capacità firmware: il browser la usa per abilitare le
       // funzioni disponibili (scan=1 → scan autonomo 'S' supportato).
-      Serial.println(F("ver=3.3 scan=1"));
+      Serial.println(F("ver=3.4 scan=1"));
       Serial.println(F("*ver"));
     }
     else if (c == '!') {
@@ -534,7 +561,22 @@ void executeCommand() {
         uint32_t lowUs    = periodUs > highUs ? periodUs - highUs : 5;
         // Step totali = freq * dur / 1000
         uint32_t totalSteps = ((uint32_t)freq * (uint32_t)dur) / 1000UL;
-        for (uint32_t s = 0; s < totalSteps; s++) {
+        // AUDIT FW-02: questo era l'UNICO percorso di moto non interrompibile
+        // (fino a 10.000 passi ≈ 312° senza mai guardare la seriale) e il
+        // drain di fine nota INGOIAVA in silenzio uno STOP arrivato durante
+        // la nota. Ora: check di 'x' ogni 16 passi (come stepperMove) con
+        // "*tabort", e il drain finale preserva un eventuale 'x' ritardatario.
+        bool tAborted = false;
+        for (uint32_t s = 0; s < totalSteps && !tAborted; s++) {
+          if ((s & 15) == 0) {
+            while (Serial.available()) {
+              char tc = (char)Serial.read();
+              lastRxMs = millis();
+              if (tc == 'x') { tAborted = true; break; }
+            }
+            if (!tAborted && (uint32_t)(millis() - lastRxMs) > WDT_TIMEOUT_MS) tAborted = true;  // FW-03
+            if (tAborted) break;
+          }
           digitalWrite(PIN_PUL, HIGH);
           uint32_t h = highUs;
           while (h > 10000) { delayMicroseconds(10000); h -= 10000; }
@@ -544,8 +586,19 @@ void executeCommand() {
           while (h > 10000) { delayMicroseconds(10000); h -= 10000; }
           if (h) delayMicroseconds(h);
         }
+        if (tAborted) {
+          while (Serial.available() > 0) { Serial.read(); lastRxMs = millis(); }
+          Serial.println(F("*tabort"));
+          cmdLen = 0;
+          return;
+        }
       }
-      while (Serial.available() > 0) Serial.read();
+      // drain: scarta i comandi accodati durante la nota MA non lo STOP
+      while (Serial.available() > 0) {
+        char dc = (char)Serial.read();
+        lastRxMs = millis();
+        if (dc == 'x') { Serial.println(F("*tabort")); }
+      }
       Serial.println(F("*tend"));
     }
   } else if (cmdLen >= 2 && cmdBuf[0] == 'S') {
@@ -607,12 +660,15 @@ void setup() {
 void loop() {
   while (Serial.available() > 0) {
     char c = Serial.read();
+    lastRxMs = millis();                                // watchdog host (FW-03)
     if (c == '\r' || c == '\n') {
       if (cmdLen > 0) executeCommand();
     } else if (cmdLen < sizeof(cmdBuf) - 1) {
       cmdBuf[cmdLen++] = c;
       // comandi a singolo carattere si eseguono immediatamente
-      if (cmdLen == 1 && (c == 'p' || c == 'q' || c == 'm' || c == 'd' || c == '?' || c == '!' || c == '@' || c == 'f' || c == 'l' || c == 'v')) {
+      // ('x' incluso: a motore fermo è un no-op consumato subito, così non
+      // avvelena il buffer della riga successiva — fix audit)
+      if (cmdLen == 1 && (c == 'p' || c == 'q' || c == 'm' || c == 'd' || c == '?' || c == '!' || c == '@' || c == 'f' || c == 'l' || c == 'v' || c == 'x')) {
         executeCommand();
       }
     } else {
