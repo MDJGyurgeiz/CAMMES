@@ -2268,6 +2268,11 @@ function importIntake() {
                 body: 'Solo ' + (camLift.validCount || 0) + ' righe valide "grado,alzata": il file non sembra una misura CAMMES.', duration: 8000 });
             return;
         }
+        // AUDIT MET-01: un run salvato incompleto ora si dichiara da solo
+        if ((camLift.meta && camLift.meta.stato === 'INCOMPLETO') || camLift.missingCount > 0) {
+            if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura INCOMPLETA caricata (aspirazione)',
+                body: (camLift.missingCount || camLift.meta.gradiMancanti || '?') + ' gradi senza lettura (riempiti a 0): durate, aree e verdetti possono essere falsati. Usala solo per un\'occhiata, non per un confronto.', duration: 10000 });
+        }
         window._metaIn = camLift.meta || {};               // metadati #k=v (data, runs, sigma…)
         rawIntake = camLift.slice();                       // grezzo gradi-camma (sorgente)
         camLift = applyVirtualFollower(camLift, 'intake');
@@ -2309,6 +2314,11 @@ function importExhaust() {
             if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'File non riconosciuto',
                 body: 'Solo ' + (camLift.validCount || 0) + ' righe valide "grado,alzata": il file non sembra una misura CAMMES.', duration: 8000 });
             return;
+        }
+        // AUDIT MET-01: un run salvato incompleto ora si dichiara da solo
+        if ((camLift.meta && camLift.meta.stato === 'INCOMPLETO') || camLift.missingCount > 0) {
+            if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura INCOMPLETA caricata (scarico)',
+                body: (camLift.missingCount || camLift.meta.gradiMancanti || '?') + ' gradi senza lettura (riempiti a 0): durate, aree e verdetti possono essere falsati. Usala solo per un\'occhiata, non per un confronto.', duration: 10000 });
         }
         window._metaEx = camLift.meta || {};               // metadati #k=v (data, runs, sigma…)
         rawExhaust = camLift.slice();                      // grezzo gradi-camma (sorgente)

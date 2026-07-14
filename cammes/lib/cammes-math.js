@@ -718,58 +718,34 @@ function convertPuntToFinger(camLiftRaw, rBase, lArm, lValve, rPunt, tiltDeg) {
 // ========== HELPER: Map cam degrees to crankshaft degrees ==========
 
 // Mappa 360 punti camma (1 grado/step) → 720 punti albero motore (0.5 deg/step).
-// Per ogni grado camma d (1..360), p_crank = d*2 ± angle (intake: -, exhaust: +).
-// Slot non popolati direttamente sono interpolati linearmente dai vicini.
+// Relazione diretta: p_crank = d*2 ± angle (intake: -, exhaust: +).
 //
-// FIX bug rev. 2026-05-23: la versione precedente usava cascate di if con
-// limiti arbitrari (es. "p > 0 && p < 3" wrap manuale) che producevano slot
-// non popolati per certi valori dispari di 'angle'. Sostituito con
-// modulo wrap720() esplicito che gestisce qualunque input in [-Inf, +Inf].
+// FIX audit MAT-01 (2026-07-14): la versione "diretta" scriveva crank[p] con
+// p = d*2 ± angle; con angle frazionario (es. centro lobo 106.5°, che la UI
+// accetta) p diventava frazionario → proprietà stringa ignorate dall'array →
+// curva completamente azzerata IN SILENZIO. Ora la mappatura è INVERSA: per
+// ogni slot crank intero p si calcola il grado camma d = (p ± angle)/2 e si
+// legge camLift interpolato linearmente (circolare). Funziona con qualunque
+// angle reale e per gli angle interi coincide con la vecchia mappatura.
 function mapCamToCrank(camLift, angle, clearance, type) {
     var crank = new Array(722);
     for (var j = 0; j <= 721; j++) crank[j] = 0;
 
-    // Parity di 'angle' determina quali slot crank vengono popolati direttamente:
-    //   angle pari → solo p = d*2 ± pari = pari → slot pari 2,4,..720 popolati
-    //   angle dispari → slot dispari 1,3,..719 popolati
-    // L'altra metà degli slot viene interpolata sotto.
-    var s = 1;
-    if (Math.floor(angle / 2) === angle / 2) s = 0;
-
-    // Wrap di p in [1..720] qualunque sia il valore (gestisce negativi e > 720).
-    function wrap720(p) {
-        return ((p - 1) % 720 + 720) % 720 + 1;
+    // Lettura circolare di camLift a grado frazionario (interpolazione lineare)
+    function camAt(d) {
+        d = ((d - 1) % 360 + 360) % 360 + 1;      // wrap in [1..360]
+        var d0 = Math.floor(d), frac = d - d0;
+        if (frac < 1e-9) return camLift[d0] || 0;
+        var d1 = (d0 % 360) + 1;
+        return (camLift[d0] || 0) * (1 - frac) + (camLift[d1] || 0) * frac;
     }
 
-    for (var d = 1; d <= 360; d++) {
-        var p;
-        if (type === 'intake') {
-            p = d * 2 - angle;
-        } else {
-            p = d * 2 + angle;
-        }
-        p = wrap720(p);
-
-        var lift = camLift[d] - clearance;
+    for (var p = 1; p <= 720; p++) {
+        var d = (type === 'intake') ? (p + angle) / 2 : (p - angle) / 2;
+        var lift = camAt(d) - clearance;
         if (lift < 0) lift = 0;
         crank[p] = lift;
     }
-
-    // Interpolazione lineare degli slot non popolati direttamente.
-    // Se s=1 (angle dispari) gli slot popolati sono dispari 1,3,..719;
-    // interpoliamo i pari 2,4,..720. Se s=0, viceversa.
-    for (var z = 5 - s; z <= 720; z += 2) {
-        var prev = z - 1, next = z + 1;
-        if (prev < 1) prev = 720;
-        if (next > 720) next = 1;
-        var interp = (crank[prev] + crank[next]) / 2;
-        if (interp < 0) interp = 0;
-        crank[z] = interp;
-    }
-    if (s === 0) {
-        crank[1] = (crank[720] + crank[2]) / 2;
-    }
-
     return crank;
 }
 
@@ -785,7 +761,8 @@ function parseCamFile(text) {
     var camLift = new Array(361);
     var meta = {};
     var valid = 0;
-    for (var z = 1; z <= 360; z++) camLift[z] = 0;
+    var covered = new Array(361);
+    for (var z = 1; z <= 360; z++) { camLift[z] = 0; covered[z] = false; }
     for (var r = 0; r < righe.length; r++) {
         var line = righe[r].trim();
         if (!line) continue;
@@ -809,11 +786,57 @@ function parseCamFile(text) {
         if (!isFinite(deg) || !isFinite(val)) continue;
         if (deg < 1 || deg > 360) continue;
         camLift[deg] = val;
-        valid++;
+        if (!covered[deg]) { covered[deg] = true; valid++; }   // gradi UNICI (audit MAT-07)
     }
     camLift.meta = meta;
+    // validCount = gradi 1..360 realmente coperti da una riga valida (non il
+    // numero di righe: 360 righe sullo stesso grado contavano 360 — MAT-07).
+    // missingCount/covered rendono un run incompleto riconoscibile alla
+    // rilettura: i gradi mancanti restano 0 nell'array per compatibilità, ma
+    // il chiamante ora può distinguerli da uno zero misurato (audit MET-01).
     camLift.validCount = valid;
+    camLift.missingCount = 360 - valid;
+    camLift.covered = covered;
     return camLift;
+}
+
+// ---- VERIFICA BANCO (audit MET-02): verdetto di salute su pezzo cilindrico --
+// pdata[1..360] = letture sul cilindro rettificato (alzata attesa 0 ovunque).
+// REGOLA: un campione mancante o invalido non può MAI migliorare l'esito.
+// Prima il chiamante faceva Number(x)||0: un punto perso diventava 0 =
+// "perfetto" proprio dove il banco poteva essere difettoso → falso PASS.
+// Qui: qualunque buco/NaN/fuori scala → 'NON_VALUTABILE' (né PASS né FAIL).
+// L'eccentricità di montaggio viene tolta (removeCamBaseline): non è colpa
+// del banco. Ritorna { status, rms, max, covered, missing }.
+function benchVerdict(pdata, thresholds) {
+    var thr = thresholds || {};
+    var rmsMax = (typeof thr.rms === 'number') ? thr.rms : 0.02;
+    var absMax = (typeof thr.max === 'number') ? thr.max : 0.05;
+    var vals = new Array(361), covered = 0, missing = 0, i;
+    vals[0] = 0;
+    for (i = 1; i <= 360; i++) {
+        var v = Number(pdata[i]);
+        // valido = numerico e fisicamente plausibile per un residuo su cilindro
+        // (il LM339N con ingresso flottante produce numeri casuali fuori scala)
+        if (isFinite(v) && v > -1 && v < 32) { vals[i] = v; covered++; }
+        else { vals[i] = null; missing++; }
+    }
+    if (missing > 0) {
+        return { status: 'NON_VALUTABILE', rms: NaN, max: NaN, covered: covered, missing: missing };
+    }
+    var arr = vals;
+    try { arr = removeCamBaseline(vals); } catch (e) {}
+    var sq = 0, mx = 0;
+    for (i = 1; i <= 360; i++) {
+        var a = Math.abs(Number(arr[i]) || 0);
+        sq += a * a;
+        if (a > mx) mx = a;
+    }
+    var rms = Math.sqrt(sq / 360);
+    return {
+        status: (rms <= rmsMax && mx <= absMax) ? 'OK' : 'FAIL',
+        rms: rms, max: mx, covered: covered, missing: 0
+    };
 }
 
 // ========== FILE IMPORT ==========
@@ -943,6 +966,7 @@ var api = {
     convertPuntToFinger: convertPuntToFinger,
     mapCamToCrank: mapCamToCrank,
     parseCamFile: parseCamFile,
+    benchVerdict: benchVerdict,
     simulateCompliance: simulateCompliance,
     simulateCompliance2DOF: simulateCompliance2DOF,
     simulateCompliance3DOF: simulateCompliance3DOF,

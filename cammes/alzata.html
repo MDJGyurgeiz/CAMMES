@@ -698,7 +698,14 @@ var _engineOnMessage = function(event) {
                 liveTraceAddPoint(msg);
             }
         } else {
-            msg = "0.00";
+            // AUDIT MET-01: prima qui msg diventava "0.00" e la lettura invalida
+            // finiva nel profilo come ZERO FISICO (invisibile sul cerchio base,
+            // "dente" a 0 sul fianco del lobo). Ora resta NaN: il bin non viene
+            // scritto e il run viene dichiarato incompleto a fine giro.
+            msg = "NaN";
+            if (typeof startflag !== 'undefined' && startflag === 1) {
+                window._invalidTotal = (window._invalidTotal || 0) + 1;
+            }
             document.cpot.cpot.value = "NO SENSORE";
             // Auto-stop dopo N misure INVALIDE consecutive (NaN o fuori scala):
             // ferma anche il firmware ('x' dentro stop()) e lo dice CHIARO.
@@ -727,8 +734,13 @@ var _engineOnMessage = function(event) {
             if (deg > 360) deg = 360;
             var v = Number(msg);
             if (currentMode.subStepsPerDeg <= 1) {
-                pdindex[deg] = deg;
-                pdata[deg]   = v;
+                // AUDIT MET-01: una lettura invalida NON scrive il bin (prima
+                // ci finiva 0). Il grado resta senza dato e viene conteggiato
+                // come mancante a fine giro e al salvataggio.
+                if (isFinite(v)) {
+                    pdindex[deg] = deg;
+                    pdata[deg]   = v;
+                }
             } else {
                 if (!subBuffer[deg]) subBuffer[deg] = [];
                 if (!isNaN(v)) subBuffer[deg].push(v);
@@ -774,6 +786,24 @@ var _engineOnMessage = function(event) {
             // stessa quota (~0) in tutte e due. Se il minimo della prima metà
             // e quello della seconda divergono, lo zero del comparatore è
             // derivato o il pezzo si è mosso durante la misura.
+            // AUDIT MET-01: run incompleto DICHIARATO. Conta i gradi 1..360
+            // senza lettura valida (letture invalide scartate + frame persi
+            // dello streaming): se ce ne sono, lo dice subito e marca il run —
+            // sav() chiederà conferma e scriverà i metadati di stato.
+            window._runMissing = 0;
+            if (labms !== 1) {
+                for (var _dm = 1; _dm <= 360; _dm++) {
+                    if (!isFinite(Number(pdata[_dm]))) window._runMissing++;
+                }
+                if (window._runMissing > 0 && window.cammesToast) {
+                    window.cammesToast({
+                        kind: 'err', title: 'Misura INCOMPLETA: ' + window._runMissing + ' gradi senza lettura',
+                        body: (window._invalidTotal ? window._invalidTotal + ' letture invalide scartate. ' : '') +
+                              'Il profilo ha dei buchi: NON usarlo per un confronto. Controlla comparatore e cavi e ripeti la misura.',
+                        duration: 12000
+                    });
+                }
+            }
             // (Indipendente dal punto di partenza: non confronta angoli
             // adiacenti, che su un fianco ripido differirebbero legittimamente.)
             if (labms !== 1) {
@@ -792,29 +822,41 @@ var _engineOnMessage = function(event) {
                 }
             }
             // === VERIFICA BANCO: pezzo cilindrico → il residuo È l'errore del banco ===
+            // AUDIT MET-02: il verdetto vive in lib/cammes-math.js (benchVerdict)
+            // ed è testato da tools/test_misura_affidabile.js. Un campione perso
+            // NON conta più come zero "perfetto": qualunque buco → NON VALUTABILE
+            // (prima Number(x)||0 poteva produrre un falso PASS proprio dove il
+            // banco era difettoso). E il toast dice "salvato" solo se il server
+            // ha davvero risposto ok (prima lo affermava anche a POST fallita).
             if (labms !== 1 && window._benchVerify) {
                 window._benchVerify = false;
-                var _bvArr = new Array(361);
-                for (var _b = 1; _b <= 360; _b++) _bvArr[_b] = Number(pdata[_b]) || 0;
-                // togli l'eccentricità di montaggio (non è colpa del banco)
-                try { if (typeof removeCamBaseline === 'function') _bvArr = removeCamBaseline(_bvArr); } catch (eBv) {}
-                var _bvSq = 0, _bvMax = 0, _bvN = 0;
-                for (var _b2 = 1; _b2 <= 360; _b2++) {
-                    var _bv = Math.abs(Number(_bvArr[_b2]) || 0);
-                    _bvSq += _bv * _bv; _bvN++;
-                    if (_bv > _bvMax) _bvMax = _bv;
+                var _bv = window.benchVerdict(pdata);
+                if (_bv.status === 'NON_VALUTABILE') {
+                    if (window.cammesToast) window.cammesToast({
+                        kind: 'err', title: 'Verifica banco: NON VALUTABILE',
+                        body: _bv.missing + ' gradi su 360 senza lettura valida: un test di salute con dei buchi non certifica niente (un campione perso conterebbe come "perfetto" proprio dove il banco pu&ograve; essere difettoso). Controlla comparatore e cavi e ripeti. Nessun esito salvato.',
+                        duration: 12000
+                    });
+                } else {
+                    var _bvPass = _bv.status === 'OK';
+                    if (window.cammesToast) window.cammesToast({
+                        kind: _bvPass ? 'success' : 'err',
+                        title: _bvPass ? 'Verifica banco: SUPERATA' : 'Verifica banco: NON SUPERATA',
+                        body: 'Residuo sul cilindro (tolta l\'eccentricit&agrave;): RMS ' + _bv.rms.toFixed(3) + ' mm, max ' + _bv.max.toFixed(3) +
+                              ' mm (soglie: 0,020 / 0,050).' + (_bvPass ? '' : ' Controlla gioco supporti, squadra comparatore, corrente driver.'),
+                        duration: 12000
+                    });
+                    fetch('/api/settings', { method: 'POST', body: JSON.stringify({ verificaBanco: {
+                        date: new Date().toISOString(), rms: Number(_bv.rms.toFixed(4)), max: Number(_bv.max.toFixed(4)), pass: _bvPass } }) })
+                        .then(function (r) {
+                            if (r.ok) {
+                                if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Esito archiviato', body: 'La verifica banco con data &egrave; visibile in Home.', duration: 4000 });
+                            } else { throw new Error('HTTP ' + r.status); }
+                        })
+                        .catch(function (eSv) {
+                            if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Esito NON archiviato', body: 'Il verdetto qui sopra vale, ma il salvataggio in Home &egrave; fallito (' + eSv.message + ').', duration: 8000 });
+                        });
                 }
-                var _bvRms = Math.sqrt(_bvSq / (_bvN || 1));
-                var _bvPass = _bvRms <= 0.02 && _bvMax <= 0.05;
-                fetch('/api/settings', { method: 'POST', body: JSON.stringify({ verificaBanco: {
-                    date: new Date().toISOString(), rms: Number(_bvRms.toFixed(4)), max: Number(_bvMax.toFixed(4)), pass: _bvPass } }) }).catch(function () {});
-                if (window.cammesToast) window.cammesToast({
-                    kind: _bvPass ? 'success' : 'err',
-                    title: _bvPass ? 'Verifica banco: SUPERATA' : 'Verifica banco: NON SUPERATA',
-                    body: 'Residuo sul cilindro (tolta l\'eccentricit&agrave;): RMS ' + _bvRms.toFixed(3) + ' mm, max ' + _bvMax.toFixed(3) +
-                          ' mm (soglie: 0,020 / 0,050).' + (_bvPass ? ' Esito salvato: lo vedi in Home.' : ' Controlla gioco supporti, squadra comparatore, corrente driver.'),
-                    duration: 12000
-                });
                 startflag = 0;
                 var _bvSm = document.getElementById('scanMode'); if (_bvSm) _bvSm.disabled = false;
                 return;
@@ -1051,6 +1093,8 @@ function _startSingleRun(firstRun) {
     max = 0; maxg = 0; maxg_encoder = null;
     window._lastRepeatStats = null;   // le statistiche valgono solo per il run corrente
     window._lastUnstable = 0;         // audit stabilità del run corrente
+    window._invalidTotal = 0;         // letture invalide scartate (audit MET-01)
+    window._runMissing = 0;           // gradi senza dato a fine run (audit MET-01)
     // Reset controllo divergenza stepper↔encoder per questo run
     _encChkBaseI = 0; _encChkBaseCount = null; _encAlarmed = false;
     window._encStuck = false;
@@ -1255,9 +1299,23 @@ function sav() {
     // entro 1° sull'intero giro, quindi l'opzione di re-indicizzazione encoder è
     // stata ritirata dalla UI (l'encoder resta in uso per zero virtuale, reset
     // e allarme slittamento; reindexByEncoder vive in lib/cammes-math.js).
+    // AUDIT MET-01: si scrivono SOLO i gradi con lettura valida — prima i bin
+    // mai riempiti finivano nel file come "undefined,undefined" e alla
+    // rilettura diventavano zeri indistinguibili da misure vere. I gradi
+    // mancanti vengono contati e dichiarati nei metadati (#stato/#gradiMancanti).
     stringa = "";
-    for (t = 1; t < pdindex.length; t++) {
-        stringa = stringa + pdindex[t] + "," + pdata[t] + "\r\n";
+    var _missingSave = 0;
+    for (t = 1; t <= 360; t++) {
+        var _svv = Number(pdata[t]);
+        if (isFinite(_svv)) { stringa = stringa + t + "," + pdata[t] + "\r\n"; }
+        else { _missingSave++; }
+    }
+    if (_missingSave > 0) {
+        if (!confirm('ATTENZIONE: misura INCOMPLETA\n\n' + _missingSave + ' gradi su 360 sono senza lettura valida.\n' +
+                     'Il file verrà marcato #stato=INCOMPLETO e NON va usato per confronti.\n\nSalvare comunque?')) {
+            document.salva.salva.value = " annullato";
+            return;
+        }
     }
     var fname = safeName + "_alz";
     // Salvataggio via HTTP POST con ACK REALE dal server: il vecchio invio
@@ -1280,6 +1338,13 @@ function sav() {
     }
     if (window._lastUnstable > 0) {
         metaTail += '#puntiInstabili=' + window._lastUnstable + '\r\n';
+    }
+    if (_missingSave > 0) {
+        metaTail += '#stato=INCOMPLETO\r\n' +
+                    '#gradiMancanti=' + _missingSave + '\r\n';
+    }
+    if (window._invalidTotal > 0) {
+        metaTail += '#lettureInvalide=' + window._invalidTotal + '\r\n';
     }
     var body = "_pline\r\n" + stringa + metaTail;
     var doSave = function () {
