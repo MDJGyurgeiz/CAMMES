@@ -717,17 +717,49 @@ function convertPuntToFinger(camLiftRaw, rBase, lArm, lValve, rPunt, tiltDeg) {
 
 // ========== HELPER: Map cam degrees to crankshaft degrees ==========
 
-// Mappa 360 punti camma (1 grado/step) → 720 punti albero motore (0.5 deg/step).
-// Relazione diretta: p_crank = d*2 ± angle (intake: -, exhaust: +).
+// Posizione del picco del lobo in gradi-camma, con risoluzione SUB-GRADO
+// (fit parabolico sui tre punti attorno al massimo, circolare). È il
+// riferimento fisico della fase: lo zero di scansione è arbitrario (dipende
+// da dove l'operatore ha azzerato), il naso del lobo no (audit MAT-02).
+function camPeakPos(camLift) {
+    var m = 1, best = -Infinity, d;
+    for (d = 1; d <= 360; d++) {
+        var v = Number(camLift[d]);
+        if (isFinite(v) && v > best) { best = v; m = d; }
+    }
+    if (!(best > 0)) return 180;                        // profilo piatto: neutro
+    var prev = ((m - 2) % 360 + 360) % 360 + 1;
+    var next = (m % 360) + 1;
+    var y0 = Number(camLift[prev]) || 0, y1 = best, y2 = Number(camLift[next]) || 0;
+    var den = y0 - 2 * y1 + y2;
+    var delta = (den < -1e-12 || den > 1e-12) ? 0.5 * (y0 - y2) / den : 0;
+    if (delta > 0.5) delta = 0.5;
+    if (delta < -0.5) delta = -0.5;
+    return m + delta;
+}
+
+// Centri lobo EFFETTIVI con anticipo applicato (audit MAT-04): montare la
+// camma con adv gradi di anticipo sposta l'aspirazione più vicina al PMS
+// (centro ATDC ridotto) e lo scarico più lontano (centro BTDC aumentato).
+function effectiveCenters(intakeCenter, exhaustCenter, advance) {
+    var adv = Number(advance) || 0;
+    return { intake: Number(intakeCenter) - adv, exhaust: Number(exhaustCenter) + adv };
+}
+
+// Mappa 360 punti camma (1 grado/step) → 720 punti albero motore (0.5°/slot).
+// CONVENZIONE (= etichette della UI, audit MAT-03): asse albero 1..720 con
+// PMS incrocio all'indice 360; aspirazione = centro lobo centerDeg gradi DOPO
+// il PMS (picco a 360+centerDeg), scarico = centerDeg gradi PRIMA (360-centerDeg).
+// La fase è agganciata al PICCO MISURATO (camPeakPos, sub-grado): due scansioni
+// dello stesso lobo con zeri diversi danno la stessa curva mappata (MAT-02).
+// centerDeg è il centro EFFETTIVO (già comprensivo di anticipo — MAT-04:
+// i chiamanti lo ottengono da effectiveCenters()).
 //
-// FIX audit MAT-01 (2026-07-14): la versione "diretta" scriveva crank[p] con
-// p = d*2 ± angle; con angle frazionario (es. centro lobo 106.5°, che la UI
-// accetta) p diventava frazionario → proprietà stringa ignorate dall'array →
-// curva completamente azzerata IN SILENZIO. Ora la mappatura è INVERSA: per
-// ogni slot crank intero p si calcola il grado camma d = (p ± angle)/2 e si
-// legge camLift interpolato linearmente (circolare). Funziona con qualunque
-// angle reale e per gli angle interi coincide con la vecchia mappatura.
-function mapCamToCrank(camLift, angle, clearance, type) {
+// FIX audit MAT-01 (2026-07-14): mappatura INVERSA con interpolazione — la
+// versione diretta scriveva crank[d*2±angle] e con centri frazionari (che la
+// UI accetta a step 0.5) produceva indici frazionari → curva azzerata in
+// silenzio. Ora per ogni slot intero p si legge camLift interpolato.
+function mapCamToCrank(camLift, centerDeg, clearance, type) {
     var crank = new Array(722);
     for (var j = 0; j <= 721; j++) crank[j] = 0;
 
@@ -740,8 +772,11 @@ function mapCamToCrank(camLift, angle, clearance, type) {
         return (camLift[d0] || 0) * (1 - frac) + (camLift[d1] || 0) * frac;
     }
 
+    var dPk = camPeakPos(camLift);
+    var pCenter = (type === 'intake') ? 360 + Number(centerDeg) : 360 - Number(centerDeg);
     for (var p = 1; p <= 720; p++) {
-        var d = (type === 'intake') ? (p + angle) / 2 : (p - angle) / 2;
+        // 1 grado camma = 2 gradi albero; ordine temporale preservato
+        var d = dPk + (p - pCenter) / 2;
         var lift = camAt(d) - clearance;
         if (lift < 0) lift = 0;
         crank[p] = lift;
@@ -965,6 +1000,8 @@ var api = {
     convertPuntToRoller: convertPuntToRoller,
     convertPuntToFinger: convertPuntToFinger,
     mapCamToCrank: mapCamToCrank,
+    camPeakPos: camPeakPos,
+    effectiveCenters: effectiveCenters,
     parseCamFile: parseCamFile,
     benchVerdict: benchVerdict,
     simulateCompliance: simulateCompliance,

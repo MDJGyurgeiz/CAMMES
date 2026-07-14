@@ -2279,8 +2279,9 @@ function importIntake() {
         folIntake = camLift.slice();
         var angle = Number(document.getElementById('intakeAngle').value);
         var clearance = Number(document.getElementById('intakeClearance').value);
+        var advIn = Number((document.getElementById('advance') || {}).value) || 0;
 
-        crankIntake = mapCamToCrank(camLift, angle, clearance, 'intake');
+        crankIntake = mapCamToCrank(camLift, effectiveCenters(angle, angle, advIn).intake, clearance, 'intake');
 
         var mx = findMax(crankIntake);
         intakeMaxLift = mx.lift;
@@ -2326,8 +2327,9 @@ function importExhaust() {
         folExhaust = camLift.slice();
         var angle = Number(document.getElementById('exhaustAngle').value);
         var clearance = Number(document.getElementById('exhaustClearance').value);
+        var advEx = Number((document.getElementById('advance') || {}).value) || 0;
 
-        crankExhaust = mapCamToCrank(camLift, angle, clearance, 'exhaust');
+        crankExhaust = mapCamToCrank(camLift, effectiveCenters(angle, angle, advEx).exhaust, clearance, 'exhaust');
 
         var mx = findMax(crankExhaust);
         exhaustMaxLift = mx.lift;
@@ -2823,13 +2825,16 @@ function analyze() {
     // folIntake/folExhaust = profilo gradi-camma post-follower (pre-gioco),
     // usato per l'alzata al PMS riferita al picco misurato.
     window._lastBaselineAmp = 0;   // ricalcolata da removeCamBaseline (max dei due lati)
+    // AUDIT MAT-04: l'anticipo entra nella mappatura tramite i centri EFFETTIVI
+    // (prima veniva raccolto ma le curve restavano non fasate).
+    var _ecA = effectiveCenters(intakeAng, exhaustAng, adv);
     if (rawIntake && rawIntake.length) {
         folIntake   = applyVirtualFollower(analysisRaw(rawIntake), 'intake');
-        crankIntake = mapCamToCrank(folIntake, intakeAng, intakeClear, 'intake');
+        crankIntake = mapCamToCrank(folIntake, _ecA.intake, intakeClear, 'intake');
     }
     if (rawExhaust && rawExhaust.length) {
         folExhaust   = applyVirtualFollower(analysisRaw(rawExhaust), 'exhaust');
-        crankExhaust = mapCamToCrank(folExhaust, exhaustAng, exhaustClear, 'exhaust');
+        crankExhaust = mapCamToCrank(folExhaust, _ecA.exhaust, exhaustClear, 'exhaust');
     }
     // Avviso (una volta) se la correzione baseline ha tolto un'eccentricità reale
     if (baselineEnabled() && window._lastBaselineAmp > 0.05 && window.cammesToast && !window._baselineToastShown) {
@@ -2873,35 +2878,32 @@ function analyze() {
     var asymIn = computeLobeAsymmetry(anlIn, mxIn.idx);
     var asymEx = computeLobeAsymmetry(anlEx, mxEx.idx);
 
-    // Alzata al PMS (overlap TDC) — RIFERITA AL PICCO MISURATO del lobo, non
-    // all'origine arbitraria della scansione (la vecchia anlIn[361] campionava
-    // un punto fisso scollegato dal lobo → numero privo di senso fisico).
-    // Il centro lobo (intakeAngle/exhaustAngle) è in gradi MOTORE; 1°camma =
-    // 2°motore → offset in gradi-camma = angolo/2. A |centro lobo| dal naso la
-    // valvola è alla quota di incrocio al PMS. Campiono il fianco di salita
-    // (dato più pulito; lobo ~simmetrico → fianco apertura ≈ chiusura).
-    var _camWrap = function (i) { return ((Math.round(i) - 1) % 360 + 360) % 360 + 1; };
-    var _argMaxCam = function (arr) {
-        var mi = 1, mv = -Infinity;
-        for (var q = 1; q <= 360; q++) { var v = arr[q] || 0; if (v > mv) { mv = v; mi = q; } }
-        return mi;
-    };
-    var dPkIn = _argMaxCam(folIntake), dPkEx = _argMaxCam(folExhaust);
-    var liftInTDC = Math.max(0, (folIntake[_camWrap(dPkIn - intakeAng / 2)] || 0) - intakeClear) * rockerIn;
-    var liftExTDC = Math.max(0, (folExhaust[_camWrap(dPkEx - exhaustAng / 2)] || 0) - exhaustClear) * rockerEx;
+    // Alzata al PMS (overlap TDC) — AUDIT MAT-03/MAT-04: le curve crank sono
+    // ora fasate davvero (picco misurato → 360±centro effettivo con anticipo),
+    // quindi l'alzata all'incrocio È il campione all'indice 360 (=PMS).
+    // Questo usa automaticamente il fianco FISICAMENTE giusto per ciascun
+    // lobo: aspirazione in apertura (picco dopo il PMS), scarico in chiusura
+    // (picco prima del PMS) — prima entrambe campionavano il fianco di
+    // apertura, sbagliato per lo scarico sui lobi asimmetrici, e l'anticipo
+    // era ignorato. Gioco già sottratto nella mappatura, rocker già in anl*.
+    var liftInTDC = anlIn[360] || 0;
+    var liftExTDC = anlEx[360] || 0;
 
-    // Lobe Separation Angle
-    var LSA = (intakeAng + exhaustAng) / 2;
+    // Centri lobo EFFETTIVI (audit MAT-05: si conservano i centri REALI per
+    // lobo — dichiarati ± anticipo — e la LSA è solo DERIVATA; prima i centri
+    // venivano ricostruiti da LSA±adv, cancellando l'asimmetria vera tra i
+    // lobi, e curve/etichette/eventi non coincidevano più).
+    var intakeCenter  = _ecA.intake;    // ATDC (già -adv, = centro delle curve mappate)
+    var exhaustCenter = _ecA.exhaust;   // BTDC (già +adv)
 
-    // Timing calculations
-    var intakeOpenBTC  = -(LSA - adv - durIntake / 2);
-    var intakeCloseABC = LSA - adv + durIntake / 2 - 180;
-    var exOpenBBC      = LSA + adv + durExhaust / 2 - 180;
-    var exCloseATC     = -(LSA + adv - durExhaust / 2);
+    // Lobe Separation Angle: proprietà della camma, l'anticipo si elide
+    var LSA = (intakeCenter + exhaustCenter) / 2;
 
-    // Centers
-    var intakeCenter = LSA - adv;
-    var exhaustCenter = LSA + adv;
+    // Timing calculations (dai centri reali per lobo)
+    var intakeOpenBTC  = -(intakeCenter - durIntake / 2);
+    var intakeCloseABC = intakeCenter + durIntake / 2 - 180;
+    var exOpenBBC      = exhaustCenter + durExhaust / 2 - 180;
+    var exCloseATC     = -(exhaustCenter - durExhaust / 2);
 
     // Overlap
     var overlap = intakeOpenBTC + exCloseATC;
