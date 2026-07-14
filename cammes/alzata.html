@@ -57,7 +57,7 @@
             <!-- Meccanismo live: cosa sta facendo la macchina ORA -->
             <div style="margin-top:10px; text-align:center;">
                 <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:4px;">Meccanismo (live)</div>
-                <canvas id="liveMechCanvas" width="240" height="260" style="max-width:100%;border-radius:var(--r-md);"></canvas>
+                <canvas id="liveMechCanvas" width="240" height="260" style="max-width:100%;border-radius:var(--r-md);display:block;margin:0 auto;"></canvas>
             </div>
         </div>
 
@@ -500,8 +500,8 @@ var _engineOnOpen = function(event) {
             body: 'Server di nuovo raggiungibile.', duration: 2500 });
     }
     _everConnected = true;
-    document.imp2.imp2.value = "  gradi  " + "0";
-    document.cpot.cpot.value = " " + "00.00";
+    document.imp2.imp2.value = "gradi 0";
+    document.cpot.cpot.value = "00.00";
     gaugemicrom.value = 0;
     gaugemicrom.draw();
     sendSocket = new WebSocket("ws://localhost:8080");
@@ -560,7 +560,7 @@ var _engineOnMessage = function(event) {
                 _autoLastIdx = aIdx;
                 i = aIdx;
                 // progresso (nel percorso classico lo fa il ramo '*se')
-                document.imp2.imp2.value = "  gradi  " + (i / currentMode.subStepsPerDeg).toFixed(2);
+                document.imp2.imp2.value = "gradi " + (i / currentMode.subStepsPerDeg).toFixed(2);
                 if (startflag === 1 && window.cammesScanProgress) {
                     var aEta = scanEta.tick(i);
                     window.cammesScanProgress.set(i, currentMode.totalSteps, aEta);
@@ -678,7 +678,7 @@ var _engineOnMessage = function(event) {
         if (motorFree) {
             var mDeg = msg.match(/deg=(-?\d+(\.\d+)?)/);
             if (mDeg) {
-                document.imp2.imp2.value = '  enc ' + parseFloat(mDeg[1]).toFixed(2) + '°';
+                document.imp2.imp2.value = 'enc ' + parseFloat(mDeg[1]).toFixed(2) + '°';
             }
         }
     }
@@ -689,7 +689,7 @@ var _engineOnMessage = function(event) {
         else { msg2 = msg; }
 
         if (n >= 0 && n < 32) {
-            document.cpot.cpot.value = " " + msg2;
+            document.cpot.cpot.value = msg2;
             gaugemicrom.value = msg;
             gaugemicrom.draw();
             window._liveLift = n;   // alzata corrente (mm) per il meccanismo live
@@ -916,7 +916,7 @@ var _engineOnMessage = function(event) {
     if (msg === '*se') {
         // visualizza progresso in gradi camma reali (i sub-step ÷ subStepsPerDeg)
         var degShown = (i / currentMode.subStepsPerDeg).toFixed(2);
-        document.imp2.imp2.value = "  gradi  " + degShown;
+        document.imp2.imp2.value = "gradi " + degShown;
         // Aggiorna progress bar + ETA solo durante scansione attiva.
         if (startflag === 1 && window.cammesScanProgress) {
             var etaSec = scanEta.tick(i);
@@ -1065,7 +1065,7 @@ function _startSingleRun(firstRun) {
         // Direzione coerente col percorso classico: rsign 1 → 'p' (dir −).
         autoScanActive = true; _autoLastIdx = 0; _autoGapWarned = false;
         i = 0;
-        document.imp2.imp2.value = "  gradi  0.00";
+        document.imp2.imp2.value = "gradi 0.00";
         sendSocket.send('S' + (rsign == 1 ? '-' : '+') + currentMode.totalSteps + '\n');
         // Guardia firmware vecchio: nessun campione in 6 s → fallback
         // AUTOMATICO al metodo classico e scansione riavviata da capo.
@@ -1081,7 +1081,7 @@ function _startSingleRun(firstRun) {
         }, 6000);
     } else {
         i = i + 1;
-        document.imp2.imp2.value = "  gradi  " + (i / currentMode.subStepsPerDeg).toFixed(2);
+        document.imp2.imp2.value = "gradi " + (i / currentMode.subStepsPerDeg).toFixed(2);
         if (rsign == 1) { sendSocket.send('p'); }
         if (rsign == -1) { sendSocket.send('q'); }
     }

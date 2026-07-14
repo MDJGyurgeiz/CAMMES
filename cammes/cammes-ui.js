@@ -794,7 +794,12 @@
     ctx.fillStyle = muted; ctx.font = '11px monospace'; ctx.textAlign = 'left';
     ctx.fillText('cam ' + Math.round(ang) + '°', 8, 14);
     ctx.fillText('alzata ' + fLift.toFixed(2) + ' mm', 8, 28);
-    ctx.fillText('valvola ' + valveLiftMm.toFixed(2) + ' mm', 8, 42);
+    // La riga valvola solo quando DIFFERISCE dall'alzata (bilanciere/follower
+    // attivi, come in Analisi): nella vista live di Alzata (puntalino 1:1)
+    // erano sempre identiche — un numero doppio senza informazione.
+    if (Math.abs(valveLiftMm - fLift) > 0.005) {
+        ctx.fillText('valvola ' + valveLiftMm.toFixed(2) + ' mm', 8, 42);
+    }
   }
 
   // Animatore: chiama frameFn() ogni rAF per ottenere gli opts e ridisegna.
