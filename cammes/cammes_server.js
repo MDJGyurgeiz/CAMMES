@@ -580,8 +580,80 @@ var mimeTypes = {
     '.ttf':  'font/ttf'
 };
 
+// ============================================================
+// Confine di rete (audit SEC-01 / SEC-02)
+// ============================================================
+// Il banco resta raggiungibile da tutta la LAN (requisito d'uso: la UI si
+// apre anche da tablet/telefono), ma:
+//  - HTTP: si servono SOLO i file della UI (allowlist esplicita) e si
+//    rifiutano Host esterni (anti DNS-rebinding). Prima il fallback statico
+//    serviva QUALSIASI file sotto la directory (log da 600 KB, misure,
+//    sorgente del server, node_modules...).
+//  - WS: si accettano solo pagine servite da questa macchina (allowlist
+//    Origin). Prima QUALUNQUE pagina web aperta nel browser di un
+//    dispositivo della LAN poteva comandare il motore (i WebSocket non
+//    hanno same-origin policy).
+
+var OS_HOSTNAME = String(os.hostname() || '').toLowerCase();
+
+// Hostname/IP con cui è legittimo raggiungere questo server
+function isTrustedHostname(h) {
+    if (!h) return false;
+    h = String(h).toLowerCase();
+    if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]') return true;
+    if (h === OS_HOSTNAME || h === OS_HOSTNAME + '.local') return true;
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return true;   // IP letterale (accesso LAN tipico)
+    return false;
+}
+
+// Header Host "hostname[:porta]" → true se punta davvero a questa macchina.
+// Un attacco DNS-rebinding arriva con Host=dominio-dell-attaccante.
+function isTrustedHost(hostHeader) {
+    if (!hostHeader) return true;                          // client non-browser (curl, tool)
+    var h = String(hostHeader).trim();
+    var host = h.charAt(0) === '['
+        ? h.slice(0, h.indexOf(']') + 1)                   // [IPv6] con o senza :porta
+        : h.replace(/:\d+$/, '');
+    return isTrustedHostname(host.replace(/^\[|\]$/g, '') === '::1' ? '::1' : host);
+}
+
+// Origin di una pagina → può usare il WebSocket? Sì se la pagina è stata
+// servita da questa macchina (qualunque nome/IP legittimo); no per pagine
+// di altri siti. Assenza di Origin = client non-browser (tool da banco): ok.
+function isAllowedWsOrigin(origin) {
+    if (!origin) return true;
+    try {
+        var oh = String(origin).split('//')[1] || '';
+        oh = (oh.charAt(0) === '[' ? oh.slice(0, oh.indexOf(']') + 1) : oh.split(':')[0]).split('/')[0];
+        return isTrustedHostname(oh.replace(/^\[|\]$/g, ''));
+    } catch (e) { return false; }
+}
+
+// Allowlist dei file statici: SOLO la UI. Tutto il resto → 404 (anche se
+// il file esiste): settings/log/misure passano dalle API, non dal filesystem.
+var STATIC_ALLOW = {
+    '/': 1, '/home.html': 1, '/alzata.html': 1, '/grafici.html': 1, '/analisi.html': 1,
+    '/style.css': 1, '/cammes-ui.js': 1, '/cammes-scan.js': 1,
+    '/jspdf.umd.min.js': 1, '/responsivevoice.js': 1, '/favicon.ico': 1
+};
+function isAllowedStatic(u) {
+    if (STATIC_ALLOW[u]) return true;
+    if (/^\/lib\/[A-Za-z0-9._-]+\.js$/.test(u)) return true;
+    if (/^\/fonts\/[A-Za-z0-9._-]+\.woff2?$/.test(u)) return true;
+    if (/^\/images\/[A-Za-z0-9._-]+\.(png|jpe?g|svg|ico|webp)$/.test(u)) return true;
+    return false;
+}
+
 var httpServer = http.createServer(function (req, res) {
     var urlPath = req.url.split('?')[0]; // Rimuovi query string
+
+    // Anti DNS-rebinding (audit SEC-01): Host che non punta a questa macchina
+    if (!isTrustedHost(req.headers.host)) {
+        log.warn('HTTP', 'Rifiutato Host non locale: "' + req.headers.host + '" per ' + urlPath);
+        res.writeHead(403);
+        res.end('Forbidden (Host)');
+        return;
+    }
 
     // API: controllo aggiornamenti software (GitHub Releases, cache 1h)
     if (urlPath === '/api/update-check') {
@@ -763,9 +835,17 @@ var httpServer = http.createServer(function (req, res) {
     }
 
     // Route default: / -> home.html
+    // AUDIT SEC-02: allowlist esplicita — prima QUALSIASI file esistente
+    // sotto STATIC_DIR veniva servito con 200 (cammes.log, settings.json,
+    // prove/*.scr, cammes_server.js, node_modules, fw/...).
+    if (!isAllowedStatic(urlPath)) {
+        res.writeHead(404);
+        res.end('Not found: ' + urlPath);
+        return;
+    }
     var filePath = path.join(STATIC_DIR, urlPath === '/' ? 'home.html' : urlPath);
 
-    // Sicurezza: impedisci path traversal
+    // Sicurezza: impedisci path traversal (cintura oltre all'allowlist)
     var resolved = path.resolve(filePath);
     if (resolved.indexOf(path.resolve(STATIC_DIR)) !== 0) {
         res.writeHead(403);
@@ -822,7 +902,25 @@ httpServer.listen(HTTP_PORT, function () {
 // 2. WebSocket Server (porta 8080)
 // ============================================================
 
-var wsServer = new WebSocket.Server({ port: WS_PORT }, function () {
+var wsServer = new WebSocket.Server({
+    port: WS_PORT,
+    // AUDIT SEC-01: solo pagine servite da questa macchina (o client
+    // non-browser come i tool da banco). Una pagina web qualsiasi aperta su
+    // un dispositivo della LAN prima poteva comandare il motore o avviare
+    // un flash: i WebSocket non hanno same-origin policy.
+    verifyClient: function (info) {
+        if (!isTrustedHost(info.req && info.req.headers.host)) {
+            log.warn('WS', 'Rifiutato Host non locale: "' + (info.req && info.req.headers.host) + '"');
+            return false;
+        }
+        var origin = info.origin || (info.req && info.req.headers.origin);
+        if (!isAllowedWsOrigin(origin)) {
+            log.warn('WS', 'Rifiutata Origin non locale: "' + origin + '"');
+            return false;
+        }
+        return true;
+    }
+}, function () {
     log('WS', 'WebSocket server avviato su ws://localhost:' + WS_PORT);
 });
 wsServer.on('error', function (err) {
