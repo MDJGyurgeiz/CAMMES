@@ -12,7 +12,7 @@
     "test": "node tools/test_version.js && node tools/test_followers.js && node tools/test_3dof.js && node tools/test_surge.js && node tools/test_baseline.js && node tools/test_encoder_reindex.js && node tools/test_misura_affidabile.js && node tools/test_fase_segni.js && node tools/test_confine_rete.js && node tools/validate_clio.js && node tools/validate_vw.js"
   },
   "dependencies": {
-    "ws": "^8.16.0",
+    "ws": "^8.21.0",
     "serialport": "^12.0.0"
   },
   "devDependencies": {

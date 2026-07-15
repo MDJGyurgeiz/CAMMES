@@ -961,7 +961,11 @@ function reindexByEncoder(pd, pdEnc) {
     for (i = 1; i <= 360; i++) { if (typeof pdEnc[i] === 'number' && !isNaN(pdEnc[i])) { if (first < 0) first = i; last = i; } }
     if (first < 0 || first === last) return null;
     var E0 = pdEnc[first], span = pdEnc[last] - E0;
-    if (Math.abs(span) < 360) return null;            // atteso ~1440 cnt/giro; troppo piccolo → sospetto
+    // AUDIT MAT-08: soglia RELATIVA al giro atteso (~1440 cnt). La vecchia
+    // soglia assoluta (|span| >= 360 cnt) accettava anche MEZZO giro (718
+    // cnt) come giro completo, ripiegando la camma su se stessa in silenzio.
+    // Sotto il 70% del giro atteso i dati encoder non descrivono un giro.
+    if (Math.abs(span) < 0.7 * 360 * COUNTS_PER_DEG) return null;
     var sign = span >= 0 ? 1 : -1;
     var acc = new Array(361), cnt = new Array(361);
     for (i = 1; i <= 360; i++) { acc[i] = 0; cnt[i] = 0; }

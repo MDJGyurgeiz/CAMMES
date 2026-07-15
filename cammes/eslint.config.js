@@ -58,7 +58,10 @@ var RULES = {
 };
 
 module.exports = [
-    { ignores: ['node_modules/**', 'lib/**', '**/*.min.js'] },
+    // Le librerie terze in lib/ sono tutte *.min.js (già ignorate); la
+    // matematica di casa lib/cammes-math.js VA lintata (audit TEST-03:
+    // prima 'lib/**' la escludeva in blocco).
+    { ignores: ['node_modules/**', '**/*.min.js'] },
     {
         files: ['**/cammes_server.js', '**/tools/**/*.js'],
         languageOptions: { ecmaVersion: 2022, sourceType: 'commonjs', globals: NODE_GLOBALS },

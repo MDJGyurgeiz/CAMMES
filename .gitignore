@@ -26,3 +26,4 @@ CAMMES_DIST/
 # ECCEZIONE: avrdude fa parte del prodotto (flash firmware dall'app) e serve
 # anche alla build CI — senza, un clone fresco non può flashare da fw/
 !cammes/fw/avrdude.exe
+.claude/settings.local.json

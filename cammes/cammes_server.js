@@ -846,8 +846,8 @@ var httpServer = http.createServer(function (req, res) {
     var filePath = path.join(STATIC_DIR, urlPath === '/' ? 'home.html' : urlPath);
 
     // Sicurezza: impedisci path traversal (cintura oltre all'allowlist)
-    var resolved = path.resolve(filePath);
-    if (resolved.indexOf(path.resolve(STATIC_DIR)) !== 0) {
+    var resolvedStatic = path.resolve(filePath);
+    if (resolvedStatic.indexOf(path.resolve(STATIC_DIR)) !== 0) {
         res.writeHead(403);
         res.end('Forbidden');
         return;

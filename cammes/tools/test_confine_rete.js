@@ -19,8 +19,8 @@ var os = require('os');
 var spawn = require('child_process').spawn;
 var WebSocket = require(path.join(__dirname, '..', 'node_modules', 'ws'));
 
-var HTTP_PORT = 3210, WS_PORT = 3211;
-var fails = 0, done = 0;
+var HTTP_PORT = 3310, WS_PORT = 3311;
+var fails = 0;
 function check(label, cond, detail) {
     console.log((cond ? '  PASS  ' : '  FAIL  ') + label + (detail ? '  [' + detail + ']' : ''));
     if (!cond) fails++;
@@ -33,6 +33,15 @@ console.log('=============================================================');
 var server = spawn(process.execPath,
     [path.join(__dirname, '..', 'cammes_server.js'), '--no-browser', '--port', String(HTTP_PORT), '--ws-port', String(WS_PORT)],
     { stdio: 'ignore', cwd: path.join(__dirname, '..') });
+
+// Il server figlio va SEMPRE terminato, anche se il test viene interrotto o
+// va in errore: senza questo un run killato a metà lasciava un processo
+// zombie che teneva bloccata la porta (visto in sviluppo).
+function killServer() { try { server.kill(); } catch (e) {} }
+process.on('exit', killServer);
+process.on('SIGINT', function () { killServer(); process.exit(130); });
+process.on('SIGTERM', function () { killServer(); process.exit(143); });
+process.on('uncaughtException', function (e) { killServer(); console.error(e); process.exit(1); });
 
 function get(pathname, headers, cb) {
     var req = http.request({ host: '127.0.0.1', port: HTTP_PORT, path: pathname, headers: headers || {} }, function (res) {
@@ -61,12 +70,16 @@ function finish() {
     process.exit(0);
 }
 
-// attesa avvio server (poll)
+// attesa avvio server (poll con timeout DURO: se la porta è occupata da un
+// altro processo il test FALLISCE invece di appendere all'infinito)
 var tries = 0;
 (function waitUp() {
     get('/', null, function (err, code) {
         if (!err && code) return runTests();
-        if (++tries > 50) { check('server di test avviato', false, String(err)); return finish(); }
+        if (++tries > 40) {   // ~8 s
+            check('server di test avviato entro 8 s', false, 'porta ' + HTTP_PORT + ' occupata? ' + String(err || 'no response'));
+            return finish();
+        }
         setTimeout(waitUp, 200);
     });
 })();

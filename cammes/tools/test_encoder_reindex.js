@@ -66,6 +66,16 @@ check('slittamento → divergenza riportata > 5°', window._encReindexDivergence
 var o5 = reindexByEncoder(pd, new Array(361));
 check('nessun dato encoder → null (fallback passi)', o5 === null);
 
+// (6) AUDIT MAT-08: MEZZO giro encoder (2 cnt/° → span 718) NON è un giro:
+// prima la soglia assoluta (>=360 cnt) lo accettava e ripiegava la camma
+// su se stessa. Ora → null (il chiamante tiene i passi).
+var o6 = reindexByEncoder(pd, encFrom(function (d) { return (d - 1) * 2; }));
+check('mezzo giro (718 cnt) → RIFIUTATO (null)', o6 === null);
+
+// (7) giro leggermente corto (90% = 1296 cnt, slittamento reale) → accettato
+var o7 = reindexByEncoder(pd, encFrom(function (d) { return Math.round((d - 1) * 4 * 0.9); }));
+check('giro al 90% (slittamento) → ancora accettato', o7 !== null);
+
 console.log('');
 if (fails === 0) { console.log('TUTTI I CHECK PASSANO'); process.exit(0); }
 else { console.log(fails + ' CHECK FALLITI'); process.exit(1); }
