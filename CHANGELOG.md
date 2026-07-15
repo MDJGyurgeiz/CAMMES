@@ -1211,6 +1211,49 @@ chiesti). Mai colpito dall'UI (max 360°), ma blindato: **firmware 3.2**
 dall'encoder (err 0,017%), ritorno netto −1 cnt.
 Nota per i futuri driver di test: $±N prende UNITÀ (gradi con r32), non µstep.
 
+## Sessione 12 — 2026-07-15: audit esterno (94 rilievi) — 15/15 P0 verificati e corretti in 7 lotti
+
+Audit esterno indipendente (`CLAUDE_HANDOFF_CAMMES.md`, snapshot `e15ac01`).
+Verificati indipendentemente tutti i 15 P0 (riferimenti riga coincidenti,
+riproduzioni funzionanti): **tutti confermati**, nessuno inventato. Corretti in
+7 lotti, ciascuno con test di regressione che falliva prima e passa dopo.
+Dettaglio in `AUDIT_RESPONSE.md`. Suite: 52 → **129 check verdi**; lint a 0;
+`npm audit` pulito salvo `pkg` (devDep).
+
+- **L1 `24473ad`** — MAT-01 (centri frazionari: `mapCamToCrank` inversa +
+  interpolazione, 106,5° non azzera più la curva), MET-01 (invalidi non
+  azzerati, run incompleti marcati `#stato=INCOMPLETO`), MET-02 (`benchVerdict`:
+  buchi → NON VALUTABILE, mai falso PASS), MAT-07 (`validCount` = gradi unici).
+  Nuovo `test_misura_affidabile.js`.
+- **L2 `cd53e64`** — MAT-02 (fase dal picco misurato sub-grado, `camPeakPos`),
+  MAT-03 (segni = etichette ATDC/BTDC), MAT-04 (anticipo applicato via
+  `effectiveCenters`), MAT-05 (centri reali, LSA derivata). Nuovo
+  `test_fase_segni.js`.
+- **L3 `60a3b8b`** — firmware **3.4**: MOT-01 (timer scansione cancellati da
+  STOP + generation token), FW-02 (Concerto interrompibile, `*tabort`), FW-03
+  (watchdog host: moto fermo se il PC sparisce 5 s), fix `x` idle che
+  avvelenava `cmdBuf`. Hex compilato (9402 byte); flash e prova moto al banco.
+- **L4 `51108a4`** — SEC-02 (allowlist statica: log/settings/misure/sorgente →
+  404), SEC-01 (Origin allowlist su WS + Host check, uso LAN invariato),
+  `prove/**` fuori dagli asset pkg. Nuovo `test_confine_rete.js`.
+- **L5 `445de9a`** — MOT-02 (interblocchi `_scanBusy`), MOT-03 (socket unico),
+  MOT-04 (STOP Concerto reale), MOT-05 (RESET con STOP prima del reload).
+- **L6 `4addf4f`** — SEC-09 (`ws` 8.21), MAT-08 (soglia relativa reindex),
+  DOC-01 (README fw 3.4), REL-09 (`settings.local.json` fuori dal repo),
+  APP-18/19 (residuo CSS, testo cestino), TEST-03 (ESLint installato, lint
+  verde, `cammes-math.js` lintata), tag spurio eliminato.
+- **L7 `4deb398`** — DYN-01 (valve float = perdita di contatto reale: 0 al
+  quasi-statico, crescente coi giri, cala con molla rigida), DYN-03 (camma
+  interpolata nei solver), DYN-04 (default nullish `_num`), DYN-05 (modello
+  dichiarato esplorativo per il regime assoluto). `validate_clio` riscritto;
+  nuovo `test_valve_float.js`.
+
+Trappola d'ambiente registrata: `npm install` su Google Drive rompe con EBADF
+(estrazione tar) → installato in una cartella locale C: e ricopiato con
+robocopy. I test che avviano un server (`test_confine_rete`) vanno con il
+preview server SPENTO (contesa su COM8/porte) e uccidono il figlio su ogni
+uscita per non lasciare processi zombie che bloccano le porte.
+
 ## Sessione 11 — 2026-07-13: profili movimento testati, motore scansione automatico, layout
 
 ### Test al banco dei 4 profili movimento (domanda utente: "che senso ha averne 4?")
