@@ -234,14 +234,33 @@ function convertPuntToRoller(camLiftRaw, rBase, rRoll, rPunt) {
 // (1/(720·RPS·40) sec per stabilità a 16000 rpm). Stato (x, v) propagato
 // punto per punto sul ciclo 0..720°.
 //
+// AUDIT DYN-04: default con nullish, NON con `||` — così 0 è un valore fisico
+// valido (smorzamento nullo, molla senza precarico) e non viene silenziosamente
+// sostituito dal default.
+function _num(v, d) { return (typeof v === 'number' && !isNaN(v)) ? v : d; }
+
+// Lettura circolare di camLift720 a grado FRAZIONARIO, interpolazione lineare,
+// mm → m. Condivisa dai tre solver. Audit DYN-03: prima ogni solver usava
+// Math.round (nearest-neighbor a 1°), che introduceva gradini spuri sul fianco
+// — e, scommesso col vecchio indicatore di float, un "distacco" fittizio.
+function _camAtM(camLift720, degIdx) {
+    var d = ((degIdx - 1) % 720 + 720) % 720 + 1;
+    var i0 = Math.floor(d), fr = d - i0;
+    if (fr < 1e-9) return (camLift720[i0] || 0) * 1e-3;
+    var i1 = (i0 % 720) + 1;
+    return ((camLift720[i0] || 0) * (1 - fr) + (camLift720[i1] || 0) * fr) * 1e-3;
+}
+
 // Output: array crank[1..720] con la posizione valvola REALE (compliance).
+// L'array porta anche .maxSeparation (mm) e .floatIdx (1..720): la massima
+// perdita di contatto cam-punteria (follower sopra la camma) — audit DYN-01.
 function simulateCompliance(camLift720, rpm, params) {
     var p = params || {};
-    var m_kg     = (p.massEqG  || 100) / 1000;   // kg
-    var k_train  = (p.kTrainN_mm || 5000) * 1000; // N/m
-    var k_spring = (p.kSpringN_mm || 30) * 1000; // N/m
-    var F0       = p.F0N || 200;                 // N preload
-    var damping  = (p.dampingRatio || 0.06);     // ζ critico
+    var m_kg     = _num(p.massEqG, 100) / 1000;   // kg
+    var k_train  = _num(p.kTrainN_mm, 5000) * 1000; // N/m
+    var k_spring = _num(p.kSpringN_mm, 30) * 1000; // N/m
+    var F0       = _num(p.F0N, 200);              // N preload
+    var damping  = _num(p.dampingRatio, 0.06);    // ζ critico
 
     // Pulsazione naturale e smorzamento equivalente
     var omega_n  = Math.sqrt(k_train / m_kg);     // rad/s
@@ -262,11 +281,7 @@ function simulateCompliance(camLift720, rpm, params) {
     var x = 0;   // posizione valvola (m, convertita da mm)
     var v = 0;   // velocità valvola (m/s)
 
-    function camAt(degIdx) {
-        // Lookup camLift720 con indice 1..720; converto mm → m
-        var i = ((Math.round(degIdx) - 1) % 720 + 720) % 720 + 1;
-        return (camLift720[i] || 0) * 1e-3;
-    }
+    function camAt(degIdx) { return _camAtM(camLift720, degIdx); }
 
     function accel(t, x_cur, v_cur, degAtT) {
         var x_cam = camAt(degAtT);
@@ -285,6 +300,7 @@ function simulateCompliance(camLift720, rpm, params) {
 
     var out = new Array(722);
     for (var ii = 0; ii <= 721; ii++) out[ii] = 0;
+    var maxSep = 0, floatIdx = 0;   // audit DYN-01: perdita di contatto
 
     for (var deg = 1; deg <= 720; deg++) {
         for (var sub = 0; sub < subSteps; sub++) {
@@ -302,9 +318,16 @@ function simulateCompliance(camLift720, rpm, params) {
             v += (k1v + 2 * k2v + 2 * k3v + k4v) * dt / 6;
             // Vincolo: valvola non scende sotto zero (sede valvola)
             if (x < 0) { x = 0; if (v < 0) v = 0; }
+            // Separazione = quanto la valvola supera la camma (contatto perso).
+            // Quasi-statico: x < x_cam (schiacciamento) → sep 0. Ad alto regime
+            // l'inerzia porta x sopra x_cam → sep > 0 e cresce coi giri.
+            var sep = x - camAt(degAt);
+            if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
         }
         out[deg] = x * 1000;  // m → mm
     }
+    out.maxSeparation = maxSep * 1000;   // mm
+    out.floatIdx = floatIdx;
     return out;
 }
 
@@ -333,13 +356,13 @@ function simulateCompliance(camLift720, rpm, params) {
 // Solver: Runge-Kutta 4° ordine su stato (x1, v1, x2, v2).
 function simulateCompliance2DOF(camLift720, rpm, params) {
     var p = params || {};
-    var m1_kg = (p.massEqIntermediateG || 60) / 1000;   // massa bilancere
-    var m2_kg = (p.massEqG || 100) / 1000;              // massa valvola
-    var k_push  = (p.kPushrodN_mm || 800) * 1000;       // rigidezza pushrod/cam-bilancere
-    var k_train = (p.kTrainN_mm   || 5000) * 1000;      // rigidezza bilancere-valvola
-    var k_spring = (p.kSpringN_mm || 30) * 1000;        // rigidezza molla valvola
-    var F0       = p.F0N || 200;
-    var damping  = p.dampingRatio || 0.06;
+    var m1_kg = _num(p.massEqIntermediateG, 60) / 1000;  // massa bilancere
+    var m2_kg = _num(p.massEqG, 100) / 1000;             // massa valvola
+    var k_push  = _num(p.kPushrodN_mm, 800) * 1000;      // rigidezza pushrod/cam-bilancere
+    var k_train = _num(p.kTrainN_mm, 5000) * 1000;       // rigidezza bilancere-valvola
+    var k_spring = _num(p.kSpringN_mm, 30) * 1000;       // rigidezza molla valvola
+    var F0       = _num(p.F0N, 200);
+    var damping  = _num(p.dampingRatio, 0.06);
 
     var omega_n1 = Math.sqrt(k_push / m1_kg);
     var omega_n2 = Math.sqrt(k_train / m2_kg);
@@ -356,10 +379,7 @@ function simulateCompliance2DOF(camLift720, rpm, params) {
 
     var x1 = 0, v1 = 0, x2 = 0, v2 = 0;
 
-    function camAt(degIdx) {
-        var i = ((Math.round(degIdx) - 1) % 720 + 720) % 720 + 1;
-        return (camLift720[i] || 0) * 1e-3;
-    }
+    function camAt(degIdx) { return _camAtM(camLift720, degIdx); }
 
     function deriv(x1c, v1c, x2c, v2c, degAtT) {
         var x_cam = camAt(degAtT);
@@ -382,6 +402,7 @@ function simulateCompliance2DOF(camLift720, rpm, params) {
 
     var out = new Array(722);
     for (var ii = 0; ii <= 721; ii++) out[ii] = 0;
+    var maxSep = 0, floatIdx = 0;   // separazione cam-bilancere (audit DYN-01)
 
     for (var deg = 1; deg <= 720; deg++) {
         for (var sub = 0; sub < subSteps; sub++) {
@@ -398,10 +419,15 @@ function simulateCompliance2DOF(camLift720, rpm, params) {
             // Vincolo: né bilancere né valvola sotto zero
             if (x1 < 0) { x1 = 0; if (v1 < 0) v1 = 0; }
             if (x2 < 0) { x2 = 0; if (v2 < 0) v2 = 0; }
+            // Perdita di contatto = bilancere sopra la camma
+            var sep = x1 - camAt(degAt);
+            if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
         }
         // Posizione della VALVOLA (lift osservato all'esterno)
         out[deg] = x2 * 1000;
     }
+    out.maxSeparation = maxSep * 1000;
+    out.floatIdx = floatIdx;
     return out;
 }
 
@@ -437,20 +463,20 @@ function simulateCompliance2DOF(camLift720, rpm, params) {
 // Solver: RK4 su stato a 6 componenti.
 function simulateCompliance3DOF(camLift720, rpm, params) {
     var p = params || {};
-    var m1_kg = (p.massEqIntermediateG || 60) / 1000;   // bilancere
-    var m2_kg = (p.massEqG || 100) / 1000;              // valvola
-    var m3_kg = (p.massSeatG || 15)  / 1000;            // sede valvola (effettiva)
-    var k_push   = (p.kPushrodN_mm || 800)  * 1000;     // cam→bilancere
-    var k_train  = (p.kTrainN_mm   || 5000) * 1000;     // bilancere→valvola
-    var k_spring = (p.kSpringN_mm  || 30)   * 1000;     // molla valvola
-    var k_seat   = (p.kSeatN_mm    || 80000)* 1000;     // sede→testata (rigidezza)
+    var m1_kg = _num(p.massEqIntermediateG, 60) / 1000;  // bilancere
+    var m2_kg = _num(p.massEqG, 100) / 1000;             // valvola
+    var m3_kg = _num(p.massSeatG, 15)  / 1000;           // sede valvola (effettiva)
+    var k_push   = _num(p.kPushrodN_mm, 800)  * 1000;    // cam→bilancere
+    var k_train  = _num(p.kTrainN_mm, 5000) * 1000;      // bilancere→valvola
+    var k_spring = _num(p.kSpringN_mm, 30)   * 1000;     // molla valvola
+    var k_seat   = _num(p.kSeatN_mm, 80000)* 1000;       // sede→testata (rigidezza)
     // Cedevolezza pivot bilanciere (lato perno): molla del perno verso terra.
     // 0 = perno libero → comportamento 3-DOF originale (bilanciere massa libera
     // tra k_push e k_train). Valori finiti = perno con rigidezza propria
     // (cede sotto carico). Più alto = perno più rigido/vincolato.
     var k_pivot  = (p.kPivotN_mm && p.kPivotN_mm > 0) ? p.kPivotN_mm * 1000 : 0;
-    var F0       = p.F0N || 200;
-    var damping  = p.dampingRatio || 0.06;
+    var F0       = _num(p.F0N, 200);
+    var damping  = _num(p.dampingRatio, 0.06);
 
     // Rigidezza di contatto valvola-sede: stesso ordine della sede.
     var k_contact = k_seat;
@@ -477,10 +503,7 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
 
     var x1 = 0, v1 = 0, x2 = 0, v2 = 0, x3 = 0, v3 = 0;
 
-    function camAt(degIdx) {
-        var i = ((Math.round(degIdx) - 1) % 720 + 720) % 720 + 1;
-        return (camLift720[i] || 0) * 1e-3;
-    }
+    function camAt(degIdx) { return _camAtM(camLift720, degIdx); }
 
     function deriv(x1c, v1c, x2c, v2c, x3c, v3c, degAtT) {
         var x_cam = camAt(degAtT);
@@ -507,6 +530,7 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
 
     var out = new Array(722);
     for (var ii = 0; ii <= 721; ii++) out[ii] = 0;
+    var maxSep = 0, floatIdx = 0;   // separazione cam-bilancere (audit DYN-01)
 
     for (var deg = 1; deg <= 720; deg++) {
         for (var sub = 0; sub < subSteps; sub++) {
@@ -524,24 +548,40 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
             // Il bilancere non scende sotto zero (contatto cam unilaterale).
             // La valvola NON è clampata: la sede compliante fa da pavimento.
             if (x1 < 0) { x1 = 0; if (v1 < 0) v1 = 0; }
+            var sep = x1 - camAt(degAt);
+            if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
         }
         // Lift valvola osservato: mai negativo all'esterno (la valvola non
         // può fisicamente affondare nella testata oltre la flessione sede).
         out[deg] = Math.max(0, x2) * 1000;
     }
+    out.maxSeparation = maxSep * 1000;
+    out.floatIdx = floatIdx;
     return out;
 }
 
-// Indicatore valve float: misura quanto la curva "valvola reale" si discosta
-// dalla "cam geometrica" — gap = max(camLift - valveLift) durante decelerazione.
-// Se gap > 0.1 mm → float manifesto (valvola perde contatto).
+// Indicatore valve float = PERDITA DI CONTATTO cam-punteria (audit DYN-01).
+// La separazione è tracciata DENTRO il solver (max di follower − camma, con
+// camma interpolata): 0 al quasi-statico, crescente coi giri. Se il solver
+// l'ha esposta (.maxSeparation) la usiamo; altrimenti fallback all'overshoot
+// della valvola sopra la camma. maxGap mantiene il nome per compatibilità coi
+// consumatori, ma ora significa "distacco" (mm), NON lo schiacciamento
+// elastico che il vecchio max(camLift − valveLift) misurava per errore
+// (~0,1 mm anche a 1 rpm, e DECRESCENTE coi giri).
 function detectValveFloat(camLift720, valveLift720) {
+    if (valveLift720 && typeof valveLift720.maxSeparation === 'number') {
+        return {
+            maxGap: valveLift720.maxSeparation,
+            gapIdx: valveLift720.floatIdx || 0,
+            separation: true
+        };
+    }
     var maxGap = 0, gapIdx = 0;
     for (var i = 1; i <= 720; i++) {
-        var g = (camLift720[i] || 0) - (valveLift720[i] || 0);
+        var g = (valveLift720[i] || 0) - (camLift720[i] || 0);   // overshoot valvola > camma
         if (g > maxGap) { maxGap = g; gapIdx = i; }
     }
-    return { maxGap: maxGap, gapIdx: gapIdx };
+    return { maxGap: maxGap, gapIdx: gapIdx, separation: false };
 }
 
 // =============================================================

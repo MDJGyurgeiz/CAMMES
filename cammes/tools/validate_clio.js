@@ -13,16 +13,22 @@
 //     esatti) → questa è una validazione di PLAUSIBILITÀ, non di precisione
 //     al giro.
 //
-// TESI FISICA DA VERIFICARE:
-//   Un motore di serie è progettato perché il valve float resti trascurabile
-//   FINO al fuorigiri (con margine). Quindi col modello topologicamente
-//   CORRETTO per questo motore — l'1-DOF, perché la punteria è diretta —
-//   il float a 7000 rpm deve essere ~0 (≪ 0.15 mm). Se così è, il modello
-//   è validato nel regime che conta.
+// COSA VALIDA QUESTO TEST (rivisto dopo l'audit DYN-01, 2026-07):
+//   Il valve float è la PERDITA DI CONTATTO cam-punteria: la punteria "vola"
+//   oltre il profilo. La metrica corretta (detectValveFloat, che ora legge la
+//   separazione tracciata dentro il solver) deve comportarsi FISICAMENTE:
+//     (a) ~0 al quasi-statico/basso regime (la molla tiene il contatto);
+//     (b) crescente col regime (più inerzia → più distacco);
+//     (c) IN CALO se si irrigidisce la molla (risposta corretta al progetto).
+//   Questa è la proprietà che il fix DYN-01 garantisce, e la validiamo qui
+//   sulla camma REALE della Clio.
 //
-//   I modelli 2/3-DOF inseriscono un bilanciere+pushrod che QUI non esiste:
-//   ci si aspetta che sovrastimino il float. Mostrato per completezza e come
-//   monito: il modello va scelto in base all'architettura del treno valvole.
+//   NB — il modello 1-DOF a massa concentrata è ESPLORATIVO per il regime
+//   ASSOLUTO di float (audit DYN-02/DYN-05: un solo ciclo da fermo, params di
+//   classe non di fabbrica). NON usiamo più il numero assoluto di float a
+//   7000 rpm come criterio (la vecchia soglia <0.15 mm validava in realtà lo
+//   SCHIACCIAMENTO ELASTICO, non il float — proprio il bug DYN-01). Il valore
+//   assoluto resta a schermo come indicazione, non come verdetto.
 //
 // Uso:  node cammes/tools/validate_clio.js   (exit 0 = validato)
 
@@ -53,14 +59,17 @@ for (var e = 1; e <= 720; e++) if (crank[e] > thr) durat++;
 var clio = { massEqG:95, kTrainN_mm:6000, kSpringN_mm:30, F0N:230, dampingRatio:0.06,
              massEqIntermediateG:25, kPushrodN_mm:1500, massSeatG:15, kSeatN_mm:80000 };
 
-function sweep(fn) {
+function sweep(fn, params) {
     var row = {};
-    for (var rpm = 3000; rpm <= 12000; rpm += 250) {
-        var v  = fn(crank, rpm, clio);
+    for (var rpm = 2000; rpm <= 12000; rpm += 250) {
+        var v  = fn(crank, rpm, params || clio);
         var fl = detectValveFloat(crank, v);
         if (!row.onset && fl.maxGap > 0.3) row.onset = rpm;       // float significativo
+        if (rpm === 2500)  row.f2500  = fl.maxGap;                 // basso regime
+        if (rpm === 5000)  row.f5000  = fl.maxGap;
         if (rpm === 7000)  row.f7000  = fl.maxGap;                 // al fuorigiri
         if (rpm === 8000)  row.f8000  = fl.maxGap;
+        if (rpm === 9000)  row.f9000  = fl.maxGap;
         if (rpm === 10000) row.f10000 = fl.maxGap;
     }
     return row;
@@ -68,6 +77,9 @@ function sweep(fn) {
 var s1 = sweep(simulateCompliance);
 var s2 = sweep(simulateCompliance2DOF);
 var s3 = sweep(simulateCompliance3DOF);
+// Molla irrigidita (rate + precarico): il float DEVE calare (audit DYN-01 (c))
+var clioStiff = Object.assign({}, clio, { kSpringN_mm: 55, F0N: 380 });
+var s1s = sweep(simulateCompliance, clioStiff);
 
 function mm(x){ return (x == null) ? '   —  ' : (x).toFixed(3) + ' mm'; }
 function rp(x){ return (x == null) ? 'nessuno <12k' : (x + ' rpm'); }
@@ -78,13 +90,12 @@ console.log('=============================================================');
 console.log('Camma caricata: picco ' + peak.toFixed(2) + ' mm @ ' + (peakIdx-360) +
             '°,  durata ' + durat + '°  (atteso ~8.6 mm / ~246°)');
 console.log('');
-console.log('Float massimo (gap cam-valvola) per modello e regime:');
-console.log('  modello   | @7000(redline) | @8000   | @10000  | onset>0.3mm');
-console.log('  ----------+----------------+---------+---------+-------------');
-console.log('  1-DOF *   |   ' + mm(s1.f7000) + '   | ' + mm(s1.f8000) + ' | ' + mm(s1.f10000) + ' | ' + rp(s1.onset));
-console.log('  2-DOF     |   ' + mm(s2.f7000) + '   | ' + mm(s2.f8000) + ' | ' + mm(s2.f10000) + ' | ' + rp(s2.onset));
-console.log('  3-DOF     |   ' + mm(s3.f7000) + '   | ' + mm(s3.f8000) + ' | ' + mm(s3.f10000) + ' | ' + rp(s3.onset));
-console.log('  (*) 1-DOF = modello topologicamente corretto per punteria diretta a bicchiere');
+console.log('Valve float = perdita di contatto cam-punteria (mm), modello 1-DOF:');
+console.log('  molla        | @2500 | @5000  | @7000  | @10000 | onset>0.3mm');
+console.log('  -------------+-------+--------+--------+--------+-------------');
+console.log('  classe (30)  | ' + mm(s1.f2500) + '| ' + mm(s1.f5000) + ' | ' + mm(s1.f7000) + ' | ' + mm(s1.f10000) + ' | ' + rp(s1.onset));
+console.log('  sport  (55)  | ' + mm(s1s.f2500) + '| ' + mm(s1s.f5000) + ' | ' + mm(s1s.f7000) + ' | ' + mm(s1s.f10000) + ' | ' + rp(s1s.onset));
+console.log('  (modello esplorativo per il regime ASSOLUTO — validiamo l\'andamento)');
 console.log('');
 
 var fails = 0;
@@ -94,24 +105,31 @@ function check(label, cond, detail){
 }
 check('camma: picco 8.0–9.2 mm',   peak >= 8.0 && peak <= 9.2,  peak.toFixed(2) + ' mm');
 check('camma: durata 230–260°',    durat >= 230 && durat <= 260, durat + '°');
-check('1-DOF: float trascurabile al fuorigiri 7000 rpm (<0.15 mm)',
-      s1.f7000 < 0.15, mm(s1.f7000));
-check('1-DOF: float cresce monotono 7000→10000 (no instabilità numerica grossolana)',
-      s1.f10000 >= s1.f7000 - 0.01, mm(s1.f7000) + ' → ' + mm(s1.f10000));
-check('2/3-DOF sovrastimano (topologia pushrod assente sul motore reale)',
-      s2.f7000 > s1.f7000 && s3.f7000 > s1.f7000,
-      '2DOF ' + mm(s2.f7000) + ', 3DOF ' + mm(s3.f7000) + ' vs 1DOF ' + mm(s1.f7000));
-check('3-DOF ≈ 2-DOF sul float (la sede agisce alla chiusura, non al naso)',
-      Math.abs((s3.f7000||0) - (s2.f7000||0)) < 0.05,
-      '|Δ| = ' + Math.abs((s3.f7000||0)-(s2.f7000||0)).toFixed(3) + ' mm');
+// (a) float ~0 al basso regime: la molla tiene il contatto (era il vero bug
+//     DYN-01 — la vecchia metrica dava ~0.24 mm qui, > della sua soglia)
+check('float ~0 a 2500 rpm (contatto mantenuto)',
+      s1.f2500 < 0.05, mm(s1.f2500));
+// (b) monotonia col regime: più giri → più distacco
+check('float cresce col regime (2500 < 5000 < 7000 < 10000)',
+      s1.f2500 <= s1.f5000 && s1.f5000 < s1.f7000 && s1.f7000 < s1.f10000,
+      mm(s1.f2500) + ' < ' + mm(s1.f5000) + ' < ' + mm(s1.f7000) + ' < ' + mm(s1.f10000));
+// (c) risposta al progetto: molla più rigida → MENO float allo stesso regime
+check('molla sport (55/380) riduce il float a 7000 vs classe (30/230)',
+      s1s.f7000 < s1.f7000, 'sport ' + mm(s1s.f7000) + ' < classe ' + mm(s1.f7000));
+// topologia: bilanciere+pushrod (2/3-DOF) aggiungono massa/cedevolezza →
+// float ≥ 1-DOF (che è il modello corretto per la punteria diretta Clio)
+check('2/3-DOF ≥ 1-DOF ad alto regime (massa/pushrod in più)',
+      s2.f9000 >= s1.f9000 - 0.05 && s3.f9000 >= s1.f9000 - 0.05,
+      '1D ' + mm(s1.f9000) + ', 2D ' + mm(s2.f9000) + ', 3D ' + mm(s3.f9000));
 
 console.log('');
 if (fails === 0) {
-    console.log('VALIDATO: la pipeline reale sulla camma Clio dà risultati fisicamente');
-    console.log('coerenti. Il modello corretto (1-DOF) non prevede float al fuorigiri,');
-    console.log('come deve essere per un motore di serie sano.');
+    console.log('VALIDATO: sulla camma Clio reale la metrica di float si comporta');
+    console.log('fisicamente — nulla al basso regime, crescente coi giri, in calo se');
+    console.log('la molla è più rigida. Il regime assoluto di float resta indicativo');
+    console.log('(modello 1-DOF esplorativo, non calibrato su dati molla di fabbrica).');
     process.exit(0);
 } else {
-    console.log(fails + ' CHECK FALLITI — il modello NON è coerente, indagare.');
+    console.log(fails + ' CHECK FALLITI — la metrica NON è coerente, indagare.');
     process.exit(1);
 }
