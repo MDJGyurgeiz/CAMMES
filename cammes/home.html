@@ -2082,7 +2082,7 @@ function openHomeConcert() {
 
     // Apre la WebSocket (lazy) verso il server CAMMES
     try {
-        concertWs = new WebSocket('ws://localhost:8080');
+        concertWs = new WebSocket('ws://' + (location.hostname || 'localhost') + ':8080');
         concertWs.onerror = function () {
             var w = document.getElementById('concertWarn'); if (w) w.style.display = 'block';
         };
@@ -2102,6 +2102,13 @@ function closeHomeConcert() {
     if (concertWs) { try { concertWs.close(); } catch (e) {} concertWs = null; }
 }
 function stopHomeConcert() {
+    // AUDIT MOT-04/FW-02: lo stop era solo browser-side (bloccava le note
+    // FUTURE) — la nota in corso continuava fino a 5 s. Dal firmware 3.4
+    // 'x' interrompe anche la nota corrente (*tabort) ed è innocuo a motore
+    // fermo, quindi lo mandiamo sempre.
+    if (concertWs && concertWs.readyState === 1) {
+        try { concertWs.send('x'); } catch (e) {}
+    }
     concertPlaying = false;
     concertCancelToken++;
     var stopBtn = document.getElementById('concertStopBtn');

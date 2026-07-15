@@ -13,8 +13,10 @@
 //  Script top-level (no IIFE): var e function sono globali, come prima.
 // =============================================================
 
-// Stato condiviso della connessione
-var WS_URL = "ws://localhost:8080";
+// Stato condiviso della connessione.
+// AUDIT MOT-03/SEC-01: l'host segue la pagina (prima "localhost" fisso: da
+// un tablet in LAN il WebSocket puntava al tablet stesso e non funzionava).
+var WS_URL = "ws://" + (location.hostname || "localhost") + ":8080";
 var engineSocket = null;
 var _engineReconnectTimer = null;
 var _everConnected = false;
@@ -55,6 +57,7 @@ function connectEngine() {
 // criterio per l'utente.
 
 function m1() {
+    if (window._scanBusy && window._scanBusy('Il jog manuale')) return;   // audit MOT-02
     oldg = Number(oldg) - 1;
     if (rsign == 1) { sendSocket.send('$-001\n'); }
     if (rsign == -1) { sendSocket.send('$+001\n'); }
@@ -62,6 +65,7 @@ function m1() {
 }
 
 function p1() {
+    if (window._scanBusy && window._scanBusy('Il jog manuale')) return;   // audit MOT-02
     oldg = Number(oldg) + 1;
     if (rsign == 1) { sendSocket.send('$+001\n'); }
     if (rsign == -1) { sendSocket.send('$-001\n'); }
@@ -69,6 +73,7 @@ function p1() {
 }
 
 function rlb() {
+    if (window._scanBusy && window._scanBusy('Il cambio di direzione')) return;   // audit MOT-02
     rot = rot + 1;
     if (rot == 2) { rot = 0; }
     if (rot == 0) {

@@ -76,7 +76,7 @@
             <div class="controls-group">
                 <button class="btn btn-success" onclick="start();" data-tip="<strong>Avvia scansione</strong>Esegue una rotazione completa di 360&deg; sull'albero a camme misurando il profilo di alzata. Tempo dipende dalla modalit&agrave; selezionata.">&#9654; START</button>
                 <button class="btn btn-danger" onclick="stop();" data-tip="<strong>Interrompi</strong>Ferma la scansione in corso. Dati parziali non vengono salvati. Il prossimo START riparte da zero.">&#10074;&#10074; STOP</button>
-                <button class="btn btn-secondary" onclick="location.reload(true);" data-tip="<strong>Reset completo</strong>Ricarica la pagina e azzera tutto: grafico, contatori, posizione encoder.">&#8634; RESET</button>
+                <button class="btn btn-secondary" onclick="safeReload();" data-tip="<strong>Reset completo</strong>Ferma prima il firmware (STOP), poi ricarica la pagina e azzera tutto: grafico, contatori, posizione encoder.">&#8634; RESET</button>
             </div>
 
             <div class="separator"></div>
@@ -528,27 +528,31 @@ var _engineOnOpen = function(event) {
     document.cpot.cpot.value = "00.00";
     gaugemicrom.value = 0;
     gaugemicrom.draw();
-    sendSocket = new WebSocket("ws://localhost:8080");
-    // Allinea la config Arduino alla modalità corrente del browser appena
-    // sendSocket è pronto. Senza questo, dopo un reload la config Arduino
-    // resta quella dell'ultima sessione e $+N a fine 0 virtuale può finire
-    // con scaling sbagliato (es. 180° browser ↔ 5° camma se r=1 residuo).
-    sendSocket.onopen = function() {
-        try {
-            sendSocket.send('c' + currentMode.samples + '\n');
-            sendSocket.send('r' + currentMode.microsteps + '\n');
-            sendSocket.send('w' + currentMode.settleMs + '\n');
-            // Profilo movimento FISSO: Standard (k1). Il selettore a 4 profili
-            // è stato rimosso: era una scelta senza criterio per l'utente.
-            sendSocket.send('k1\n');
-            // Ping immediato sensore + encoder per accendere subito i LED
-            // (senza aspettare il prossimo tick di polling).
-            setTimeout(function(){
-                try { sendSocket.send('m'); } catch(e) {}
-                try { sendSocket.send('?'); } catch(e) {}
-            }, 100);
-        } catch (e) { console.warn('Config sync fallito:', e); }
-    };
+    // AUDIT MOT-03: SOCKET UNICO. Prima qui si apriva un SECONDO WebSocket
+    // di solo invio, senza onclose/onerror né riconnessione: se moriva solo
+    // lui, STOP diventava un no-op silenzioso (con toast "interrotta" bugiardo)
+    // mentre la ricezione continuava; e ogni riconnessione ne creava un altro
+    // (leak lato server). Ora invio e ricezione condividono engineSocket,
+    // che ha già lifecycle completo e auto-reconnect in cammes-scan.js.
+    sendSocket = engineSocket;
+    // Allinea la config Arduino alla modalità corrente del browser (siamo
+    // dentro onopen: il socket è già pronto). Senza questo, dopo un reload
+    // la config Arduino resta quella dell'ultima sessione e $+N a fine 0
+    // virtuale può finire con scaling sbagliato.
+    try {
+        sendSocket.send('c' + currentMode.samples + '\n');
+        sendSocket.send('r' + currentMode.microsteps + '\n');
+        sendSocket.send('w' + currentMode.settleMs + '\n');
+        // Profilo movimento FISSO: Standard (k1). Il selettore a 4 profili
+        // è stato rimosso: era una scelta senza criterio per l'utente.
+        sendSocket.send('k1\n');
+        // Ping immediato sensore + encoder per accendere subito i LED
+        // (senza aspettare il prossimo tick di polling).
+        setTimeout(function(){
+            try { sendSocket.send('m'); } catch(e) {}
+            try { sendSocket.send('?'); } catch(e) {}
+        }, 100);
+    } catch (e) { console.warn('Config sync fallito:', e); }
     msgold = "***";
 };
 
@@ -1004,6 +1008,9 @@ connectEngine();
 <script>
 var i = 0;
 function start() {
+    // AUDIT MOT-02: un secondo START a scansione attiva riazzerava pdata e
+    // l'indice mescolando lo stream in arrivo → misura corrotta in silenzio.
+    if (_scanBusy('Un nuovo START')) return;
     if (!_wsReady()) {
         if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Server non connesso',
             body: 'Avvia cammes_server.js e collega l’Arduino prima di scansionare.', duration: 4500 });
@@ -1221,6 +1228,35 @@ function stop() {
     if (window.cammesScanProgress) window.cammesScanProgress.reset();
     if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Scansione interrotta', body: 'I dati parziali non sono stati salvati.', duration: 3000 });
 }
+
+// AUDIT MOT-02: guardia unica per i comandi incompatibili con una scansione
+// in corso. Prima jog, Ruota, direzione, FREE, reset encoder, posizioni
+// salvate e un secondo START restavano attivi durante la misura: nel
+// percorso classico muovevano DAVVERO il motore a metà giro, e in ogni caso
+// corrompevano la misura o perdevano lo zero encoder in silenzio.
+function _scanBusy(cosa) {
+    // (labms escluso apposta: lo Zero virtuale imposta labms=1 e POI chiama
+    // start() — durante la sua scansione vale comunque startflag===1)
+    if (startflag === 1 || autoScanActive) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'warn', title: 'Scansione in corso',
+            body: (cosa || 'Questo comando') + ' &egrave; bloccato durante la misura: premi STOP prima, oppure aspetta la fine.',
+            duration: 4000
+        });
+        return true;
+    }
+    return false;
+}
+window._scanBusy = _scanBusy;   // usata anche dal jog condiviso (cammes-scan.js)
+
+// AUDIT MOT-05: il RESET ricaricava la pagina SENZA fermare il firmware —
+// uno scan autonomo continuava a girare a pagina nuova. Ora: STOP reale,
+// poi reload (piccolo ritardo per lasciar partire la 'x' sul socket).
+function safeReload() {
+    try { stop(); } catch (e) {}
+    setTimeout(function () { location.reload(true); }, 250);
+}
+window.safeReload = safeReload;
 </script>
 
 <script src="lib/cammes-math.js"></script>
@@ -1412,6 +1448,7 @@ function sav() {
 <script>
 var dif = 0;
 function ruota() {
+    if (_scanBusy('Ruota')) return;   // audit MOT-02
     var dg = document.getElementById("step").value;
     var w = "rotazione a   " + dg + " gradi  attivata";
     responsiveVoice.speak(w, "Italian Female", { volume: 3 });
@@ -1452,6 +1489,7 @@ function ruota() {
 <script>
 var labms = 0;
 function ms() {
+    if (_scanBusy('Lo Zero virtuale')) return;   // audit MOT-02
     if (typeof _wsReady === 'function' && !_wsReady()) {
         if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Server non connesso',
             body: 'Lo Zero virtuale richiede server e Arduino attivi.', duration: 4500 });
@@ -1488,6 +1526,7 @@ var pollFreeSensorId = null;
 var pollFreeEncoderId = null;
 
 function toggleMotorFree() {
+    if (_scanBusy('Lo sblocco motore')) return;   // audit MOT-02
     motorFree = !motorFree;
     var btn   = document.getElementById('freeBtn');
     var badge = document.getElementById('motorFreeBadge');
@@ -1574,6 +1613,7 @@ window.toggleMotorFree = toggleMotorFree;
 
 // ===== Reset encoder + posizioni salvate (zero meccanico) =====
 function resetEncoder() {
+    if (_scanBusy('Il reset encoder')) return;   // audit MOT-02: perderebbe lo zero della misura
     if (!sendSocket || sendSocket.readyState !== 1) return;
     try { sendSocket.send('!'); } catch (e) {}
     if (window.cammesToast) window.cammesToast({
@@ -1627,6 +1667,7 @@ function savePositionMark() {
     });
 }
 function gotoSavedPosition(label) {
+    if (_scanBusy('Vai a posizione')) return;   // audit MOT-02
     var arr = loadSavedPositions();
     var p = arr.find(function (x) { return x.label === label; });
     if (!p) return;
