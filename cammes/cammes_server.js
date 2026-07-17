@@ -137,6 +137,41 @@ function sendJson(res, code, obj) {
     res.end(JSON.stringify(obj));
 }
 
+// AUDIT SEC-05: raccolta del body con LIMITE che risponde 413 (prima
+// req.destroy() uccideva il socket in silenzio: il client vedeva solo una
+// connessione interrotta). cb(err, body); err.tooLarge = true se sforato.
+function readBody(req, res, maxBytes, cb) {
+    var body = '', over = false;
+    req.on('data', function (chunk) {
+        if (over) return;
+        body += chunk;
+        if (body.length > maxBytes) {
+            over = true;
+            sendJson(res, 413, { error: 'Corpo troppo grande (max ' + Math.round(maxBytes / 1024) + ' KB)' });
+            req.destroy();
+        }
+    });
+    req.on('end', function () { if (!over) cb(null, body); });
+    req.on('error', function (e) { if (!over) cb(e); });
+}
+
+// AUDIT SEC-06: scrittura ATOMICA (temp nella stessa dir + fsync + rename).
+// Prima writeFileSync diretto: un crash a metà lasciava settings.json
+// troncato/corrotto (poi readSettings ritornava {} perdendo TUTTO). rename
+// è atomico sullo stesso filesystem: il file di destinazione o è la vecchia
+// versione o la nuova, mai a metà.
+function writeFileAtomic(destPath, data) {
+    var tmp = destPath + '.tmp-' + process.pid;
+    var fd = fs.openSync(tmp, 'w');
+    try {
+        fs.writeSync(fd, data);
+        fs.fsyncSync(fd);
+    } finally {
+        fs.closeSync(fd);
+    }
+    fs.renameSync(tmp, destPath);
+}
+
 // ============================================================
 // Utility - lista dei file misurazione su disco (cartella prove/)
 // Ritorna: [{ name, type:'alz'|'pol'|'other', size, mtime }, ...]
@@ -325,20 +360,35 @@ var SETTINGS_FILE = path.join(REAL_DIR, 'settings.json');
 function readSettings() {
     try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); } catch (e) { return {}; }
 }
+// AUDIT SEC-06: coda di scrittura settings. Ogni POST fa read→merge→write;
+// due POST concorrenti (es. sync metadati + verifica banco) si sovrapponevano
+// (TOCTOU) e l'ultimo vinceva sovrascrivendo il merge dell'altro. Serializzo:
+// una scrittura alla volta, ognuna legge lo stato aggiornato dalla precedente.
+var _settingsQueue = Promise.resolve();
 function apiSettings(req, res) {
     if (req.method === 'GET') return sendJson(res, 200, readSettings());
     if (req.method === 'POST') {
-        var body = '';
-        req.on('data', function (c) { body += c; if (body.length > 200000) req.destroy(); });
-        req.on('end', function () {
+        readBody(req, res, 200000, function (err, body) {
+            if (err) return;   // 413 già inviato da readBody, o socket morto
             var patch;
             try { patch = JSON.parse(body); } catch (e) { return sendJson(res, 400, { error: 'JSON non valido' }); }
-            var cur = readSettings();
-            Object.keys(patch).forEach(function (k) { cur[k] = patch[k]; });   // merge shallow
-            try {
-                fs.writeFileSync(SETTINGS_FILE, JSON.stringify(cur, null, 2));
+            if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+                return sendJson(res, 400, { error: 'Atteso un oggetto JSON' });
+            }
+            // accoda: read→merge→write atomico serializzato
+            _settingsQueue = _settingsQueue.then(function () {
+                var cur = readSettings();
+                // merge shallow; un valore null CANCELLA la chiave (permette
+                // di rimuovere impostazioni senza un endpoint dedicato)
+                Object.keys(patch).forEach(function (k) {
+                    if (patch[k] === null) delete cur[k];
+                    else cur[k] = patch[k];
+                });
+                writeFileAtomic(SETTINGS_FILE, JSON.stringify(cur, null, 2));
                 sendJson(res, 200, { ok: true });
-            } catch (e) { sendJson(res, 500, { error: 'Scrittura fallita: ' + e.message }); }
+            }).catch(function (e) {
+                sendJson(res, 500, { error: 'Scrittura fallita: ' + e.message });
+            });
         });
         return;
     }
@@ -681,7 +731,20 @@ function isAllowedStatic(u) {
 }
 
 var httpServer = http.createServer(function (req, res) {
-    var urlPath = req.url.split('?')[0]; // Rimuovi query string
+    // AUDIT SEC-05: ogni richiesta in un try/catch. Prima un'eccezione in un
+    // handler (es. decodeURIComponent su '%' malformato) risaliva a
+    // uncaughtException: il processo restava vivo ma il socket pendeva senza
+    // risposta (il browser aspettava all'infinito). Ora → 500 pulito.
+    try {
+        handleRequest(req, res);
+    } catch (e) {
+        log.error('HTTP', 'Handler crash su ' + req.url + ': ' + (e && e.stack || e));
+        try { if (!res.headersSent) sendJson(res, 500, { error: 'Errore interno' }); else res.end(); } catch (e2) {}
+    }
+});
+
+function handleRequest(req, res) {
+    var urlPath = req.url.split('?')[0]; // Rimuovi query string (grezzo, come le route)
 
     // Anti DNS-rebinding (audit SEC-01): Host che non punta a questa macchina
     if (!isTrustedHost(req.headers.host)) {
@@ -742,9 +805,8 @@ var httpServer = http.createServer(function (req, res) {
 
     // API: ripristina un file dal cestino
     if (urlPath === '/api/trash/restore' && req.method === 'POST') {
-        var rbody = '';
-        req.on('data', function (c) { rbody += c; if (rbody.length > 10000) req.destroy(); });
-        req.on('end', function () {
+        readBody(req, res, 10000, function (rerr, rbody) {
+            if (rerr) return;
             var tname;
             try { tname = JSON.parse(rbody).name; } catch (e) { return sendJson(res, 400, { error: 'Body non valido' }); }
             if (!isSafeFilename(tname)) return sendJson(res, 400, { error: 'Nome non valido' });
@@ -799,7 +861,10 @@ var httpServer = http.createServer(function (req, res) {
 
     // API: download (GET) o delete (DELETE) di un file misura specifico
     if (urlPath.indexOf('/api/file/') === 0) {
-        var fname = decodeURIComponent(urlPath.substring('/api/file/'.length));
+        var fname;
+        // AUDIT SEC-05: nome con escape % malformato → 400, non crash
+        try { fname = decodeURIComponent(urlPath.substring('/api/file/'.length)); }
+        catch (e) { return sendJson(res, 400, { error: 'Nome file non valido (URI)' }); }
         if (!isSafeFilename(fname)) {
             return sendJson(res, 400, { error: 'Nome file non valido', name: fname });
         }
@@ -815,17 +880,14 @@ var httpServer = http.createServer(function (req, res) {
             if (!/\.scr$/i.test(fname)) {
                 return sendJson(res, 400, { error: 'Salvataggio consentito solo per file .scr' });
             }
-            var body = '';
-            req.on('data', function (chunk) {
-                body += chunk;
-                if (body.length > 2000000) { req.destroy(); }   // cap 2 MB di sicurezza
-            });
-            req.on('end', function () {
+            // AUDIT SEC-05: cap 2 MB con 413 esplicito (prima req.destroy muto)
+            readBody(req, res, 2000000, function (err, body) {
+                if (err) return;
                 fs.mkdir(PROVE_DIR, { recursive: true }, function () {
-                    fs.writeFile(fpath, body, function (err) {
-                        if (err) {
-                            log('API', 'POST save errore: ' + err.message);
-                            return sendJson(res, 500, { error: 'Errore salvataggio', detail: err.message });
+                    fs.writeFile(fpath, body, function (werr) {
+                        if (werr) {
+                            log('API', 'POST save errore: ' + werr.message);
+                            return sendJson(res, 500, { error: 'Errore salvataggio', detail: werr.message });
                         }
                         log('API', 'POST save ok: ' + fname + ' (' + body.length + ' B)');
                         sendJson(res, 200, { ok: true, saved: fname });
@@ -906,7 +968,7 @@ var httpServer = http.createServer(function (req, res) {
         res.writeHead(200, { 'Content-Type': contentType });
         res.end(data);
     });
-});
+}
 
 // Doppio avvio (scenario tipico: secondo doppio click sull'exe): messaggio
 // chiaro invece di un'istanza zombie, e apertura del browser su quella attiva.
