@@ -303,18 +303,29 @@ float readSensorStableMm() {
   uint32_t tEnd = millis() + SCAN_BUDGET_MS;
   float prev = readSensorMmOnceT(SCAN_FRAME_MS);
   float last = prev;
-  while (millis() < tEnd) {
+  uint8_t validFrames = isnan(prev) ? 0 : 1;
+  while ((int32_t)(tEnd - millis()) > 0) {
     uint32_t remain = tEnd - millis();
     float v = readSensorMmOnceT(remain > SCAN_FRAME_MS ? SCAN_FRAME_MS : (uint16_t)remain);
-    if (isnan(v)) continue;
+    if (isnan(v)) {
+      // AUDIT FW-05: un frame NaN AZZERA il confronto — prima veniva solo
+      // saltato e due frame concordi SEPARATI da un buco del sensore
+      // passavano per "stabili". Dopo un NaN servono due frame buoni freschi.
+      prev = NAN;
+      continue;
+    }
+    if (validFrames < 255) validFrames++;
     if (!isnan(prev) && fabs(v - prev) <= SCAN_EPS_MM) return (v + prev) * 0.5f;
     prev = v;
     last = v;
   }
-  // Budget scaduto SENZA due frame concordi entro 5 µm: il punto viene
-  // accettato lo stesso (ultimo frame) ma va DICHIARATO — l'audit *sstat
-  // a fine scansione rende impossibile un'instabilità silenziosa.
+  // Budget scaduto senza due frame CONSECUTIVI concordi entro 5 µm.
+  // AUDIT FW-05: con meno di 2 frame validi in tutto il budget (1500 ms ≈
+  // ~15 frame attesi) il sensore sta perdendo colpi: il punto è NaN vero,
+  // non un numero — il browser lo scarta e lo conta (percorso MET-01).
+  // Con ≥2 frame validi ma discordi: ultimo frame, dichiarato in *sstat.
   g_lastReadStable = false;
+  if (validFrames < 2) return NAN;
   return last;
 }
 
@@ -457,7 +468,7 @@ void executeCommand() {
     else if (c == 'v') {
       // Versione/capacità firmware: il browser la usa per abilitare le
       // funzioni disponibili (scan=1 → scan autonomo 'S' supportato).
-      Serial.println(F("ver=3.4 scan=1"));
+      Serial.println(F("ver=3.5 scan=1"));
       Serial.println(F("*ver"));
     }
     else if (c == '!') {
@@ -602,24 +613,39 @@ void executeCommand() {
       Serial.println(F("*tend"));
     }
   } else if (cmdLen >= 2 && cmdBuf[0] == 'S') {
-    // S±NNNNN — scan autonomo: segno = direzione (come p/q), NNNNN = unità
-    int8_t dir = (cmdBuf[1] == '+') ? +1 : -1;
-    int value = atoi(&cmdBuf[(cmdBuf[1] == '+' || cmdBuf[1] == '-') ? 2 : 1]);
-    if (value > 0 && value <= 20000) {
-      autonomousScan(dir, (uint16_t)value);
+    // S±NNNNN — scan autonomo: segno = direzione (come p/q), NNNNN = unità.
+    // AUDIT FW-04: parsing con strtol (32 bit) + grammatica e range ESPLICITI.
+    // Prima atoi (int16 su AVR) wrappava: "S+70000" diventava 4464 unità
+    // ACCETTATE in silenzio. E il tetto era 20000 unità (~55 giri!): nessuna
+    // scansione legittima supera 720 unità (Race: 360° a passi da 0,5°) —
+    // tetto 1500 con margine. Fuori grammatica/range → "*err" e nessun moto.
+    if (cmdBuf[1] != '+' && cmdBuf[1] != '-') { Serial.println(F("*err S")); cmdLen = 0; return; }
+    char *endS = NULL;
+    long valueS = strtol(&cmdBuf[2], &endS, 10);
+    if (endS == &cmdBuf[2] || *endS != '\0' || valueS <= 0 || valueS > 1500) {
+      Serial.println(F("*err S"));
+      cmdLen = 0;
+      return;
     }
-  } else if (cmdLen >= 4 && cmdBuf[0] == '$') {
-    // $+NNN o $-NNN
-    int sign  = (cmdBuf[1] == '+') ? +1 : -1;
-    int value = atoi(&cmdBuf[2]);
-    if (value > 0) {
-      bool completed = stepperMove(sign * value);
-      // Drain del buffer seriale: durante il movimento il PC potrebbe aver
-      // accodato altri comandi (polling encoder, ecc.) che ora sono accumulati.
-      // Li scartiamo per non andare fuori sequenza nello stato del parser.
-      while (Serial.available() > 0) Serial.read();
-      if (completed) Serial.println(F("*mv"));   // fine movimento (se interrotto ha già emesso *mabort)
+    autonomousScan(cmdBuf[1] == '+' ? +1 : -1, (uint16_t)valueS);
+  } else if (cmdLen >= 2 && cmdBuf[0] == '$') {
+    // $±NNN — rotazione manuale. AUDIT FW-04: come sopra (strtol + range);
+    // prima "$+70000" wrappava a 4464° eseguiti davvero e non c'era tetto.
+    // Tetto 3600 unità (10 giri): copre Ruota/0V/posizioni con largo margine.
+    if (cmdLen < 3 || (cmdBuf[1] != '+' && cmdBuf[1] != '-')) { Serial.println(F("*err $")); cmdLen = 0; return; }
+    char *endM = NULL;
+    long valueM = strtol(&cmdBuf[2], &endM, 10);
+    if (endM == &cmdBuf[2] || *endM != '\0' || valueM <= 0 || valueM > 3600) {
+      Serial.println(F("*err $"));
+      cmdLen = 0;
+      return;
     }
+    bool completed = stepperMove((cmdBuf[1] == '+' ? +1 : -1) * (int16_t)valueM);
+    // Drain del buffer seriale: durante il movimento il PC potrebbe aver
+    // accodato altri comandi (polling encoder, ecc.) che ora sono accumulati.
+    // Li scartiamo per non andare fuori sequenza nello stato del parser.
+    while (Serial.available() > 0) { Serial.read(); lastRxMs = millis(); }
+    if (completed) Serial.println(F("*mv"));   // fine movimento (se interrotto ha già emesso *mabort)
   }
   cmdLen = 0;
 }

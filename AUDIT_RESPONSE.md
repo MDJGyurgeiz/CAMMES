@@ -133,6 +133,23 @@ Test: `tools/test_valve_float.js`.
   correzione DYN-01 rende corretta la *fisica della metrica* e la sua risposta
   al progetto molla, non la calibrazione assoluta.
 
+## Lotti aggiunti dopo la validazione al banco (2026-07-17)
+
+**Lotto 8 — MET-03 / MET-04 (provenienza misura).** Il `.scr` registra ora
+`#tastatore`, `#verso`, `#microstep`, `#fw` (versione reale dell'Arduino) e
+`#encoderSpan` (corsa encoder del giro, ~±1440 = giro pieno). Analisi avvisa
+se aspirazione e scarico hanno verso o tastatore diversi (fianchi specchiati /
+rampe non confrontabili). Motivato dal banco: puntalino vs piattello Ø33 sullo
+stesso lobo davano 1,26 mm RMS di "differenza" apparente, azzerata (0,047 mm)
+convertendo il tastatore.
+
+**Lotto 9 — FW-04 / FW-05 (firmware 3.5).** Parser `S`/`$` con `strtol` 32 bit +
+range espliciti: `S+70000` (che con `atoi` int16 wrappava a 4464 unità eseguite)
+ora → `*err`, zero moto; tetti `S`≤1500, `$`≤3600. Stabilità sensore: un NaN
+azzera il confronto, <2 frame validi → NaN vero (scartato via MET-01).
+**Validato al banco**: harness 23/23, tre scansioni Clio con ripetibilità
+0,024 mm RMS e zero gradi persi.
+
 ## Ancora aperti (P1/P2/P3 non in questi lotti)
 
 Non affrontati in questa tornata, da valutare in seguito: SEC-03..08/10 (XSS,

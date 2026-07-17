@@ -87,7 +87,7 @@ async function readEncoder() {
 
 async function main() {
     console.log('=============================================================');
-    console.log(' TEST HARDWARE FIRMWARE 3.4 — ' + PORT + ' (server SPENTO)');
+    console.log(' TEST HARDWARE FIRMWARE 3.4+ — ' + PORT + ' (server SPENTO)');
     console.log('=============================================================');
 
     kickOn();
@@ -96,10 +96,12 @@ async function main() {
     check('boot dopo apertura porta ("CAMMES Uno ready")', !!boot);
     await sleep(300);
 
-    // --- A. versione ---
+    // --- A. versione (3.4 o superiore) ---
     send('v\n');
     var ver = await waitFor('ver=', 3000);
-    check('A: versione = 3.4 con scan', !!ver && ver.line.indexOf('ver=3.4 scan=1') >= 0, ver ? ver.line : 'nessuna risposta');
+    var verNum = ver ? parseFloat((ver.line.match(/ver=([\d.]+)/) || [])[1]) : 0;
+    check('A: versione >= 3.4 con scan', verNum >= 3.4 && ver.line.indexOf('scan=1') >= 0, ver ? ver.line : 'nessuna risposta');
+    var has35 = verNum >= 3.5;
 
     // --- B. fix cmdBuf: 'x' idle non avvelena il comando successivo ---
     send('x');                       // STOP a motore fermo, SENZA newline (come stop() della pagina)
@@ -128,12 +130,12 @@ async function main() {
     // Prova indiretta (il *wdt non può arrivare mentre siamo muti: il chip
     // FTDI consegna solo su TX): 8 s di silenzio, poi kick e verifica che
     // (a) *wdt+*mabort erano in coda, (b) l'encoder si è fermato molto
-    // prima del target 4000°.
+    // prima del target 3000°.
     var encStart = await readEncoder();
     check('D: lettura encoder pre-moto', encStart !== null, 'enc ' + encStart);
     kickOff();
     var d0 = Date.now();
-    send('$+4000\n');                // ~16 s di moto a ~250°/s: il wdt DEVE troncarlo a ~5 s
+    send('$+3000\n');                // ~12 s di moto a ~250°/s (entro il tetto 3600 del fw 3.5): il wdt DEVE troncarlo a ~5 s
     await sleep(8000);               // SILENZIO TOTALE (niente kick, niente keep-alive)
     kickOn();
     var wdt = await waitFor('*wdt', 2000);
@@ -148,11 +150,11 @@ async function main() {
     check('D: motore FERMO dopo il wdt (encoder stabile)', stopped, 'enc ' + encA + ' → ' + encB);
     var movedDeg = (encA !== null && encStart !== null) ? Math.abs(encA - encStart) / 4 : null;
     // abort a ~5 s su un moto da ~16 s → rotazione molto sotto il target
-    check('D: moto troncato molto prima del target 4000°', movedDeg !== null && movedDeg > 200 && movedDeg < 2800,
-          movedDeg !== null ? movedDeg.toFixed(0) + '° percorsi (target 4000°)' : 'n/a');
+    check('D: moto troncato molto prima del target 3000°', movedDeg !== null && movedDeg > 200 && movedDeg < 2100,
+          movedDeg !== null ? movedDeg.toFixed(0) + '° percorsi (target 3000°)' : 'n/a');
     send('v\n');
     var ver2 = await waitFor('ver=', 3000);
-    check('D: firmware vivo e responsivo dopo il wdt', !!ver2 && ver2.line.indexOf('3.4') >= 0);
+    check('D: firmware vivo e responsivo dopo il wdt', !!ver2 && ver2.line.indexOf('scan=1') >= 0, ver2 ? ver2.line : 'muto');
 
     // --- E. controprova: keep-alive attivi → nessun wdt, moto completo ---
     var e0 = Date.now();
@@ -169,6 +171,37 @@ async function main() {
     send('x');
     var mab2 = await waitFor('*mabort', 2000);
     check('F: x durante $ → *mabort (STOP classico)', !!mab2, mab2 ? 'latenza ' + (mab2.t - fx) + ' ms' : 'nessun *mabort');
+    await sleep(500);
+
+    // --- G. (fw 3.5, audit FW-04) parser: wrap atoi e range → *err, ZERO moto ---
+    if (has35) {
+        var encG = await readEncoder();
+        send('S+70000\n');           // col 3.4 wrappava a 4464 unità ESEGUITE
+        var e1 = await waitFor('*err', 2500);
+        check('G: S+70000 → *err (niente wrap atoi)', !!e1, e1 ? e1.line : 'nessun *err');
+        send('$+70000\n');           // idem per la rotazione manuale
+        var e2 = await waitFor('*err', 2500);
+        check('G: $+70000 → *err', !!e2);
+        send('$+9999\n');            // oltre il tetto 3600
+        var e3 = await waitFor('*err', 2500);
+        check('G: $+9999 (oltre tetto 10 giri) → *err', !!e3);
+        send('S+2000\n');            // oltre il tetto scansione 1500
+        var e4 = await waitFor('*err', 2500);
+        check('G: S+2000 (oltre tetto scan) → *err', !!e4);
+        send('$+abc\n');             // grammatica rotta
+        var e5 = await waitFor('*err', 2500);
+        check('G: $+abc (grammatica) → *err', !!e5);
+        await sleep(800);
+        var encG2 = await readEncoder();
+        check('G: encoder IMMOBILE su tutti i comandi rifiutati', encG !== null && encG2 !== null && Math.abs(encG2 - encG) <= 2,
+              'enc ' + encG + ' → ' + encG2);
+        // e un comando LEGITTIMO subito dopo funziona ancora
+        send('$+010\n');
+        var mvG = await waitFor('*mv', 8000);
+        check('G: $+010 legittimo dopo i rifiuti → *mv', !!mvG);
+    } else {
+        console.log('  (G: test parser saltati — richiedono fw 3.5)');
+    }
 
     console.log('');
     if (fails > 0) console.log('RISULTATO: ' + fails + ' check FALLITI');

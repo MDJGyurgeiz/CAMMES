@@ -1254,6 +1254,19 @@ robocopy. I test che avviano un server (`test_confine_rete`) vanno con il
 preview server SPENTO (contesa su COM8/porte) e uccidono il figlio su ogni
 uscita per non lasciare processi zombie che bloccano le porte.
 
+### Lotto 9 — FW-04/FW-05: parser robusto + stabilità sensore (firmware 3.5)
+Parser `S`/`$` con `strtol` (32 bit) e grammatica/range espliciti: prima
+`atoi` (int16 su AVR) wrappava — `S+70000` diventava 4464 unità ESEGUITE in
+silenzio; ora fuori grammatica o oltre i tetti (`S`≤1500, `$`≤3600) →
+`*err` e ZERO moto. `readSensorStableMm`: un frame NaN azzera il confronto
+di stabilità (due letture concordi separate da un buco non valgono più) e
+<2 frame validi nel budget → NaN vero (il browser lo scarta, MET-01). Fw
+**3.5** compilato (10260 byte), flashato e validato: harness a **23/23 PASS**
+(nuovo blocco G: 5 comandi malformati → *err, encoder immobile, comando
+legittimo dopo funziona). Tre scansioni Clio consecutive fw3.4↔fw3.5:
+ripetibilità **0,024 mm RMS**, 0 gradi mancanti — il parser più severo non
+scarta punti buoni.
+
 ### Lotto 8 — MET-03/MET-04: provenienza misura (`ba83b61`)
 Il .scr ora registra `#tastatore` (selettore in Avanzate, ricordato),
 `#verso`, `#microstep`, `#fw` (versione reale dell'Arduino) e `#encoderSpan`
