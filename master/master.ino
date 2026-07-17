@@ -128,6 +128,16 @@ uint8_t cmdLen = 0;
 uint32_t lastRxMs = 0;
 const uint32_t WDT_TIMEOUT_MS = 5000;
 
+// AUDIT FW-01: stato motore PERSISTENTE. Prima 'f' (FREE) metteva ENA=LOW ma
+// il primo p/q/$/S rimetteva ENA=HIGH e muoveva: la mano dell'operatore era
+// ancora sull'albero. Ora FREE è uno stato: finché è attivo i movimenti sono
+// RIFIUTATI ('*locked'), va prima un 'l' (LOCK) esplicito.
+bool g_motorFree = false;
+
+// AUDIT FW-11: motivo dell'ultimo reset (MCUSR), letto nel setup. Il boot lo
+// annuncia così l'host sa PERCHÉ la scheda è (ri)partita.
+uint8_t g_resetFlags = 0;
+
 // ---- Config runtime ----
 uint8_t  cfgSamples       = 1;   // campioni per misura (1..9)
 uint8_t  cfgStepsPerUnit  = DEFAULT_STEPS_PER_UNIT;  // micropassi per p/q
@@ -199,6 +209,9 @@ ISR(PCINT0_vect)   { encoderUpdate(); }              // PCINT0 (D8 CHANGE)
 // vengono scartati per non intasare il buffer RX durante i movimenti lunghi.
 bool stepperMove(int16_t units) {
   if (units == 0) return true;
+  // AUDIT FW-01: se il motore è in FREE non si muove finché non arriva 'l'.
+  // Prima qualunque movimento rimetteva ENA=HIGH annullando il FREE in silenzio.
+  if (g_motorFree) { Serial.println(F("*locked")); return false; }
   digitalWrite(PIN_ENA, HIGH);
   digitalWrite(PIN_DIR, units > 0 ? HIGH : LOW);
   // 32 bit: con r32 già 2048 unità (2048°) superano i 65535 µstep e un
@@ -441,8 +454,12 @@ void executeCommand() {
   cmdBuf[cmdLen] = '\0';
   if (cmdLen == 1) {
     char c = cmdBuf[0];
-    if (c == 'p')      { if (stepperMove(-1)) emitMeasureScan(readSensorMm()); }
-    else if (c == 'q') { if (stepperMove(+1)) emitMeasureScan(readSensorMm()); }
+    // AUDIT FW-06: p/q ora leggono con lo STESSO assestamento dello scan
+    // autonomo — settle meccanico (cfgSettleMs) + lettura adattiva a 2 frame
+    // concordi (readSensorStableMm). Prima leggevano UN frame subito dopo il
+    // movimento, con le vibrazioni ancora in corso.
+    if (c == 'p')      { if (stepperMove(-1)) { if (cfgSettleMs) delay(cfgSettleMs); emitMeasureScan(readSensorStableMm()); } }
+    else if (c == 'q') { if (stepperMove(+1)) { if (cfgSettleMs) delay(cfgSettleMs); emitMeasureScan(readSensorStableMm()); } }
     else if (c == 'x') {
       // STOP ricevuto a motore FERMO: niente da fermare, ma va consumato.
       // Scoperto in verifica audit: prima 'x' non era un comando riconosciuto
@@ -468,7 +485,7 @@ void executeCommand() {
     else if (c == 'v') {
       // Versione/capacità firmware: il browser la usa per abilitare le
       // funzioni disponibili (scan=1 → scan autonomo 'S' supportato).
-      Serial.println(F("ver=3.5 scan=1"));
+      Serial.print(F("ver=3.6 scan=1 free=")); Serial.println(g_motorFree ? 1 : 0);
       Serial.println(F("*ver"));
     }
     else if (c == '!') {
@@ -488,12 +505,15 @@ void executeCommand() {
     }
     else if (c == 'f') {
       // FREE: rilascia corrente stepper. L'utente può ruotare l'albero
-      // a mano; l'encoder continua a contare in tempo reale.
+      // a mano; l'encoder continua a contare in tempo reale. Stato
+      // PERSISTENTE (audit FW-01): i movimenti restano rifiutati fino a 'l'.
+      g_motorFree = true;
       digitalWrite(PIN_ENA, LOW);
       Serial.println(F("*free"));
     }
     else if (c == 'l') {
       // LOCK: riabilita corrente stepper (torna in tenuta).
+      g_motorFree = false;
       digitalWrite(PIN_ENA, HIGH);
       Serial.println(F("*lock"));
     }
@@ -654,10 +674,23 @@ void executeCommand() {
 //  Setup
 // =============================================================
 void setup() {
-  pinMode(PIN_PUL, OUTPUT);
-  pinMode(PIN_DIR, OUTPUT);
-  pinMode(PIN_ENA, OUTPUT);
-  digitalWrite(PIN_ENA, LOW);                         // motore disabilitato a riposo
+  // AUDIT FW-11: motivo del reset (MCUSR) catturato PRIMA di qualsiasi cosa e
+  // azzerato (buona prassi: evita loop di reset dopo un watchdog). Annunciato
+  // al boot così l'host sa perché la scheda è (ri)partita.
+  g_resetFlags = MCUSR;
+  MCUSR = 0;
+
+  // AUDIT FW-12: ordine PIN sicuro. Prima si faceva pinMode(OUTPUT) e POI
+  // digitalWrite: nell'istante tra i due il pin driva LOW il livello di reset,
+  // e con PUL reso output mentre ENA era ancora INPUT (high-Z, driver magari
+  // abilitato) si poteva generare un impulso spurio = mezzo passo all'avvio.
+  // Ora: ENA disabilitato PER PRIMO (nessun passo possibile), poi PUL/DIR;
+  // digitalWrite-prima-di-pinMode pre-carica il latch così l'uscita nasce già
+  // al livello giusto senza transitorio. (Verifica finale all'oscilloscopio
+  // sul DM542E: NEEDS_HARDWARE.)
+  digitalWrite(PIN_ENA, LOW);  pinMode(PIN_ENA, OUTPUT); digitalWrite(PIN_ENA, LOW);  // motore disabilitato a riposo
+  digitalWrite(PIN_PUL, LOW);  pinMode(PIN_PUL, OUTPUT); digitalWrite(PIN_PUL, LOW);  // PUL idle basso (nessun fronte)
+  digitalWrite(PIN_DIR, LOW);  pinMode(PIN_DIR, OUTPUT); digitalWrite(PIN_DIR, LOW);
 
   pinMode(PIN_SENS_INT, INPUT);
   pinMode(PIN_SENS_DAT, INPUT);
@@ -677,7 +710,15 @@ void setup() {
   PCMSK0 |= (1 << PCINT0);
 
   Serial.begin(9600);
+  // "CAMMES Uno ready": stringa storica che l'host usa per rilevare i reboot —
+  // NON cambiarla. Subito dopo, l'handshake versionato con lo stato completo
+  // e il reset reason (audit FW-11): l'host può loggare/diagnosticare.
   Serial.println(F("CAMMES Uno ready"));
+  Serial.print(F("*boot ver=3.6 r=")); Serial.print(cfgStepsPerUnit);
+  Serial.print(F(" samp="));   Serial.print(cfgSamples);
+  Serial.print(F(" settle="));  Serial.print(cfgSettleMs);
+  Serial.print(F(" free="));    Serial.print(g_motorFree ? 1 : 0);
+  Serial.print(F(" rst=0x"));   Serial.println(g_resetFlags, HEX);
 }
 
 // =============================================================
