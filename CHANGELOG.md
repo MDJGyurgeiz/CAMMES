@@ -1279,6 +1279,16 @@ legacy preservato. Validato dal vivo: slot corto a 300° = 0 (non la coda del
 file lungo caricato prima), file da 20 righe rifiutato, Clio reale via
 `?files=` renderizzata (picco 8,52 mm, 360 punti).
 
+### Lotto 21 — MAT-06, SER-01, FW-08/10, DOC-02 (residui software)
+MAT-06 già risolto in L2. SER-01: l'autodetect seriale prova la firma firmware
+`v` su OGNI porta (manufacturer noti per primi) e tiene solo chi risponde CAMMES.
+FW-10: attesa sensore rollover-safe. FW-08/DOC-02: README a fw 3.6, protocollo
+completo versionato in `master.ino`, claim qualificati (validazione di
+plausibilità, non certificazione; non è un banco a motore). Voci non chiudibili
+solo via software (E-stop/schema hardware FW-03/07/12, flash fw 3.6, report VW
+REP, release/toolchain REL, legacy Excel XLS, fuzz/E2E TEST) elencate con
+motivazione in AUDIT_RESPONSE.md.
+
 ### Lotto 19-20 — DYN-02/06/07 + APP-10..17/20: dinamica e UI
 DYN-02: i solver 1/2/3-DOF fanno un **warm-up** di 3 giri (stato riportato tra
 i giri, registra solo l'ultimo) invece di misurare il transitorio dal fermo.

@@ -217,10 +217,40 @@ speechSynthesis locale (rimossa responsiveVoice); APP-20 claim RMS condizionato.
 APP-15 (web worker) rinviato: le simulazioni girano già in setTimeout e sul
 banco monoutente non bloccano criticamente. Verificato live. Suite 137.
 
-## Ancora aperti (P1/P2/P3 non in questi lotti)
+**Lotto 21 — MAT-06, SER-01, FW-08/10, DOC-02.** MAT-06 **già risolto** in L2
+(alzata al PMS = curva fasata a indice 360). SER-01: autodetect seriale prova
+la firma firmware `v` su OGNI porta (note per prime), tiene solo chi risponde
+CAMMES (prima apriva il primo FTDI a caso). FW-10: attesa sensore rollover-safe
+(diff unsigned). FW-08: tabella protocollo/README allineati a fw 3.6 e
+protocollo completo versionato nel commento di `master.ino`. DOC-02: claim
+qualificati (validazione di plausibilità, non certificazione; niente "banco a
+motore").
 
-Non affrontati in questa tornata, da valutare in seguito: SEC-03..08/10 (XSS,
-path containment, lock settings, backup, logging sincrono, updater firmato),
-SER-01..03, FW-01/04..12, MET-03..05, MAT-06, DYN-02/06..08, APP-01..17/20,
-REL-01..08/10, DOC-02, XLS-01..04, REP-01..04, TEST-01/02. FW-03 richiede la
-prova hardware al banco; REP-02 richiede la ri-scansione delle camme VW.
+## Stato finale e voci non chiudibili solo via software
+
+Tutti i **15 P0** e la grande maggioranza dei P1/P2 sono chiusi (21 lotti,
+commit `24473ad`→HEAD). Suite **137 check verdi**, lint 0, `npm audit` pulito
+salvo `pkg` (devDep, nessun fix a monte). Restano fuori, con motivazione:
+
+- **Richiede hardware / azione fisica**: **FW-03** (E-stop NC e rischio fisico
+  residuo — validato il watchdog software, l'E-stop resta un fungo in serie
+  all'alimentazione); **FW-07/FW-12** (schema/BOM e verifica LM339/impulso pin
+  all'oscilloscopio); **flash+bench del fw 3.6** (COM8 bloccata da un processo
+  wedged: serve un replug USB, poi `bench_fw34_test.js`); **REP-01..04**
+  (rigenerazione report VW: serve la ri-scansione delle camme rimontate).
+- **Firmware da fare col prossimo flash al banco**: **FW-09** (risposta `BUSY`
+  ai comandi non-`x` durante il moto, oggi scartati in silenzio dal drain).
+- **Rinviato per scelta di rapporto costo/beneficio sul banco monoutente**:
+  **APP-15** (Web Worker per le simulazioni; già in `setTimeout`, non bloccano
+  criticamente); **SEC-07 streaming** (backup in memoria, ok per il volume di
+  `prove/`; aggiunti MANIFEST+SHA-256).
+- **Release / toolchain (REL-01..08/10), decisioni utente**: aggiornamento
+  `pkg`/runtime LTS, firma Authenticode dell'exe, CI con `npm ci`/SBOM, tag
+  firmato — da concordare con la pubblicazione della release.
+- **Legacy Excel (XLS-01..04)**: il foglio `camme-analisi_rev8.5.xlsm` è
+  l'architettura PRECEDENTE, sostituita dall'app web. Da **archiviare** come
+  legacy (non manutenere): #REF!/#VALUE! e le macro non impattano la UI attuale.
+- **Qualità test (TEST-01/02)**: la suite è passata da 52 check autoreferenziali
+  a 137, con dataset/fixture reali (Clio, VW) e riproduzioni dei bug dell'audit
+  (MAT-01, MET-02, DYN-01, SEC-*). Restano da aggiungere in futuro fuzz/E2E e un
+  harness firmware in CI (HIL) — coperti oggi da `bench_fw34_test.js` al banco.

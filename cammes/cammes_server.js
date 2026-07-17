@@ -1344,24 +1344,22 @@ function autoDetectSerial() {
             log('SERIAL', '  ' + portName + ' - ' + (p.manufacturer || 'sconosciuto'));
         });
 
-        // Cerca Arduino (manufacturer contiene "Arduino" o "wch" per cloni CH340)
-        var arduinoPort = null;
-        for (var i = 0; i < ports.length; i++) {
-            var mfg = (ports[i].manufacturer || '').toLowerCase();
-            if (mfg.indexOf('arduino') !== -1 || mfg.indexOf('wch') !== -1 || mfg.indexOf('ftdi') !== -1) {
-                arduinoPort = ports[i].path || ports[i].comName;
-                break;
-            }
-        }
-
-        if (arduinoPort) {
-            openSerialPort(arduinoPort);
-        } else if (ports.length > 0) {
-            // Nessun manufacturer riconosciuto: PROBE in sequenza — si apre la
-            // porta, si manda 'v' e la si tiene SOLO se il firmware CAMMES
-            // risponde. (Prima si prendeva "l'ultima COM qualsiasi": su PC con
-            // altri dispositivi seriali si sparava il keep-alive a chi capitava.)
-            probePorts(ports.map(function (p) { return p.path || p.comName; }), 0);
+        // AUDIT SER-01: PROBE della firma firmware su OGNI porta, non "apri la
+        // prima con manufacturer Arduino/WCH/FTDI e fidati". Prima, se il primo
+        // FTDI era un ALTRO dispositivo (o l'Arduino era su una seconda porta),
+        // ci si attaccava a quello sbagliato senza riprovare. Ora si ordinano
+        // le porte mettendo davanti quelle col manufacturer noto e si prova 'v'
+        // in sequenza, tenendo la PRIMA che risponde davvero come CAMMES.
+        var known = [], others = [];
+        ports.forEach(function (p) {
+            var name = p.path || p.comName;
+            var mfg = (p.manufacturer || '').toLowerCase();
+            if (mfg.indexOf('arduino') !== -1 || mfg.indexOf('wch') !== -1 || mfg.indexOf('ftdi') !== -1) known.push(name);
+            else others.push(name);
+        });
+        var ordered = known.concat(others);
+        if (ordered.length > 0) {
+            probePorts(ordered, 0);   // apre, manda 'v', tiene solo chi risponde CAMMES
         } else {
             scheduleSerialRetry();
         }

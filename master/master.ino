@@ -284,11 +284,14 @@ bool stepperMove(int16_t units) {
 //  Lettura singolo frame: aspetta finestra di settle e restituisce mm
 // =============================================================
 float readSensorMmOnceT(uint16_t timeoutMs) {
-  uint32_t deadline = millis() + timeoutMs;
+  // AUDIT FW-10: attesa rollover-safe. `millis() < deadline` falliva subito se
+  // millis() era prossimo a wrap (dopo ~49 giorni di uptime); la differenza
+  // unsigned start→now confrontata col timeout è immune al rollover.
+  uint32_t start = millis();
   noInterrupts();
   sensorReady = false;
   interrupts();
-  while (millis() < deadline) {
+  while ((uint32_t)(millis() - start) < timeoutMs) {
     if (sensorReady) break;
   }
   noInterrupts();
