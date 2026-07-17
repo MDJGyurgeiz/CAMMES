@@ -44,6 +44,19 @@
   }
   window.cammesGetCssVar = getCssVar;
 
+  // -------- ESCAPE HTML (canonico) ----------------------------------------
+  // Escape canonico per i contenuti utente (nomi file, tag, label) destinati
+  // a innerHTML — incluso il body/title dei toast. showToast NON lo applica
+  // da sé: i chiamanti passano spesso HTML voluto (grassetti, entità, link),
+  // quindi è responsabilità del chiamante escapare con cammesEscape() le sole
+  // parti non fidate prima di comporre la stringa.
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  window.cammesEscape = escapeHtml;
+
   // -------- TOAST NOTIFICATIONS ------------------------------------------
   function ensureToastStack() {
     let stack = document.getElementById('toast-stack');

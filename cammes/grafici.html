@@ -298,25 +298,28 @@ function loadFile() {
         vmax2 = vmax1.split('.');
         vmax = vmax2[0] + "." + vmax2[1].substring(0, 2);
 
+        // SEC-03: textContent, non innerHTML — nom[0] è il nome del file
+        // scelto dal picker (arbitrario, mai sanificato). gmax/vmax sono
+        // numerici ma si uniforma tutto a textContent per coerenza.
         if (index == 1) {
-            document.getElementById('g1g').innerHTML = gmax;
-            document.getElementById('g1v').innerHTML = vmax;
-            document.getElementById('lb1').innerHTML = nom[0];
+            document.getElementById('g1g').textContent = gmax;
+            document.getElementById('g1v').textContent = vmax;
+            document.getElementById('lb1').textContent = nom[0];
         }
         if (index == 2) {
-            document.getElementById('g2g').innerHTML = gmax;
-            document.getElementById('g2v').innerHTML = vmax;
-            document.getElementById('lb2').innerHTML = nom[0];
+            document.getElementById('g2g').textContent = gmax;
+            document.getElementById('g2v').textContent = vmax;
+            document.getElementById('lb2').textContent = nom[0];
         }
         if (index == 3) {
-            document.getElementById('g3g').innerHTML = gmax;
-            document.getElementById('g3v').innerHTML = vmax;
-            document.getElementById('lb3').innerHTML = nom[0];
+            document.getElementById('g3g').textContent = gmax;
+            document.getElementById('g3v').textContent = vmax;
+            document.getElementById('lb3').textContent = nom[0];
         }
         if (index == 4) {
-            document.getElementById('g4g').innerHTML = gmax;
-            document.getElementById('g4v').innerHTML = vmax;
-            document.getElementById('lb4').innerHTML = nom[0];
+            document.getElementById('g4g').textContent = gmax;
+            document.getElementById('g4v').textContent = vmax;
+            document.getElementById('lb4').textContent = nom[0];
         }
         update();
     }
@@ -531,10 +534,14 @@ function evalNominal() {
         }
         var pass = maxDev <= tol;
         var name = (document.getElementById('lb' + (c + 1)) || {}).textContent || ('grafico' + (c + 1));
+        // SEC-03: name è il nome file (arbitrario) riletto da lb1..4 — va
+        // escapato prima di ricomporlo in innerHTML, altrimenti il fix
+        // textContent sulle etichette verrebbe vanificato un passaggio dopo.
+        var safeName = window.cammesEscape ? window.cammesEscape(name) : name.replace(/[&<>]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]; });
         rows += '<div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;">' +
             '<span style="font-weight:700;color:' + (pass ? 'var(--success, #2ecc71)' : 'var(--danger, #e74c3c)') + ';">' +
             (pass ? '&#10003; CONFORME' : '&#10007; NON CONFORME') + '</span>' +
-            '<span style="flex:1;">' + name + '</span>' +
+            '<span style="flex:1;">' + safeName + '</span>' +
             '<span style="color:var(--text-muted);">max ' + maxDev.toFixed(3) + ' mm @ ' + maxDeg + '&deg;</span></div>';
     }
     if (box) box.innerHTML = rows || '<div style="font-size:12px;color:var(--text-muted);">Carica almeno una curva misurata qui sopra per avere il verdetto.</div>';
@@ -577,9 +584,11 @@ function _loadAlzFromText(text, originalName) {
     var vfmt = vparts[0] + '.' + ((vparts[1] || '00') + '00').substring(0, 2);
     var ids = ['g1', 'g2', 'g3', 'g4'];
     var prefix = ids[index - 1];
-    document.getElementById(prefix + 'g').innerHTML = localGmax;
-    document.getElementById(prefix + 'v').innerHTML = vfmt;
-    document.getElementById('lb' + index).innerHTML = label;
+    // SEC-03: textContent, non innerHTML — label deriva dal nome file
+    // (arbitrario: arriva da ?files= o dall'archivio prove/).
+    document.getElementById(prefix + 'g').textContent = localGmax;
+    document.getElementById(prefix + 'v').textContent = vfmt;
+    document.getElementById('lb' + index).textContent = label;
     update();
     if (window.cammesToast) window.cammesToast({
         kind: 'success', title: 'File caricato', body: label, duration: 2000

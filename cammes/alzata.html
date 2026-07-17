@@ -1744,12 +1744,30 @@ function renderSavedPositions() {
     var wrap = document.getElementById('savedPositions');
     if (!wrap) return;
     var arr = loadSavedPositions();
-    wrap.innerHTML = arr.map(function (p) {
-        return '<span class="saved-pos-chip" onclick="gotoSavedPosition(\'' + p.label + '\');" title="Vai a ' + p.deg + '&deg;">' +
-               p.label + ' <span style="opacity:.7;">' + p.deg.toFixed(0) + '&deg;</span>' +
-               '<span class="saved-pos-chip-delete" onclick="deletePositionMark(\'' + p.label + '\', event);">&times;</span>' +
-               '</span>';
-    }).join('');
+    // SEC-03: le label sono sanificate al salvataggio (savePositionMark), ma
+    // localStorage può contenere dati vecchi o importati da un altro PC:
+    // costruzione DOM con textContent e listener con label in closure, così
+    // la label non passa mai da innerHTML né da stringhe JS in onclick.
+    wrap.innerHTML = '';
+    arr.forEach(function (p) {
+        var chip = document.createElement('span');
+        chip.className = 'saved-pos-chip';
+        chip.title = 'Vai a ' + p.deg + '°';
+        chip.addEventListener('click', function () { gotoSavedPosition(p.label); });
+        chip.appendChild(document.createTextNode(p.label + ' '));
+        var degSpan = document.createElement('span');
+        degSpan.style.opacity = '.7';
+        degSpan.textContent = p.deg.toFixed(0) + '°';
+        chip.appendChild(degSpan);
+        var del = document.createElement('span');
+        del.className = 'saved-pos-chip-delete';
+        del.textContent = '×';
+        // deletePositionMark fa ev.stopPropagation(): il click sulla × non
+        // arriva al chip e non parte il "vai a posizione" (come prima).
+        del.addEventListener('click', function (ev) { deletePositionMark(p.label, ev); });
+        chip.appendChild(del);
+        wrap.appendChild(chip);
+    });
 }
 window.savePositionMark = savePositionMark;
 window.gotoSavedPosition = gotoSavedPosition;

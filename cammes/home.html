@@ -932,7 +932,7 @@ function toggleBookmarkFilter() {
 
 // ===== Tag/etichette sui file (persistente in localStorage) =====
 // Struttura: { fileName: ["race", "stradale", ...] }
-// Tag normalizzati: lowercase, trim, no spazi multipli, max 20 char.
+// Tag normalizzati: lowercase, trim, spazi→'-', whitelist [a-z0-9àèéìòù_-], max 20 char.
 var TAGS_KEY = 'cammes-tags-v1';
 function loadAllTags() {
     try { return JSON.parse(localStorage.getItem(TAGS_KEY)) || {}; } catch (e) { return {}; }
@@ -949,7 +949,14 @@ function getTagsForFile(name) {
     return Array.isArray(all[name]) ? all[name] : [];
 }
 function normalizeTag(t) {
-    return String(t || '').toLowerCase().trim().replace(/\s+/g, '-').substring(0, 20);
+    // SEC-03: whitelist esplicita. La vecchia normalizzazione (solo spazi→'-')
+    // lasciava passare un tag come "<svg/onload=...>" scritto senza spazi,
+    // che poi finiva in innerHTML e dentro onclick inline. Tutto ciò che non
+    // è [a-z0-9àèéìòù_-] viene rimosso alla radice.
+    return String(t || '').toLowerCase().trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9àèéìòù_-]/g, '')
+        .substring(0, 20);
 }
 function addTagsToFile(name, tagsArr) {
     var all = loadAllTags();
@@ -1134,16 +1141,35 @@ function renderTagStats() {
     entries.sort(function (a, b) { return b.n - a.n; });
     var top = entries.slice(0, 8);
     var maxN = top[0].n;
-    var html = top.map(function (e) {
+    // SEC-03: righe costruite via DOM con textContent + addEventListener.
+    // Il nome del tag è contenuto utente e prima finiva sia nel markup che
+    // dentro onclick inline: escapeHtml non basta nel contesto onclick,
+    // perché il parser HTML ri-decodifica le entità prima dell'esecuzione JS.
+    bars.innerHTML = '';
+    top.forEach(function (e) {
         var pct = maxN > 0 ? (e.n / maxN) * 100 : 0;
         var active = selectedTagFilters.indexOf(e.tag) !== -1 ? ' active' : '';
-        return '<div class="tag-stats-row' + active + '" onclick="toggleTagFilter(\'' + escapeHtml(e.tag) + '\');" title="Click per filtrare per ' + escapeHtml(e.tag) + '">' +
-                 '<div class="tag-stats-label">' + escapeHtml(e.tag) + '</div>' +
-                 '<div class="tag-stats-bar-wrap"><div class="tag-stats-bar" style="width:' + pct.toFixed(1) + '%"></div></div>' +
-                 '<div class="tag-stats-count">' + e.n + '</div>' +
-               '</div>';
-    }).join('');
-    bars.innerHTML = html;
+        var row = document.createElement('div');
+        row.className = 'tag-stats-row' + active;
+        row.title = 'Click per filtrare per ' + e.tag;
+        row.addEventListener('click', function () { toggleTagFilter(e.tag); });
+        var label = document.createElement('div');
+        label.className = 'tag-stats-label';
+        label.textContent = e.tag;
+        var barWrap = document.createElement('div');
+        barWrap.className = 'tag-stats-bar-wrap';
+        var bar = document.createElement('div');
+        bar.className = 'tag-stats-bar';
+        bar.style.width = pct.toFixed(1) + '%';
+        barWrap.appendChild(bar);
+        var count = document.createElement('div');
+        count.className = 'tag-stats-count';
+        count.textContent = e.n;
+        row.appendChild(label);
+        row.appendChild(barWrap);
+        row.appendChild(count);
+        bars.appendChild(row);
+    });
     card.style.display = '';
 }
 
@@ -1160,19 +1186,37 @@ function renderTagFilters() {
         return;
     }
     row.style.display = '';
-    var html = '<span class="tag-filter-label">Tag:</span>';
+    // SEC-03: chip costruiti via DOM (textContent + addEventListener), mai
+    // innerHTML/onclick inline: il nome del tag è contenuto utente e nel
+    // vecchio codice finiva non escapato sia nel markup che in una stringa JS.
+    row.innerHTML = '';
+    var lbl = document.createElement('span');
+    lbl.className = 'tag-filter-label';
+    lbl.textContent = 'Tag:';
+    row.appendChild(lbl);
     tags.forEach(function (t) {
-        var active = selectedTagFilters.indexOf(t) !== -1 ? 'active' : '';
-        html += '<button class="tag-filter-chip ' + active +
-                '" onclick="toggleTagFilter(\'' + t + '\');" type="button">' +
-                t + '<span class="tag-filter-count">' + counts[t] + '</span></button>';
+        var active = selectedTagFilters.indexOf(t) !== -1 ? ' active' : '';
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tag-filter-chip' + active;
+        btn.appendChild(document.createTextNode(t));
+        var cnt = document.createElement('span');
+        cnt.className = 'tag-filter-count';
+        cnt.textContent = counts[t];
+        btn.appendChild(cnt);
+        btn.addEventListener('click', function () { toggleTagFilter(t); });
+        row.appendChild(btn);
     });
     if (selectedTagFilters.length > 0) {
-        html += '<button class="tag-filter-chip" onclick="clearTagFilters();" ' +
-                'type="button" style="background:transparent;border-style:dashed;">' +
-                '× azzera</button>';
+        var clr = document.createElement('button');
+        clr.type = 'button';
+        clr.className = 'tag-filter-chip';
+        clr.style.background = 'transparent';
+        clr.style.borderStyle = 'dashed';
+        clr.textContent = '× azzera';
+        clr.addEventListener('click', clearTagFilters);
+        row.appendChild(clr);
     }
-    row.innerHTML = html;
 }
 function clearTagFilters() {
     selectedTagFilters = [];
@@ -1377,6 +1421,29 @@ function renderRecentsTable() {
     var countEl = document.getElementById('recentsCount');
     if (!wrap) return;
 
+    // SEC-03: unico listener delegato per tutte le azioni di riga (stella,
+    // anteprima, tag, elimina). Il nome file viaggia in data-name — per il
+    // DOM un attributo è solo testo — invece che dentro onclick inline, dove
+    // il vecchio replace(/'/g,'&#39;') veniva ri-decodificato dal parser HTML
+    // in apice e permetteva il breakout con nomi file piazzati a mano in
+    // prove/ (la sanificazione avviene solo al salvataggio da UI).
+    // Il listener sta su #recentsWrap, che sopravvive ai re-render.
+    if (!wrap._actionsBound) {
+        wrap._actionsBound = true;
+        wrap.addEventListener('click', function (e) {
+            var el = e.target.closest('[data-act]');
+            if (!el) return;
+            var name = el.getAttribute('data-name');
+            switch (el.getAttribute('data-act')) {
+                case 'star':    toggleBookmark(name, e); break;
+                case 'open':    openQuickView(name, el.getAttribute('data-type')); break;
+                case 'del':     confirmDelete(name); break;
+                case 'tag-del': clickRemoveTag(name, el.getAttribute('data-tag'), e); break;
+                case 'tag-add': promptAddTags(name, e); break;
+            }
+        });
+    }
+
     var bookmarks = loadBookmarks();
     var bookmarkSet = {};
     bookmarks.forEach(function (n) { bookmarkSet[n] = true; });
@@ -1449,28 +1516,29 @@ function renderRecentsTable() {
         var bm = bookmarkSet[f.name];
         var starChar = bm ? '&#9733;' : '&#9734;';
         var starTitle = bm ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti';
-        var nameJs = safeName.replace(/'/g, '&#39;');
-        // Tag badges sotto il nome file
+        // SEC-03: niente nomi file in stringhe JS inline — solo attributi
+        // data-* (escapati con escapeHtml, che copre anche " e '); le azioni
+        // le gestisce il listener delegato su #recentsWrap qui sopra.
         var fileTags = allTags[f.name] || [];
         var tagsHtml = '<div class="file-tags">';
         fileTags.forEach(function (t) {
             var safeTag = escapeHtml(t);
-            tagsHtml += '<span class="tag-badge" title="Click per rimuovere il tag" onclick="clickRemoveTag(\'' + nameJs + '\', \'' + safeTag + '\', event);">' + safeTag + '</span>';
+            tagsHtml += '<span class="tag-badge" title="Click per rimuovere il tag" data-act="tag-del" data-name="' + safeName + '" data-tag="' + safeTag + '">' + safeTag + '</span>';
         });
-        tagsHtml += '<button class="tag-add-btn" title="Aggiungi/modifica tag" onclick="promptAddTags(\'' + nameJs + '\', event);">+</button>';
+        tagsHtml += '<button class="tag-add-btn" title="Aggiungi/modifica tag" data-act="tag-add" data-name="' + safeName + '">+</button>';
         tagsHtml += '</div>';
         return '<tr class="' + (bm ? 'bookmarked' : '') + '">' +
-            '<td><button class="star-btn' + (bm ? ' active' : '') + '" title="' + starTitle + '" onclick="toggleBookmark(\'' + nameJs + '\', event);">' + starChar + '</button></td>' +
+            '<td><button class="star-btn' + (bm ? ' active' : '') + '" title="' + starTitle + '" data-act="star" data-name="' + safeName + '">' + starChar + '</button></td>' +
             '<td><span class="type-pill ' + safeType + '">' + typeLabel + '</span></td>' +
             '<td>' +
-              '<span class="fname" title="Click per anteprima" onclick="openQuickView(\'' + nameJs + '\', \'' + safeType + '\');">' + safeName + '</span>' +
+              '<span class="fname" title="Click per anteprima" data-act="open" data-name="' + safeName + '" data-type="' + safeType + '">' + safeName + '</span>' +
               tagsHtml +
             '</td>' +
             '<td class="fsize">' + fmtBytes(f.size) + '</td>' +
             '<td class="fdate">' + escapeHtml(fmtDate(f.mtime)) + '</td>' +
             '<td style="text-align:right;white-space:nowrap;">' +
               '<a class="home-action-btn" href="/api/file/' + encodeURIComponent(f.name) + '" target="_blank" download="' + safeName + '" title="Scarica">&darr;</a>' +
-              '<button class="delete-btn" title="Elimina" onclick="confirmDelete(\'' + nameJs + '\');">&times;</button>' +
+              '<button class="delete-btn" title="Elimina" data-act="del" data-name="' + safeName + '">&times;</button>' +
             '</td>' +
             '</tr>';
     }).join('');
@@ -1730,23 +1798,14 @@ function _renderQuickView(fileName, fileType, text) {
     }
 
     var safeName = escapeHtml(fileName);
-    var safeType = escapeHtml(fileType || '');
-    var nameJs = safeName.replace(/'/g, '&#39;');
 
-    // Tag badges nel modal
-    var fileTags = getTagsForFile(fileName);
-    var tagsHtml = '<div class="file-tags" id="qvTagsRow">';
-    fileTags.forEach(function (t) {
-        var safeTag = escapeHtml(t);
-        tagsHtml += '<span class="tag-badge" title="Rimuovi" onclick="clickRemoveTag(\'' + nameJs + '\', \'' + safeTag + '\', event); _refreshQuickViewTags(\'' + nameJs + '\');">' + safeTag + '</span>';
-    });
-    tagsHtml += '<button class="tag-add-btn" title="Aggiungi/modifica tag" onclick="promptAddTags(\'' + nameJs + '\', event); _refreshQuickViewTags(\'' + nameJs + '\');">+</button>';
-    tagsHtml += '</div>';
-
+    // Tag badges nel modal: il contenitore resta vuoto qui, lo riempie
+    // _refreshQuickViewTags() via DOM (SEC-03: niente nome file in onclick
+    // inline — stesso motivo della tabella recenti).
     body.innerHTML =
         '<div style="margin-bottom: var(--sp-3);">' +
         '  <div class="quickview-stat-label">Tag</div>' +
-        tagsHtml +
+        '  <div class="file-tags" id="qvTagsRow"></div>' +
         '</div>' +
         '<div class="quickview-stats">' +
         '  <div class="quickview-stat"><div class="quickview-stat-label">N. punti</div><div class="quickview-stat-value">' + parsed.count + '</div></div>' +
@@ -1756,10 +1815,15 @@ function _renderQuickView(fileName, fileType, text) {
         '<div class="quickview-chart-wrap"><canvas id="quickviewCanvas"></canvas></div>' +
         '<div class="quickview-actions">' +
         '  <a class="btn btn-secondary" href="/api/file/' + encodeURIComponent(fileName) + '" download="' + safeName + '">&darr; Scarica</a>' +
-        '  <button class="btn btn-secondary" onclick="exportSinglePDF(\'' + nameJs + '\', \'' + safeType + '\');" title="Esporta scheda tecnica PDF di questo file">&#128196; Scheda PDF</button>' +
+        '  <button class="btn btn-secondary" id="qvPdfBtn" title="Esporta scheda tecnica PDF di questo file">&#128196; Scheda PDF</button>' +
         '  <a class="btn btn-accent" href="grafici.html?files=' + encodeURIComponent(fileName) + '" title="Apri pagina Confronto con questo file già caricato">Apri in Confronto</a>' +
         '  <button class="btn btn-secondary" onclick="closeQuickView();">Chiudi</button>' +
         '</div>';
+
+    _refreshQuickViewTags(fileName);
+    // SEC-03: listener con fileName in closure, non onclick inline
+    var pdfBtn = document.getElementById('qvPdfBtn');
+    if (pdfBtn) pdfBtn.addEventListener('click', function () { exportSinglePDF(fileName, fileType || ''); });
 
     var css = window.cammesGetCssVar || function () { return ''; };
     var accent = (fileType === 'pol' ? css('--accent-2') : css('--accent')) || '#00d4ff';
@@ -1812,18 +1876,34 @@ function closeQuickView() {
 }
 // Rinfresca la riga tag nel modal Quick View senza ricaricare il file.
 // Chiamato dopo promptAddTags / clickRemoveTag dal contesto del modal.
+// SEC-03: badge costruiti via DOM (textContent + listener con fileName in
+// closure). Il vecchio onclick inline con replace(/'/g,'&#39;') era un falso
+// escape: il parser HTML ri-decodifica l'entità in apice prima di eseguire
+// il JS, quindi un nome file ostile usciva dalla stringa.
 function _refreshQuickViewTags(fileName) {
     var row = document.getElementById('qvTagsRow');
     if (!row) return;
-    var fileTags = getTagsForFile(fileName);
-    var safeNameJs = fileName.replace(/'/g, '&#39;');
-    var html = '';
-    fileTags.forEach(function (t) {
-        var safeTag = escapeHtml(t);
-        html += '<span class="tag-badge" title="Rimuovi" onclick="clickRemoveTag(\'' + safeNameJs + '\', \'' + safeTag + '\', event); _refreshQuickViewTags(\'' + safeNameJs + '\');">' + safeTag + '</span>';
+    row.innerHTML = '';
+    getTagsForFile(fileName).forEach(function (t) {
+        var badge = document.createElement('span');
+        badge.className = 'tag-badge';
+        badge.title = 'Rimuovi';
+        badge.textContent = t;
+        badge.addEventListener('click', function (ev) {
+            clickRemoveTag(fileName, t, ev);
+            _refreshQuickViewTags(fileName);
+        });
+        row.appendChild(badge);
     });
-    html += '<button class="tag-add-btn" title="Aggiungi/modifica tag" onclick="promptAddTags(\'' + safeNameJs + '\', event); _refreshQuickViewTags(\'' + safeNameJs + '\');">+</button>';
-    row.innerHTML = html;
+    var add = document.createElement('button');
+    add.className = 'tag-add-btn';
+    add.title = 'Aggiungi/modifica tag';
+    add.textContent = '+';
+    add.addEventListener('click', function (ev) {
+        promptAddTags(fileName, ev);
+        _refreshQuickViewTags(fileName);
+    });
+    row.appendChild(add);
 }
 
 window.openQuickView  = openQuickView;
@@ -2634,15 +2714,38 @@ function toggleTrash() {
         box = document.createElement('div');
         box.id = 'trashBox';
         box.className = 'card';
-        var rows = (d.files || []).map(function (f) {
-            return '<div style="display:flex;align-items:center;gap:10px;padding:4px 0;font-size:13px;">' +
-                '<span style="flex:1;">' + f.original + '</span>' +
-                '<span style="color:var(--text-muted);font-size:11px;">eliminato ' + f.deletedAt + '</span>' +
-                '<button class="home-action-btn" onclick="restoreTrash(\'' + f.trashName + '\')">&#8617; Ripristina</button></div>';
-        }).join('');
-        box.innerHTML = '<div class="card-title">&#9851; Cestino (' + (d.files || []).length + ')' +
-            '<span style="font-size:11px;color:var(--text-muted);font-weight:normal;margin-left:10px;">i file si eliminano da soli dopo 30 giorni</span></div>' +
-            (rows || '<div style="font-size:13px;color:var(--text-muted);">Vuoto.</div>');
+        var files = d.files || [];
+        box.innerHTML = '<div class="card-title">&#9851; Cestino (' + files.length + ')' +
+            '<span style="font-size:11px;color:var(--text-muted);font-weight:normal;margin-left:10px;">i file si eliminano da soli dopo 30 giorni</span></div>';
+        // SEC-03: righe costruite via DOM. f.original arrivava in innerHTML
+        // senza escape e f.trashName finiva in onclick inline: i nomi nel
+        // cestino possono derivare da file piazzati a mano in prove/, quindi
+        // vanno trattati come testo (textContent + listener in closure).
+        if (files.length === 0) {
+            var empty = document.createElement('div');
+            empty.style.cssText = 'font-size:13px;color:var(--text-muted);';
+            empty.textContent = 'Vuoto.';
+            box.appendChild(empty);
+        } else {
+            files.forEach(function (f) {
+                var row = document.createElement('div');
+                row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:4px 0;font-size:13px;';
+                var name = document.createElement('span');
+                name.style.cssText = 'flex:1;';
+                name.textContent = f.original;
+                var when = document.createElement('span');
+                when.style.cssText = 'color:var(--text-muted);font-size:11px;';
+                when.textContent = 'eliminato ' + f.deletedAt;
+                var btn = document.createElement('button');
+                btn.className = 'home-action-btn';
+                btn.innerHTML = '&#8617; Ripristina';   // testo statico, nessun dato utente
+                btn.addEventListener('click', function () { restoreTrash(f.trashName); });
+                row.appendChild(name);
+                row.appendChild(when);
+                row.appendChild(btn);
+                box.appendChild(row);
+            });
+        }
         var anchor = document.getElementById('trashBtn').closest('.card');
         anchor.parentNode.insertBefore(box, anchor);
     }).catch(function () {});

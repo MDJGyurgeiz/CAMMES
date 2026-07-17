@@ -77,7 +77,6 @@ function kickOff() { if (kickTimer) { clearInterval(kickTimer); kickTimer = null
 
 // Lettura encoder: '?' → "encoder=N deg=X.XX"
 async function readEncoder() {
-    var before = lines.length;
     send('?\n');
     var r = await waitFor('encoder=', 2500);
     if (!r) return null;
