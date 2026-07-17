@@ -1254,6 +1254,22 @@ robocopy. I test che avviano un server (`test_confine_rete`) vanno con il
 preview server SPENTO (contesa su COM8/porte) e uccidono il figlio su ogni
 uscita per non lasciare processi zombie che bloccano le porte.
 
+### Validazione al banco (2026-07-17, albero Clio montato con piattello Ø33)
+Firmware **3.4 flashato** (8,7 s via API, verified) e provato con il nuovo
+harness hardware `tools/bench_fw34_test.js` (fuori da npm test, richiede
+banco): **16/16 PASS** — watchdog host scattato a ~5,5 s di silenzio (moto
+troncato a 1373°/4000°, motore fermo, firmware vivo), nessun *wdt con
+keep-alive attivi, *tabort in 126 ms, cmdBuf pulito dopo 'x' a vuoto, STOP
+classico 186 ms. Il harness incorpora la trappola FTDI (kick '\n' ogni 150 ms,
+sospeso solo nella finestra muta del test watchdog, con verifica indiretta via
+encoder). Scansione end-to-end Veloce sulla Clio: 360/360 gradi, 0 invalide,
+0 instabili, picco 8,530 mm; **RMS 0,047 mm** contro la scansione storica
+convertita puntalino→Ø33 (= ripetibilità storica; il confronto grezzo dava
+1,26 mm perché il file storico è a puntalino — il .scr non registra il
+tastatore: da aggiungere ai metadati, rilievo MET-03). STOP a metà scansione:
+nessun riavvio spontaneo, nessun degrado a fallback, zero timer armati
+(MOT-01/cmdBuf verificati dal vivo).
+
 ## Sessione 11 — 2026-07-13: profili movimento testati, motore scansione automatico, layout
 
 ### Test al banco dei 4 profili movimento (domanda utente: "che senso ha averne 4?")

@@ -73,8 +73,16 @@ ritardatario invece di scartarlo.
 **FW-03 — nessun fail-safe locale.** Watchdog host: durante ogni movimento, se
 non arriva alcun byte per 5 s (cavo/PC morti) → `*wdt` + abort. Il keep-alive
 `\n` del server (ogni 100 ms) copre l'esercizio normale con margine 50×.
-Firmware **3.4** compilato (9402 byte) e incluso. *Flash sull'Arduino e prova
-del moto reale: da fare al banco (Arduino non collegato in sessione).*
+Firmware **3.4** compilato (9402 byte), incluso, **flashato e VALIDATO AL
+BANCO il 2026-07-17** (`tools/bench_fw34_test.js`, 16/16 PASS): watchdog
+scattato a ~5,5 s di silenzio con moto troncato a 1373° dei 4000° comandati e
+motore fermo (encoder congelato); nessun `*wdt` con keep-alive attivi; nota
+Concerto interrotta in 126 ms; `x` a vuoto non avvelena più il comando
+successivo; STOP classico in 186 ms. Scansione end-to-end sulla camma Clio:
+360/360 gradi, 0 letture invalide, 0 punti instabili, RMS 0,047 mm contro la
+scansione storica (convertita puntalino→piattello Ø33) = ripetibilità storica
+del banco. STOP a metà scansione: nessun riavvio spontaneo in 11 s (MOT-01
+verificato dal vivo).
 
 **cmdBuf (extra non in audit).** `x` a motore fermo è ora comando immediato
 consumato subito: prima restava in `cmdBuf`, avvelenava la riga successiva e
