@@ -198,6 +198,16 @@ un'"epoca" dello zero encoder: reset `!` o reboot Arduino la incrementano e
 "Vai a" una posizione di epoca diversa viene rifiutata (chip barrato) invece
 di muovere a un riferimento sbagliato. Verificato live.
 
+**Lotto 17 — FW-01/06/11/12 (firmware 3.6).** FREE persistente (`*locked`),
+p/q con assestamento reale, handshake di boot con reset reason, ordine pin
+sicuro. Compila; **flash e bench 3.6 PENDENTI** (COM8 bloccata da un processo
+wedged, serve un replug USB — poi harness `bench_fw34_test.js`).
+
+**Lotto 18 — SEC-04/07/08/10 (hardening server).** SEC-04 containment con
+`path.relative` (no dir sorelle); SEC-08 logging asincrono a coda; SEC-07
+backup con MANIFEST+SHA-256 e settings.json; SEC-10 SHA-256 atteso mostrato
+nella notifica di aggiornamento (l'app non auto-scarica/esegue). Test esteso.
+
 ## Ancora aperti (P1/P2/P3 non in questi lotti)
 
 Non affrontati in questa tornata, da valutare in seguito: SEC-03..08/10 (XSS,

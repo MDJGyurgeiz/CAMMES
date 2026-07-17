@@ -1279,6 +1279,23 @@ legacy preservato. Validato dal vivo: slot corto a 300° = 0 (non la coda del
 file lungo caricato prima), file da 20 righe rifiutato, Clio reale via
 `?files=` renderizzata (picco 8,52 mm, 360 punti).
 
+### Lotto 18 — SEC-04/07/08/10: hardening server
+SEC-04: containment via `path.relative` (`isInside`) al posto del confronto a
+prefisso, che accettava le directory sorelle. SEC-08: logging asincrono a coda
+(batch ogni 200 ms) invece di `appendFileSync` per ogni riga nel percorso caldo
+seriale; rotazione async. SEC-07: il backup ZIP include `MANIFEST.txt` con
+SHA-256 per file e `settings.json` (verificabilità/completezza). SEC-10: l'app
+non scarica né esegue nulla in automatico; ora la notifica di aggiornamento
+mostra lo **SHA-256 atteso** (estratto dalle note della release) con il comando
+`certutil` per verificare il file scaricato. Test `test_server_robustezza` esteso.
+
+### Lotto 17 — FW-01/06/11/12: firmware 3.6 (flash+bench pendenti)
+FW-01: FREE persistente (`*locked`, movimenti rifiutati fino a LOCK). FW-06:
+p/q leggono con settle + 2 frame come lo scan autonomo. FW-11: handshake di
+boot `*boot` con stato completo e reset reason (MCUSR). FW-12: ordine pin
+sicuro all'avvio. Compila (10548 B); flash e validazione al banco pendenti
+(COM8 bloccata da un processo wedged, serve replug USB).
+
 ### Lotto 16 — MET-05: posizioni encoder legate allo zero
 Le posizioni salvate (encoderCount assoluto) sono ora timbrate con un'"epoca"
 dello zero encoder (sessionStorage). Ogni evento che ridefinisce l'origine —

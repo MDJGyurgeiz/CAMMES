@@ -884,14 +884,20 @@
     fetch('/api/update-check').then(function (r) { return r.json(); }).then(function (d) {
       if (!d || !d.updateAvailable) return;
       try { sessionStorage.setItem('cammes-upd-notified', '1'); } catch (e) {}
+      // AUDIT SEC-10: mostra lo SHA-256 atteso così l'utente può verificare
+      // il file scaricato (Windows: `certutil -hashfile cammes.exe SHA256`)
+      // prima di eseguirlo — l'app non scarica né esegue nulla in automatico.
+      var shaLine = d.downloadSha256
+        ? '<br><span style="font-size:11px;color:var(--text-muted);">SHA-256 atteso: <code>' + window.cammesEscape(d.downloadSha256) + '</code> — verifica con <code>certutil -hashfile ' + window.cammesEscape(d.downloadName || 'cammes.exe') + ' SHA256</code></span>'
+        : '';
       if (window.cammesToast) window.cammesToast({
         kind: 'info',
         title: 'Aggiornamento disponibile: v' + d.latest,
         body: 'Stai usando la ' + CAMMES_VERSION + '. <a href="' + (d.downloadUrl || d.url) +
               '" target="_blank" rel="noopener" style="color:var(--accent);">' +
               (d.downloadUrl ? 'Scarica ' + (d.downloadName || 'cammes.exe') : 'Apri la pagina release') + '</a>. ' +
-              'Dalla Home puoi anche aggiornare il firmware Arduino.',
-        duration: 12000
+              'Dalla Home puoi anche aggiornare il firmware Arduino.' + shaLine,
+        duration: 14000
       });
     }).catch(function () {});
   }

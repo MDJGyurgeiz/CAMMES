@@ -120,11 +120,23 @@ function secSix() {
             check('SEC-06: entrambi i POST concorrenti applicati', obj[kA] === 1 && obj[kB] === 2,
                   kA + '=' + obj[kA] + ', ' + kB + '=' + obj[kB]);
             check('SEC-06: settings.json resta JSON valido', !!obj && typeof obj === 'object');
-            // pulizia: rimuovi le chiavi di test (null → restano ma innocue; le azzeriamo)
-            req('POST', '/api/settings', JSON.stringify({ [kA]: null, [kB]: null }), function () { finish(); });
+            // pulizia: rimuovi le chiavi di test (null → cancella la chiave, audit SEC-06)
+            req('POST', '/api/settings', JSON.stringify({ [kA]: null, [kB]: null }), function () { secSeven(); });
         });
     }
     // spara i due POST "in contemporanea"
     req('POST', '/api/settings', JSON.stringify({ [kA]: 1 }), onDone);
     req('POST', '/api/settings', JSON.stringify({ [kB]: 2 }), onDone);
+}
+
+function secSeven() {
+    // SEC-07 — il backup ZIP contiene MANIFEST.txt (con sha256) e settings.json
+    req('GET', '/api/backup-zip', null, function (err, code, body) {
+        // body è binario ma i nomi file nel ZIP sono ASCII in chiaro
+        var hasManifest = !err && code === 200 && body.indexOf('MANIFEST.txt') >= 0;
+        var hasSettings = body.indexOf('settings.json') >= 0;
+        check('SEC-07: backup ZIP include MANIFEST.txt', hasManifest, 'HTTP ' + code);
+        check('SEC-07: backup ZIP include settings.json', hasSettings);
+        finish();
+    });
 }

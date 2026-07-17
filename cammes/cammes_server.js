@@ -75,18 +75,50 @@ var ANSI = process.stdout.isTTY ? {
 // Log persistente su file (per la diagnostica di assistenza): stesse righe
 // della console, senza colori. Rotazione: sopra 1 MB si tiene la coda.
 var LOG_FILE = path.join(REAL_DIR, 'cammes.log');
-var _logWrites = 0, _logFileBroken = false;
+var _logFileBroken = false;
+// AUDIT SEC-08: logging ASINCRONO. Prima ogni riga faceva appendFileSync nel
+// percorso caldo (~98% delle righe sono DATA seriale): un I/O sincrono per ogni
+// campione può bloccare l'event loop e far perdere frame durante la scansione.
+// Ora le righe si accodano e si scrivono in batch con appendFile async.
+var _logQueue = [];
+var _logFlushing = false;
+var _logSinceRotCheck = 0;
+function _flushLog() {
+    if (_logFlushing || _logFileBroken || _logQueue.length === 0) return;
+    _logFlushing = true;
+    var chunk = _logQueue.join('');
+    _logQueue.length = 0;
+    fs.appendFile(LOG_FILE, chunk, function (err) {
+        _logFlushing = false;
+        if (err) { _logFileBroken = true; return; }
+        _logSinceRotCheck += chunk.length;
+        if (_logSinceRotCheck > 256 * 1024) {   // controllo rotazione ogni ~256 KB scritti
+            _logSinceRotCheck = 0;
+            fs.stat(LOG_FILE, function (e, st) {
+                if (!e && st.size > 1024 * 1024) {
+                    fs.readFile(LOG_FILE, 'utf8', function (e2, data) {
+                        if (!e2) { try { writeFileAtomic(LOG_FILE, data.slice(-512 * 1024)); } catch (e3) {} }
+                    });
+                }
+            });
+        }
+        if (_logQueue.length) _flushLog();   // altre righe accodate nel frattempo
+    });
+}
 function logToFile(line) {
     if (_logFileBroken) return;
-    try {
-        fs.appendFileSync(LOG_FILE, line + '\r\n');
-        if (++_logWrites % 500 === 0) {
-            var st = fs.statSync(LOG_FILE);
-            if (st.size > 1024 * 1024) {
-                fs.writeFileSync(LOG_FILE, fs.readFileSync(LOG_FILE, 'utf8').slice(-512 * 1024));
-            }
-        }
-    } catch (e) { _logFileBroken = true; }
+    _logQueue.push(line + '\r\n');
+    if (_logQueue.length === 1) setTimeout(_flushLog, 200);   // batch entro 200 ms
+    else if (_logQueue.length > 2000) _flushLog();            // burst: flush subito
+}
+
+// AUDIT SEC-04: containment robusto. Il vecchio controllo
+// resolved.indexOf(base) === 0 accettava le directory SORELLE (es. base
+// "/x/prove" accettava "/x/prove-altro/f"). path.relative dà '' o un percorso
+// che NON inizia con '..' e non è assoluto solo se target è DENTRO base.
+function isInside(baseDir, target) {
+    var rel = path.relative(path.resolve(baseDir), path.resolve(target));
+    return rel === '' || (rel.indexOf('..') !== 0 && !path.isAbsolute(rel) && rel.charAt(0) !== '.');
 }
 
 function logAt(level, tag, msg) {
@@ -256,6 +288,19 @@ function apiUpdateCheck(res) {
                 (rel.assets || []).forEach(function (a) {
                     if (!exeAsset && /\.exe$/i.test(a.name || '')) exeAsset = a;
                 });
+                // AUDIT SEC-10: l'app NON scarica né esegue l'exe da sola (il
+                // download è manuale dal link), ma senza un checksum l'utente non
+                // può verificare ciò che scarica. La CI mette lo SHA-256 nelle
+                // note della release: lo estraiamo (64 hex vicino al nome exe, o
+                // il primo 64-hex delle note) così la UI lo mostra da confrontare.
+                var notes = String(rel.body || '');
+                var sha = null;
+                if (exeAsset) {
+                    var reNear = new RegExp('([a-f0-9]{64})[^a-f0-9]{0,80}' + exeAsset.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '|' + exeAsset.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^a-f0-9]{0,80}([a-f0-9]{64})', 'i');
+                    var m = notes.match(reNear);
+                    if (m) sha = (m[1] || m[2] || '').toLowerCase();
+                }
+                if (!sha) { var m2 = notes.match(/\b[a-f0-9]{64}\b/i); if (m2) sha = m2[0].toLowerCase(); }
                 var data = {
                     current: APP_VERSION,
                     latest: latest,
@@ -265,8 +310,9 @@ function apiUpdateCheck(res) {
                     downloadUrl: exeAsset ? exeAsset.browser_download_url : null,
                     downloadName: exeAsset ? exeAsset.name : null,
                     downloadSizeMB: exeAsset ? Math.round(exeAsset.size / 1048576 * 10) / 10 : null,
+                    downloadSha256: sha,
                     publishedAt: rel.published_at,
-                    notes: String(rel.body || '').substring(0, 2000)
+                    notes: notes.substring(0, 2000)
                 };
                 _updateCache = { ts: Date.now(), data: data };
                 log('API', 'update-check: installata ' + APP_VERSION + ', ultima ' + latest +
@@ -336,11 +382,29 @@ function apiBackupZip(res) {
     listMisureFiles(function (err, files) {
         if (err) return sendJson(res, 500, { error: err.message });
         var entries = [];
+        // AUDIT SEC-07: MANIFEST con SHA-256 per file (verificabilità del
+        // backup) + inclusione di settings.json (officina/anagrafica/verifiche
+        // banco). Prima il backup era solo le misure, senza modo di accorgersi
+        // di un file corrotto/mancante al ripristino.
+        var manifest = ['# CAMMES backup manifest', '# generato: ' + new Date().toISOString(), '# file<TAB>bytes<TAB>sha256'];
+        var skipped = [];
         files.forEach(function (f) {
             try {
-                entries.push({ name: f.name, data: fs.readFileSync(path.join(PROVE_DIR, f.name)), mtime: new Date(f.mtime) });
-            } catch (e) { log.warn('API', 'backup-zip: salto ' + f.name + ' (' + e.message + ')'); }
+                var buf = fs.readFileSync(path.join(PROVE_DIR, f.name));
+                var sha = require('crypto').createHash('sha256').update(buf).digest('hex');
+                entries.push({ name: 'prove/' + f.name, data: buf, mtime: new Date(f.mtime) });
+                manifest.push('prove/' + f.name + '\t' + buf.length + '\t' + sha);
+            } catch (e) { skipped.push(f.name); log.warn('API', 'backup-zip: salto ' + f.name + ' (' + e.message + ')'); }
         });
+        // settings.json accanto all'exe (se presente)
+        try {
+            var sBuf = fs.readFileSync(SETTINGS_FILE);
+            var sSha = require('crypto').createHash('sha256').update(sBuf).digest('hex');
+            entries.push({ name: 'settings.json', data: sBuf, mtime: new Date() });
+            manifest.push('settings.json\t' + sBuf.length + '\t' + sSha);
+        } catch (e) {}
+        if (skipped.length) manifest.push('# NON inclusi (illeggibili): ' + skipped.join(', '));
+        entries.push({ name: 'MANIFEST.txt', data: Buffer.from(manifest.join('\r\n') + '\r\n', 'utf8'), mtime: new Date() });
         var zip = buildZip(entries);
         var fname = 'cammes_backup_' + new Date().toISOString().substring(0, 10) + '.zip';
         log('API', 'backup-zip: ' + entries.length + ' file, ' + zip.length + ' B');
@@ -870,7 +934,7 @@ function handleRequest(req, res) {
         }
         var fpath = path.join(PROVE_DIR, fname);
         var resolved = path.resolve(fpath);
-        if (resolved.indexOf(path.resolve(PROVE_DIR)) !== 0) {
+        if (!isInside(PROVE_DIR, resolved)) {   // AUDIT SEC-04: no dir sorelle
             return sendJson(res, 403, { error: 'Path traversal rifiutato' });
         }
 
@@ -945,7 +1009,7 @@ function handleRequest(req, res) {
 
     // Sicurezza: impedisci path traversal (cintura oltre all'allowlist)
     var resolvedStatic = path.resolve(filePath);
-    if (resolvedStatic.indexOf(path.resolve(STATIC_DIR)) !== 0) {
+    if (!isInside(STATIC_DIR, resolvedStatic)) {   // AUDIT SEC-04
         res.writeHead(403);
         res.end('Forbidden');
         return;
@@ -1106,7 +1170,7 @@ function handleFileSave(msg) {
     // Salva il file (path.join + verifica resolved per safety extra)
     var filePath = path.join(PROVE_DIR, fileName + '.scr');
     var resolved = path.resolve(filePath);
-    if (resolved.indexOf(path.resolve(PROVE_DIR)) !== 0) {
+    if (!isInside(PROVE_DIR, resolved)) {   // AUDIT SEC-04: no dir sorelle
         log.warn('FILE', 'Path traversal tentato, rifiutato: ' + resolved);
         return;
     }
