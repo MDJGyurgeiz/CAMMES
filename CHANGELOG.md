@@ -1254,6 +1254,18 @@ robocopy. I test che avviano un server (`test_confine_rete`) vanno con il
 preview server SPENTO (contesa su COM8/porte) e uccidono il figlio su ogni
 uscita per non lasciare processi zombie che bloccano le porte.
 
+### Lotto 13 — APP-08/APP-09: loader Confronto robusto
+grafici.html non usava il parser di libreria: due parser fatti a mano con
+split posizionale rigido (riga i = grado i), limite 361 che ora becca la coda
+di metadati `#...`, crash su file corti, e array globale `valori`/`valori5`
+condiviso tra i 4 slot (contaminazione: un file più corto ereditava le code
+del precedente). Ora tutto passa da `parseCamFile` (incluso lib in grafici),
+ogni slot ha il proprio array (`_cmpData`/`_polData`), limite 360, guardia
+`validCount<30` → file rifiutato, avviso su misure incomplete. Ramo `_pol`
+legacy preservato. Validato dal vivo: slot corto a 300° = 0 (non la coda del
+file lungo caricato prima), file da 20 righe rifiutato, Clio reale via
+`?files=` renderizzata (picco 8,52 mm, 360 punti).
+
 ### Lotto 12 — SEC-05/SEC-06: robustezza richieste + scritture atomiche (`2492dc5`)
 SEC-05: ogni richiesta in try/catch (un handler che lancia → 500 pulito, non
 socket appeso via uncaughtException); `decodeURIComponent` protetto (URL/nome

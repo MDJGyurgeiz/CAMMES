@@ -17,6 +17,10 @@
 <body>
 
 <script src="lib/chart.umd.min.js"></script>
+<!-- APP-08/APP-09: espone parseCamFile (parser robusto condiviso) come globale.
+     Sostituisce i due parser fatti a mano che assumevano riga i == grado i e
+     si rompevano sulla coda di metadati #chiave=valore dei file .scr attuali. -->
+<script src="lib/cammes-math.js"></script>
 
 <div class="app-container">
 
@@ -169,7 +173,6 @@
 
 <script>
 // Chart.js v4 — confronto fino a 4 alzate (theme-aware)
-var valori = new Array();
 var chartColors = {
     red:   'rgb(255, 0, 0)',
     blue:  'rgb(0, 0, 200)',
@@ -241,101 +244,90 @@ document.addEventListener('cammes:theme:change', function () {
 var index = 0;
 var vmax = 0;
 var gmax = 0;
+// APP-08 (anti-contaminazione): ogni slot 1..4 ha il PROPRIO array cam[1..360].
+// update() legge da qui, NON più da un array globale `valori` condiviso: prima,
+// caricando un file più corto del precedente, gli indici alti restavano quelli
+// del file vecchio → curve mescolate. Ora ogni file vive nel suo slot.
+window._cmpData = window._cmpData || [];
+
 function loadFile() {
-    vmax = 0;
-    gmax = 0;
-    var input, file, fr;
-    input = document.getElementById('fileinput1');
+    var input = document.getElementById('fileinput1');
+    if (!input) { bodyAppend("p", "non riesco a trovare questo file"); return; }
+    if (!input.files || !input.files[0]) { bodyAppend("p", "il browser non supporta la proprieta' file"); return; }
 
-    if (!input) {
-        bodyAppend("p", "non riesco a trovare questo file");
-    } else if (!input.files) {
-        bodyAppend("p", "il browser non supporta la proprieta' file");
-    } else {
-        nom = input.files[0].name.split('.');
-        lmd = input.files[0].lastModifiedDate.toString();
-        nomes = nom[0].split('_');
-        tfile = nomes[nomes.length - 1];
-        if (tfile != "alz") { alert('tipologia file non valida'); }
+    var nom = input.files[0].name.split('.');
+    var nomes = nom[0].split('_');
+    var tfile = nomes[nomes.length - 1];
+    if (tfile != "alz") { alert('tipologia file non valida'); return; }
 
-        if (tfile == "alz") {
-            index = index + 1;
-            file = input.files[0];
-            fr = new FileReader();
-            fr.onload = receivedText;
-            fr.readAsText(file);
-        }
+    var file = input.files[0];
+    var fr = new FileReader();
+    fr.onload = function () { showResult(fr, nom[0]); };
+    fr.readAsText(file);
+}
 
-        function receivedText() {
-            showResult(fr, "Text");
-            fr = new FileReader();
-            fr.onload = receivedBinary;
-            fr.readAsBinaryString(file);
-        }
+// APP-08/APP-09: usa il parser robusto parseCamFile (colonna-grado, tollerante a
+// \n/\r\n, metadati #k=v, ';'+virgola decimale) invece dello split posizionale
+// fragile. `cam` è un array [1..360] di numeri con .validCount/.missingCount/.meta.
+function showResult(fr, fileLabel) {
+    var cam = parseCamFile(fr.result);
+    _commitCmpCurve(cam, fileLabel);
+}
+
+// Registra la curva nello slot corrente, aggiorna tabella + grafico.
+// Ritorna true se caricata, false se scartata (guardie APP-09 / max 4 file).
+// Condiviso tra il picker (showResult) e il loader da URL (_loadAlzFromText):
+// così le guardie APP-08/APP-09 restano allineate in un solo punto.
+function _commitCmpCurve(cam, label) {
+    // GUARDIA APP-09: file irriconoscibile → non caricare lo slot.
+    if (!cam || cam.validCount < 30) {
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'File non riconosciuto', body: 'solo ' + (cam ? cam.validCount : 0) + ' righe valide', duration: 6000 });
+        return false;
     }
-
-    function showResult(fr, label) {
-        var markup, result, n, aByte, byteStr;
-        var risultato = "";
-        result = fr.result;
-        for (n = 0; n < result.length; ++n) {
-            aByte = result.charCodeAt(n);
-            risultato = risultato + String.fromCharCode(aByte);
-        }
-
-        risp = risultato.split('\r\n');
-
-        for (i = 1; i <= 361; i++) {
-            risp2 = risp[i].split(',');
-            valori[i] = risp2[1];
-            if (Number(risp2[1]) > vmax) {
-                vmax1 = risp2[1];
-                vmax = Number(risp2[1]);
-                gmax = i;
-            }
-        }
-
-        vmax2 = vmax1.split('.');
-        vmax = vmax2[0] + "." + vmax2[1].substring(0, 2);
-
-        // SEC-03: textContent, non innerHTML — nom[0] è il nome del file
-        // scelto dal picker (arbitrario, mai sanificato). gmax/vmax sono
-        // numerici ma si uniforma tutto a textContent per coerenza.
-        if (index == 1) {
-            document.getElementById('g1g').textContent = gmax;
-            document.getElementById('g1v').textContent = vmax;
-            document.getElementById('lb1').textContent = nom[0];
-        }
-        if (index == 2) {
-            document.getElementById('g2g').textContent = gmax;
-            document.getElementById('g2v').textContent = vmax;
-            document.getElementById('lb2').textContent = nom[0];
-        }
-        if (index == 3) {
-            document.getElementById('g3g').textContent = gmax;
-            document.getElementById('g3v').textContent = vmax;
-            document.getElementById('lb3').textContent = nom[0];
-        }
-        if (index == 4) {
-            document.getElementById('g4g').textContent = gmax;
-            document.getElementById('g4v').textContent = vmax;
-            document.getElementById('lb4').textContent = nom[0];
-        }
-        update();
+    if (index >= 4) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Massimo 4 file', body: 'Limite Confronto raggiunto. Reset per caricarne altri.', duration: 3000 });
+        return false;
     }
+    // Misura incompleta: si procede ma si avvisa (i buchi restano 0 nell'array).
+    if (cam.missingCount > 0 || (cam.meta && cam.meta.stato === 'INCOMPLETO')) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura incompleta', body: cam.missingCount + ' gradi mancanti (riempiti a 0), confronto indicativo', duration: 5000 });
+    }
+    // Picco e grado del picco da cam[1..360] con Number(), senza vmax1.split('.')
+    // fragile (lanciava se il valore non aveva il punto decimale).
+    var localVmax = 0, localGmax = 0;
+    for (var i = 1; i <= 360; i++) {
+        var v = Number(cam[i]);
+        if (isFinite(v) && v > localVmax) { localVmax = v; localGmax = i; }
+    }
+    index = index + 1;
+    window._cmpData[index] = cam;      // ogni slot il PROPRIO array
+    vmax = localVmax; gmax = localGmax;
+
+    // SEC-03: textContent, non innerHTML — label è il nome del file (arbitrario,
+    // mai sanificato). gmax/vmax sono numerici ma si uniforma a textContent.
+    var prefix = ['g1', 'g2', 'g3', 'g4'][index - 1];
+    document.getElementById(prefix + 'g').textContent = localGmax;
+    document.getElementById(prefix + 'v').textContent = localVmax.toFixed(2);
+    document.getElementById('lb' + index).textContent = label;
+    update();
+    return true;
 }
 </script>
 
 <script>
 function update() {
-    mylabel = "grafico" + index;
-    for (k = 1; k <= 361; k++) {
+    var mylabel = "grafico" + index;
+    // Legge la curva DELLO SLOT corrente (per-slot, APP-08), non più `valori`
+    // globale. Limite 1..360 (NON 361: la 361ª riga era una riga di metadati).
+    var cam = window._cmpData[index] || [];
+    for (var k = 1; k <= 360; k++) {
         if (index == 1) {
             lineChartData.labels.push(k);
         }
-        lineChartData.datasets.forEach((dataset) => {
+        lineChartData.datasets.forEach(function (dataset) {
             if (dataset.label == mylabel) {
-                dataset.data.push(valori[k]);
+                var v = Number(cam[k]);
+                dataset.data.push(isFinite(v) ? v : null);   // buco → null (gap nel grafico)
             }
         });
     }
@@ -392,7 +384,8 @@ document.addEventListener('cammes:theme:change', function () {
 // Vista polare: accetta file _alz (raggio = raggio base + alzata) e, per
 // retrocompatibilità, i vecchi _pol (raggio già assoluto come coppie cos,sin).
 var index2 = 0;
-var valori5 = new Array();
+// APP-08: per-slot anche per le viste polari. _polData[1..4] = raggi[1..360].
+window._polData = window._polData || [];
 function loadFile2() {
     var input = document.getElementById('fileinput2');
     if (!input || !input.files || !input.files[0]) return;
@@ -409,16 +402,37 @@ function loadFile2() {
     var file = input.files[0];
     var fr = new FileReader();
     fr.onload = function () {
-        var risp = String(fr.result).split(/\r?\n/);
         var rBase = Number((document.getElementById('polRBase') || {}).value) || 16;
-        for (var i = 1; i <= 360; i++) {
-            var risp2 = (risp[i] || '0,0').split(',');
-            var r = (tfile === 'pol')
-                ? Math.sqrt(risp2[0] * risp2[0] + risp2[1] * risp2[1])
-                : rBase + (Number(risp2[1]) || 0);
-            valori5[i] = r.toFixed(2);
+        var perSlot = new Array(361);            // array LOCALE di questa vista
+        for (var z = 1; z <= 360; z++) perSlot[z] = 0;
+
+        if (tfile === 'pol') {
+            // Ramo LEGACY _pol PRESERVATO: righe posizionali "cos,sin", raggio
+            // già assoluto. NON è "grado,alzata" → parseCamFile non si applica.
+            var risp = String(fr.result).split(/\r?\n/);
+            for (var i = 1; i <= 360; i++) {
+                var risp2 = (risp[i] || '0,0').split(',');
+                var r = Math.sqrt(risp2[0] * risp2[0] + risp2[1] * risp2[1]);
+                perSlot[i] = (isFinite(r) ? r : 0).toFixed(2);
+            }
+        } else {
+            // Ramo _alz: parser robusto, raggio = raggio base + alzata[grado].
+            var cam = parseCamFile(fr.result);
+            if (!cam || cam.validCount < 30) {   // GUARDIA APP-09
+                if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'File non riconosciuto', body: 'solo ' + (cam ? cam.validCount : 0) + ' righe valide', duration: 6000 });
+                return;
+            }
+            if (cam.missingCount > 0 || (cam.meta && cam.meta.stato === 'INCOMPLETO')) {
+                if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura incompleta', body: cam.missingCount + ' gradi mancanti (riempiti a 0), vista indicativa', duration: 5000 });
+            }
+            for (var j = 1; j <= 360; j++) {
+                var v = Number(cam[j]);
+                perSlot[j] = (rBase + (isFinite(v) ? v : 0)).toFixed(2);
+            }
         }
+
         index2 = index2 + 1;
+        window._polData[index2] = perSlot;
         update2();
         if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Vista polare ' + index2, body: file.name + (tfile === 'alz' ? ' (raggio base ' + rBase + ' mm + alzata)' : ' (file polare legacy)'), duration: 3500 });
     };
@@ -427,19 +441,20 @@ function loadFile2() {
 </script>
 
 <script>
-// Aggiorna l'N-esimo chart polare con i dati di valori5 (raggi 1..360).
-// Usa direttamente chart.data invece di variabili globali birdsData* che
-// non vengono più create dal refactor v4 (makePolar incapsula i data).
+// Aggiorna l'N-esimo chart polare con i raggi dello SLOT corrente (_polData,
+// APP-08). Usa direttamente chart.data invece di variabili globali birdsData*
+// che non vengono più create dal refactor v4 (makePolar incapsula i data).
 function update2() {
     var charts = [polarAreaChart, polarAreaChart2, polarAreaChart3, polarAreaChart4];
     var idx = index2 - 1;
     if (idx < 0 || idx >= charts.length) return;
     var ch = charts[idx];
     if (!ch) return;
+    var data = window._polData[index2] || [];
     if (!ch.data.labels) ch.data.labels = [];
     for (var x = 1; x <= 360; x++) {
         ch.data.labels.push(x);
-        ch.data.datasets.forEach(function (ds) { ds.data.push(valori5[x]); });
+        ch.data.datasets.forEach(function (ds) { ds.data.push(data[x]); });
     }
     ch.update('none');
 }
@@ -447,24 +462,11 @@ function update2() {
 
 <!-- ===== Collaudo su profilo nominale: banda ±tol + verdetto PASS/FAIL ===== -->
 <script>
-var _nominal = null;   // [1..360] profilo nominale
+var _nominal = null;   // [1..360] profilo nominale (array parseCamFile)
 
-// Parser tollerante: righe "grado,alzata" (o ';' con virgola decimale),
-// salta intestazioni (_pline) e metadati (#k=v). Ritorna null se irriconoscibile.
-function _parseProfile(text) {
-    var arr = new Array(361), valid = 0;
-    for (var z = 1; z <= 360; z++) arr[z] = 0;
-    String(text).split(/\r?\n/).forEach(function (line) {
-        line = line.trim();
-        if (!line || line.charAt(0) === '#' || line.charAt(0) === '_' || line.charAt(0) === '*') return;
-        var parts = line.indexOf(';') !== -1 ? line.split(';').map(function (s) { return s.replace(',', '.'); }) : line.split(',');
-        if (parts.length < 2) return;
-        var deg = Math.round(Number(parts[0])), val = Number(parts[1]);
-        if (isFinite(deg) && isFinite(val) && deg >= 1 && deg <= 360) { arr[deg] = val; valid++; }
-    });
-    return valid >= 30 ? arr : null;
-}
-
+// APP-08/APP-09: il parse manuale _parseProfile è stato rimosso; ora il nominale
+// passa dallo stesso parser robusto parseCamFile (vedi loadNominal). _nomAt legge
+// _nominal[1..360] esattamente come prima.
 function _nomAt(shift, d) { var k = ((d - 1 + shift) % 360 + 360) % 360 + 1; return _nominal[k]; }
 
 // Allinea il nominale alla curva misurata: aggancio al picco + rifinitura ±8° per SSE
@@ -491,11 +493,17 @@ function loadNominal() {
     if (!input || !input.files || !input.files[0]) return;
     var fr = new FileReader();
     fr.onload = function () {
-        _nominal = _parseProfile(fr.result);
-        if (!_nominal) {
-            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Nominale non riconosciuto', body: 'Servono righe "grado,alzata" (file _alz o CSV).', duration: 6000 });
+        var cam = parseCamFile(fr.result);
+        // GUARDIA APP-09: stessa soglia validCount<30 del percorso curve.
+        if (!cam || cam.validCount < 30) {
+            _nominal = null;
+            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Nominale non riconosciuto', body: 'Servono righe "grado,alzata" (file _alz o CSV): solo ' + (cam ? cam.validCount : 0) + ' valide.', duration: 6000 });
             return;
         }
+        if (cam.missingCount > 0 || (cam.meta && cam.meta.stato === 'INCOMPLETO')) {
+            if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Nominale incompleto', body: cam.missingCount + ' gradi mancanti (riempiti a 0), banda indicativa', duration: 5000 });
+        }
+        _nominal = cam;
         evalNominal();
     };
     fr.readAsText(input.files[0]);
@@ -555,44 +563,19 @@ window.evalNominal = evalNominal;
      fetch e popola i dataset sequenzialmente imitando loadFile(). -->
 <script>
 function _loadAlzFromText(text, originalName) {
-    // Simula la logica di showResult() ma su testo già fetchato
-    if (typeof index === 'undefined') return;
-    if (index >= 4) {
-        if (window.cammesToast) window.cammesToast({
-            kind: 'warn', title: 'Massimo 4 file',
-            body: 'Limite Confronto raggiunto. Reset per caricarne altri.',
-            duration: 3000
-        });
-        return;
-    }
-    index = index + 1;
-    var lines = text.split(/\r?\n/);
-    var localVmax = 0, localGmax = 0, localVmax1 = '0';
-    for (var i = 1; i <= 361 && i < lines.length; i++) {
-        var parts = lines[i].split(',');
-        if (parts.length < 2) continue;
-        valori[i] = parts[1];
-        if (Number(parts[1]) > localVmax) {
-            localVmax1 = parts[1];
-            localVmax = Number(parts[1]);
-            localGmax = i;
-        }
-    }
+    // APP-08/APP-09: stesso parser robusto e stesse guardie del picker, via
+    // _commitCmpCurve (slot dedicato, niente array `valori` globale).
+    if (typeof index === 'undefined' || typeof parseCamFile !== 'function') return;
+    var cam = parseCamFile(text);
     // Etichetta = nome file senza .scr / _alz finale
     var label = originalName.replace(/\.(scr|txt|csv)$/i, '').replace(/_alz$/i, '');
-    var vparts = String(localVmax1).split('.');
-    var vfmt = vparts[0] + '.' + ((vparts[1] || '00') + '00').substring(0, 2);
-    var ids = ['g1', 'g2', 'g3', 'g4'];
-    var prefix = ids[index - 1];
-    // SEC-03: textContent, non innerHTML — label deriva dal nome file
-    // (arbitrario: arriva da ?files= o dall'archivio prove/).
-    document.getElementById(prefix + 'g').textContent = localGmax;
-    document.getElementById(prefix + 'v').textContent = vfmt;
-    document.getElementById('lb' + index).textContent = label;
-    update();
-    if (window.cammesToast) window.cammesToast({
-        kind: 'success', title: 'File caricato', body: label, duration: 2000
-    });
+    // SEC-03: _commitCmpCurve scrive label via textContent (mai innerHTML) —
+    // label deriva dal nome file (arbitrario: arriva da ?files= o dall'archivio).
+    if (_commitCmpCurve(cam, label)) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'success', title: 'File caricato', body: label, duration: 2000
+        });
+    }
 }
 
 function _loadFromUrlIfNeeded() {
@@ -606,7 +589,9 @@ function _loadFromUrlIfNeeded() {
     if (names.length === 0) return;
 
     function tryStart(attempts) {
-        if (!window.myLine || typeof valori === 'undefined') {
+        // Attende chart pronto E parser caricato (prima gateava su `valori`,
+        // ora rimosso: si gatea su parseCamFile, che _commitCmpCurve richiede).
+        if (!window.myLine || typeof parseCamFile !== 'function') {
             if (attempts <= 0) return;
             return setTimeout(function () { tryStart(attempts - 1); }, 50);
         }

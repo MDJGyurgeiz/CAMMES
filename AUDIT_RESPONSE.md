@@ -172,6 +172,11 @@ protetto (→ 400), `readBody` con 413 esplicito. SEC-06: `writeFileAtomic`
 (temp+fsync+rename) e coda di scrittura settings serializzata (niente più
 TOCTOU né file troncato). Test `test_server_robustezza.js` (6 check).
 
+**Lotto 13 — APP-08 / APP-09 (loader Confronto).** grafici.html ora usa
+`parseCamFile` (niente più split posizionale, limite 361→360, coda metadati
+gestita); ogni slot ha il proprio array (no contaminazione tra file); guardia
+`validCount<30` e avviso su misure incomplete. Validato dal vivo con .scr reali.
+
 ## Ancora aperti (P1/P2/P3 non in questi lotti)
 
 Non affrontati in questa tornata, da valutare in seguito: SEC-03..08/10 (XSS,
