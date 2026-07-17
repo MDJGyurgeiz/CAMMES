@@ -1254,6 +1254,19 @@ robocopy. I test che avviano un server (`test_confine_rete`) vanno con il
 preview server SPENTO (contesa su COM8/porte) e uccidono il figlio su ogni
 uscita per non lasciare processi zombie che bloccano le porte.
 
+### Lotto 14 — APP-01/APP-02: staleness analisi + dispatcher modello compliance
+APP-02: i tool race (sweep RPM, suggerisci molla, mappa k×F₀, sweep 3D)
+chiamavano sempre `simulateCompliance` (1-DOF) ignorando il modello scelto;
+ora un dispatcher unico `runComplianceModel` rispetta 1/2/3-DOF (verificato:
+a 12000 rpm float 5,60 / 12,20 / 12,18 mm) e arricchisce i parametri
+bilancere/sede dal DOM. APP-01: cambiare un parametro che modifica la CURVA
+(follower, raggio base, rocker, centro, anticipo, gioco, smoothing, modello/
+parametri compliance) senza ri-premere Analizza ora marca l'analisi "stale"
+(banner + export CSV/PDF/cam card/race report bloccati con avviso), così il
+report non mescola più input nuovi e array vecchi; il live tuning con
+compliance attiva marca stale (forze live ma float al vecchio regime). Netto
+dopo Analizza. Suite 135.
+
 ### Lotto 13 — APP-08/APP-09: loader Confronto robusto
 grafici.html non usava il parser di libreria: due parser fatti a mano con
 split posizionale rigido (riga i = grado i), limite 361 che ora becca la coda

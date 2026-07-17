@@ -177,6 +177,13 @@ TOCTOU né file troncato). Test `test_server_robustezza.js` (6 check).
 gestita); ogni slot ha il proprio array (no contaminazione tra file); guardia
 `validCount<30` e avviso su misure incomplete. Validato dal vivo con .scr reali.
 
+**Lotto 14 — APP-01 / APP-02 (analisi).** APP-02: dispatcher unico
+`runComplianceModel` — i tool race rispettano il modello 1/2/3-DOF scelto
+(prima sempre 1-DOF). APP-01: guardia di stale-ness — un cambio di parametro
+che modifica la curva marca l'analisi non aggiornata (banner) e blocca le
+export finché non si ri-analizza (niente più mix input nuovi / array vecchi).
+Verificato dal vivo.
+
 ## Ancora aperti (P1/P2/P3 non in questi lotti)
 
 Non affrontati in questa tornata, da valutare in seguito: SEC-03..08/10 (XSS,

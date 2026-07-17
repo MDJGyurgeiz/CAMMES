@@ -507,8 +507,12 @@
 
             <!-- Action buttons -->
             <div class="flex gap-8" style="margin-top:16px;">
-                <button class="btn btn-success" onclick="analyze();" style="flex:1;" data-tip="<strong>Esegui analisi</strong>Calcola durata, LSA, centri lobi, velocit&agrave; e accelerazione, forze inerziali, RPM critico. Risultati nella sezione 'Risultati Analisi' sotto. Necessario aver importato almeno una delle due camme (asp. o scar.).">&#9654; Analizza</button>
+                <button class="btn btn-success" id="analyzeBtn" onclick="analyze();" style="flex:1;" data-tip="<strong>Esegui analisi</strong>Calcola durata, LSA, centri lobi, velocit&agrave; e accelerazione, forze inerziali, RPM critico. Risultati nella sezione 'Risultati Analisi' sotto. Necessario aver importato almeno una delle due camme (asp. o scar.).">&#9654; Analizza</button>
                 <button class="btn btn-secondary" onclick="resetAll();" data-tip="<strong>Reset analisi</strong>Cancella i dati importati e i risultati. I parametri di configurazione restano.">&#8634; Reset</button>
+            </div>
+            <!-- AUDIT APP-01: avviso analisi non aggiornata (parametri di curva cambiati) -->
+            <div id="analysisStaleBanner" style="display:none;margin-top:8px;padding:8px 12px;border-radius:6px;background:rgba(255,170,0,0.12);border:1px solid var(--warn,orange);color:var(--warn,orange);font-size:13px;">
+                &#9888; Hai cambiato parametri che modificano la curva: premi <b>Analizza</b> per aggiornare risultati ed export.
             </div>
             <div class="flex gap-8" style="margin-top:8px;">
                 <button class="btn btn-secondary" id="btnExportCSV" onclick="exportCSV();" style="flex:1;" disabled data-tip="<strong>Esporta tabella CSV</strong>Salva tutti i dati 360&deg; (alzata, velocit&agrave;, accelerazione, forze) in un file .csv apribile con Excel/LibreOffice.">&#8595; CSV</button>
@@ -1025,6 +1029,36 @@ var TYPOLOGY = {
 // RACE-GRADE: Sweep RPM e Optimizer molla
 // =============================================================
 
+// AUDIT APP-02: dispatcher UNICO del modello di compliance. Prima i tool race
+// (rpmSweep, springOptimizer, sweep 3D) chiamavano SEMPRE simulateCompliance
+// (1-DOF) anche quando l'utente aveva scelto 2-DOF/3-DOF nel selettore: lo
+// Sweep RPM e il "suggerisci molla" ottimizzavano su un modello DIVERSO da
+// quello mostrato in analisi. Ora tutti passano di qui e rispettano la scelta.
+function currentComplianceModel() {
+    var sel = document.getElementById('complianceModel');
+    return sel ? sel.value : '1dof';
+}
+function runComplianceModel(curve, rpm, params, modelVal) {
+    var m = modelVal || currentComplianceModel();
+    if (m !== '2dof' && m !== '3dof') return simulateCompliance(curve, rpm, params);
+    // 2/3-DOF: arricchisci coi parametri del bilancere/sede dal DOM SENZA
+    // sovrascrivere quelli già passati dal chiamante (mass/k/F0 dello sweep).
+    var num = function (id, d) { var el = document.getElementById(id); var v = el ? Number(el.value) : NaN; return isFinite(v) ? v : d; };
+    var full = Object.assign({
+        massEqIntermediateG: num('massEqIntermediate', 50),
+        kPushrodN_mm: num('kPushrod', 800)
+    }, params);
+    if (m === '3dof') {
+        full = Object.assign({
+            massSeatG: num('massSeat', 15),
+            kSeatN_mm: num('kSeat', 80000),
+            kPivotN_mm: num('kPivot', 0)
+        }, full);
+        return simulateCompliance3DOF(curve, rpm, full);
+    }
+    return simulateCompliance2DOF(curve, rpm, full);
+}
+
 // Sweep RPM: simula compliance a N regimi diversi (1/2x..2x del target)
 // e ritorna una curva valveFloat(RPM). Identifica il punto critico
 // dove float supera la soglia di sicurezza (0.5 mm di default).
@@ -1038,7 +1072,7 @@ function rpmSweep(camLift720, baseRpm, springParams, opts) {
     var criticalRpm = null;
     for (var i = 0; i < nPoints; i++) {
         var rpm = rpmMin + (rpmMax - rpmMin) * i / (nPoints - 1);
-        var valve = simulateCompliance(camLift720, rpm, springParams);
+        var valve = runComplianceModel(camLift720, rpm, springParams);   // audit APP-02: rispetta il modello scelto
         var fl = detectValveFloat(camLift720, valve);
         results.push({ rpm: rpm, float: fl.maxGap, floatDeg: fl.gapIdx - 360 });
         if (!criticalRpm && fl.maxGap > floatThreshold) criticalRpm = rpm;
@@ -1060,7 +1094,7 @@ function springOptimizer(camLift720, targetRpm, baseParams, opts) {
         for (var j = 0; j < nF0; j++) {
             var F0 = F0Range[0] + (F0Range[1] - F0Range[0]) * j / (nF0 - 1);
             var p = Object.assign({}, baseParams, { kSpringN_mm: k, F0N: F0 });
-            var valve = simulateCompliance(camLift720, targetRpm, p);
+            var valve = runComplianceModel(camLift720, targetRpm, p);   // audit APP-02
             var fl = detectValveFloat(camLift720, valve);
             if (fl.maxGap < threshold) {
                 // Cost: combinazione di k (più rigida = più coppia richiesta + più
@@ -1223,7 +1257,7 @@ function springMap(camLift720, targetRpm, baseParams, opts) {
         var row = [];
         for (var jk = 0; jk < nK; jk++) {
             var p = Object.assign({}, baseParams, { kSpringN_mm: kVals[jk], F0N: F0Vals[jf] });
-            var valve = simulateCompliance(camLift720, targetRpm, p);
+            var valve = runComplianceModel(camLift720, targetRpm, p);   // audit APP-02
             var fl = detectValveFloat(camLift720, valve);
             row.push(fl.maxGap);
             if (fl.maxGap < minFloat) minFloat = fl.maxGap;
@@ -1504,7 +1538,7 @@ function sweep3D(camLift720, baseParams, opts) {
             p.kSpringN_mm = kVals[ik];
             p.F0N         = F0Vals[jf];
             for (var lr = 0; lr < nRpm; lr++) {
-                var v  = simulateCompliance(camLift720, rpmVals[lr], p);
+                var v  = runComplianceModel(camLift720, rpmVals[lr], p);   // audit APP-02
                 var fl = detectValveFloat(camLift720, v).maxGap;
                 if (fl > maxF) maxF = fl;
                 pts.push({
@@ -1675,6 +1709,7 @@ function run3DSweep() {
 // valvole. Esegue sweep RPM + optimizer + spring map e li impagina in
 // un PDF strutturato. Indipendente da exportPDF (che è la scheda completa).
 function exportRaceReport() {
+    if (exportBlockedByStale()) return;   // audit APP-01
     if (!lastAnalysis || !lastAnalysis.arrays) return;
     if (!window.jspdf || !window.jspdf.jsPDF) {
         if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'PDF non disponibile', body: 'jspdf non caricato.', duration: 4000 });
@@ -2651,6 +2686,49 @@ function liveRetuneForces() {
         window.lastAnalysis.inputs.massEqIntake = mEqIn;
         window.lastAnalysis.inputs.massEqExhaust = mEqEx;
     }
+    // AUDIT APP-01: il live tuning aggiorna le FORZE ma NON ricalcola la
+    // compliance/valve-float (resta al regime dell'ultima analisi). Se la
+    // compliance è attiva, l'export mescolerebbe forze nuove e float vecchio
+    // → marca stale così il report resta coerente solo dopo un nuovo Analizza.
+    var cEn = document.getElementById('complianceEnabled');
+    if (cEn && cEn.value === '1') markAnalysisStale();
+}
+
+// AUDIT APP-01: stale-ness dell'analisi. Il live tuning ricalcola le forze dai
+// dati cacheati SOLO per input che non cambiano la CURVA (rpm, k, F0, massa).
+// Ma se l'utente cambia un parametro che CAMBIA la curva (follower, raggio
+// base, rocker, centro lobo, anticipo, gioco, smoothing, modello/parametri
+// compliance) senza ri-premere Analizza, i risultati mostrati/esportati
+// mescolerebbero i nuovi input col vecchio array. Marchiamo "stale" e
+// blocchiamo l'export finché non si ri-analizza.
+var _analysisStale = false;
+function markAnalysisStale() {
+    if (!lastAnalysis) return;   // niente da invalidare finché non c'è un'analisi
+    _analysisStale = true;
+    var b = document.getElementById('analysisStaleBanner');
+    if (b) b.style.display = '';
+    var btn = document.getElementById('analyzeBtn');
+    if (btn) btn.classList.add('btn-attention');
+}
+function clearAnalysisStale() {
+    _analysisStale = false;
+    var b = document.getElementById('analysisStaleBanner');
+    if (b) b.style.display = 'none';
+    var btn = document.getElementById('analyzeBtn');
+    if (btn) btn.classList.remove('btn-attention');
+}
+// true se l'export deve fermarsi (analisi assente o stale)
+function exportBlockedByStale() {
+    if (!lastAnalysis) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Analisi mancante', body: 'Premi <b>Analizza</b> prima di esportare.', duration: 3500 });
+        return true;
+    }
+    if (_analysisStale) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Analisi non aggiornata',
+            body: 'Hai cambiato parametri che modificano la curva. Premi <b>Analizza</b> prima di esportare, altrimenti il report mescolerebbe dati nuovi e vecchi.', duration: 6000 });
+        return true;
+    }
+    return false;
 }
 
 // Wire-up listener live tuning (chiamato a DOMContentLoaded)
@@ -2659,6 +2737,17 @@ function initLiveTuning() {
     ids.forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.addEventListener('input', scheduleLiveRetune);
+    });
+    // Input che CAMBIANO la curva → analisi stale finché non si ri-analizza.
+    var curveIds = ['followerType', 'rBase', 'rBaseExhaust', 'rPunt',
+        'rockerIntake', 'rockerExhaust', 'intakeAngle', 'exhaustAngle', 'advance',
+        'intakeClearance', 'exhaustClearance', 'smoothWindow', 'durationRef',
+        'complianceEnabled', 'complianceModel', 'kTrain', 'dampingRatio',
+        'massEqIntermediate', 'kPushrod', 'massSeat', 'kSeat', 'kPivot',
+        'baselineCorrect'];
+    curveIds.forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) { el.addEventListener('input', markAnalysisStale); el.addEventListener('change', markAnalysisStale); }
     });
 }
 if (document.readyState === 'loading') {
@@ -3169,6 +3258,8 @@ function analyze() {
     // Animazione meccanismo: ora che lastAnalysis è popolato, mostra e disegna
     var mechCard = document.getElementById('mechAnimCard');
     if (mechCard) { mechCard.style.display = 'block'; mechAnimRefresh(); }
+
+    clearAnalysisStale();   // audit APP-01: risultati ora allineati al DOM
 
     document.getElementById('btnExportCSV').disabled = false;
     document.getElementById('btnExportPDF').disabled = false;
@@ -3908,11 +3999,7 @@ function tsForFilename() {
 }
 
 function exportCSV() {
-    if (!lastAnalysis) {
-        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Analisi mancante', body: 'Premi <b>Analizza</b> prima di esportare.', duration: 3500 });
-        else alert("Esegui prima l'analisi.");
-        return;
-    }
+    if (exportBlockedByStale()) return;   // audit APP-01
     var L = lastAnalysis;
     var lines = [];
 
@@ -4152,10 +4239,9 @@ function chartToPrintImage(chart) {
 // ritorna l'arraybuffer invece di scaricare (per la verifica automatica).
 // =============================================================
 function exportCamCard(testMode) {
-    if (!lastAnalysis) {
-        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Analisi mancante', body: 'Premi <b>Analizza</b> prima di esportare.', duration: 3500 });
-        return null;
-    }
+    // testMode (verifica automatica) salta la guardia stale-ness: gira senza DOM
+    if (!testMode && exportBlockedByStale()) return null;
+    if (!lastAnalysis) return null;
     var L = lastAnalysis, R = L.results, I = L.inputs, A = L.arrays;
     var jsPDF = window.jspdf.jsPDF;
     var doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape', compress: true });
@@ -4339,11 +4425,7 @@ fetch('/api/settings').then(function (r) { return r.json(); }).then(function (s)
 }).catch(function () {});
 
 function exportPDF() {
-    if (!lastAnalysis) {
-        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Analisi mancante', body: 'Premi <b>Analizza</b> prima di esportare.', duration: 3500 });
-        else alert("Esegui prima l'analisi.");
-        return;
-    }
+    if (exportBlockedByStale()) return;   // audit APP-01
     if (!window.jspdf || !window.jspdf.jsPDF) {
         if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Libreria PDF non caricata', body: 'jspdf.umd.min.js non disponibile. Ricarica la pagina.', duration: 5000 });
         else alert('Libreria PDF non caricata.');
