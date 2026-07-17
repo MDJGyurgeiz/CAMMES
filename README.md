@@ -2,7 +2,7 @@
 
 Sistema completo per misurare e analizzare i profili degli alberi a camme: hardware (Arduino Uno + stepper + encoder + comparatore), server PC (Node.js, distribuito come `.exe` standalone offline) e interfaccia web.
 
-**Versione corrente: v3.2.0** (firmware Arduino **3.4**) — la versione in esecuzione è mostrata in basso a destra in ogni pagina; il controllo aggiornamenti è automatico (GitHub Releases).
+**Versione corrente: v3.2.0** (firmware Arduino **3.5**) — la versione in esecuzione è mostrata in basso a destra in ogni pagina; il controllo aggiornamenti è automatico (GitHub Releases).
 
 > Per l'uso quotidiano in officina vedi **[MANUALE_OPERATORE.md](MANUALE_OPERATORE.md)** (1 pagina).
 
@@ -23,7 +23,7 @@ Sistema completo per misurare e analizzare i profili degli alberi a camme: hardw
       └────────────┬──────────────┘
                    │ USB seriale 9600 baud (hot-plug: riconnessione automatica)
       ┌────────────┴──────────────┐
-      │     Arduino Uno (v3.4)    │   stepper via driver opto-isolato (TB6600/DM542)
+      │     Arduino Uno (v3.5)    │   stepper via driver opto-isolato (TB6600/DM542)
       │                           │   encoder LDP3806 1:1 camme (1440 cnt/giro)
       │                           │   comparatore Neoteck via LM339N
       └───────────────────────────┘
@@ -50,7 +50,7 @@ CAMMES/
 │   ├── fw/                       #   firmware precompilato (.hex) + avrdude per il flash in-app
 │   ├── prove/                    #   archivio misure .scr (con cestino .trash/, 30 gg)
 │   └── package.json              #   deps: ws, serialport · dev: eslint, pkg
-├── master/master.ino             # firmware unificato v3.4 (1 Arduino Uno)
+├── master/master.ino             # firmware unificato v3.5 (1 Arduino Uno)
 ├── legacy/                       # vecchia architettura 2-Arduino + polare.html (dismessi)
 ├── .github/workflows/release.yml # CI: su tag v* → test → build exe → asset in release
 ├── LICENSE                       # tutti i diritti riservati + limitazione responsabilità
@@ -104,7 +104,7 @@ anagrafica tag/preferiti) e cammes.log (diagnostica).
 | `$±NNN` | PC→Uno | Rotazione manuale → `*mv` (o `*mabort` se interrotta) |
 | `m` | PC→Uno | Solo misura → `*sm` |
 | `?` / `!` | PC→Uno | Query encoder (`encoder=N deg=…` + `*pos`) / reset zero |
-| `v` | PC→Uno | Versione/capacità → `ver=3.4 scan=1` + `*ver` |
+| `v` | PC→Uno | Versione/capacità → `ver=3.5 scan=1` + `*ver` |
 | `cN rN wN uN aN gN kN` | PC→Uno | Config: campioni, µpassi, settle, pulse, rampa, preset |
 | `f` / `l` | PC→Uno | Motore libero / bloccato |
 
@@ -126,7 +126,7 @@ npm run build      :: genera cammes.exe (pkg, node18-win-x64)
 ```
 
 ### Firmware
-Il modo più semplice: **Home → Sistema & aggiornamenti → ⚡ Aggiorna firmware Arduino** (usa l'hex e l'avrdude inclusi, ~15 s). In alternativa: `arduino-cli compile --fqbn arduino:avr:uno master` + upload. Lo **scan autonomo** e lo **STOP di emergenza** richiedono firmware **3.1+**; il **watchdog host** (il moto si ferma da solo se il PC sparisce per 5 s) e lo **STOP del Concerto** richiedono il **3.4** (verifica col comando `v` o dalla card Sistema in Home).
+Il modo più semplice: **Home → Sistema & aggiornamenti → ⚡ Aggiorna firmware Arduino** (usa l'hex e l'avrdude inclusi, ~15 s). In alternativa: `arduino-cli compile --fqbn arduino:avr:uno master` + upload. Lo **scan autonomo** e lo **STOP di emergenza** richiedono firmware **3.1+**; il **watchdog host** (il moto si ferma da solo se il PC sparisce per 5 s) e lo **STOP del Concerto** richiedono il **3.4**; il parser robusto (comandi fuori range rifiutati con `*err`) il **3.5** (verifica col comando `v` o dalla card Sistema in Home).
 
 ### Release
 `git tag vX.Y.Z && git push --tags` → la CI (runner Windows) esegue i test come gate, compila l'exe, calcola lo SHA256 e allega tutto alla release GitHub. L'update-check in-app punta all'asset `.exe` dell'ultima release.
