@@ -166,6 +166,12 @@ nell'elenco quando la seriale non è aperta (prima si usava `lastComPort`
 stale). Validato al banco: flash via API → risposta singola 200, ~10 s,
 seriale riconnessa.
 
+**Lotto 12 — SEC-05 / SEC-06 (robustezza server).** SEC-05: dispatch in
+try/catch (handler che lancia → 500, non socket appeso), `decodeURIComponent`
+protetto (→ 400), `readBody` con 413 esplicito. SEC-06: `writeFileAtomic`
+(temp+fsync+rename) e coda di scrittura settings serializzata (niente più
+TOCTOU né file troncato). Test `test_server_robustezza.js` (6 check).
+
 ## Ancora aperti (P1/P2/P3 non in questi lotti)
 
 Non affrontati in questa tornata, da valutare in seguito: SEC-03..08/10 (XSS,

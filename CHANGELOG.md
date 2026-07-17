@@ -1254,6 +1254,15 @@ robocopy. I test che avviano un server (`test_confine_rete`) vanno con il
 preview server SPENTO (contesa su COM8/porte) e uccidono il figlio su ogni
 uscita per non lasciare processi zombie che bloccano le porte.
 
+### Lotto 12 — SEC-05/SEC-06: robustezza richieste + scritture atomiche (`2492dc5`)
+SEC-05: ogni richiesta in try/catch (un handler che lancia → 500 pulito, non
+socket appeso via uncaughtException); `decodeURIComponent` protetto (URL/nome
+con % malformato → 400); `readBody()` con 413 esplicito su settings/save/
+restore (prima `req.destroy()` muto). SEC-06: `writeFileAtomic` (temp+fsync+
+rename) — un crash a metà non tronca più settings.json; coda `_settingsQueue`
+che serializza i POST concorrenti (prima TOCTOU, l'ultimo vinceva); patch con
+`null` cancella la chiave. Nuovo `test_server_robustezza.js` (6 check). Suite 135.
+
 ### Lotto 11 — SER-02/SER-03: robustezza flash firmware
 SER-02: guardia once in `runAvrdude` — `spawn` emette `error` E POI `close`
 su un fallimento di avvio, e `avrdudeDone` veniva chiamato due volte
