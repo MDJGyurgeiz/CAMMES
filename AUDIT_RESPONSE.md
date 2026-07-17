@@ -184,6 +184,15 @@ che modifica la curva marca l'analisi non aggiornata (banner) e blocca le
 export finché non si ri-analizza (niente più mix input nuovi / array vecchi).
 Verificato dal vivo.
 
+**Lotto 15 — APP-03..07 (strumenti Analisi).** APP-03: ottimizzatore molla
+riformulato come esplorazione (solo valve float) con caveat e margine soglia.
+APP-04: doughnut di fasatura posiziona gli eventi agli angoli reali (anelli
+concentrici, origine al PMS di scoppio), overlap reale. APP-05: durata @ gioco
+con soglia fissa dichiarata (0,05 mm) al posto di max(0,05, 1% picco), esposta
+in results/cam card/CSV. APP-06: A/B passa dalla pipeline principale
+(baseline+follower+anticipo per lobo). APP-07: provenienza raw/convertito
+per-lato, niente doppia conversione. Verificato live sulla Clio.
+
 ## Ancora aperti (P1/P2/P3 non in questi lotti)
 
 Non affrontati in questa tornata, da valutare in seguito: SEC-03..08/10 (XSS,

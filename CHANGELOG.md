@@ -1279,6 +1279,24 @@ legacy preservato. Validato dal vivo: slot corto a 300° = 0 (non la coda del
 file lungo caricato prima), file da 20 righe rifiutato, Clio reale via
 `?files=` renderizzata (picco 8,52 mm, 360 punti).
 
+### Lotto 15 — APP-03..07: strumenti di Analisi
+APP-03: l'ottimizzatore molla è ora presentato come ESPLORAZIONE (solo valve
+float), con caveat esplicito (non verifica coil bind/stress/fatica/geometria)
+e margine alla soglia mostrato — bottone, risultati, toast e PDF allineati.
+APP-04: il doughnut di fasatura posiziona gli eventi agli angoli di manovella
+REALI (due anelli concentrici, archi centrati sul lobo, origine al PMS di
+scoppio dove entrambe le valvole sono chiuse), overlap dalla grandezza reale.
+APP-05: durata @ gioco con soglia FISSA dichiarata (DUR_EPS 0,05 mm, il gioco
+è già sottratto nella curva) al posto di max(0,05, 1% picco) adattivo nascosto;
+soglia esposta in results, cam card, CSV. APP-06: il confronto A/B passa dalla
+STESSA pipeline dell'analisi (baseline + follower + anticipo per lobo) con
+guardia copertura. APP-07: provenienza raw/convertito PER-LATO
+(_metaIn/_metaEx.converted) — un file già follower non viene più ri-convertito
+al ricalcolo/salvataggio dopo un cambio follower. Verificato live sulla camma
+Clio (durata 231°, overlap 31°, archi doughnut = durata reale). Reso robusto
+anche l'harness dei test server (porte libere dal SO, niente più blocchi su
+porte "wedged" da un run killato).
+
 ### Lotto 12 — SEC-05/SEC-06: robustezza richieste + scritture atomiche (`2492dc5`)
 SEC-05: ogni richiesta in try/catch (un handler che lancia → 500 pulito, non
 socket appeso via uncaughtException); `decodeURIComponent` protetto (URL/nome

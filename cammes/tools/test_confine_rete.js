@@ -16,28 +16,38 @@
 var path = require('path');
 var http = require('http');
 var os = require('os');
+var net = require('net');
 var spawn = require('child_process').spawn;
 var WebSocket = require(path.join(__dirname, '..', 'node_modules', 'ws'));
 
-var HTTP_PORT = 3310, WS_PORT = 3311;
+var HTTP_PORT = 0, WS_PORT = 0;   // assegnate a runtime (porte libere vere)
 var fails = 0;
 function check(label, cond, detail) {
     console.log((cond ? '  PASS  ' : '  FAIL  ') + label + (detail ? '  [' + detail + ']' : ''));
     if (!cond) fails++;
 }
 
+// Chiede al SO una porta libera: bind su 0, legge la porta, chiude. Evita il
+// problema delle porte fisse "wedged" da un server orfano di un run killato
+// (su Windows un timeout che uccide npm lascia il figlio a tenere la porta).
+function freePort() {
+    return new Promise(function (resolve, reject) {
+        var srv = net.createServer();
+        srv.unref();
+        srv.on('error', reject);
+        srv.listen(0, '127.0.0.1', function () {
+            var p = srv.address().port;
+            srv.close(function () { resolve(p); });
+        });
+    });
+}
+
 console.log('=============================================================');
 console.log(' CONFINE DI RETE — regressione audit SEC-01 / SEC-02');
 console.log('=============================================================');
 
-var server = spawn(process.execPath,
-    [path.join(__dirname, '..', 'cammes_server.js'), '--no-browser', '--port', String(HTTP_PORT), '--ws-port', String(WS_PORT)],
-    { stdio: 'ignore', cwd: path.join(__dirname, '..') });
-
-// Il server figlio va SEMPRE terminato, anche se il test viene interrotto o
-// va in errore: senza questo un run killato a metà lasciava un processo
-// zombie che teneva bloccata la porta (visto in sviluppo).
-function killServer() { try { server.kill(); } catch (e) {} }
+var server = null;
+function killServer() { try { if (server) server.kill(); } catch (e) {} }
 process.on('exit', killServer);
 process.on('SIGINT', function () { killServer(); process.exit(130); });
 process.on('SIGTERM', function () { killServer(); process.exit(143); });
@@ -70,19 +80,29 @@ function finish() {
     process.exit(0);
 }
 
-// attesa avvio server (poll con timeout DURO: se la porta è occupata da un
-// altro processo il test FALLISCE invece di appendere all'infinito)
+// Avvio: prendi due porte libere reali, poi lancia il server su quelle.
+Promise.all([freePort(), freePort()]).then(function (ports) {
+    HTTP_PORT = ports[0];
+    WS_PORT = ports[1];
+    server = spawn(process.execPath,
+        [path.join(__dirname, '..', 'cammes_server.js'), '--no-browser', '--port', String(HTTP_PORT), '--ws-port', String(WS_PORT)],
+        { stdio: 'ignore', cwd: path.join(__dirname, '..') });
+    waitUp();
+}).catch(function (e) { check('assegnazione porte libere', false, String(e)); finish(); });
+
+// attesa avvio server (poll con timeout DURO: se non risponde il test FALLISCE
+// invece di appendere all'infinito)
 var tries = 0;
-(function waitUp() {
+function waitUp() {
     get('/', null, function (err, code) {
         if (!err && code) return runTests();
         if (++tries > 40) {   // ~8 s
-            check('server di test avviato entro 8 s', false, 'porta ' + HTTP_PORT + ' occupata? ' + String(err || 'no response'));
+            check('server di test avviato entro 8 s', false, 'porta ' + HTTP_PORT + ' non risponde: ' + String(err || 'no response'));
             return finish();
         }
         setTimeout(waitUp, 200);
     });
-})();
+}
 
 function runTests() {
     var seq = [

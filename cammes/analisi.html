@@ -526,7 +526,7 @@
             <!-- RACE-GRADE: Sweep RPM + Optimizer molla + Mappa + Report -->
             <div class="flex gap-8" style="margin-top:8px;" data-module="race">
                 <button class="btn btn-secondary" id="btnSweepRpm" onclick="runRpmSweep();" style="flex:1;" disabled data-tip="<strong>Sweep RPM</strong>Esegue la simulazione compliance a 12 regimi diversi (da rpm/2 a rpm*2) e plotta come cresce il valve float al variare degli RPM. Trova il <b>vero</b> regime massimo operativo, considerando dinamica del treno valvole. Tempo: ~5 secondi.">&#128201; Sweep RPM</button>
-                <button class="btn btn-secondary" id="btnOptimizeSpring" onclick="runSpringOptimizer();" style="flex:1;" disabled data-tip="<strong>Optimizer molla</strong>Cerca la molla minima (k, F&#8320;) che mantiene valve float &lt; 0.3 mm al RPM target. Itera su una griglia di (k, F&#8320;) e simula compliance per ognuna. Suggerisce la combinazione pi&ugrave; leggera (= meno coppia richiesta alla cam) che rispetta il vincolo. Tempo: ~10 secondi.">&#127919; Suggerisci molla</button>
+                <button class="btn btn-secondary" id="btnOptimizeSpring" onclick="runSpringOptimizer();" style="flex:1;" disabled data-tip="<strong>Esplora molla</strong>Esplora una griglia di (k, F&#8320;) e per ognuna simula la compliance, cercando la combinazione pi&ugrave; leggera che tiene il valve float &lt; 0.3 mm al RPM target. &Egrave; un'ESPLORAZIONE del solo valve float: NON verifica coil bind, stress del filo, fatica n&eacute; geometria della molla &mdash; da controllare a parte prima di adottare i valori. Tempo: ~10 secondi.">&#127919; Esplora molla</button>
             </div>
             <div class="flex gap-8" style="margin-top:8px;" data-module="race">
                 <button class="btn btn-secondary" id="btnSpringMap" onclick="runSpringMap();" style="flex:1;" disabled data-tip="<strong>Mappa molla k×F&#8320;</strong>Heatmap del valve float al variare SIMULTANEO di rigidezza k e precarico F&#8320;. Verde = sicuro (&lt;0.1mm), giallo = limite (0.1-0.3), rosso = float eccessivo. Marca la tua molla attuale (&#9678;) e la zona sicura. A colpo d'occhio vedi quali combinazioni funzionano. Tempo: ~8 secondi.">&#128506; Mappa molla</button>
@@ -1172,8 +1172,8 @@ function runSpringOptimizer() {
     var box   = document.getElementById('raceResultsBox');
     var title = document.getElementById('raceResultsTitle');
     var body  = document.getElementById('raceResultsBody');
-    title.textContent = 'Optimizer molla in corso...';
-    body.innerHTML = '<i>Cerca tra 88 combinazioni (k, F&#8320;), ~5-10 secondi.</i>';
+    title.textContent = 'Esplorazione molla in corso...';
+    body.innerHTML = '<i>Esplora 88 combinazioni (k, F&#8320;) rispetto al valve float, ~5-10 secondi.</i>';
     var cv2 = document.getElementById('springMapCanvas'); if (cv2) cv2.style.display = 'none';
     var c3b = document.getElementById('sweep3dCanvas'); if (c3b) c3b.style.display = 'none';
     var ssb = document.getElementById('surgeSweepCanvas'); if (ssb) ssb.style.display = 'none';
@@ -1201,7 +1201,7 @@ function runSpringOptimizer() {
                 F0Range: [100, 1500]    // precarichi fino a 1500 N (race)
             });
 
-            title.textContent = 'Optimizer molla — soglia float 0.3 mm @ ' + inp.rpm + ' rpm';
+            title.textContent = 'Esplorazione molla — soglia float 0.3 mm @ ' + inp.rpm + ' rpm';
             if (!result) {
                 body.innerHTML = '<b style="color:var(--danger);">Nessuna combinazione trovata</b> nel range k=20..400 N/mm, F&#8320;=100..1500 N che mantenga il valve float sotto 0.3 mm al regime ' + inp.rpm + ' rpm.<br><br>' +
                                  'Possibili soluzioni:<br>' +
@@ -1210,29 +1210,30 @@ function runSpringOptimizer() {
                                  '&bull; Considera RPM target inferiori<br>' +
                                  '&bull; Allarga il range cercato (modifica kRange/F0Range nel codice)';
                 if (window.cammesToast) window.cammesToast({
-                    kind: 'err', title: 'Optimizer fallito',
-                    body: 'Nessuna molla nel range raggiunge float &lt; 0.1 mm. Riduci massa o RPM target.',
+                    kind: 'err', title: 'Nessuna candidata',
+                    body: 'Nessuna molla nel range tiene il float &lt; 0.3 mm. Riduci massa o RPM target.',
                     duration: 6000
                 });
             } else {
-                var currentScore = inp.springK + inp.springPreload / 10;
-                var newScore = result.k + result.F0 / 10;
                 var diffK  = result.k  - inp.springK;
                 var diffF0 = result.F0 - inp.springPreload;
+                var margin = 0.3 - result.maxFloat;   // AUDIT APP-03: margine alla soglia
                 body.innerHTML =
-                    '<b style="color:var(--success);">Combinazione minima trovata:</b><br>' +
+                    '<b style="color:var(--success);">Candidata esplorativa (solo valve float):</b><br>' +
                     '<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin-top:8px;font-family:var(--font-mono);">' +
                       '<div style="color:var(--text-muted);">k molla:</div><div><b>' + result.k.toFixed(1) + ' N/mm</b> ' +
                       '<span style="color:' + (diffK >= 0 ? 'var(--warning)' : 'var(--success)') + ';">(' + (diffK >= 0 ? '+' : '') + diffK.toFixed(1) + ' vs attuale)</span></div>' +
                       '<div style="color:var(--text-muted);">F&#8320; precarico:</div><div><b>' + result.F0.toFixed(0) + ' N</b> ' +
                       '<span style="color:' + (diffF0 >= 0 ? 'var(--warning)' : 'var(--success)') + ';">(' + (diffF0 >= 0 ? '+' : '') + diffF0.toFixed(0) + ' vs attuale)</span></div>' +
-                      '<div style="color:var(--text-muted);">Float max:</div><div><b style="color:var(--success);">' + result.maxFloat.toFixed(3) + ' mm</b></div>' +
+                      '<div style="color:var(--text-muted);">Float max:</div><div><b style="color:var(--success);">' + result.maxFloat.toFixed(3) + ' mm</b> <span style="color:var(--text-muted);">(margine ' + margin.toFixed(3) + ' mm alla soglia)</span></div>' +
                     '</div>' +
-                    '<p style="margin-top:8px;font-size:11px;color:var(--text-muted);">' +
+                    '<p style="margin-top:8px;font-size:11px;color:var(--warning,orange);">' +
+                    '&#9888; Esplora solo lo spazio (k, F&#8320;) rispetto al valve float. NON verifica coil bind, stress del filo, fatica n&eacute; geometria della molla: vanno controllati a parte prima di adottare i valori.</p>' +
+                    '<p style="margin-top:4px;font-size:11px;color:var(--text-muted);">' +
                     'Usa il <b>Live tuning</b> sopra per applicare questi valori e verificare l\'analisi completa.</p>';
                 if (window.cammesToast) window.cammesToast({
-                    kind: 'success', title: 'Molla ottimale trovata',
-                    body: 'k=' + result.k.toFixed(0) + ' N/mm, F&#8320;=' + result.F0.toFixed(0) + ' N → float ' + result.maxFloat.toFixed(3) + ' mm',
+                    kind: 'success', title: 'Candidata trovata (esplorativa)',
+                    body: 'k=' + result.k.toFixed(0) + ' N/mm, F&#8320;=' + result.F0.toFixed(0) + ' N → float ' + result.maxFloat.toFixed(3) + ' mm. Verifica coil bind/stress/fatica a parte.',
                     duration: 6000
                 });
             }
@@ -1786,14 +1787,17 @@ function exportRaceReport() {
             }
             y += 8;
 
-            // ===== 3. Optimizer =====
-            sect('Molla ottimale');
+            // ===== 3. Esplorazione molla (AUDIT APP-03: non "ottimizzazione") =====
+            sect('Esplorazione molla (solo valve float)');
             var opt = springOptimizer(anlIn, inp.rpm, baseParams, { threshold: 0.3, kRange: [20,400], F0Range: [100,1500] });
             doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60,66,80);
             if (opt) {
-                doc.text('Combinazione minima (float < 0.3 mm): k=' + opt.k.toFixed(0) + ' N/mm, F0=' + opt.F0.toFixed(0) + ' N → float ' + opt.maxFloat.toFixed(3) + ' mm', margin, y); y += 5;
+                doc.text('Candidata (float < 0.3 mm): k=' + opt.k.toFixed(0) + ' N/mm, F0=' + opt.F0.toFixed(0) + ' N -> float ' + opt.maxFloat.toFixed(3) + ' mm', margin, y); y += 5;
                 var dK = opt.k - inp.springK, dF = opt.F0 - inp.springPreload;
-                doc.text('Rispetto attuale: ' + (dK>=0?'+':'') + dK.toFixed(0) + ' N/mm, ' + (dF>=0?'+':'') + dF.toFixed(0) + ' N', margin, y); y += 7;
+                doc.text('Rispetto attuale: ' + (dK>=0?'+':'') + dK.toFixed(0) + ' N/mm, ' + (dF>=0?'+':'') + dF.toFixed(0) + ' N', margin, y); y += 5;
+                doc.setFontSize(8); doc.setTextColor(150,90,0);
+                doc.text('Esplora solo (k,F0) vs valve float: NON verifica coil bind, stress, fatica o geometria molla.', margin, y);
+                doc.setFontSize(9); doc.setTextColor(60,66,80); y += 7;
             } else {
                 doc.setTextColor(180,40,40);
                 doc.text('Nessuna molla nel range k=20-400, F0=100-1500 raggiunge float < 0.3 mm a ' + inp.rpm + ' rpm.', margin, y); y += 7;
@@ -2268,6 +2272,11 @@ function applyVirtualFollower(camLift, side) {
 
 // Se il file caricato è già una curva FOLLOWER (header _pline_conv: salvato da
 // "Salva profilo"), NON va riconvertito: imposta follower = Puntalino e avvisa.
+// Riconosce l'header `_pline_conv[:tipo:param]` di una curva GIÀ convertita a
+// follower. Ritorna la stringa dell'algoritmo (truthy, es. "bicch:33") o false.
+// AUDIT APP-07: il valore va CATTURATO dal chiamante e salvato per-lato
+// (_metaIn/_metaEx.converted) — il solo forzare #followerType a 'punt' è uno
+// stato transitorio che un preset o un cambio manuale cancellano.
 function detectConvertedFile(text) {
     var first = (String(text).split(/\r?\n/)[0] || '').trim();
     if (first.indexOf('_pline_conv') !== 0) return false;
@@ -2279,7 +2288,7 @@ function detectConvertedFile(text) {
         body: 'Questo file &egrave; una curva follower (' + info + '): follower impostato su <b>Puntalino</b> per non riconvertirlo.',
         duration: 6000
     });
-    return true;
+    return info;
 }
 
 function importIntake() {
@@ -2295,7 +2304,11 @@ function importIntake() {
     var fr = new FileReader();
     fr.onload = function() {
         intakeFileBase = nom[0];
-        detectConvertedFile(fr.result);                    // se già follower → forza punt
+        // AUDIT APP-07: provenienza PER-LATO. Il vecchio guard viveva solo nel
+        // select globale #followerType: bastava cambiarlo dopo il load (a mano
+        // o con un preset) e il prossimo Analizza ri-convertiva una curva GIÀ
+        // follower (bicchiere su bicchiere). Il flag per-lato è persistente.
+        var _convIn = detectConvertedFile(fr.result);      // se già follower → forza punt
         var camLift = parseCamFile(fr.result);
         if (!camLift.validCount || camLift.validCount < 30) {
             // prima un file malformato caricava 360 zeri IN SILENZIO
@@ -2309,7 +2322,8 @@ function importIntake() {
                 body: (camLift.missingCount || camLift.meta.gradiMancanti || '?') + ' gradi senza lettura (riempiti a 0): durate, aree e verdetti possono essere falsati. Usala solo per un\'occhiata, non per un confronto.', duration: 10000 });
         }
         window._metaIn = camLift.meta || {};               // metadati #k=v (data, runs, sigma…)
-        rawIntake = camLift.slice();                       // grezzo gradi-camma (sorgente)
+        window._metaIn.converted = _convIn || false;       // provenienza PER-LATO (audit APP-07)
+        rawIntake = camLift.slice();                       // curva sorgente gradi-camma
         camLift = applyVirtualFollower(camLift, 'intake');
         folIntake = camLift.slice();
         var angle = Number(document.getElementById('intakeAngle').value);
@@ -2344,7 +2358,7 @@ function importExhaust() {
     var fr = new FileReader();
     fr.onload = function() {
         exhaustFileBase = nom[0];
-        detectConvertedFile(fr.result);                    // se già follower → forza punt
+        var _convEx = detectConvertedFile(fr.result);      // se già follower → forza punt (audit APP-07)
         var camLift = parseCamFile(fr.result);
         if (!camLift.validCount || camLift.validCount < 30) {
             if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'File non riconosciuto',
@@ -2357,7 +2371,8 @@ function importExhaust() {
                 body: (camLift.missingCount || camLift.meta.gradiMancanti || '?') + ' gradi senza lettura (riempiti a 0): durate, aree e verdetti possono essere falsati. Usala solo per un\'occhiata, non per un confronto.', duration: 10000 });
         }
         window._metaEx = camLift.meta || {};               // metadati #k=v (data, runs, sigma…)
-        rawExhaust = camLift.slice();                      // grezzo gradi-camma (sorgente)
+        window._metaEx.converted = _convEx || false;       // provenienza PER-LATO (audit APP-07)
+        rawExhaust = camLift.slice();                      // curva sorgente gradi-camma
         camLift = applyVirtualFollower(camLift, 'exhaust');
         folExhaust = camLift.slice();
         var angle = Number(document.getElementById('exhaustAngle').value);
@@ -2395,11 +2410,6 @@ function saveProfileToArchive() {
         else if (ft === 'roller') { var rr = Number(document.getElementById('rRoll').value) || 0; tag = 'roll' + rr; hdr = '_pline_conv:roll:' + rr; desc = 'rullo R' + rr; }
         else if (ft === 'finger') { var la = Number(document.getElementById('lArm').value) || 0, lv = Number(document.getElementById('lValve').value) || 0; tag = 'finger'; hdr = '_pline_conv:finger:' + la + 'x' + lv; desc = 'finger ' + la + '/' + lv; }
     }
-    function buildContent(curve) {
-        var lines = [hdr];
-        for (var i = 1; i <= 360; i++) { lines.push(i + ',' + (+(Number(curve[i] || 0)).toFixed(4))); }
-        return lines.join('\r\n') + '\r\n';
-    }
     function nameFor(base) {
         var b = String(base || 'profilo').replace(/[^A-Za-z0-9._-]/g, '-');   // safe per il server
         if (!tag) return b + '.scr';
@@ -2407,10 +2417,25 @@ function saveProfileToArchive() {
     }
     // grezzo (punt) → salva il dato come misurato; convertito → applica baseline
     // (se attiva) + follower, coerente con ciò che mostra l'analisi.
-    function curveFor(rawX, side) { return conv ? applyVirtualFollower(analysisRaw(rawX), side) : rawX.slice(); }
+    // AUDIT APP-07: un lato caricato da file GIÀ follower NON viene riconvertito
+    // (rawX è già la curva follower) e mantiene l'header/algoritmo di origine —
+    // prima curveFor lo ri-convertiva e riscriveva l'header dal global sbagliando
+    // la provenienza.
+    function convForSide(meta) { return meta && meta.converted; }
+    function hdrForSide(meta) { return convForSide(meta) ? '_pline_conv:' + convForSide(meta) : hdr; }
+    function curveFor(rawX, side, meta) {
+        if (convForSide(meta)) return rawX.slice();          // già follower: as-is
+        return conv ? applyVirtualFollower(analysisRaw(rawX), side) : rawX.slice();
+    }
+    function buildContentFor(rawX, side, meta) {
+        var lines = [hdrForSide(meta)];
+        var curve = curveFor(rawX, side, meta);
+        for (var i = 1; i <= 360; i++) { lines.push(i + ',' + (+(Number(curve[i] || 0)).toFixed(4))); }
+        return lines.join('\r\n') + '\r\n';
+    }
     var jobs = [];
-    if (intakeLoaded)  jobs.push({ name: nameFor(intakeFileBase),  body: buildContent(curveFor(rawIntake,  'intake')) });
-    if (exhaustLoaded) jobs.push({ name: nameFor(exhaustFileBase), body: buildContent(curveFor(rawExhaust, 'exhaust')) });
+    if (intakeLoaded)  jobs.push({ name: nameFor(intakeFileBase),  body: buildContentFor(rawIntake,  'intake',  window._metaIn) });
+    if (exhaustLoaded) jobs.push({ name: nameFor(exhaustFileBase), body: buildContentFor(rawExhaust, 'exhaust', window._metaEx) });
     Promise.all(jobs.map(function (j) {
         return fetch('/api/file/' + encodeURIComponent(j.name), { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: j.body })
             .then(function (r) { return r.json(); })
@@ -2932,12 +2957,20 @@ function analyze() {
     // AUDIT MAT-04: l'anticipo entra nella mappatura tramite i centri EFFETTIVI
     // (prima veniva raccolto ma le curve restavano non fasate).
     var _ecA = effectiveCenters(intakeAng, exhaustAng, adv);
+    // AUDIT APP-07: un lato caricato da file GIÀ convertito (_pline_conv) non
+    // passa più da applyVirtualFollower — prima bastava cambiare il follower
+    // dopo il load (a mano o con un preset) e il ricalcolo applicava una
+    // SECONDA conversione (bicchiere su bicchiere) senza dirlo.
     if (rawIntake && rawIntake.length) {
-        folIntake   = applyVirtualFollower(analysisRaw(rawIntake), 'intake');
+        folIntake   = (window._metaIn && window._metaIn.converted)
+                    ? analysisRaw(rawIntake)
+                    : applyVirtualFollower(analysisRaw(rawIntake), 'intake');
         crankIntake = mapCamToCrank(folIntake, _ecA.intake, intakeClear, 'intake');
     }
     if (rawExhaust && rawExhaust.length) {
-        folExhaust   = applyVirtualFollower(analysisRaw(rawExhaust), 'exhaust');
+        folExhaust   = (window._metaEx && window._metaEx.converted)
+                    ? analysisRaw(rawExhaust)
+                    : applyVirtualFollower(analysisRaw(rawExhaust), 'exhaust');
         crankExhaust = mapCamToCrank(folExhaust, _ecA.exhaust, exhaustClear, 'exhaust');
     }
     // Avviso (una volta) se la correzione baseline ha tolto un'eccentricità reale
@@ -2956,13 +2989,15 @@ function analyze() {
     var mxIn = findMax(anlIn);
     var mxEx = findMax(anlEx);
 
-    // Duration: count degrees where lift > soglia (offset-resistant).
-    // BUG FIX: la condizione `> 0` contava tutti i 720° se il comparatore
-    // aveva offset residuo (curva non torna mai a zero esatto). Soglia
-    // adattiva: max(0.05 mm, 1% del picco) — sotto questo valore la
-    // valvola è di fatto chiusa anche se il comparatore legge offset.
-    var durThreshIn = Math.max(0.05, mxIn.lift * 0.01);
-    var durThreshEx = Math.max(0.05, mxEx.lift * 0.01);
+    // Durata: gradi motore in cui la valvola è aperta (lift > soglia).
+    // AUDIT APP-05: il gioco (lash) è GIÀ sottratto dentro mapCamToCrank, quindi
+    // sulla curva anl* il punto di apertura valvola è lift>0. La vecchia soglia
+    // max(0.05, 1% picco) NON era il lash: era un valore ADATTIVO nascosto che
+    // SCALAVA col picco (su un lobo da 11 mm tagliava 0,11 mm di fianco) e non
+    // era riportato da nessuna parte. Ora è una guardia FISSA e dichiarata,
+    // solo contro l'offset residuo del comparatore — il gioco è già nella curva.
+    var DUR_EPS = 0.05;   // mm: guardia anti-offset comparatore, NON una soglia di alzata
+    var durThreshIn = DUR_EPS, durThreshEx = DUR_EPS;
     var durIntake = 0, durExhaust = 0;
     for (var i = 1; i <= 720; i++) {
         if (anlIn[i] > durThreshIn) durIntake++;
@@ -3172,8 +3207,9 @@ function analyze() {
     createForceChart(forcesIn, forcesEx, rpm);
     createComplianceChart(anlIn, valveLiftIn, anlEx, valveLiftEx, rpm);
 
-    // Update timing diagram
-    updateTimingDiagram(durIntake, durExhaust, intakeAng, exhaustAng, adv, LSA);
+    // Update timing diagram — AUDIT APP-04: passa i CENTRI reali e l'overlap
+    // calcolato, così gli eventi sono posizionati agli angoli veri.
+    updateTimingDiagram(intakeCenter, exhaustCenter, durIntake, durExhaust, overlap);
 
     // Update main chart with rocker-applied data
     updateChartWithData(anlIn, anlEx);
@@ -3216,6 +3252,7 @@ function analyze() {
         },
         results: {
             durIntake: durIntake, durExhaust: durExhaust,
+            durThresh: DUR_EPS,   // soglia usata per la durata (audit APP-05: riportata ovunque)
             durRefIn: durRefIn, durRefEx: durRefEx,
             LSA: LSA, intakeCenter: intakeCenter, exhaustCenter: exhaustCenter,
             intakeOpenBTC: intakeOpenBTC, intakeCloseABC: intakeCloseABC,
@@ -3620,48 +3657,53 @@ function createForceChart(forcesIn, forcesEx, rpm) {
 
 // ========== TIMING DIAGRAM (Doughnut) ==========
 
-function updateTimingDiagram(durIn, durEx, intAng, exAng, adv, LSA) {
-    var intCenter = LSA - adv;
-    var exCenter = LSA + adv;
-
-    var intakeOpen = durIn;
-    var intakeClosed = 720 - durIn;
-    var exhaustOpen = durEx;
-    var exhaustClosed = 720 - durEx;
-
-    if (timingChartInstance) {
-        timingChartInstance.destroy();
+// AUDIT APP-04: diagramma di FASATURA, non pi\u00F9 di sole proporzioni. Due anelli
+// concentrici (scarico interno, aspirazione esterno): ogni arco \u00E8 posizionato
+// all'angolo di manovella REALE (aperto attorno al centro lobo, largo = durata),
+// cos\u00EC l'incrocio (overlap) si VEDE dove i due archi si sovrappongono, vicino al
+// PMS. Prima ogni valvola partiva dalla stessa origine e mostrava solo "quanta
+// parte del ciclo \u00E8 aperta", ignorando centri/anticipo, e la legenda calcolava
+// un overlap approssimato (durIn+durEx-720) diverso da quello riportato altrove.
+//
+// Ruota di 720\u00B0 con origine (top) al PMS di SCOPPIO (indice 0/720 crank), dove
+// entrambe le valvole sono chiuse: \u00E8 l'unico punto SEMPRE fuori dagli eventi
+// (che si addensano attorno al PMS incrocio=360), cos\u00EC nessun arco attraversa
+// la cucitura del doughnut e non viene troncato. w(c) = c % 720.
+function updateTimingDiagram(intakeCenter, exhaustCenter, durIn, durEx, overlap) {
+    // Centro lobo in angolo di manovella: aspirazione 360+centro (ATDC),
+    // scarico 360-centro (BTDC). L'arco aperto \u00E8 centrato l\u00EC, largo = durata.
+    function wheel(c) { return ((c % 720) + 720) % 720; }
+    function slices(centerCrank, dur) {
+        var start = wheel(centerCrank - dur / 2);
+        var pre = Math.max(0, start);
+        var arc = Math.max(0, Math.min(dur, 720 - pre));
+        var post = Math.max(0, 720 - pre - arc);
+        return [pre, arc, post];
     }
+    var inSl = slices(360 + intakeCenter, durIn);
+    var exSl = slices(360 - exhaustCenter, durEx);
+    var ov = (overlap > 0 ? overlap : 0);
 
+    if (timingChartInstance) timingChartInstance.destroy();
+    var TRANSP = 'rgba(0,0,0,0)';
     var ctx = document.getElementById('timingChart').getContext('2d');
     timingChartInstance = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: [
-                'Asp. aperta (' + intakeOpen + '\u00B0)',
-                'Asp. chiusa (' + intakeClosed + '\u00B0)',
-                'Scar. aperto (' + exhaustOpen + '\u00B0)',
-                'Scar. chiuso (' + exhaustClosed + '\u00B0)'
-            ],
+            labels: ['gap', 'aperta', 'gap'],
             datasets: [
-                {
+                {   // anello ESTERNO = aspirazione
                     label: 'Aspirazione',
-                    data: [intakeOpen, intakeClosed],
-                    backgroundColor: [
-                        'rgba(0, 212, 255, 0.8)',
-                        'rgba(0, 212, 255, 0.1)'
-                    ],
-                    borderColor: ['#00d4ff', '#2a2a4a'],
+                    data: inSl,
+                    backgroundColor: [TRANSP, 'rgba(0, 212, 255, 0.85)', TRANSP],
+                    borderColor: [TRANSP, '#00d4ff', TRANSP],
                     borderWidth: 1
                 },
-                {
+                {   // anello INTERNO = scarico
                     label: 'Scarico',
-                    data: [exhaustOpen, exhaustClosed],
-                    backgroundColor: [
-                        'rgba(255, 82, 82, 0.8)',
-                        'rgba(255, 82, 82, 0.1)'
-                    ],
-                    borderColor: ['#ff5252', '#2a2a4a'],
+                    data: exSl,
+                    backgroundColor: [TRANSP, 'rgba(255, 82, 82, 0.85)', TRANSP],
+                    borderColor: [TRANSP, '#ff5252', TRANSP],
                     borderWidth: 1
                 }
             ]
@@ -3669,7 +3711,7 @@ function updateTimingDiagram(durIn, durEx, intAng, exAng, adv, LSA) {
         options: {
             responsive: false,
             cutout: '30%',
-            rotation: -90,
+            rotation: 0,   // 0 = PMI in alto; il PMS/overlap cade in basso
             plugins: {
                 legend: {
                     display: true,
@@ -3678,21 +3720,21 @@ function updateTimingDiagram(durIn, durEx, intAng, exAng, adv, LSA) {
                         color: anaColors().text,
                         font: { size: 11 },
                         padding: 8,
-                        generateLabels: function (chart) {
+                        generateLabels: function () {
                             return [
-                                { text: 'Asp. aperta: ' + intakeOpen + '\u00B0', fillStyle: 'rgba(0,212,255,0.8)', strokeStyle: '#00d4ff', lineWidth: 1, index: 0 },
-                                { text: 'Scar. aperto: ' + exhaustOpen + '\u00B0', fillStyle: 'rgba(255,82,82,0.8)', strokeStyle: '#ff5252', lineWidth: 1, index: 1 },
-                                { text: 'Overlap: ' + (intakeOpen + exhaustOpen - 720 > 0 ? (intakeOpen + exhaustOpen - 720) : 0) + '\u00B0', fillStyle: 'rgba(255,215,64,0.8)', strokeStyle: '#ffd740', lineWidth: 1, index: 2 }
+                                { text: 'Aspirazione: ' + durIn + '\u00B0', fillStyle: 'rgba(0,212,255,0.85)', strokeStyle: '#00d4ff', lineWidth: 1, index: 0 },
+                                { text: 'Scarico: ' + durEx + '\u00B0', fillStyle: 'rgba(255,82,82,0.85)', strokeStyle: '#ff5252', lineWidth: 1, index: 1 },
+                                { text: 'Overlap: ' + ov.toFixed(1) + '\u00B0', fillStyle: 'rgba(255,215,64,0.8)', strokeStyle: '#ffd740', lineWidth: 1, index: 2 }
                             ];
                         }
                     }
                 },
                 tooltip: {
+                    filter: function (item) { return item.dataIndex === 1; },   // solo l'arco "aperta"
                     callbacks: {
-                        label: function (ctx) {
-                            var label = ctx.datasetIndex === 0 ? 'Aspirazione' : 'Scarico';
-                            var state = ctx.dataIndex === 0 ? 'Aperta' : 'Chiusa';
-                            return label + ' ' + state + ': ' + ctx.parsed + '\u00B0';
+                        label: function (c) {
+                            var v = (c.datasetIndex === 0) ? 'Aspirazione' : 'Scarico';
+                            return v + ' aperta: ' + c.parsed + '\u00B0';
                         }
                     }
                 }
@@ -3759,6 +3801,21 @@ function runABComparison() {
     var clearA = Number(document.getElementById('abA_clear').value);
     var angleB = Number(document.getElementById('abB_angle').value);
     var clearB = Number(document.getElementById('abB_clear').value);
+    // AUDIT APP-06: A/B usa la STESSA pipeline dell'analisi principale
+    // (baseline + follower virtuale + anticipo per lobo), non più il solo
+    // mapCamToCrank sul grezzo puntalino — prima confrontava curve incoerenti
+    // con la vista principale mostrata sopra.
+    var advAB = Number((document.getElementById('advance') || {}).value) || 0;
+    var ecA = effectiveCenters(angleA, angleA, advAB);
+    var ecB = effectiveCenters(angleB, angleB, advAB);
+    // Rispetta la provenienza per-lato (APP-07): un file già follower non
+    // viene riconvertito. detectConvertedFile forza anche #followerType=punt.
+    function prepAB(txt, side) {
+        var wasConv = detectConvertedFile(txt);
+        var cam = parseCamFile(txt);
+        if (!cam.validCount || cam.validCount < 30) return null;   // guardia copertura
+        return wasConv ? analysisRaw(cam) : applyVirtualFollower(analysisRaw(cam), side);
+    }
 
     Promise.all([
         readFileAsText(fileAInt),
@@ -3766,15 +3823,20 @@ function runABComparison() {
         readFileAsText(fileBInt),
         readFileAsText(fileBExh)
     ]).then(function(results) {
-        var camA_int = parseCamFile(results[0]);
-        var camA_exh = parseCamFile(results[1]);
-        var camB_int = parseCamFile(results[2]);
-        var camB_exh = parseCamFile(results[3]);
+        var folA_int = prepAB(results[0], 'intake');
+        var folA_exh = prepAB(results[1], 'exhaust');
+        var folB_int = prepAB(results[2], 'intake');
+        var folB_exh = prepAB(results[3], 'exhaust');
+        if (!folA_int || !folA_exh || !folB_int || !folB_exh) {
+            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'File A/B non riconosciuto',
+                body: 'Uno dei 4 file ha meno di 30 righe valide "grado,alzata": non è una misura CAMMES.', duration: 8000 });
+            return;
+        }
 
-        var crankA_int = mapCamToCrank(camA_int, angleA, clearA, 'intake');
-        var crankA_exh = mapCamToCrank(camA_exh, angleA, clearA, 'exhaust');
-        var crankB_int = mapCamToCrank(camB_int, angleB, clearB, 'intake');
-        var crankB_exh = mapCamToCrank(camB_exh, angleB, clearB, 'exhaust');
+        var crankA_int = mapCamToCrank(folA_int, ecA.intake, clearA, 'intake');
+        var crankA_exh = mapCamToCrank(folA_exh, ecA.exhaust, clearA, 'exhaust');
+        var crankB_int = mapCamToCrank(folB_int, ecB.intake, clearB, 'intake');
+        var crankB_exh = mapCamToCrank(folB_exh, ecB.exhaust, clearB, 'exhaust');
 
         // Find maxes
         var maxA_int = findMax(crankA_int);
@@ -4028,6 +4090,7 @@ function exportCSV() {
     // Section: risultati riassuntivi
     lines.push('# === Risultati ===');
     var R = L.results;
+    lines.push('Soglia durata @ gioco [mm],' + (R.durThresh != null ? R.durThresh : 0.05));
     lines.push('Durata asp. [deg],' + R.durIntake);
     lines.push('Durata scar. [deg],' + R.durExhaust);
     lines.push('Durata asp. @ rif [deg],' + R.durRefIn);
@@ -4295,7 +4358,7 @@ function exportCamCard(testMode) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
     doc.text('dati camma', x0, y); doc.text('aspirazione', xI, y); doc.text('scarico', xE, y); y += lh + 1;
     row('gioco valvola', I.intakeClearance.toFixed(2) + ' mm', I.exhaustClearance.toFixed(2) + ' mm');
-    row('durata @ gioco', R.durIntake.toFixed(0) + '°', R.durExhaust.toFixed(0) + '°');
+    row('durata @ gioco (>' + (R.durThresh != null ? R.durThresh.toFixed(2) : '0.05') + ' mm)', R.durIntake.toFixed(0) + '°', R.durExhaust.toFixed(0) + '°');
     row('durata @ ' + I.durationRef.toFixed(2) + ' mm', R.durRefIn.toFixed(0) + '°', R.durRefEx.toFixed(0) + '°');
     row('alzata valvola', R.maxLiftIn.toFixed(2) + ' mm', R.maxLiftEx.toFixed(2) + ' mm', true);
     row('alzata camma', camPkIn.toFixed(2) + ' mm', camPkEx.toFixed(2) + ' mm');
@@ -4830,6 +4893,7 @@ function exportPDF() {
 function resetAll() {
     intakeLoaded = false;
     exhaustLoaded = false;
+    window._metaIn = {}; window._metaEx = {};   // azzera provenienza per-lato (audit APP-07)
     intakeMaxLift = 0;
     intakeMaxPos = 0;
     exhaustMaxLift = 0;

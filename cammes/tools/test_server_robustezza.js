@@ -14,23 +14,30 @@
 
 var path = require('path');
 var http = require('http');
+var net = require('net');
 var spawn = require('child_process').spawn;
 
-var HTTP_PORT = 3410, WS_PORT = 3411;
+var HTTP_PORT = 0, WS_PORT = 0;   // porte libere vere, assegnate a runtime
 var fails = 0;
 function check(label, cond, detail) {
     console.log((cond ? '  PASS  ' : '  FAIL  ') + label + (detail ? '  [' + detail + ']' : ''));
     if (!cond) fails++;
+}
+// porta libera dal SO (evita porte fisse "wedged" da server orfani di run killati)
+function freePort() {
+    return new Promise(function (resolve, reject) {
+        var srv = net.createServer(); srv.unref();
+        srv.on('error', reject);
+        srv.listen(0, '127.0.0.1', function () { var p = srv.address().port; srv.close(function () { resolve(p); }); });
+    });
 }
 
 console.log('=============================================================');
 console.log(' ROBUSTEZZA SERVER — regressione audit SEC-05 / SEC-06');
 console.log('=============================================================');
 
-var server = spawn(process.execPath,
-    [path.join(__dirname, '..', 'cammes_server.js'), '--no-browser', '--port', String(HTTP_PORT), '--ws-port', String(WS_PORT)],
-    { stdio: 'ignore', cwd: path.join(__dirname, '..') });
-function killServer() { try { server.kill(); } catch (e) {} }
+var server = null;
+function killServer() { try { if (server) server.kill(); } catch (e) {} }
 process.on('exit', killServer);
 process.on('uncaughtException', function (e) { killServer(); console.error(e); process.exit(1); });
 
@@ -56,15 +63,24 @@ function finish() {
     process.exit(0);
 }
 
+// Avvio: porte libere reali, poi spawn del server su quelle
+Promise.all([freePort(), freePort()]).then(function (ports) {
+    HTTP_PORT = ports[0]; WS_PORT = ports[1];
+    server = spawn(process.execPath,
+        [path.join(__dirname, '..', 'cammes_server.js'), '--no-browser', '--port', String(HTTP_PORT), '--ws-port', String(WS_PORT)],
+        { stdio: 'ignore', cwd: path.join(__dirname, '..') });
+    waitUp();
+}).catch(function (e) { check('assegnazione porte libere', false, String(e)); finish(); });
+
 // attesa avvio
 var tries = 0;
-(function waitUp() {
+function waitUp() {
     req('GET', '/', null, function (err, code) {
         if (!err && code) return runTests();
         if (++tries > 40) { check('server di test avviato', false, String(err)); return finish(); }
         setTimeout(waitUp, 200);
     });
-})();
+}
 
 function runTests() {
     // SEC-05.1 — URL con % malformato → 400 (non crash/hang)
