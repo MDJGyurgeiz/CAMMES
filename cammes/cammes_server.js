@@ -484,8 +484,36 @@ function apiFlashFirmware(res) {
         return sendJson(res, 400, { error: 'Nessuna porta Arduino nota: collega l\'Arduino e riprova' });
     }
 
-    flashInProgress = true;
-    log('FLASH', 'Avvio flash firmware ' + (info.firmware || '?') + ' su ' + port);
+    // AUDIT SER-03: se la seriale è APERTA, port = serialPort.path è
+    // autorevole → procedi. Se NON è aperta, `port` viene da lastComPort,
+    // che può essere STALE (Arduino ricollegato su un'altra COM dopo un
+    // unplug): verifica che quella porta esista ancora prima di lanciare
+    // avrdude, altrimenti si flasherebbe un dispositivo sbagliato o si
+    // fallirebbe in modo oscuro.
+    var launchFlash = function () {
+        flashInProgress = true;
+        log('FLASH', 'Avvio flash firmware ' + (info.firmware || '?') + ' su ' + port);
+        _doFlash(res, info, port);
+    };
+    if (serialPort && serialPort.isOpen) {
+        return launchFlash();
+    }
+    if (!SerialPort || !SerialPort.list) return launchFlash();   // no modulo list: best-effort
+    SerialPort.list().then(function (ports) {
+        var present = ports.some(function (p) { return (p.path || p.comName) === port; });
+        if (!present) {
+            var avail = ports.map(function (p) { return p.path || p.comName; });
+            return sendJson(res, 409, {
+                error: 'La porta ' + port + ' non è più presente (Arduino scollegato o su un\'altra COM). '
+                     + (avail.length ? 'Porte disponibili: ' + avail.join(', ') + '. ' : '')
+                     + 'Ricollega e attendi che il LED Motore torni verde, poi riprova.'
+            });
+        }
+        launchFlash();
+    }).catch(function () { launchFlash(); });
+}
+
+function _doFlash(res, info, port) {
 
     var tmpDir = path.join(os.tmpdir(), 'cammes-fw');
     try { fs.mkdirSync(tmpDir, { recursive: true }); } catch (e) {}
@@ -520,22 +548,30 @@ function runAvrdude(res, tools, idx, port, hexPath, t0) {
     log('FLASH', 'avrdude (' + tool.source + ') ' + args.join(' '));
     var out = '';
     var child;
+    // AUDIT SER-02: guardia once. spawn emette 'error' E POI 'close' su un
+    // fallimento di avvio; senza questo flag avrdudeDone veniva chiamato due
+    // volte → doppio sendJson ("headers already sent", crash del processo) e
+    // doppio reset di flashInProgress. Solo il PRIMO evento vince.
+    var settled = false;
+    function finish(code, extra) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(killer);
+        avrdudeDone(res, tools, idx, port, hexPath, t0, code, out + (extra || ''));
+    }
     try {
         child = spawn(tool.exe, args, { windowsHide: true });
     } catch (e) {
         return avrdudeDone(res, tools, idx, port, hexPath, t0, -1, out + '\nspawn: ' + e.message);
     }
-    var killer = setTimeout(function () { try { child.kill(); } catch (e) {} }, 90000);
+    var killer = setTimeout(function () {
+        try { child.kill(); } catch (e) {}
+        finish(-1, '\ntimeout: avrdude ucciso dopo 90 s');
+    }, 90000);
     child.stdout.on('data', function (d) { out += d; if (out.length > 200000) out = out.slice(-100000); });
     child.stderr.on('data', function (d) { out += d; if (out.length > 200000) out = out.slice(-100000); });
-    child.on('error', function (e) {
-        clearTimeout(killer);
-        avrdudeDone(res, tools, idx, port, hexPath, t0, -1, out + '\nerrore: ' + e.message);
-    });
-    child.on('close', function (code) {
-        clearTimeout(killer);
-        avrdudeDone(res, tools, idx, port, hexPath, t0, code, out);
-    });
+    child.on('error', function (e) { finish(-1, '\nerrore: ' + e.message); });
+    child.on('close', function (code) { finish(code, ''); });
 }
 
 function avrdudeDone(res, tools, idx, port, hexPath, t0, code, out) {

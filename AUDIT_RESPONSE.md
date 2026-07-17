@@ -150,6 +150,22 @@ azzera il confronto, <2 frame validi → NaN vero (scartato via MET-01).
 **Validato al banco**: harness 23/23, tre scansioni Clio con ripetibilità
 0,024 mm RMS e zero gradi persi.
 
+**Lotto 10 — SEC-03 (XSS memorizzato).** Tag/nomi file/posizioni salvate
+uscivano in `innerHTML` e `onclick` inline con escape debole (`&#39;`
+ridecodificato). Ora chip, badge, righe tabella/cestino, quickview e
+posizioni sono ricostruiti via DOM (`textContent` + listener delegati su
+`data-act`/`data-name`), `normalizeTag` ha una whitelist e `cammes-ui.js`
+esporta `window.cammesEscape`. Verificato: payload ostili (da localStorage e
+da nomi file) resi come testo, zero elementi iniettati, zero handler inline,
+`data-name` round-trip esatto.
+
+**Lotto 11 — SER-02 / SER-03 (robustezza flash).** SER-02: guardia once in
+`runAvrdude` (prima `error`+`close` chiamavano `avrdudeDone` due volte →
+doppio `sendJson`, crash). SER-03: porta di flash verificata presente
+nell'elenco quando la seriale non è aperta (prima si usava `lastComPort`
+stale). Validato al banco: flash via API → risposta singola 200, ~10 s,
+seriale riconnessa.
+
 ## Ancora aperti (P1/P2/P3 non in questi lotti)
 
 Non affrontati in questa tornata, da valutare in seguito: SEC-03..08/10 (XSS,

@@ -1254,6 +1254,26 @@ robocopy. I test che avviano un server (`test_confine_rete`) vanno con il
 preview server SPENTO (contesa su COM8/porte) e uccidono il figlio su ogni
 uscita per non lasciare processi zombie che bloccano le porte.
 
+### Lotto 11 — SER-02/SER-03: robustezza flash firmware
+SER-02: guardia once in `runAvrdude` — `spawn` emette `error` E POI `close`
+su un fallimento di avvio, e `avrdudeDone` veniva chiamato due volte
+(doppio `sendJson` = "headers already sent" e crash del processo, doppio
+reset di `flashInProgress`). Ora solo il primo evento vince; il timeout 90 s
+chiude anch'esso in modo pulito. SER-03: se la seriale non è aperta, prima
+di lanciare avrdude si verifica che la porta (da `lastComPort`, che può
+essere stale dopo un unplug/replug su un'altra COM) sia ancora presente
+nell'elenco; altrimenti 409 con l'elenco delle porte disponibili invece di
+flashare il dispositivo sbagliato. Validato al banco: flash via API →
+singola risposta 200, ok, ~10 s, seriale riconnessa a 3.5.
+
+### Lotto 10 — SEC-03: XSS da contenuti memorizzati (`8ee36ce`)
+Tag, nomi file e posizioni salvate uscivano in innerHTML e onclick inline
+con escape debole; dati arbitrari via localStorage o file piazzati a mano
+bypassavano la sanificazione da UI. Chip/badge/righe ricostruiti via DOM
+(textContent + listener delegati su data-act/data-name), `normalizeTag` con
+whitelist, `window.cammesEscape` canonico. Verificato: payload ostili resi
+come testo, 0 iniezioni, 0 onclick residui.
+
 ### Lotto 9 — FW-04/FW-05: parser robusto + stabilità sensore (firmware 3.5)
 Parser `S`/`$` con `strtol` (32 bit) e grammatica/range espliciti: prima
 `atoi` (int16 su AVR) wrappava — `S+70000` diventava 4464 unità ESEGUITE in
