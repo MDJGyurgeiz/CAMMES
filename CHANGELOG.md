@@ -1254,6 +1254,13 @@ robocopy. I test che avviano un server (`test_confine_rete`) vanno con il
 preview server SPENTO (contesa su COM8/porte) e uccidono il figlio su ogni
 uscita per non lasciare processi zombie che bloccano le porte.
 
+### Lotto 8 — MET-03/MET-04: provenienza misura (`ba83b61`)
+Il .scr ora registra `#tastatore` (selettore in Avanzate, ricordato),
+`#verso`, `#microstep`, `#fw` (versione reale dell'Arduino) e `#encoderSpan`
+(~±1440 = giro pieno). Analisi avvisa se aspirazione e scarico dichiarano
+verso o tastatore diversi. Validato al banco con scansione reale (metadati
+completi nel file, ripetibilità 0,044 mm tra due scan consecutive).
+
 ### Validazione al banco (2026-07-17, albero Clio montato con piattello Ø33)
 Firmware **3.4 flashato** (8,7 s via API, verified) e provato con il nuovo
 harness hardware `tools/bench_fw34_test.js` (fuori da npm test, richiede
