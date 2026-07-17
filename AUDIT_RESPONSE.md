@@ -193,6 +193,11 @@ in results/cam card/CSV. APP-06: A/B passa dalla pipeline principale
 (baseline+follower+anticipo per lobo). APP-07: provenienza raw/convertito
 per-lato, niente doppia conversione. Verificato live sulla Clio.
 
+**Lotto 16 — MET-05 (posizioni encoder).** Le posizioni salvate sono legate a
+un'"epoca" dello zero encoder: reset `!` o reboot Arduino la incrementano e
+"Vai a" una posizione di epoca diversa viene rifiutata (chip barrato) invece
+di muovere a un riferimento sbagliato. Verificato live.
+
 ## Ancora aperti (P1/P2/P3 non in questi lotti)
 
 Non affrontati in questa tornata, da valutare in seguito: SEC-03..08/10 (XSS,

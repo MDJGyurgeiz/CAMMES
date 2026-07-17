@@ -1279,6 +1279,14 @@ legacy preservato. Validato dal vivo: slot corto a 300° = 0 (non la coda del
 file lungo caricato prima), file da 20 righe rifiutato, Clio reale via
 `?files=` renderizzata (picco 8,52 mm, 360 punti).
 
+### Lotto 16 — MET-05: posizioni encoder legate allo zero
+Le posizioni salvate (encoderCount assoluto) sono ora timbrate con un'"epoca"
+dello zero encoder (sessionStorage). Ogni evento che ridefinisce l'origine —
+reset encoder `!`, reboot Arduino — incrementa l'epoca; "Vai a" una posizione
+di un'epoca diversa la RIFIUTA (prima ci sarebbe andato usando un riferimento
+sbagliato) e il chip appare barrato. Lo zero virtuale non incrementa l'epoca
+(sposta l'albero senza azzerare il contatore). Verificato live.
+
 ### Lotto 15 — APP-03..07: strumenti di Analisi
 APP-03: l'ottimizzatore molla è ora presentato come ESPLORAZIONE (solo valve
 float), con caveat esplicito (non verifica coil bind/stress/fatica/geometria)

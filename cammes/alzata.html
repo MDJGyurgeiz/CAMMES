@@ -618,6 +618,7 @@ var _engineOnMessage = function(event) {
     // po', encoder e configurazione sono stati azzerati: avvisa forte.
     if (msg.indexOf('CAMMES Uno ready') !== -1 && (Date.now() - _pageLoadTs) > 12000) {
         currentEncoderCount = null;
+        if (typeof bumpEncEpoch === 'function') bumpEncEpoch('reboot Arduino');   // MET-05: posizioni salvate non più valide
         if (startflag === 1 || autoScanActive) { try { stop(); } catch (e) {} }
         if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Arduino riavviato!',
             body: 'La scheda si &egrave; resettata: <b>riferimento zero e configurazione persi</b>. Se stavi misurando, la scansione non &egrave; pi&ugrave; valida: rifai lo Zero virtuale e riparti.', duration: 12000 });
@@ -1647,15 +1648,35 @@ function resetEncoder() {
     if (_scanBusy('Il reset encoder')) return;   // audit MOT-02: perderebbe lo zero della misura
     if (!sendSocket || sendSocket.readyState !== 1) return;
     try { sendSocket.send('!'); } catch (e) {}
+    if (typeof bumpEncEpoch === 'function') bumpEncEpoch('reset zero encoder');   // MET-05
     if (window.cammesToast) window.cammesToast({
         kind: 'success', title: 'Encoder azzerato',
-        body: 'Posizione corrente impostata come 0&deg;.', duration: 2500
+        body: 'Posizione corrente impostata come 0&deg;. Le posizioni salvate prima di ora non sono pi&ugrave; raggiungibili (zero cambiato).', duration: 4000
     });
 }
 window.resetEncoder = resetEncoder;
 
 // Posizioni salvate in localStorage: array di {label, deg, ts}
 var SAVED_POS_KEY = 'cammes-saved-positions';
+// AUDIT MET-05: "epoca" dello zero encoder. Le posizioni salvate contengono un
+// encoderCount ASSOLUTO, valido solo finché lo zero non cambia. Ogni evento che
+// ridefinisce l'origine (reset encoder '!', reboot Arduino, zero virtuale)
+// incrementa l'epoca; una posizione con epoca diversa da quella corrente NON è
+// più raggiungibile in modo affidabile e "Vai a" la rifiuta. L'epoca vive in
+// sessionStorage così sopravvive a un reload della pagina ma non a un riavvio.
+function currentEncEpoch() {
+    var e = 0;
+    try { e = parseInt(sessionStorage.getItem('cammes-enc-epoch'), 10) || 0; } catch (x) {}
+    return e;
+}
+function bumpEncEpoch(reason) {
+    var e = currentEncEpoch() + 1;
+    try { sessionStorage.setItem('cammes-enc-epoch', String(e)); } catch (x) {}
+    if (window.CAMMES_DEBUG) console.log('[MET-05] zero encoder ridefinito (' + (reason || '?') + ') → epoca ' + e);
+    if (typeof renderSavedPositions === 'function') { try { renderSavedPositions(); } catch (x) {} }
+    return e;
+}
+window.bumpEncEpoch = bumpEncEpoch;
 function loadSavedPositions() {
     try { return JSON.parse(localStorage.getItem(SAVED_POS_KEY)) || []; } catch (e) { return []; }
 }
@@ -1686,7 +1707,7 @@ function savePositionMark() {
     var arr = loadSavedPositions();
     // Sostituisci se label già esiste
     var idx = arr.findIndex(function (p) { return p.label === label; });
-    var entry = { label: label, deg: parseFloat(deg), encoderCount: currentEncoderCount, ts: Date.now() };
+    var entry = { label: label, deg: parseFloat(deg), encoderCount: currentEncoderCount, ts: Date.now(), epoch: currentEncEpoch() };
     if (idx >= 0) arr[idx] = entry;
     else arr.push(entry);
     saveSavedPositions(arr);
@@ -1702,6 +1723,15 @@ function gotoSavedPosition(label) {
     var arr = loadSavedPositions();
     var p = arr.find(function (x) { return x.label === label; });
     if (!p) return;
+    // AUDIT MET-05: la posizione è riferita a uno zero encoder che potrebbe non
+    // essere più quello attuale (reset/reboot/zero virtuale nel frattempo).
+    if ((p.epoch || 0) !== currentEncEpoch()) {
+        if (window.cammesToast) window.cammesToast({
+            kind: 'err', title: 'Posizione non più valida',
+            body: 'Lo zero encoder è cambiato (reset, riavvio o zero virtuale) dopo il salvataggio di <b>' + label + '</b>: non è più raggiungibile in modo affidabile. Riazzera e risalva la posizione.',
+            duration: 9000 });
+        return;
+    }
     if (motorFree) {
         if (window.cammesToast) window.cammesToast({
             kind: 'warn', title: 'Motore libero',
@@ -1749,10 +1779,13 @@ function renderSavedPositions() {
     // costruzione DOM con textContent e listener con label in closure, così
     // la label non passa mai da innerHTML né da stringhe JS in onclick.
     wrap.innerHTML = '';
+    var epoch = currentEncEpoch();
     arr.forEach(function (p) {
+        var stale = (p.epoch || 0) !== epoch;   // MET-05: zero cambiato dopo il salvataggio
         var chip = document.createElement('span');
         chip.className = 'saved-pos-chip';
-        chip.title = 'Vai a ' + p.deg + '°';
+        chip.title = stale ? 'Zero encoder cambiato: non più raggiungibile, riazzera e risalva' : 'Vai a ' + p.deg + '°';
+        if (stale) { chip.style.opacity = '.45'; chip.style.textDecoration = 'line-through'; }
         chip.addEventListener('click', function () { gotoSavedPosition(p.label); });
         chip.appendChild(document.createTextNode(p.label + ' '));
         var degSpan = document.createElement('span');
