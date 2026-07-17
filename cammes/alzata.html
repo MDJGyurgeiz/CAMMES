@@ -111,6 +111,12 @@
             </div>
 
             <div class="adv-row">
+                <span class="toggle-label">Tastatore</span>
+                <select id="probeType" class="input" style="width:180px;" onchange="try{localStorage.setItem('cammes-probe-type',this.value);}catch(e){}" data-tip="<strong>Cosa tocca la camma?</strong>Viene scritto nei metadati del file (.scr): due misure dello stesso lobo con tastatori diversi hanno FIANCHI diversi anche di millimetri (il piattello &laquo;anticipa&raquo; le rampe) e NON vanno confrontate alla pari. Registrarlo evita confronti senza senso a distanza di mesi."><option value="puntalino" selected>Puntalino sferico</option><option value="piattello33">Piattello &Oslash;33</option><option value="altro">Altro</option></select>
+                <span class="help-icon" data-tip="<strong>Perch&eacute; conta?</strong>Confrontando una scansione a puntalino con una a piattello dello stesso albero Clio la differenza apparente era 1,26 mm RMS; convertendo il puntalino a piattello (Analisi &rarr; follower virtuale) torna 0,047 mm. Il metadato ti dice subito con cosa &egrave; stata fatta la misura." tabindex="0">?</span>
+            </div>
+
+            <div class="adv-row">
                 <button type="button" class="btn btn-secondary btn-sm" onclick="benchVerifyStart();" data-tip="<strong>Verifica banco</strong>Controllo periodico della salute del banco: monta un <b>pezzo cilindrico rettificato</b> (alzata attesa = 0 ovunque), azzera il comparatore e premi. Una scansione Veloce misura il residuo: entro 0,02 mm RMS il banco &egrave; OK. L'esito (con data) compare in Home.">&#129514; Verifica banco</button>
             </div>
 
@@ -819,6 +825,10 @@ var _engineOnMessage = function(event) {
             // dello streaming): se ce ne sono, lo dice subito e marca il run —
             // sav() chiederà conferma e scriverà i metadati di stato.
             window._runMissing = 0;
+            // Corsa encoder netta del giro (audit MET-03: nel .scr dice se il
+            // giro era davvero ~1440 cnt — un file con span dimezzato urla da solo)
+            window._encSpanScan = (currentEncoderCount != null && window._scanEncStart != null)
+                ? currentEncoderCount - window._scanEncStart : null;
             if (labms !== 1) {
                 for (var _dm = 1; _dm <= 360; _dm++) {
                     if (!isFinite(Number(pdata[_dm]))) window._runMissing++;
@@ -1003,6 +1013,18 @@ var _engineOnMessage = function(event) {
 
 
 connectEngine();
+
+// Provenienza misura (audit MET-03): versione firmware REALE dal server
+// (finisce nei metadati del .scr) e tastatore ricordato tra le sessioni.
+window._deviceFw = null;
+fetch('/api/firmware-info').then(function (r) { return r.json(); })
+    .then(function (d) { window._deviceFw = d.deviceFirmware || null; })
+    .catch(function () {});
+try {
+    var _pt = localStorage.getItem('cammes-probe-type');
+    var _ptEl = document.getElementById('probeType');
+    if (_pt && _ptEl) _ptEl.value = _pt;
+} catch (e) {}
 </script>
 
 <script>
@@ -1127,6 +1149,7 @@ function _startSingleRun(firstRun) {
     window._lastUnstable = 0;         // audit stabilità del run corrente
     window._invalidTotal = 0;         // letture invalide scartate (audit MET-01)
     window._runMissing = 0;           // gradi senza dato a fine run (audit MET-01)
+    window._scanEncStart = currentEncoderCount;   // per #encoderSpan (audit MET-03)
     // Reset controllo divergenza stepper↔encoder per questo run
     _encChkBaseI = 0; _encChkBaseCount = null; _encAlarmed = false;
     window._encStuck = false;
@@ -1398,7 +1421,15 @@ function sav() {
                    '#sw=' + (window.CAMMES_VERSION || '?') + '\r\n' +
                    '#modalita=' + ((document.getElementById('scanMode') || {}).value || '?') + '\r\n' +
                    '#motore=' + (window._engineFallback ? 'browser' : 'firmware') + '\r\n' +
-                   '#picco=' + Number(max).toFixed(3) + '@' + maxg + '\r\n';
+                   '#picco=' + Number(max).toFixed(3) + '@' + maxg + '\r\n' +
+                   // Provenienza (audit MET-03/MET-04): con cosa e come è stata
+                   // fatta la misura — senza, due .scr dello stesso lobo con
+                   // tastatori o versi diversi sembrano camme diverse.
+                   '#tastatore=' + (((document.getElementById('probeType') || {}).value) || 'puntalino') + '\r\n' +
+                   '#verso=' + (rsign === 1 ? 'orario' : 'antiorario') + '\r\n' +
+                   '#microstep=' + ((currentMode && currentMode.microsteps) || '?') + '\r\n' +
+                   (window._deviceFw ? '#fw=' + window._deviceFw + '\r\n' : '') +
+                   (window._encSpanScan != null ? '#encoderSpan=' + window._encSpanScan + '\r\n' : '');
     if (window._lastRepeatStats && window._lastRepeatStats.runs > 1) {
         metaTail += '#runs=' + window._lastRepeatStats.runs + '\r\n' +
                     '#sigmaMax=' + window._lastRepeatStats.sigmaMax.toFixed(4) + '\r\n' +
