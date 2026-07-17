@@ -1279,6 +1279,23 @@ legacy preservato. Validato dal vivo: slot corto a 300° = 0 (non la coda del
 file lungo caricato prima), file da 20 righe rifiutato, Clio reale via
 `?files=` renderizzata (picco 8,52 mm, 360 punti).
 
+### Lotto 19-20 — DYN-02/06/07 + APP-10..17/20: dinamica e UI
+DYN-02: i solver 1/2/3-DOF fanno un **warm-up** di 3 giri (stato riportato tra
+i giri, registra solo l'ultimo) invece di misurare il transitorio dal fermo.
+DYN-06/07: dichiarati esplicitamente esplorativi/euristici (surge) e qualificato
+il dominio della conversione follower (RMS 0,046 mm solo per bicchiere Ø33 su
+Clio, risoluzione 1° camma). DYN-08 e APP-16 risultati **già risolti** nei lotti
+precedenti. APP-10: il differenziale in Confronto esclude le bande nominali
+(solo misure 0-3). APP-11: vista polare ora `radar` = contorno reale della camma
+(non più disco pieno). APP-12: layout responsive via classi CSS invece di stili
+inline che annullavano le media query. APP-13: ARIA (role=dialog/aria-modal sui
+modali, aria-live sui toast, tile/toggle focusabili). APP-14: `cancelAnimationFrame`
+per non accumulare rAF. APP-17: sintesi vocale locale (`speechSynthesis`) al posto
+di responsiveVoice (niente testo a servizio remoto, volume nel range); rimossa la
+libreria. APP-20: il claim RMS 0,046 è ora condizionato al follower. APP-15
+(chunking simulazioni): rinviato — le simulazioni girano già in setTimeout e sul
+banco monoutente non bloccano in modo critico.
+
 ### Lotto 18 — SEC-04/07/08/10: hardening server
 SEC-04: containment via `path.relative` (`isInside`) al posto del confronto a
 prefisso, che accettava le directory sorelle. SEC-08: logging asincrono a coda

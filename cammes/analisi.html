@@ -179,7 +179,9 @@
     </div>
 
     <!-- Main: Chart + Parameters -->
-    <div class="main-grid" style="grid-template-columns: 1fr 360px;">
+    <!-- audit APP-12: layout via classe (style.css) invece di style inline, che
+         annullava le media query facendo saltare il collasso a colonna singola. -->
+    <div class="main-grid cols-analisi">
 
         <!-- Left: 720-degree chart -->
         <div class="card chart-card">
@@ -487,7 +489,7 @@
                     <span class="param-unit">N/mm (0=libero)</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Surge molla <span class="help-icon" data-tip="<strong>Surge molla (massa distribuita)</strong>Modella la molla valvola come catena di spire (massa distribuita) invece che molla ideale. Ad alto regime le spire entrano in <b>risonanza (surge)</b>: oscillano tra loro, perdono forza, possono sbattere → modo di guasto race. Calcola la <b>frequenza di surge</b> (&frac12;&middot;&radic;(k/m)) e quanto la molla &egrave; in risonanza al regime scelto. Usa il moto valvola (compliance se attiva, altrimenti profilo cam)." tabindex="0">?</span></span>
+                    <span class="param-label">Surge molla <span class="help-icon" data-tip="<strong>Surge molla (massa distribuita)</strong>Modella la molla valvola come catena di spire (massa distribuita) invece che molla ideale. Ad alto regime le spire entrano in <b>risonanza (surge)</b>: oscillano tra loro, perdono forza, possono sbattere → modo di guasto race. Calcola la <b>frequenza di surge</b> (&frac12;&middot;&radic;(k/m)) e quanto la molla &egrave; in risonanza al regime scelto. Usa il moto valvola (compliance se attiva, altrimenti profilo cam). <em>(criterio esplorativo/euristico, non validato indipendentemente)</em>" tabindex="0">?</span></span>
                     <select id="surgeEnabled" class="input" style="width:120px;" onchange="onSurgeToggle();">
                         <option value="0" selected>OFF</option>
                         <option value="1">ON (massa distrib.)</option>
@@ -534,7 +536,7 @@
             </div>
             <div class="flex gap-8" style="margin-top:8px;" data-module="race">
                 <button class="btn btn-secondary" id="btnSweep3D" onclick="run3DSweep();" style="flex:1;" disabled data-tip="<strong>Sweep 3D k×F&#8320;×RPM</strong>Nuvola ruotabile del valve float sui TRE assi insieme: rigidezza k, precarico F&#8320; e regime. Ogni punto colorato (verde sicuro &rarr; rosso float) &egrave; una combinazione simulata. Trascina per ruotare la vista ed esplorare il volume sicuro nello spazio molla-regime. Tempo: ~0.5 s.">&#127922; Sweep 3D</button>
-                <button class="btn btn-secondary" id="btnSurgeSweep" onclick="runSurgeSweep();" style="flex:1;" disabled data-tip="<strong>Surge vs RPM</strong>Plotta il <b>surge ratio</b> della molla (ampiezza oscillazione spire / corsa valvola) al variare del regime. I picchi mostrano i <b>regimi di risonanza</b> dove le spire vanno in surge. Richiede <b>Surge molla = ON</b>. La linea rossa a 1.0 &egrave; la soglia di surge serio. Tempo: ~2 s.">&#127926; Surge vs RPM</button>
+                <button class="btn btn-secondary" id="btnSurgeSweep" onclick="runSurgeSweep();" style="flex:1;" disabled data-tip="<strong>Surge vs RPM</strong>Plotta il <b>surge ratio</b> della molla (ampiezza oscillazione spire / corsa valvola) al variare del regime. I picchi mostrano i <b>regimi di risonanza</b> dove le spire vanno in surge. Richiede <b>Surge molla = ON</b>. La linea rossa a 1.0 &egrave; la soglia di surge serio. Tempo: ~2 s. <em>(criterio esplorativo/euristico, non validato indipendentemente)</em>">&#127926; Surge vs RPM</button>
             </div>
 
             <!-- Risultati Sweep / Optimizer / Mappa (modulo: race) -->
@@ -848,7 +850,10 @@
 
     <!-- A vs B Comparison card (modulo: confronto) -->
     <div class="card ab-card" data-module="confronto">
-        <div class="ab-toggle" onclick="toggleAB()">
+        <!-- audit APP-13: toggle navigabile da tastiera (Enter/Spazio richiamano
+             lo stesso toggleAB dell'onclick). NON convertito in <button> per non
+             alterare il CSS. -->
+        <div class="ab-toggle" onclick="toggleAB()" tabindex="0" role="button" aria-label="Mostra/nascondi confronto A vs B" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAB();}">
             <span class="ab-toggle-arrow" id="abArrow">&#9654;</span>
             <span class="card-title" style="margin:0;cursor:pointer;">Confronto A vs B</span>
         </div>
@@ -1500,7 +1505,9 @@ function runSurgeSweep() {
                         : w.ratio > 0.4 ? '<b style="color:var(--warning);">attenzione</b>'
                         : '<b style="color:var(--success);">margine ampio</b>';
             body.innerHTML = 'Picco surge ratio <b>' + w.ratio.toFixed(2) + '</b> a <b>' + w.rpm +
-                ' rpm</b> (' + verdict + '). Frequenza di surge ' + Math.round(sweep.freqHz) + ' Hz.';
+                ' rpm</b> (' + verdict + '). Frequenza di surge ' + Math.round(sweep.freqHz) + ' Hz.' +
+                // audit DYN-06: caveat testuale, il modello surge e' esplorativo/euristico
+                ' <em style="color:var(--text-muted);">(criterio esplorativo/euristico, non validato indipendentemente)</em>';
             renderSurgeSweep(sweep, inp.rpm);
             if (window.cammesToast) window.cammesToast({ kind: w.ratio > 1 ? 'warn' : 'success',
                 title: 'Surge sweep completato', body: 'Picco ' + w.ratio.toFixed(2) + ' @ ' + w.rpm + ' rpm', duration: 4000 });
@@ -4383,7 +4390,15 @@ function exportCamCard(testMode) {
     }
     var remarks = [
         '# misura CAMMES: scansione 360° col puntalino, conversione geometrica al follower dichiarato.',
-        '# conversione puntalino->follower VALIDATA fisicamente (piattello reale, RMS 0.046 mm).',
+        // audit APP-20 + DYN-07: la nota di validazione fisica e' CONDIZIONALE sul
+        // follower (ft, congelato dall'analisi ~riga 4316). La conversione geometrica
+        // e' a risoluzione 1° camma; la validazione al banco (RMS 0.046 mm) vale solo
+        // per il bicchiere piatto — non estenderla implicitamente a roller/finger.
+        (ft === 'bicch'
+            ? '# conversione puntalino->follower VALIDATA fisicamente su bicchiere piatto (Clio Ø33, RMS 0.046 mm).'
+            : ft === 'punt'
+                ? '# curva grezza al puntalino: nessuna conversione follower applicata.'
+                : '# conversione geometrica al follower a risoluzione 1° camma; validazione fisica al banco solo per bicchiere piatto (RMS 0.046 mm).'),
         '# ripetibilità - ' + ripetTxt(I.metaIn, 'ASP') + ' ' + ripetTxt(I.metaEx, 'SCA'),
         '# correzione baseline/eccentricità: ' + (I.baselineOn ? 'ON' : 'OFF') + '.',
         '# durate e fasatura riferite al gioco valvola indicato; angoli in gradi MOTORE.'

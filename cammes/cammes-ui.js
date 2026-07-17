@@ -64,6 +64,11 @@
       stack = document.createElement('div');
       stack.id = 'toast-stack';
       stack.className = 'toast-stack';
+      // audit APP-13: live region cosi' gli screen reader annunciano i toast.
+      // aria-atomic=false: annuncia solo il nuovo toast, non l'intera pila.
+      stack.setAttribute('role', 'status');
+      stack.setAttribute('aria-live', 'polite');
+      stack.setAttribute('aria-atomic', 'false');
       document.body.appendChild(stack);
     }
     return stack;
@@ -416,7 +421,8 @@
     const back = document.createElement('div');
     back.className = 'cammes-wizard-backdrop';
     back.innerHTML =
-      '<div class="cammes-wizard">' +
+      // audit APP-13: dialogo modale annunciato agli screen reader
+      '<div class="cammes-wizard" role="dialog" aria-modal="true" aria-label="Introduzione guidata">' +
       '  <button class="cammes-wizard-close" aria-label="Chiudi">&times;</button>' +
       '  <div class="cammes-wizard-icon"></div>' +
       '  <h2 class="cammes-wizard-title"></h2>' +
@@ -826,6 +832,10 @@
         var o = frameFn();
         if (o) { o.w = canvas.width; o.h = canvas.height; drawCamMechanism(ctx, o); }
       } catch (e) {}
+      // audit APP-14: annulla il rAF precedente prima di richiederne uno nuovo,
+      // altrimenti al ritorno in foreground si accumulano rAF pendenti (il fallback
+      // setTimeout puo' aver gia' schedulato un tick mentre rAF era sospeso).
+      if (raf) cancelAnimationFrame(raf);
       raf = requestAnimationFrame(tick);
       clearTimeout(wd); wd = setTimeout(tick, 120);   // fallback se rAF è sospeso
     }

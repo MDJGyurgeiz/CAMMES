@@ -302,29 +302,41 @@ function simulateCompliance(camLift720, rpm, params) {
     for (var ii = 0; ii <= 721; ii++) out[ii] = 0;
     var maxSep = 0, floatIdx = 0;   // audit DYN-01: perdita di contatto
 
-    for (var deg = 1; deg <= 720; deg++) {
-        for (var sub = 0; sub < subSteps; sub++) {
-            var degAt = deg + sub / subSteps;
-            // RK4 standard
-            var k1v = accel(0, x, v, degAt);
-            var k1x = v;
-            var k2v = accel(0, x + k1x * dt / 2, v + k1v * dt / 2, degAt + 0.5 / subSteps);
-            var k2x = v + k1v * dt / 2;
-            var k3v = accel(0, x + k2x * dt / 2, v + k2v * dt / 2, degAt + 0.5 / subSteps);
-            var k3x = v + k2v * dt / 2;
-            var k4v = accel(0, x + k3x * dt,     v + k3v * dt,     degAt + 1.0 / subSteps);
-            var k4x = v + k3v * dt;
-            x += (k1x + 2 * k2x + 2 * k3x + k4x) * dt / 6;
-            v += (k1v + 2 * k2v + 2 * k3v + k4v) * dt / 6;
-            // Vincolo: valvola non scende sotto zero (sede valvola)
-            if (x < 0) { x = 0; if (v < 0) v = 0; }
-            // Separazione = quanto la valvola supera la camma (contatto perso).
-            // Quasi-statico: x < x_cam (schiacciamento) → sep 0. Ad alto regime
-            // l'inerzia porta x sopra x_cam → sep > 0 e cresce coi giri.
-            var sep = x - camAt(degAt);
-            if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
+    // AUDIT DYN-02: WARM-UP. Prima si integrava UN solo giro partendo da fermo
+    // (x=v=0): il transitorio iniziale non si era ancora smorzato, quindi lift
+    // valvola e valve float dipendevano dalla fase di partenza del profilo. Ora
+    // si ripetono nWarm giri riusando lo stato finale come iniziale (NON si
+    // reinizializza x,v tra i giri) e si registra SOLO l'ultimo giro, a regime.
+    var nWarm = _num(p.warmupCycles, 3);
+    for (var pass = 0; pass < nWarm; pass++) {
+        var rec = (pass === nWarm - 1);
+        if (rec) { maxSep = 0; floatIdx = 0; }
+        for (var deg = 1; deg <= 720; deg++) {
+            for (var sub = 0; sub < subSteps; sub++) {
+                var degAt = deg + sub / subSteps;
+                // RK4 standard
+                var k1v = accel(0, x, v, degAt);
+                var k1x = v;
+                var k2v = accel(0, x + k1x * dt / 2, v + k1v * dt / 2, degAt + 0.5 / subSteps);
+                var k2x = v + k1v * dt / 2;
+                var k3v = accel(0, x + k2x * dt / 2, v + k2v * dt / 2, degAt + 0.5 / subSteps);
+                var k3x = v + k2v * dt / 2;
+                var k4v = accel(0, x + k3x * dt,     v + k3v * dt,     degAt + 1.0 / subSteps);
+                var k4x = v + k3v * dt;
+                x += (k1x + 2 * k2x + 2 * k3x + k4x) * dt / 6;
+                v += (k1v + 2 * k2v + 2 * k3v + k4v) * dt / 6;
+                // Vincolo: valvola non scende sotto zero (sede valvola)
+                if (x < 0) { x = 0; if (v < 0) v = 0; }
+                if (rec) {
+                    // Separazione = quanto la valvola supera la camma (contatto
+                    // perso). Quasi-statico: x < x_cam → sep 0; ad alto regime
+                    // l'inerzia porta x sopra x_cam → sep > 0, cresce coi giri.
+                    var sep = x - camAt(degAt);
+                    if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
+                }
+            }
+            if (rec) out[deg] = x * 1000;  // m → mm
         }
-        out[deg] = x * 1000;  // m → mm
     }
     out.maxSeparation = maxSep * 1000;   // mm
     out.floatIdx = floatIdx;
@@ -404,27 +416,33 @@ function simulateCompliance2DOF(camLift720, rpm, params) {
     for (var ii = 0; ii <= 721; ii++) out[ii] = 0;
     var maxSep = 0, floatIdx = 0;   // separazione cam-bilancere (audit DYN-01)
 
-    for (var deg = 1; deg <= 720; deg++) {
-        for (var sub = 0; sub < subSteps; sub++) {
-            var degAt = deg + sub / subSteps;
-            // RK4 multi-dimensionale
-            var k1 = deriv(x1, v1, x2, v2, degAt);
-            var k2 = deriv(x1 + k1[0]*dt/2, v1 + k1[1]*dt/2, x2 + k1[2]*dt/2, v2 + k1[3]*dt/2, degAt + 0.5/subSteps);
-            var k3 = deriv(x1 + k2[0]*dt/2, v1 + k2[1]*dt/2, x2 + k2[2]*dt/2, v2 + k2[3]*dt/2, degAt + 0.5/subSteps);
-            var k4 = deriv(x1 + k3[0]*dt,   v1 + k3[1]*dt,   x2 + k3[2]*dt,   v2 + k3[3]*dt,   degAt + 1.0/subSteps);
-            x1 += (k1[0] + 2*k2[0] + 2*k3[0] + k4[0]) * dt / 6;
-            v1 += (k1[1] + 2*k2[1] + 2*k3[1] + k4[1]) * dt / 6;
-            x2 += (k1[2] + 2*k2[2] + 2*k3[2] + k4[2]) * dt / 6;
-            v2 += (k1[3] + 2*k2[3] + 2*k3[3] + k4[3]) * dt / 6;
-            // Vincolo: né bilancere né valvola sotto zero
-            if (x1 < 0) { x1 = 0; if (v1 < 0) v1 = 0; }
-            if (x2 < 0) { x2 = 0; if (v2 < 0) v2 = 0; }
-            // Perdita di contatto = bilancere sopra la camma
-            var sep = x1 - camAt(degAt);
-            if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
+    // AUDIT DYN-02: warm-up (vedi 1-DOF). Stato NON reinizializzato tra i giri.
+    var nWarm = _num(p.warmupCycles, 3);
+    for (var pass = 0; pass < nWarm; pass++) {
+        var rec = (pass === nWarm - 1);
+        if (rec) { maxSep = 0; floatIdx = 0; }
+        for (var deg = 1; deg <= 720; deg++) {
+            for (var sub = 0; sub < subSteps; sub++) {
+                var degAt = deg + sub / subSteps;
+                // RK4 multi-dimensionale
+                var k1 = deriv(x1, v1, x2, v2, degAt);
+                var k2 = deriv(x1 + k1[0]*dt/2, v1 + k1[1]*dt/2, x2 + k1[2]*dt/2, v2 + k1[3]*dt/2, degAt + 0.5/subSteps);
+                var k3 = deriv(x1 + k2[0]*dt/2, v1 + k2[1]*dt/2, x2 + k2[2]*dt/2, v2 + k2[3]*dt/2, degAt + 0.5/subSteps);
+                var k4 = deriv(x1 + k3[0]*dt,   v1 + k3[1]*dt,   x2 + k3[2]*dt,   v2 + k3[3]*dt,   degAt + 1.0/subSteps);
+                x1 += (k1[0] + 2*k2[0] + 2*k3[0] + k4[0]) * dt / 6;
+                v1 += (k1[1] + 2*k2[1] + 2*k3[1] + k4[1]) * dt / 6;
+                x2 += (k1[2] + 2*k2[2] + 2*k3[2] + k4[2]) * dt / 6;
+                v2 += (k1[3] + 2*k2[3] + 2*k3[3] + k4[3]) * dt / 6;
+                // Vincolo: né bilancere né valvola sotto zero
+                if (x1 < 0) { x1 = 0; if (v1 < 0) v1 = 0; }
+                if (x2 < 0) { x2 = 0; if (v2 < 0) v2 = 0; }
+                if (rec) {
+                    var sep = x1 - camAt(degAt);   // contatto perso = bilancere sopra la camma
+                    if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
+                }
+            }
+            if (rec) out[deg] = x2 * 1000;   // lift VALVOLA osservato all'esterno
         }
-        // Posizione della VALVOLA (lift osservato all'esterno)
-        out[deg] = x2 * 1000;
     }
     out.maxSeparation = maxSep * 1000;
     out.floatIdx = floatIdx;
@@ -532,28 +550,36 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
     for (var ii = 0; ii <= 721; ii++) out[ii] = 0;
     var maxSep = 0, floatIdx = 0;   // separazione cam-bilancere (audit DYN-01)
 
-    for (var deg = 1; deg <= 720; deg++) {
-        for (var sub = 0; sub < subSteps; sub++) {
-            var degAt = deg + sub / subSteps;
-            var k1 = deriv(x1, v1, x2, v2, x3, v3, degAt);
-            var k2 = deriv(x1 + k1[0]*dt/2, v1 + k1[1]*dt/2, x2 + k1[2]*dt/2, v2 + k1[3]*dt/2, x3 + k1[4]*dt/2, v3 + k1[5]*dt/2, degAt + 0.5/subSteps);
-            var k3 = deriv(x1 + k2[0]*dt/2, v1 + k2[1]*dt/2, x2 + k2[2]*dt/2, v2 + k2[3]*dt/2, x3 + k2[4]*dt/2, v3 + k2[5]*dt/2, degAt + 0.5/subSteps);
-            var k4 = deriv(x1 + k3[0]*dt,   v1 + k3[1]*dt,   x2 + k3[2]*dt,   v2 + k3[3]*dt,   x3 + k3[4]*dt,   v3 + k3[5]*dt,   degAt + 1.0/subSteps);
-            x1 += (k1[0] + 2*k2[0] + 2*k3[0] + k4[0]) * dt / 6;
-            v1 += (k1[1] + 2*k2[1] + 2*k3[1] + k4[1]) * dt / 6;
-            x2 += (k1[2] + 2*k2[2] + 2*k3[2] + k4[2]) * dt / 6;
-            v2 += (k1[3] + 2*k2[3] + 2*k3[3] + k4[3]) * dt / 6;
-            x3 += (k1[4] + 2*k2[4] + 2*k3[4] + k4[4]) * dt / 6;
-            v3 += (k1[5] + 2*k2[5] + 2*k3[5] + k4[5]) * dt / 6;
-            // Il bilancere non scende sotto zero (contatto cam unilaterale).
-            // La valvola NON è clampata: la sede compliante fa da pavimento.
-            if (x1 < 0) { x1 = 0; if (v1 < 0) v1 = 0; }
-            var sep = x1 - camAt(degAt);
-            if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
+    // AUDIT DYN-02: warm-up (vedi 1-DOF). Stato NON reinizializzato tra i giri.
+    var nWarm = _num(p.warmupCycles, 3);
+    for (var pass = 0; pass < nWarm; pass++) {
+        var rec = (pass === nWarm - 1);
+        if (rec) { maxSep = 0; floatIdx = 0; }
+        for (var deg = 1; deg <= 720; deg++) {
+            for (var sub = 0; sub < subSteps; sub++) {
+                var degAt = deg + sub / subSteps;
+                var k1 = deriv(x1, v1, x2, v2, x3, v3, degAt);
+                var k2 = deriv(x1 + k1[0]*dt/2, v1 + k1[1]*dt/2, x2 + k1[2]*dt/2, v2 + k1[3]*dt/2, x3 + k1[4]*dt/2, v3 + k1[5]*dt/2, degAt + 0.5/subSteps);
+                var k3 = deriv(x1 + k2[0]*dt/2, v1 + k2[1]*dt/2, x2 + k2[2]*dt/2, v2 + k2[3]*dt/2, x3 + k2[4]*dt/2, v3 + k2[5]*dt/2, degAt + 0.5/subSteps);
+                var k4 = deriv(x1 + k3[0]*dt,   v1 + k3[1]*dt,   x2 + k3[2]*dt,   v2 + k3[3]*dt,   x3 + k3[4]*dt,   v3 + k3[5]*dt,   degAt + 1.0/subSteps);
+                x1 += (k1[0] + 2*k2[0] + 2*k3[0] + k4[0]) * dt / 6;
+                v1 += (k1[1] + 2*k2[1] + 2*k3[1] + k4[1]) * dt / 6;
+                x2 += (k1[2] + 2*k2[2] + 2*k3[2] + k4[2]) * dt / 6;
+                v2 += (k1[3] + 2*k2[3] + 2*k3[3] + k4[3]) * dt / 6;
+                x3 += (k1[4] + 2*k2[4] + 2*k3[4] + k4[4]) * dt / 6;
+                v3 += (k1[5] + 2*k2[5] + 2*k3[5] + k4[5]) * dt / 6;
+                // Il bilancere non scende sotto zero (contatto cam unilaterale).
+                // La valvola NON è clampata: la sede compliante fa da pavimento.
+                if (x1 < 0) { x1 = 0; if (v1 < 0) v1 = 0; }
+                if (rec) {
+                    var sep = x1 - camAt(degAt);
+                    if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
+                }
+            }
+            // Lift valvola osservato: mai negativo (la valvola non affonda nella
+            // testata oltre la flessione sede).
+            if (rec) out[deg] = Math.max(0, x2) * 1000;
         }
-        // Lift valvola osservato: mai negativo all'esterno (la valvola non
-        // può fisicamente affondare nella testata oltre la flessione sede).
-        out[deg] = Math.max(0, x2) * 1000;
     }
     out.maxSeparation = maxSep * 1000;
     out.floatIdx = floatIdx;
@@ -598,6 +624,11 @@ function detectValveFloat(camLift720, valveLift720) {
 //
 // Frequenza propria fondamentale (estremi fissi): f1 = ½·√(k/m_spring).
 // surgeRatio = ampiezza di oscillazione interna / corsa valvola: >~1 = surge.
+// audit DYN-06: CAVEAT — modello ESPLORATIVO. Il criterio surgeRatio>1 e'
+// euristico (soglia indicativa, non una condizione fisica esatta) e la
+// simulazione usa nCycles=3 per assestare il transitorio SENZA verifica di
+// convergenza. Il modello NON e' stato validato indipendentemente: usare i
+// risultati come indicazione qualitativa, non come dato metrologico.
 function springSurgeFreqHz(kSpringN_mm, springMassG) {
     var k = (kSpringN_mm || 30) * 1000;       // N/m
     var m = (springMassG || 50) / 1000;       // kg

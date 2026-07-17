@@ -208,6 +208,15 @@ wedged, serve un replug USB — poi harness `bench_fw34_test.js`).
 backup con MANIFEST+SHA-256 e settings.json; SEC-10 SHA-256 atteso mostrato
 nella notifica di aggiornamento (l'app non auto-scarica/esegue). Test esteso.
 
+**Lotto 19-20 — DYN-02/06/07 + APP-10..17/20.** DYN-02 warm-up 3 giri nei
+solver (via `_num(p.warmupCycles,3)`); DYN-06/07 dichiarati esplorativi +
+dominio conversione qualificato; DYN-08/APP-16 già risolti. APP-10 diff solo
+misure; APP-11 vista polare `radar` (contorno reale); APP-12 layout via classi
+CSS; APP-13 ARIA modali/toast + focus; APP-14 cancelAnimationFrame; APP-17
+speechSynthesis locale (rimossa responsiveVoice); APP-20 claim RMS condizionato.
+APP-15 (web worker) rinviato: le simulazioni girano già in setTimeout e sul
+banco monoutente non bloccano criticamente. Verificato live. Suite 137.
+
 ## Ancora aperti (P1/P2/P3 non in questi lotti)
 
 Non affrontati in questa tornata, da valutare in seguito: SEC-03..08/10 (XSS,

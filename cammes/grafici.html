@@ -43,7 +43,9 @@
     </div>
 
     <!-- Line chart + Data table -->
-    <div class="main-grid" style="grid-template-columns: 1fr 380px;">
+    <!-- audit APP-12: layout via classe (style.css) invece di style inline, che
+         annullava le media query facendo saltare il collasso a colonna singola. -->
+    <div class="main-grid cols-confronto">
 
         <!-- Left: Line chart -->
         <div class="card chart-card">
@@ -357,8 +359,11 @@ function polChartOptions() {
 
 function makePolar(canvasId, borderColor) {
     return new Chart(document.getElementById(canvasId), {
-        type: 'polarArea',
-        data: { datasets: [{ label: 'g', data: [], backgroundColor: [], borderColor: borderColor, borderWidth: 1 }] },
+        // audit APP-11: radar (polilinea radiale) invece di polarArea (disco pieno):
+        // cosi' il grafico mostra il contorno reale della camma. pointRadius/tension/fill
+        // rendono la traccia una polilinea continua chiusa.
+        type: 'radar',
+        data: { datasets: [{ label: 'g', data: [], backgroundColor: [], borderColor: borderColor, borderWidth: 1, pointRadius: 0, tension: 0, fill: true }] },
         options: polChartOptions()
     });
 }
@@ -752,7 +757,9 @@ function showDiffView() {
     // Trova i dataset con dati
     var loaded = [];
     lineChartData.datasets.forEach(function (d, i) {
-        if (d.data && d.data.length > 0) loaded.push({ ds: d, idx: i });
+        // audit APP-10: il diff e' solo tra misure (indici 0-3), NON tocca le
+        // bande nominali ds[4]/ds[5] che vanno escluse dal differenziale.
+        if (i < 4 && d.data && d.data.length > 0) loaded.push({ ds: d, idx: i });
     });
     if (loaded.length < 2) {
         if (window.cammesToast) window.cammesToast({

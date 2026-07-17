@@ -476,8 +476,17 @@ body {
 
 .main-grid.single-col { grid-template-columns: 1fr; }
 
+/* audit APP-12: layout-per-pagina via classe (sostituisce gli style inline di
+   grid-template-columns che, avendo priorita' sull'author stylesheet, annullavano
+   la media query e impedivano il collasso a colonna singola su schermi stretti). */
+.main-grid.cols-analisi  { grid-template-columns: 1fr 360px; }
+.main-grid.cols-confronto { grid-template-columns: 1fr 380px; }
+
 @media (max-width: 1024px) {
-  .main-grid {
+  /* audit APP-12: anche le varianti per-pagina devono collassare a colonna unica */
+  .main-grid,
+  .main-grid.cols-analisi,
+  .main-grid.cols-confronto {
     grid-template-columns: 1fr;
   }
 }

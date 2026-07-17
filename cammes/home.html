@@ -1569,7 +1569,8 @@ function confirmDelete(fileName) {
     var back = document.createElement('div');
     back.className = 'confirm-backdrop';
     back.innerHTML =
-        '<div class="confirm-modal">' +
+        // audit APP-13: dialogo modale annunciato agli screen reader
+        '<div class="confirm-modal" role="dialog" aria-modal="true" aria-label="Conferma eliminazione file">' +
         '  <div class="confirm-modal-icon">' +
         '    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
         '      <polyline points="3 6 5 6 21 6"/>' +
@@ -1752,7 +1753,8 @@ function openQuickView(fileName, fileType) {
                   : fileType === 'pol' ? 'Profilo polare'
                   : 'File misurazione';
     back.innerHTML =
-        '<div class="quickview-modal">' +
+        // audit APP-13: dialogo modale annunciato agli screen reader
+        '<div class="quickview-modal" role="dialog" aria-modal="true" aria-label="Anteprima file">' +
         '  <div class="quickview-header">' +
         '    <div>' +
         '      <div class="quickview-subtitle">' + escapeHtml(subtitle) + '</div>' +
@@ -2117,7 +2119,10 @@ function openHomeConcert() {
 
     var tiles = Object.keys(HOME_SONGS).map(function (key) {
         var s = HOME_SONGS[key];
-        return '<div class="concert-tile" data-song="' + key + '" style="--tile-color:' + s.color + ';" onclick="playHomeSong(\'' + key + '\');">' +
+        // audit APP-13: tile navigabile da tastiera. tabindex/role="button" +
+        // keydown su Enter/Spazio richiamano lo stesso playHomeSong dell'onclick
+        // (NON convertito in <button> per non alterare il CSS del tile).
+        return '<div class="concert-tile" data-song="' + key + '" style="--tile-color:' + s.color + ';" tabindex="0" role="button" onclick="playHomeSong(\'' + key + '\');" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();playHomeSong(\'' + key + '\');}">' +
                '  <div class="concert-tile-emoji">' + s.emoji + '</div>' +
                '  <div class="concert-tile-title">' + s.title + '</div>' +
                '  <div class="concert-tile-sub">' + s.sub + '</div>' +
@@ -2125,7 +2130,8 @@ function openHomeConcert() {
     }).join('');
 
     back.innerHTML =
-        '<div class="confirm-modal" style="max-width:620px;">' +
+        // audit APP-13: dialogo modale annunciato agli screen reader
+        '<div class="confirm-modal" style="max-width:620px;" role="dialog" aria-modal="true" aria-label="Concerto col motore">' +
         '  <div class="confirm-modal-icon" style="background:color-mix(in oklab, var(--accent-3) 18%, transparent);color:var(--accent-3);">' +
         '    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
         '      <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>' +

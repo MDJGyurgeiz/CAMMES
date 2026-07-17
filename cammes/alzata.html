@@ -10,7 +10,8 @@
 </head>
 <body>
 
-<script src="responsivevoice.js"></script>
+<!-- audit APP-17: rimosso responsivevoice.js (servizio remoto). Sintesi vocale
+     ora locale via speakLocal() / Web Speech API del browser. -->
 
 <div class="app-container">
 
@@ -218,6 +219,11 @@
      ============================================ -->
 
 <script>
+// audit APP-17: sintesi vocale locale via Web Speech API del browser, cosi' il
+// testo NON viene inviato al servizio remoto responsiveVoice. volume nel range
+// valido 0..1 (responsiveVoice usava 3, fuori scala). try/catch: se il browser
+// non supporta speechSynthesis la funzione resta un no-op silenzioso.
+function speakLocal(t){ try{ if(window.speechSynthesis){ var u=new SpeechSynthesisUtterance(String(t)); u.lang='it-IT'; u.volume=1; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);} }catch(e){} }
 // Gauge moderno SVG (sostituisce gauge.min.js 2014). Tema-aware: colori dai
 // CSS custom properties di style.css. API: gaugemicrom.setValue(v).
 var gaugemicrom = (window.cammesGauge && window.cammesGauge.create)
@@ -812,7 +818,7 @@ var _engineOnMessage = function(event) {
     if (i == currentMode.totalSteps) {
         if (startflag == 1) {
             var x = "sequenza di misura   terminata ";
-            responsiveVoice.speak(x, "Italian Female", { volume: 3 });
+            speakLocal(x);   // audit APP-17
             if (window.cammesScanProgress) window.cammesScanProgress.set(currentMode.totalSteps, currentMode.totalSteps, 0);
             if (scanEta) scanEta.stop();
 
@@ -1139,7 +1145,7 @@ function _showRepeatedRunsStats() {
 // dall'auto-restart dopo che un run è completato in modalità ripetuta.
 function _startSingleRun(firstRun) {
     var x = "sequenza di misura   iniziata ";
-    responsiveVoice.speak(x, "Italian Female", { volume: 3 });
+    speakLocal(x);   // audit APP-17
     var sm = document.getElementById('scanMode'); if (sm) sm.disabled = true;
     i = 0;
     consecutiveNaN = 0;
@@ -1483,7 +1489,7 @@ function ruota() {
     if (_scanBusy('Ruota')) return;   // audit MOT-02
     var dg = document.getElementById("step").value;
     var w = "rotazione a   " + dg + " gradi  attivata";
-    responsiveVoice.speak(w, "Italian Female", { volume: 3 });
+    speakLocal(w);   // audit APP-17
 
     if (dg - oldg < 0) {
         dif = -(dg - oldg);
