@@ -137,6 +137,20 @@ function secSeven() {
         var hasSettings = body.indexOf('settings.json') >= 0;
         check('SEC-07: backup ZIP include MANIFEST.txt', hasManifest, 'HTTP ' + code);
         check('SEC-07: backup ZIP include settings.json', hasSettings);
+        secEight();
+    });
+}
+
+function secEight() {
+    // Lotto F: header di sicurezza (anti-clickjacking) su ogni risposta
+    var r = http.request({ host: '127.0.0.1', port: HTTP_PORT, path: '/', method: 'GET' }, function (res) {
+        res.resume();
+        var h = res.headers;
+        check('F: X-Frame-Options DENY', h['x-frame-options'] === 'DENY', h['x-frame-options']);
+        check('F: CSP frame-ancestors none', /frame-ancestors 'none'/.test(h['content-security-policy'] || ''), h['content-security-policy']);
+        check('F: X-Content-Type-Options nosniff', h['x-content-type-options'] === 'nosniff');
         finish();
     });
+    r.on('error', function (e) { check('F: header di sicurezza', false, String(e)); finish(); });
+    r.end();
 }

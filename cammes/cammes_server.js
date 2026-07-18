@@ -810,6 +810,22 @@ var httpServer = http.createServer(function (req, res) {
 function handleRequest(req, res) {
     var urlPath = req.url.split('?')[0]; // Rimuovi query string (grezzo, come le route)
 
+    // AUDIT Lotto F: header di sicurezza su OGNI risposta.
+    // - frame-ancestors 'none' + X-Frame-Options DENY: no clickjacking (l'app
+    //   non può essere caricata in un iframe di un altro sito);
+    // - nosniff: il browser non indovina il Content-Type;
+    // - no-referrer: non trapela l'URL locale a risorse esterne;
+    // - Permissions-Policy: nega API sensibili non usate.
+    // NB: una CSP con default-src 'self' richiede prima di spostare gli script
+    // inline in file (unsafe-inline), lavoro tracciato come PARTIAL in
+    // REMAINING_RISKS; qui applichiamo la parte anti-clickjacking senza rompere
+    // le pagine attuali.
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), usb=()');
+
     // Anti DNS-rebinding (audit SEC-01): Host che non punta a questa macchina
     if (!isTrustedHost(req.headers.host)) {
         log.warn('HTTP', 'Rifiutato Host non locale: "' + req.headers.host + '" per ' + urlPath);

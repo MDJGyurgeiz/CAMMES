@@ -40,9 +40,10 @@ questa fase (banco scollegato).
 
 | ID | Stato | Nota |
 |---|---|---|
-| SEC-01 | PARTIAL | Host/Origin presenti ma nessuna autenticazione; allowlist IPv4 permissiva (Lotto F) |
+| SEC-01 | PARTIAL | Host/Origin + header anti-clickjacking (CSP frame-ancestors/X-Frame-Options/nosniff) presenti; manca ancora **autenticazione a token** e CSP `default-src 'self'` (richiede spostare gli script inline in file). Decisione UX aperta col committente (token su dispositivi LAN) |
 | SEC-03 | PARTIAL | XSS memorizzato bonificato nei percorsi noti; toast ancora via innerHTML |
-| SEC-05/06/07/08/09/10 | PARTIAL | robustezza, atomicità, backup verificato, logging, limiti WS, firma updater da completare |
+| SEC-05/06 | FIXED_SOFTWARE | 400/413 per URL/body, scrittura atomica + coda settings, exception→safe (Lotto 12) |
+| SEC-07/08/09/10 | PARTIAL | backup manifest+hash presente; logging/limiti WS/firma updater da completare |
 
 ## Dinamica
 
