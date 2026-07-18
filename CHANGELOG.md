@@ -9,6 +9,20 @@ Sistema di misura profili alberi a camme per motori.
 
 ---
 
+## Release v3.3.0 — 2026-07-18: audit esterno completato (app 3.3.0, firmware 3.6)
+
+Chiusura dell'audit esterno di 94 rilievi. Tutti i 15 P0 corretti e validati,
+più l'intero blocco P1/P2/P3 software (SEC, SER, FW, MET, MAT, DYN, APP, TEST,
+DOC) nei lotti 1→21. Firmware **3.6** (watchdog host, STOP Concerto, parser
+robusto, FREE persistente, handshake di boot con reset reason) flashato e
+**validato al banco 29/29** sulla Clio. Suite di regressione da 52 a **137
+check** verdi, lint a 0. Restano NEEDS_HARDWARE i soli rilievi che richiedono
+strumenti fisici (E-stop NC, schema/BOM LM339, ri-scansione VW) e legacy Excel,
+tracciati in AUDIT_RESPONSE.md. App allineata a **3.3.0** (badge, update-check,
+README). Vedi le sezioni "Sessione 12" e i Lotti sottostanti per il dettaglio.
+
+---
+
 ## Sessione 1 - 2026-03-03
 
 ### Analisi iniziale

@@ -1,6 +1,6 @@
 {
   "name": "cammes",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "CAMMES - Sistema di misura profili alberi a camme",
   "main": "cammes_server.js",
   "bin": "cammes_server.js",
