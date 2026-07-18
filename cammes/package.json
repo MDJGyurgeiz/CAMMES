@@ -9,7 +9,7 @@
     "start:no-browser": "node cammes_server.js --no-browser",
     "build": "pkg . --targets node18-win-x64 --output cammes.exe --compress GZip",
     "lint": "eslint --config eslint.config.js cammes_server.js cammes-ui.js cammes-scan.js lib/cammes-math.js tools/*.js",
-    "test": "node tools/test_version.js && node tools/test_followers.js && node tools/test_3dof.js && node tools/test_surge.js && node tools/test_baseline.js && node tools/test_encoder_reindex.js && node tools/test_misura_affidabile.js && node tools/test_fase_segni.js && node tools/test_confine_rete.js && node tools/test_server_robustezza.js && node tools/test_valve_float.js && node tools/validate_clio.js && node tools/validate_vw.js"
+    "test": "node tools/test_version.js && node tools/test_followers.js && node tools/test_3dof.js && node tools/test_surge.js && node tools/test_baseline.js && node tools/test_encoder_reindex.js && node tools/test_misura_affidabile.js && node tools/test_integrita_misura.js && node tools/test_fase_segni.js && node tools/test_confine_rete.js && node tools/test_server_robustezza.js && node tools/test_valve_float.js && node tools/validate_clio.js && node tools/validate_vw.js"
   },
   "dependencies": {
     "ws": "^8.21.0",

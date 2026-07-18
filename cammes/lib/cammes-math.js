@@ -868,6 +868,15 @@ function parseCamFile(text) {
     var meta = {};
     var valid = 0;
     var covered = new Array(361);
+    // AUDIT (controrevisione, Lotto C): il parser ora SEGNALA le anomalie invece
+    // di ingoiarle. Prima un grado duplicato (es. "180,999" dopo un file
+    // completo) sovrascriveva in silenzio, e un grado frazionario (106.5) veniva
+    // arrotondato. Ora: primo valore vince, duplicati/frazionari/fuori-range/
+    // invalidi sono raccolti e ok=false, senza rompere la retrocompatibilità
+    // (array 1..360 + validCount/missingCount/covered/meta restano).
+    var duplicateDegrees = [];
+    var fractionalDegrees = [];
+    var invalidRows = 0, outOfRangeRows = 0;
     for (var z = 1; z <= 360; z++) { camLift[z] = 0; covered[z] = false; }
     for (var r = 0; r < righe.length; r++) {
         var line = righe[r].trim();
@@ -887,23 +896,67 @@ function parseCamFile(text) {
             parts = line.split(',');
         }
         if (parts.length < 2) continue;
-        var deg = Math.round(Number(parts[0]));
+        var degRaw = Number(parts[0]);
         var val = Number(parts[1]);
-        if (!isFinite(deg) || !isFinite(val)) continue;
-        if (deg < 1 || deg > 360) continue;
+        if (!isFinite(degRaw) || !isFinite(val)) { invalidRows++; continue; }
+        // grado frazionario: NON arrotondare in silenzio — segnalalo e scarta
+        if (Math.abs(degRaw - Math.round(degRaw)) > 1e-9) { fractionalDegrees.push(degRaw); continue; }
+        var deg = Math.round(degRaw);
+        if (deg < 1 || deg > 360) { outOfRangeRows++; continue; }
+        if (covered[deg]) {                                 // duplicato: il primo vince
+            if (duplicateDegrees.indexOf(deg) < 0) duplicateDegrees.push(deg);
+            continue;
+        }
         camLift[deg] = val;
-        if (!covered[deg]) { covered[deg] = true; valid++; }   // gradi UNICI (audit MAT-07)
+        covered[deg] = true; valid++;                       // gradi UNICI (audit MAT-07)
     }
     camLift.meta = meta;
-    // validCount = gradi 1..360 realmente coperti da una riga valida (non il
-    // numero di righe: 360 righe sullo stesso grado contavano 360 — MAT-07).
+    // validCount = gradi 1..360 realmente coperti (non il numero di righe).
     // missingCount/covered rendono un run incompleto riconoscibile alla
     // rilettura: i gradi mancanti restano 0 nell'array per compatibilità, ma
-    // il chiamante ora può distinguerli da uno zero misurato (audit MET-01).
+    // il chiamante può distinguerli da uno zero misurato (audit MET-01).
     camLift.validCount = valid;
     camLift.missingCount = 360 - valid;
     camLift.covered = covered;
+    camLift.duplicateDegrees = duplicateDegrees;
+    camLift.fractionalDegrees = fractionalDegrees;
+    camLift.invalidRows = invalidRows;
+    camLift.outOfRangeRows = outOfRangeRows;
+    // ok = file "pulito": nessuna anomalia. NON implica completezza (per quella
+    // c'è missingCount): un file può essere ok=true ma incompleto.
+    camLift.ok = (duplicateDegrees.length === 0 && fractionalDegrees.length === 0 &&
+                  invalidRows === 0 && outOfRangeRows === 0);
     return camLift;
+}
+
+// AUDIT MET-01 (controrevisione): media di N run SENZA zero-fill. Un grado con
+// nessun campione valido in nessun run resta INVALIDO (valid[grado]=false), non
+// diventa uno zero fisico. Ritorna { values[1..360], valid[1..360], count[],
+// std[], missingCount }. runs = array di array [1..360] (NaN/non-finito=mancante).
+function averageRuns(runs) {
+    var values = new Array(361), valid = new Array(361), count = new Array(361), std = new Array(361);
+    var missingCount = 0;
+    for (var d = 1; d <= 360; d++) {
+        var sum = 0, n = 0;
+        for (var r = 0; r < runs.length; r++) {
+            var v = runs[r] ? Number(runs[r][d]) : NaN;
+            if (isFinite(v)) { sum += v; n++; }
+        }
+        if (n === 0) {
+            values[d] = NaN; valid[d] = false; count[d] = 0; std[d] = NaN;
+            missingCount++;
+        } else {
+            var mean = sum / n;
+            var sq = 0;
+            for (var r2 = 0; r2 < runs.length; r2++) {
+                var v2 = runs[r2] ? Number(runs[r2][d]) : NaN;
+                if (isFinite(v2)) sq += (v2 - mean) * (v2 - mean);
+            }
+            values[d] = mean; valid[d] = true; count[d] = n;
+            std[d] = n > 1 ? Math.sqrt(sq / (n - 1)) : 0;
+        }
+    }
+    return { values: values, valid: valid, count: count, std: std, missingCount: missingCount };
 }
 
 // ---- VERIFICA BANCO (audit MET-02): verdetto di salute su pezzo cilindrico --
@@ -1078,6 +1131,7 @@ var api = {
     camPeakPos: camPeakPos,
     effectiveCenters: effectiveCenters,
     parseCamFile: parseCamFile,
+    averageRuns: averageRuns,
     benchVerdict: benchVerdict,
     simulateCompliance: simulateCompliance,
     simulateCompliance2DOF: simulateCompliance2DOF,

@@ -1074,39 +1074,37 @@ function start() {
 function _showRepeatedRunsStats() {
     var N = repeatedRuns.length;
     if (N < 2) return;
-    var sumLift = 0, peakStdAtMaxg = 0, maxStd = 0, maxStdDeg = 0, maxCv = 0;
-    var avgLift = new Array(361), stdLift = new Array(361);
+    // AUDIT MET-01 (controrevisione): media SENZA zero-fill. Prima un grado
+    // mancante in TUTTI i run diventava 0 fisico (count>0?mean:0) e il profilo
+    // salvato sembrava completo. Ora averageRuns lascia il grado INVALIDO e la
+    // logica di completamento (che conta pdata non-finiti) lo segnala.
+    var agg = window.averageRuns(repeatedRuns);
+    var avgLift = agg.values, stdLift = agg.std;
+    var peakStdAtMaxg = 0, maxStd = 0, maxStdDeg = 0, maxCv = 0;
     for (var d = 1; d <= 360; d++) {
-        var sum = 0, count = 0;
-        for (var r = 0; r < N; r++) {
-            var v = repeatedRuns[r][d];
-            if (typeof v === 'number' && !isNaN(v)) { sum += v; count++; }
-        }
-        var mean = count > 0 ? sum / count : 0;
-        var sq = 0;
-        for (var r2 = 0; r2 < N; r2++) {
-            var v2 = repeatedRuns[r2][d];
-            if (typeof v2 === 'number' && !isNaN(v2)) sq += (v2 - mean) * (v2 - mean);
-        }
-        var sd = count > 1 ? Math.sqrt(sq / (count - 1)) : 0;
-        avgLift[d] = mean;
-        stdLift[d] = sd;
+        if (!agg.valid[d]) continue;
+        var sd = stdLift[d];
         if (sd > maxStd) { maxStd = sd; maxStdDeg = d; }
-        if (mean > 0.3 && sd / mean * 100 > maxCv) maxCv = sd / mean * 100;
+        if (avgLift[d] > 0.3 && sd / avgLift[d] * 100 > maxCv) maxCv = sd / avgLift[d] * 100;
     }
 
-    // Calcola maxg da media e std al picco
+    // Calcola maxg da media al picco (solo gradi validi)
     var maxAvg = 0, maxAvgDeg = 0;
     for (var dd = 1; dd <= 360; dd++) {
-        if (avgLift[dd] > maxAvg) { maxAvg = avgLift[dd]; maxAvgDeg = dd; }
+        if (agg.valid[dd] && avgLift[dd] > maxAvg) { maxAvg = avgLift[dd]; maxAvgDeg = dd; }
     }
-    peakStdAtMaxg = stdLift[maxAvgDeg] || 0;
+    peakStdAtMaxg = (maxAvgDeg && stdLift[maxAvgDeg]) || 0;
 
-    // Sostituisci pdata con la media (per save coerente). Aggiorna anche
-    // il chart e i contatori max/maxg in UI.
+    // Sostituisci pdata con la media: i gradi INVALIDI restano non-finiti
+    // (undefined), così il blocco di completamento li conta come mancanti e
+    // sav() marca il file #stato=INCOMPLETO. NIENTE zero fisico.
     for (var dd2 = 1; dd2 <= 360; dd2++) {
-        pdata[dd2]   = avgLift[dd2];
-        pdindex[dd2] = dd2;
+        if (agg.valid[dd2]) { pdata[dd2] = avgLift[dd2]; pdindex[dd2] = dd2; }
+        else { pdata[dd2] = undefined; }
+    }
+    if (agg.missingCount > 0 && window.cammesToast) {
+        window.cammesToast({ kind: 'err', title: 'Media run: ' + agg.missingCount + ' gradi senza dato',
+            body: 'Alcuni gradi risultano mancanti in tutti i ' + N + ' run: NON vengono azzerati. Il profilo medio è INCOMPLETO.', duration: 10000 });
     }
     max = maxAvg; maxg = maxAvgDeg;
     document.mas.mas.value = " max  " + maxg + " gradi       " + max.toFixed(3) + " (n=" + N + ")";
@@ -1119,7 +1117,8 @@ function _showRepeatedRunsStats() {
         config.data.datasets.forEach(function (d) { d.data.length = 0; });
         for (var dd3 = 1; dd3 <= 360; dd3++) {
             config.data.labels.push(dd3);
-            config.data.datasets[0].data.push(avgLift[dd3]);
+            // gradi invalidi → null nel grafico (buco visibile), non 0
+            config.data.datasets[0].data.push(agg.valid[dd3] ? avgLift[dd3] : null);
         }
         if (window.myLine) try { window.myLine.update(); } catch (e) {}
     }

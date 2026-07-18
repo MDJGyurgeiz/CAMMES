@@ -506,7 +506,14 @@ function loadNominal() {
             return;
         }
         if (cam.missingCount > 0 || (cam.meta && cam.meta.stato === 'INCOMPLETO')) {
-            if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Nominale incompleto', body: cam.missingCount + ' gradi mancanti (riempiti a 0), banda indicativa', duration: 5000 });
+            if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Nominale incompleto', body: cam.missingCount + ' gradi mancanti: il collaudo sarà NON VALUTABILE finché il nominale non è completo.', duration: 6000 });
+        }
+        // AUDIT MAT-07: nominale con righe duplicate/frazionarie → non fidarsi
+        if (cam.ok === false && window.cammesToast) {
+            window.cammesToast({ kind: 'warn', title: 'Nominale con anomalie',
+                body: (cam.duplicateDegrees && cam.duplicateDegrees.length ? cam.duplicateDegrees.length + ' gradi duplicati; ' : '') +
+                      (cam.fractionalDegrees && cam.fractionalDegrees.length ? cam.fractionalDegrees.length + ' gradi frazionari scartati; ' : '') +
+                      'controlla il file.', duration: 7000 });
         }
         _nominal = cam;
         evalNominal();
@@ -517,6 +524,12 @@ function loadNominal() {
 function evalNominal() {
     var box = document.getElementById('verdictBox');
     if (!_nominal) { if (box) box.innerHTML = ''; return; }
+    // AUDIT APP-09 (controrevisione): un profilo INCOMPLETO non può produrre un
+    // verdetto di conformità. Se il nominale ha buchi, niente collaudo affatto.
+    if (_nominal.missingCount > 0) {
+        if (box) box.innerHTML = '<div style="font-size:13px;color:var(--danger,#e74c3c);font-weight:700;">&#9888; NON VALUTABILE — profilo nominale INCOMPLETO (' + _nominal.missingCount + ' gradi mancanti). Carica un nominale completo (360 gradi) per il collaudo.</div>';
+        // banda comunque disegnata sotto, ma nessun verdetto certificabile
+    }
     var tol = Math.abs(Number(document.getElementById('tolMm').value)) || 0.10;
     if (!window.myLine) return;
     var ds = window.myLine.data.datasets;
@@ -535,9 +548,26 @@ function evalNominal() {
     window.myLine.update('none');
 
     // verdetto per ogni curva caricata (ognuna col PROPRIO allineamento)
+    var nominalOk = _nominal.missingCount === 0;
     var rows = '';
     for (var c = 0; c < 4; c++) {
         if (!ds[c] || !ds[c].data.length) continue;
+        var name = (document.getElementById('lb' + (c + 1)) || {}).textContent || ('grafico' + (c + 1));
+        // SEC-03: name è il nome file (arbitrario) riletto da lb1..4 — escapato.
+        var safeName = window.cammesEscape ? window.cammesEscape(name) : name.replace(/[&<>]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]; });
+        // AUDIT APP-09: se la MISURA (o il nominale) è incompleta → NON
+        // VALUTABILE, mai CONFORME. La copertura reale è nel cam dello slot.
+        var camC = window._cmpData[c + 1];
+        var curveIncomplete = camC && camC.missingCount > 0;
+        if (!nominalOk || curveIncomplete) {
+            var why = !nominalOk ? 'nominale incompleto'
+                    : (camC.missingCount + ' gradi mancanti nella misura');
+            rows += '<div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;">' +
+                '<span style="font-weight:700;color:var(--warn,orange);">&#9888; NON VALUTABILE</span>' +
+                '<span style="flex:1;">' + safeName + '</span>' +
+                '<span style="color:var(--text-muted);">' + why + '</span></div>';
+            continue;
+        }
         var sh = _alignShift(ds[c].data);
         var maxDev = 0, maxDeg = 0;
         for (var d3 = 1; d3 <= 360; d3++) {
@@ -546,18 +576,14 @@ function evalNominal() {
             if (dev > maxDev) { maxDev = dev; maxDeg = d3; }
         }
         var pass = maxDev <= tol;
-        var name = (document.getElementById('lb' + (c + 1)) || {}).textContent || ('grafico' + (c + 1));
-        // SEC-03: name è il nome file (arbitrario) riletto da lb1..4 — va
-        // escapato prima di ricomporlo in innerHTML, altrimenti il fix
-        // textContent sulle etichette verrebbe vanificato un passaggio dopo.
-        var safeName = window.cammesEscape ? window.cammesEscape(name) : name.replace(/[&<>]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]; });
         rows += '<div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;">' +
             '<span style="font-weight:700;color:' + (pass ? 'var(--success, #2ecc71)' : 'var(--danger, #e74c3c)') + ';">' +
             (pass ? '&#10003; CONFORME' : '&#10007; NON CONFORME') + '</span>' +
             '<span style="flex:1;">' + safeName + '</span>' +
             '<span style="color:var(--text-muted);">max ' + maxDev.toFixed(3) + ' mm @ ' + maxDeg + '&deg;</span></div>';
     }
-    if (box) box.innerHTML = rows || '<div style="font-size:12px;color:var(--text-muted);">Carica almeno una curva misurata qui sopra per avere il verdetto.</div>';
+    if (box && rows) box.innerHTML = rows;
+    else if (box && !box.innerHTML) box.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">Carica almeno una curva misurata qui sopra per avere il verdetto.</div>';
 }
 window.loadNominal = loadNominal;
 window.evalNominal = evalNominal;
