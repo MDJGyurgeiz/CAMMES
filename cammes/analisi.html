@@ -3142,10 +3142,14 @@ function analyze() {
             var _vv = (valveLiftIn[_i] || 0); if (!isFinite(_vv)) _vfin = false; else if (_vv > _vmax) _vmax = _vv;
             if ((anlIn[_i] || 0) > _cmax) _cmax = anlIn[_i];
         }
-        if ((!_vfin || (_cmax > 0 && _vmax > 3 * _cmax)) && window.cammesToast) {
-            window.cammesToast({ kind: 'warn', title: 'Compliance instabile',
-                body: 'La simulazione dinamica diverge a questi parametri (rigidezze/masse estreme o RPM molto alto). Risultati float/surge inaffidabili: riduci k sede o RPM.',
-                duration: 6500 });
+        // AUDIT DYN-02: convergenza REALE del solver (non più solo l'euristica
+        // >3× picco). Un modello NON convergente non deve produrre verdetti di
+        // float/regime affidabili.
+        window._complianceConverged = (valveLiftIn.converged !== false) && (valveLiftEx.converged !== false);
+        if ((!_vfin || (_cmax > 0 && _vmax > 3 * _cmax) || !window._complianceConverged) && window.cammesToast) {
+            window.cammesToast({ kind: 'warn', title: 'Compliance NON convergente',
+                body: 'La simulazione dinamica non raggiunge un regime periodico stabile a questi parametri (rigidezze/masse estreme o RPM molto alto): float e regime NON sono affidabili. Riduci k sede/RPM o rivedi i parametri.',
+                duration: 7000 });
         }
     }
 

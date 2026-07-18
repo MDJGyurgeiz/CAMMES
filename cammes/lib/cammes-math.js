@@ -302,15 +302,23 @@ function simulateCompliance(camLift720, rpm, params) {
     for (var ii = 0; ii <= 721; ii++) out[ii] = 0;
     var maxSep = 0, floatIdx = 0;   // audit DYN-01: perdita di contatto
 
-    // AUDIT DYN-02: WARM-UP. Prima si integrava UN solo giro partendo da fermo
-    // (x=v=0): il transitorio iniziale non si era ancora smorzato, quindi lift
-    // valvola e valve float dipendevano dalla fase di partenza del profilo. Ora
-    // si ripetono nWarm giri riusando lo stato finale come iniziale (NON si
-    // reinizializza x,v tra i giri) e si registra SOLO l'ultimo giro, a regime.
-    var nWarm = _num(p.warmupCycles, 3);
-    for (var pass = 0; pass < nWarm; pass++) {
-        var rec = (pass === nWarm - 1);
-        if (rec) { maxSep = 0; floatIdx = 0; }
+    // AUDIT DYN-02: convergenza PERIODICA, non un numero fisso di cicli. Si
+    // integrano più giri riusando lo stato finale come iniziale (transitorio
+    // che si smorza) e si REGISTRA solo quando due cicli consecutivi finiscono
+    // nello stesso stato (|Δx|,|Δv| entro tolleranza) → CONVERGED. Se non
+    // converge entro maxCycles → out.converged=false e il chiamante NON deve
+    // emettere verdetti (regime, float, ottimizzazione). Prima 3 cicli fissi:
+    // un caso instabile (molla debolissima ad alto regime) sembrava assestato.
+    var minCycles = _num(p.minCycles, 3);
+    var maxCycles = _num(p.maxCycles, 30);
+    var tolX = 5e-6, tolV = 5e-3;   // m, m/s: stato di fine ciclo a regime
+    var prevX = null, prevV = null, converged = false, cyclesRun = 0;
+    // Registriamo out[]/maxSep a OGNI giro (ognuno sovrascrive il precedente):
+    // dopo il loop out[] è l'ULTIMO giro. Confronto lo stato di fine giro N con
+    // quello di N-1: due giri consecutivi identici (entro tol) = orbita
+    // periodica → CONVERGED. break al primo giro convergente (≥minCycles).
+    for (var pass = 0; pass < maxCycles; pass++) {
+        maxSep = 0; floatIdx = 0;
         for (var deg = 1; deg <= 720; deg++) {
             for (var sub = 0; sub < subSteps; sub++) {
                 var degAt = deg + sub / subSteps;
@@ -327,19 +335,25 @@ function simulateCompliance(camLift720, rpm, params) {
                 v += (k1v + 2 * k2v + 2 * k3v + k4v) * dt / 6;
                 // Vincolo: valvola non scende sotto zero (sede valvola)
                 if (x < 0) { x = 0; if (v < 0) v = 0; }
-                if (rec) {
-                    // Separazione = quanto la valvola supera la camma (contatto
-                    // perso). Quasi-statico: x < x_cam → sep 0; ad alto regime
-                    // l'inerzia porta x sopra x_cam → sep > 0, cresce coi giri.
-                    var sep = x - camAt(degAt);
-                    if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
-                }
+                // Separazione = quanto la valvola supera la camma (contatto
+                // perso). Quasi-statico: x < x_cam → sep 0; ad alto regime
+                // l'inerzia porta x sopra x_cam → sep > 0, cresce coi giri.
+                var sep = x - camAt(degAt);
+                if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
             }
-            if (rec) out[deg] = x * 1000;  // m → mm
+            out[deg] = x * 1000;  // m → mm
         }
+        cyclesRun = pass + 1;
+        if (prevX !== null && Math.abs(x - prevX) <= tolX && Math.abs(v - prevV) <= tolV && cyclesRun >= minCycles) {
+            converged = true;
+            break;
+        }
+        prevX = x; prevV = v;
     }
     out.maxSeparation = maxSep * 1000;   // mm
     out.floatIdx = floatIdx;
+    out.converged = converged;
+    out.cyclesRun = cyclesRun;
     return out;
 }
 
@@ -416,11 +430,13 @@ function simulateCompliance2DOF(camLift720, rpm, params) {
     for (var ii = 0; ii <= 721; ii++) out[ii] = 0;
     var maxSep = 0, floatIdx = 0;   // separazione cam-bilancere (audit DYN-01)
 
-    // AUDIT DYN-02: warm-up (vedi 1-DOF). Stato NON reinizializzato tra i giri.
-    var nWarm = _num(p.warmupCycles, 3);
-    for (var pass = 0; pass < nWarm; pass++) {
-        var rec = (pass === nWarm - 1);
-        if (rec) { maxSep = 0; floatIdx = 0; }
+    // AUDIT DYN-02: convergenza periodica (vedi 1-DOF). Registra ogni giro,
+    // confronta lo stato (x1,v1,x2,v2) di fine giro con il precedente.
+    var minCycles = _num(p.minCycles, 3), maxCycles = _num(p.maxCycles, 30);
+    var tolX = 5e-6, tolV = 5e-3;
+    var pX1 = null, pV1 = null, pX2 = null, pV2 = null, converged = false, cyclesRun = 0;
+    for (var pass = 0; pass < maxCycles; pass++) {
+        maxSep = 0; floatIdx = 0;
         for (var deg = 1; deg <= 720; deg++) {
             for (var sub = 0; sub < subSteps; sub++) {
                 var degAt = deg + sub / subSteps;
@@ -436,16 +452,22 @@ function simulateCompliance2DOF(camLift720, rpm, params) {
                 // Vincolo: né bilancere né valvola sotto zero
                 if (x1 < 0) { x1 = 0; if (v1 < 0) v1 = 0; }
                 if (x2 < 0) { x2 = 0; if (v2 < 0) v2 = 0; }
-                if (rec) {
-                    var sep = x1 - camAt(degAt);   // contatto perso = bilancere sopra la camma
-                    if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
-                }
+                var sep = x1 - camAt(degAt);   // contatto perso = bilancere sopra la camma
+                if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
             }
-            if (rec) out[deg] = x2 * 1000;   // lift VALVOLA osservato all'esterno
+            out[deg] = x2 * 1000;   // lift VALVOLA osservato all'esterno
         }
+        cyclesRun = pass + 1;
+        if (pX1 !== null && Math.abs(x1-pX1)<=tolX && Math.abs(v1-pV1)<=tolV &&
+            Math.abs(x2-pX2)<=tolX && Math.abs(v2-pV2)<=tolV && cyclesRun >= minCycles) {
+            converged = true; break;
+        }
+        pX1 = x1; pV1 = v1; pX2 = x2; pV2 = v2;
     }
     out.maxSeparation = maxSep * 1000;
     out.floatIdx = floatIdx;
+    out.converged = converged;
+    out.cyclesRun = cyclesRun;
     return out;
 }
 
@@ -550,11 +572,12 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
     for (var ii = 0; ii <= 721; ii++) out[ii] = 0;
     var maxSep = 0, floatIdx = 0;   // separazione cam-bilancere (audit DYN-01)
 
-    // AUDIT DYN-02: warm-up (vedi 1-DOF). Stato NON reinizializzato tra i giri.
-    var nWarm = _num(p.warmupCycles, 3);
-    for (var pass = 0; pass < nWarm; pass++) {
-        var rec = (pass === nWarm - 1);
-        if (rec) { maxSep = 0; floatIdx = 0; }
+    // AUDIT DYN-02: convergenza periodica (vedi 1-DOF).
+    var minCycles = _num(p.minCycles, 3), maxCycles = _num(p.maxCycles, 30);
+    var tolX = 5e-6, tolV = 5e-3;
+    var pX1 = null, pV1 = null, pX2 = null, pV2 = null, pX3 = null, pV3 = null, converged = false, cyclesRun = 0;
+    for (var pass = 0; pass < maxCycles; pass++) {
+        maxSep = 0; floatIdx = 0;
         for (var deg = 1; deg <= 720; deg++) {
             for (var sub = 0; sub < subSteps; sub++) {
                 var degAt = deg + sub / subSteps;
@@ -571,18 +594,25 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
                 // Il bilancere non scende sotto zero (contatto cam unilaterale).
                 // La valvola NON è clampata: la sede compliante fa da pavimento.
                 if (x1 < 0) { x1 = 0; if (v1 < 0) v1 = 0; }
-                if (rec) {
-                    var sep = x1 - camAt(degAt);
-                    if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
-                }
+                var sep = x1 - camAt(degAt);
+                if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
             }
             // Lift valvola osservato: mai negativo (la valvola non affonda nella
             // testata oltre la flessione sede).
-            if (rec) out[deg] = Math.max(0, x2) * 1000;
+            out[deg] = Math.max(0, x2) * 1000;
         }
+        cyclesRun = pass + 1;
+        if (pX1 !== null && Math.abs(x1-pX1)<=tolX && Math.abs(v1-pV1)<=tolV &&
+            Math.abs(x2-pX2)<=tolX && Math.abs(v2-pV2)<=tolV &&
+            Math.abs(x3-pX3)<=tolX && Math.abs(v3-pV3)<=tolV && cyclesRun >= minCycles) {
+            converged = true; break;
+        }
+        pX1=x1;pV1=v1;pX2=x2;pV2=v2;pX3=x3;pV3=v3;
     }
     out.maxSeparation = maxSep * 1000;
     out.floatIdx = floatIdx;
+    out.converged = converged;
+    out.cyclesRun = cyclesRun;
     return out;
 }
 
