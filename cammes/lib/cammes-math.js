@@ -799,6 +799,22 @@ function camPeakPos(camLift) {
         if (isFinite(v) && v > best) { best = v; m = d; }
     }
     if (!(best > 0)) return 180;                        // profilo piatto: neutro
+    // AUDIT MAT-02: naso PIATTO. Non basta il primo massimo (su un plateau
+    // 170..190 tornava 170.5): si cerca il componente circolare con lift entro
+    // una tolleranza dal massimo che CONTIENE il massimo globale e se ne
+    // restituisce il centro. Su un picco netto il plateau è largo 1 e si
+    // ricade sul fit parabolico di prima.
+    var tol = Math.max(0.02, 0.01 * best);   // risoluzione ~µm o 1% del picco
+    function at(i) { return Number(camLift[((i - 1) % 360 + 360) % 360 + 1]) || 0; }
+    var lo = m, hi = m, guard = 0;
+    while (at(lo - 1) >= best - tol && guard++ < 360) lo--;
+    guard = 0;
+    while (at(hi + 1) >= best - tol && guard++ < 360) hi++;
+    if (hi - lo >= 2) {                                  // plateau: centro del componente
+        var center = (lo + hi) / 2;
+        return ((Math.round(center * 1000) / 1000 - 1) % 360 + 360) % 360 + 1;
+    }
+    // picco netto: fit parabolico sui tre punti attorno al massimo (circolare)
     var prev = ((m - 2) % 360 + 360) % 360 + 1;
     var next = (m % 360) + 1;
     var y0 = Number(camLift[prev]) || 0, y1 = best, y2 = Number(camLift[next]) || 0;
@@ -807,6 +823,48 @@ function camPeakPos(camLift) {
     if (delta > 0.5) delta = 0.5;
     if (delta < -0.5) delta = -0.5;
     return m + delta;
+}
+
+// AUDIT MAT-03: eventi apertura/chiusura dai CROSSING REALI della curva fasata,
+// non da centro±durata/2 (che assume un lobo simmetrico e su camme reali
+// asimmetriche sbaglia anche di ~60°). Sulla curva crank 1..720 (già fasata,
+// gioco sottratto) trova il picco, poi l'attraversamento CRESCENTE della soglia
+// prima del picco (apertura) e quello DECRESCENTE dopo (chiusura), interpolati
+// sub-grado. Gestisce il wrap 720→1. Ritorna indici crank frazionari.
+function findEvents(crank, threshold) {
+    var thr = (typeof threshold === 'number' && threshold > 0) ? threshold : 0.05;
+    function at(i) { return Number(crank[((i - 1) % 720 + 720) % 720 + 1]) || 0; }
+    // picco globale
+    var pk = 1, best = -Infinity;
+    for (var d = 1; d <= 720; d++) { var v = at(d); if (v > best) { best = v; pk = d; } }
+    if (!(best > thr)) return { openIdx: NaN, closeIdx: NaN, durationDeg: 0, peakIdx: pk, ambiguous: true };
+    // apertura: cammina indietro dal picco finché si scende sotto soglia
+    var i, prev, cur, frac;
+    var openIdx = NaN, closeIdx = NaN, guard;
+    guard = 0;
+    for (i = pk; guard++ < 720; i--) {
+        cur = at(i); prev = at(i - 1);
+        if (prev < thr && cur >= thr) {                 // crossing crescente tra (i-1) e i
+            frac = (thr - prev) / (cur - prev);         // 0..1
+            openIdx = (i - 1) + frac;
+            break;
+        }
+    }
+    guard = 0;
+    for (i = pk; guard++ < 720; i++) {
+        cur = at(i); var nxt = at(i + 1);
+        if (cur >= thr && nxt < thr) {                  // crossing decrescente tra i e (i+1)
+            frac = (cur - thr) / (cur - nxt);
+            closeIdx = i + frac;
+            break;
+        }
+    }
+    if (isNaN(openIdx) || isNaN(closeIdx)) return { openIdx: openIdx, closeIdx: closeIdx, durationDeg: 0, peakIdx: pk, ambiguous: true };
+    var dur = closeIdx - openIdx;
+    if (dur <= 0) dur += 720;                            // wrap
+    // normalizza gli indici a 1..720 mantenendo la frazione
+    function norm(x) { return ((x - 1) % 720 + 720) % 720 + 1; }
+    return { openIdx: norm(openIdx), closeIdx: norm(closeIdx), durationDeg: dur, peakIdx: pk, ambiguous: false };
 }
 
 // Centri lobo EFFETTIVI con anticipo applicato (audit MAT-04): montare la
@@ -1129,6 +1187,7 @@ var api = {
     convertPuntToFinger: convertPuntToFinger,
     mapCamToCrank: mapCamToCrank,
     camPeakPos: camPeakPos,
+    findEvents: findEvents,
     effectiveCenters: effectiveCenters,
     parseCamFile: parseCamFile,
     averageRuns: averageRuns,

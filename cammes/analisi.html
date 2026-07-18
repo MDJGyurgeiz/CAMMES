@@ -3045,13 +3045,33 @@ function analyze() {
     // Lobe Separation Angle: proprietà della camma, l'anticipo si elide
     var LSA = (intakeCenter + exhaustCenter) / 2;
 
-    // Timing calculations (dai centri reali per lobo)
-    var intakeOpenBTC  = -(intakeCenter - durIntake / 2);
-    var intakeCloseABC = intakeCenter + durIntake / 2 - 180;
-    var exOpenBBC      = exhaustCenter + durExhaust / 2 - 180;
-    var exCloseATC     = -(exhaustCenter - durExhaust / 2);
+    // AUDIT MAT-03: eventi apertura/chiusura dai CROSSING REALI della curva
+    // fasata (findEvents), non da centro±durata/2 che assume simmetria e su
+    // lobi asimmetrici sbaglia fino a ~60°. anlIn/anlEx sono già fasate (crank
+    // 1..720, PMS a 360) col rocker applicato; soglia = durThresh (audit APP-05).
+    // Convenzioni invariate: intake TDC=360/BDC=540, exhaust BDC=180/TDC=360;
+    // su un lobo simmetrico questi valori coincidono con centro±durata/2.
+    var inEv = findEvents(anlIn, durThreshIn);
+    var exEv = findEvents(anlEx, durThreshEx);
+    var intakeOpenBTC, intakeCloseABC, exOpenBBC, exCloseATC;
+    if (!inEv.ambiguous) {
+        intakeOpenBTC  = 360 - inEv.openIdx;    // gradi prima del TDC
+        intakeCloseABC = inEv.closeIdx - 540;   // gradi dopo il BDC
+        durIntake = Math.round(inEv.durationDeg);
+    } else {
+        intakeOpenBTC  = -(intakeCenter - durIntake / 2);
+        intakeCloseABC = intakeCenter + durIntake / 2 - 180;
+    }
+    if (!exEv.ambiguous) {
+        exOpenBBC   = 180 - exEv.openIdx;       // gradi prima del BDC
+        exCloseATC  = exEv.closeIdx - 360;      // gradi dopo il TDC
+        durExhaust = Math.round(exEv.durationDeg);
+    } else {
+        exOpenBBC   = exhaustCenter + durExhaust / 2 - 180;
+        exCloseATC  = -(exhaustCenter - durExhaust / 2);
+    }
 
-    // Overlap
+    // Overlap (da eventi reali)
     var overlap = intakeOpenBTC + exCloseATC;
 
     // ====== KINEMATIC ANALYSIS ======
