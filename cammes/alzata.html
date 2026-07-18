@@ -1667,16 +1667,25 @@ var SAVED_POS_KEY = 'cammes-saved-positions';
 // encoderCount ASSOLUTO, valido solo finché lo zero non cambia. Ogni evento che
 // ridefinisce l'origine (reset encoder '!', reboot Arduino, zero virtuale)
 // incrementa l'epoca; una posizione con epoca diversa da quella corrente NON è
-// più raggiungibile in modo affidabile e "Vai a" la rifiuta. L'epoca vive in
-// sessionStorage così sopravvive a un reload della pagina ma non a un riavvio.
+// più raggiungibile in modo affidabile e "Vai a" la rifiuta.
+//
+// CONTROREVISIONE (fix): l'epoca era in sessionStorage → a un RIAVVIO DEL
+// BROWSER tornava a 0 e una posizione vecchia (epoca 0) ridiventava "valida".
+// Ora vive in localStorage (come le posizioni), così persiste al riavvio del
+// browser — corretto, perché l'Arduino NON si resetta quando il browser si
+// riconnette (si resetta solo quando il SERVER apre la porta, evento che
+// bumpa l'epoca via rilevamento reboot). Le posizioni e l'epoca condividono
+// quindi lo stesso ciclo di vita. NB: il caso "server riavviato mentre il
+// browser era chiuso" richiede il device/boot-id del firmware (Lotto B) per
+// essere coperto in pieno; qui resta il rischio residuo documentato.
 function currentEncEpoch() {
     var e = 0;
-    try { e = parseInt(sessionStorage.getItem('cammes-enc-epoch'), 10) || 0; } catch (x) {}
+    try { e = parseInt(localStorage.getItem('cammes-enc-epoch'), 10) || 0; } catch (x) {}
     return e;
 }
 function bumpEncEpoch(reason) {
     var e = currentEncEpoch() + 1;
-    try { sessionStorage.setItem('cammes-enc-epoch', String(e)); } catch (x) {}
+    try { localStorage.setItem('cammes-enc-epoch', String(e)); } catch (x) {}
     if (window.CAMMES_DEBUG) console.log('[MET-05] zero encoder ridefinito (' + (reason || '?') + ') → epoca ' + e);
     if (typeof renderSavedPositions === 'function') { try { renderSavedPositions(); } catch (x) {} }
     return e;
