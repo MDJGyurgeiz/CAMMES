@@ -28,3 +28,5 @@ CAMMES_DIST/
 !cammes/fw/avrdude.exe
 .claude/settings.local.json
 /package-lock.json
+
+DIST_v3.3.0/
