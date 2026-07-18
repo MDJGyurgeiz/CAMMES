@@ -27,3 +27,4 @@ CAMMES_DIST/
 # anche alla build CI — senza, un clone fresco non può flashare da fw/
 !cammes/fw/avrdude.exe
 .claude/settings.local.json
+/package-lock.json

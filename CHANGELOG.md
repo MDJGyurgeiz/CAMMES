@@ -9,17 +9,23 @@ Sistema di misura profili alberi a camme per motori.
 
 ---
 
-## Release v3.3.0 — 2026-07-18: audit esterno completato (app 3.3.0, firmware 3.6)
+## v3.3.0 — 2026-07-18: primo giro audit (app 3.3.0, firmware 3.6) — BETA TECNICA
 
-Chiusura dell'audit esterno di 94 rilievi. Tutti i 15 P0 corretti e validati,
-più l'intero blocco P1/P2/P3 software (SEC, SER, FW, MET, MAT, DYN, APP, TEST,
-DOC) nei lotti 1→21. Firmware **3.6** (watchdog host, STOP Concerto, parser
-robusto, FREE persistente, handshake di boot con reset reason) flashato e
-**validato al banco 29/29** sulla Clio. Suite di regressione da 52 a **137
-check** verdi, lint a 0. Restano NEEDS_HARDWARE i soli rilievi che richiedono
-strumenti fisici (E-stop NC, schema/BOM LM339, ri-scansione VW) e legacy Excel,
-tracciati in AUDIT_RESPONSE.md. App allineata a **3.3.0** (badge, update-check,
-README). Vedi le sezioni "Sessione 12" e i Lotti sottostanti per il dettaglio.
+Primo giro completo sull'audit esterno di 94 rilievi: i 15 P0 corretti a livello
+**software** più gran parte dei P1/P2/P3, nei lotti 1→21. Firmware **3.6**
+(watchdog host, STOP Concerto, parser robusto, FREE persistente, handshake di
+boot) flashato e provato al banco (harness 29/29). Suite di regressione da 52 a
+**137 check** verdi, lint a 0.
+
+**Nota di onestà (controrevisione Codex, 2026-07-18):** "audit chiuso / 15-15
+P0 validati" era una dicitura troppo forte. Lo stato reale è **beta tecnica
+migliorata**: le regressioni software note sono superate sui dataset
+disponibili, ma la validazione **funzionale al banco** (lease/perdita
+controller, STOP peggiore, fault fisici) e quella **metrologica** sono ancora in
+corso, e restano rilievi **PARTIAL/OPEN** — tra cui una regressione MET-01 nei
+run ripetuti, MOT-04 (lease), MAT-03 (eventi asimmetrici), APP-09. Stato reale
+per ID in `REMAINING_RISKS.md`. Il secondo giro (Lotti A–G della controrevisione)
+è in corso.
 
 ---
 

@@ -1,8 +1,12 @@
 {
   "firmware": "3.6",
+  "vResponse": "ver=3.6 scan=1 free=<0|1>",
+  "protocol": "legacy-v3 (protocollo versionato v4 previsto nel Lotto B)",
   "sketch": "master/master.ino",
+  "sourceCommit": "68eb14d",
   "fqbn": "arduino:avr:uno",
   "builtAt": "2026-07-17",
   "avrdude": "8.0.0-arduino1",
-  "note": "3.6 (audit FW-01/06/11/12): FREE persistente (i movimenti sono rifiutati con *locked finche' non arriva 'l'; prima p/q/$ riabilitavano ENA e muovevano con la mano sull'albero); p/q leggono con settle+2 frame come lo scan autonomo (non piu' il primo frame); handshake di boot *boot ver/r/samp/settle/free/rst con reset reason (MCUSR); ordine pin PUL/ENA safe all'avvio (no impulso spurio). 3.5 (audit FW-04/FW-05): parser S/$ con strtol 32bit + range espliciti (prima S+70000 wrappava a 4464 unita' ESEGUITE; ora *err e nessun moto; tetti: S<=1500, $<=3600), NaN azzera il confronto di stabilita' e <2 frame validi nel budget -> NaN vero (non un numero singolo non confermato). 3.4 (audit sicurezza moto): watchdog host durante i movimenti (nessun byte per 5s -> *wdt+abort; il server manda '\n' ogni 100ms), Concerto interrompibile con 'x' (*tabort, prima 10000 passi ciechi e STOP ingoiato), 'x' a motore fermo consumato subito (prima avvelenava cmdBuf). 3.3: audit stabilità (*sstat u=N a fine scan = punti accettati a budget scaduto). 3.2: fix overflow rotazioni >2047°. 3.1: STOP interrompibile ('x'->*mabort). Risposta a 'v': ver=3.4 scan=1"
+  "hexSha256": "21031c77cf908ffeeb93a7b03e74b882175a5aceb29d3cb07e25360b79124f8d",
+  "note": "3.6 (audit FW-01/06/11/12): FREE persistente (movimenti rifiutati con *locked finche' non arriva 'l'); p/q leggono con settle+2 frame come lo scan autonomo; handshake di boot '*boot ver/r/samp/settle/free/rst' con reset reason (MCUSR); ordine pin PUL/ENA safe all'avvio. 3.5 (FW-04/05): parser S/$ strtol 32bit + range (S<=1500, $<=3600), NaN azzera il confronto di stabilita'. 3.4: watchdog host (5s -> *wdt+abort), Concerto interrompibile (*tabort), 'x' idle consumato subito. 3.3: *sstat. 3.2: overflow >2047. 3.1: STOP '*mabort'. NB: la corrispondenza riproducibile sorgente->HEX (build in CI con toolchain fissata) e' un deliverable ancora aperto (REL-07)."
 }

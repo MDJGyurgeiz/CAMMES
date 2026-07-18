@@ -522,12 +522,12 @@
             </div>
             <div class="flex gap-8" style="margin-top:8px;">
                 <button class="btn btn-secondary" id="btnSaveProfile" onclick="saveProfileToArchive();" style="flex:1;" disabled data-tip="<strong>Salva profilo in archivio (prove/)</strong>Salva la curva come file .scr accanto alle altre misure (visibile in Home). Il menu <b>Tipo follower</b> decide COSA salvi:<br>&bull; <b>Puntalino</b> &rarr; salva il GREZZO cos&igrave; misurato;<br>&bull; <b>Bicchiere/Rullo/Finger</b> &rarr; salva la curva GI&Agrave; CONVERTITA col follower scelto (marcata: al ricarico non verr&agrave; riconvertita).">&#128190; Salva profilo</button>
-                <button class="btn btn-secondary" id="btnCamCard" onclick="exportCamCard();" style="flex:1;" disabled data-tip="<strong>Scheda camma (cam card PDF)</strong>Esporta una scheda in stile rettificatore (A4 orizzontale): tabella asp/scarico (durate, alzata valvola e camma, angolo lobo, fasatura, alzata al PMS) + diagramma dei due lobi sui gradi motore. Dichiara il metodo: <i>rilevato col puntalino, presentato come</i> il follower scelto (bicchiere &Oslash;, rullo, finger con leva) &mdash; conversione validata fisicamente.">&#128196; Scheda camma</button>
+                <button class="btn btn-secondary" id="btnCamCard" onclick="exportCamCard();" style="flex:1;" disabled data-tip="<strong>Scheda camma (cam card PDF)</strong>Esporta una scheda in stile rettificatore (A4 orizzontale): tabella asp/scarico (durate, alzata valvola e camma, angolo lobo, fasatura, alzata al PMS) + diagramma dei due lobi sui gradi motore. Dichiara il metodo: <i>rilevato col puntalino, presentato come</i> il follower scelto (bicchiere &Oslash;, rullo, finger con leva) &mdash; conversione confrontata sul setup di riferimento (Clio &Oslash;33, RMS 0,046 mm); validazione metrologica indipendente ancora necessaria.">&#128196; Scheda camma</button>
             </div>
 
             <!-- RACE-GRADE: Sweep RPM + Optimizer molla + Mappa + Report -->
             <div class="flex gap-8" style="margin-top:8px;" data-module="race">
-                <button class="btn btn-secondary" id="btnSweepRpm" onclick="runRpmSweep();" style="flex:1;" disabled data-tip="<strong>Sweep RPM</strong>Esegue la simulazione compliance a 12 regimi diversi (da rpm/2 a rpm*2) e plotta come cresce il valve float al variare degli RPM. Trova il <b>vero</b> regime massimo operativo, considerando dinamica del treno valvole. Tempo: ~5 secondi.">&#128201; Sweep RPM</button>
+                <button class="btn btn-secondary" id="btnSweepRpm" onclick="runRpmSweep();" style="flex:1;" disabled data-tip="<strong>Sweep RPM</strong>Esegue la simulazione compliance a 12 regimi diversi (da rpm/2 a rpm*2) e plotta come cresce il valve float al variare degli RPM. Indica un regime critico <b>stimato</b> dal modello esplorativo di compliance (non una certificazione del regime operativo). Tempo: ~5 secondi.">&#128201; Sweep RPM</button>
                 <button class="btn btn-secondary" id="btnOptimizeSpring" onclick="runSpringOptimizer();" style="flex:1;" disabled data-tip="<strong>Esplora molla</strong>Esplora una griglia di (k, F&#8320;) e per ognuna simula la compliance, cercando la combinazione pi&ugrave; leggera che tiene il valve float &lt; 0.3 mm al RPM target. &Egrave; un'ESPLORAZIONE del solo valve float: NON verifica coil bind, stress del filo, fatica n&eacute; geometria della molla &mdash; da controllare a parte prima di adottare i valori. Tempo: ~10 secondi.">&#127919; Esplora molla</button>
             </div>
             <div class="flex gap-8" style="margin-top:8px;" data-module="race">
@@ -4395,7 +4395,7 @@ function exportCamCard(testMode) {
         // e' a risoluzione 1° camma; la validazione al banco (RMS 0.046 mm) vale solo
         // per il bicchiere piatto — non estenderla implicitamente a roller/finger.
         (ft === 'bicch'
-            ? '# conversione puntalino->follower VALIDATA fisicamente su bicchiere piatto (Clio Ø33, RMS 0.046 mm).'
+            ? '# conversione puntalino->bicchiere: confrontata sul setup di riferimento (Clio Ø33, RMS 0.046 mm) come regressione software; validazione metrologica indipendente ancora necessaria.'
             : ft === 'punt'
                 ? '# curva grezza al puntalino: nessuna conversione follower applicata.'
                 : '# conversione geometrica al follower a risoluzione 1° camma; validazione fisica al banco solo per bicchiere piatto (RMS 0.046 mm).'),

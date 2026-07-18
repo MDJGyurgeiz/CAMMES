@@ -1,5 +1,17 @@
 # CAMMES — Risposta all'audit esterno
 
+> **Stato onesto (agg. 2026-07-18).** Una controrevisione indipendente
+> (`HANDOFF_CLAUDE_CORREZIONI_V3.3.0.md`) ha mostrato che la dicitura "audit
+> chiuso / 15-15 P0 validati" usata sotto è **troppo forte**: molti P0 sono
+> *corretti a livello software* ma non *validati fisicamente*, alcuni sono
+> ancora **PARTIAL/OPEN** (in particolare MOT-04 lease, MAT-03 eventi
+> asimmetrici, APP-09, e una **regressione MET-01** nei run ripetuti). La
+> denominazione corretta del progetto è **beta tecnica migliorata**:
+> regressioni software superate sui dataset disponibili, validazione al banco e
+> metrologica ancora in corso. Lo stato reale per ID è in
+> [`REMAINING_RISKS.md`](REMAINING_RISKS.md). Le sezioni sotto restano come
+> registro storico del primo giro di interventi.
+
 Documento di riferimento: `CLAUDE_HANDOFF_CAMMES.md` (audit esterno, 94 rilievi,
 snapshot `v3.2.0-1-ge15ac01` = commit `e15ac01`).
 
