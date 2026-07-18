@@ -1,0 +1,46 @@
+{
+  "schema": "cammes-release-manifest/1",
+  "app": {
+    "name": "CAMMES",
+    "version": "3.3.0",
+    "channel": "beta-tecnica",
+    "note": "Regressioni software superate sui dataset disponibili; validazione funzionale al banco e metrologica ancora in corso. Vedi REMAINING_RISKS.md."
+  },
+  "firmware": {
+    "version": "3.6",
+    "protocol": "v3 (legacy); v4 in design (PROTOCOL.md)",
+    "hex": "cammes/fw/master.ino.hex",
+    "hexSha256": "21031c77cf908ffeeb93a7b03e74b882175a5aceb29d3cb07e25360b79124f8d",
+    "fqbn": "arduino:avr:uno",
+    "toolchain": "arduino-cli 1.4.1 / arduino:avr core",
+    "sourceReproducible": false,
+    "sourceReproducibleNote": "build firmware in CI + confronto hash = REL-07 aperto"
+  },
+  "commit": "bd33de9 (round-2 controrevisione; aggiornare a ogni release)",
+  "gates": {
+    "npmTest": "168 check verdi (suite software)",
+    "lint": "0 errori",
+    "npmAudit": "1 moderata (pkg, devDep, no fix) — REL-02",
+    "exeSigned": false,
+    "tagSigned": false,
+    "sbom": false
+  },
+  "signing": {
+    "authenticode": "NON firmato (REL-05: richiede certificato di code-signing)",
+    "tag": "annotato, non firmato GPG (REL-06)"
+  },
+  "deliverables": {
+    "REMAINING_RISKS.md": true,
+    "MOTION_CONTROL_MODEL.md": "design (Lotto A, impl. pendente + banco)",
+    "PROTOCOL.md": "v3 documentato + v4 design (Lotto B)",
+    "MATH_SPEC.md": true,
+    "THIRD_PARTY_NOTICES.md": true,
+    "SBOM": false
+  },
+  "openP0": [
+    "MOT-04 (lease esclusivo) — OPEN, Lotto A",
+    "MOT-02/03 (FSM/perdita controller) — PARTIAL, Lotto A",
+    "validazione fisica STOP/ENA/fault/metrologia — NEEDS_HARDWARE"
+  ],
+  "warning": "Questo manifest NON dichiara l'audit chiuso: alcuni P0 restano OPEN/PARTIAL e la validazione fisica non è stata eseguita. Non promuovere a release finale finché i gate exeSigned/sbom/openP0 non sono soddisfatti."
+}
