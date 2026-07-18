@@ -93,6 +93,16 @@ async function main() {
     // L'apertura porta resetta l'Arduino (DTR): aspetta il boot
     var boot = await waitFor('CAMMES Uno ready', 6000);
     check('boot dopo apertura porta ("CAMMES Uno ready")', !!boot);
+    // FW-11 (fw 3.6): handshake di boot con stato e reset reason. La riga
+    // arriva INSIEME a "CAMMES Uno ready" (stesso flush FTDI): va cercata
+    // nelle righe già ricevute, non attesa come nuova.
+    await sleep(500);
+    var bootHs = lines.filter(function (e) { return e.line.indexOf('*boot') === 0; })[0];
+    if (bootHs) {
+        check('H: handshake *boot con ver/r/samp/free/rst', /ver=3\.\d+ r=\d+ samp=\d+ settle=\d+ free=[01] rst=0x/.test(bootHs.line), bootHs.line);
+    } else {
+        console.log('  (H: *boot assente — firmware < 3.6)');
+    }
     await sleep(300);
 
     // --- A. versione (3.4 o superiore) ---
@@ -200,6 +210,30 @@ async function main() {
         check('G: $+010 legittimo dopo i rifiuti → *mv', !!mvG);
     } else {
         console.log('  (G: test parser saltati — richiedono fw 3.5)');
+    }
+
+    // --- I. (fw 3.6, audit FW-01) FREE persistente: movimenti RIFIUTATI ---
+    var has36 = verNum >= 3.6;
+    if (has36) {
+        send('f\n');
+        var fr = await waitFor('*free', 2500);
+        check('I: FREE attivato (*free)', !!fr);
+        var encI = await readEncoder();
+        send('$+050\n');                 // col 3.5 avrebbe rimesso ENA e MOSSO
+        var lk = await waitFor('*locked', 2500);
+        check('I: movimento in FREE → *locked (rifiutato)', !!lk);
+        await sleep(500);
+        var encI2 = await readEncoder();
+        check('I: encoder IMMOBILE (nessun moto in FREE)', encI !== null && encI2 !== null && Math.abs(encI2 - encI) <= 2,
+              'enc ' + encI + ' → ' + encI2);
+        send('l\n');
+        var lock = await waitFor('*lock', 2500);
+        check('I: LOCK riattiva (*lock)', !!lock);
+        send('$+010\n');
+        var mvI = await waitFor('*mv', 8000);
+        check('I: dopo LOCK il movimento funziona di nuovo', !!mvI);
+    } else {
+        console.log('  (I: test FREE persistente saltati — richiedono fw 3.6)');
     }
 
     console.log('');
