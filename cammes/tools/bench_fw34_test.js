@@ -147,8 +147,10 @@ async function main() {
     send('$+3000\n');                // ~12 s di moto a ~250°/s (entro il tetto 3600 del fw 3.5): il wdt DEVE troncarlo a ~5 s
     await sleep(8000);               // SILENZIO TOTALE (niente kick, niente keep-alive)
     kickOn();
-    var wdt = await waitFor('*wdt', 2000);
-    check('D: *wdt in coda dopo il silenzio', !!wdt);
+    // su alcuni FTDI/driver le righe arrivano DURANTE il silenzio (buffering
+    // diverso): cerca *wdt sia nelle righe già ricevute sia in quelle nuove
+    var wdt = sawBetween('*wdt', d0, Date.now()) ? { t: Date.now() } : await waitFor('*wdt', 2000);
+    check('D: *wdt ricevuto (in coda o durante il silenzio)', !!wdt);
     var mab = await waitFor('*mabort', 1500);
     check('D: *mabort dopo *wdt (moto abortito)', !!mab || sawBetween('*mabort', d0, Date.now()));
     await sleep(800);
