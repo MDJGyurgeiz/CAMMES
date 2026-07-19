@@ -226,8 +226,13 @@ async function main() {
         check('I: movimento in FREE → *locked (rifiutato)', !!lk);
         await sleep(500);
         var encI2 = await readEncoder();
-        check('I: encoder IMMOBILE (nessun moto in FREE)', encI !== null && encI2 !== null && Math.abs(encI2 - encI) <= 2,
-              'enc ' + encI + ' → ' + encI2);
+        // Tolleranza: a motore DISECCITATO (ENA=LOW in FREE) la molla del
+        // tastatore spinge la camma e l'albero si assesta di qualche count fino
+        // a un minimo locale (visto al banco col nuovo albero: ~0,75°). Il test
+        // deve provare che FREE non fa PASSARE il motore (un $+050 = ~200 counts
+        // a r32), non che l'albero sia rigido: soglia 10 counts (2,5°) « 200.
+        check('I: motore non STEPPA in FREE (drift molla tastatore < 2,5°)', encI !== null && encI2 !== null && Math.abs(encI2 - encI) <= 10,
+              'enc ' + encI + ' → ' + encI2 + ' (Δ ' + (encI2 - encI) + ' counts)');
         send('l\n');
         var lock = await waitFor('*lock', 2500);
         check('I: LOCK riattiva (*lock)', !!lock);
@@ -278,9 +283,25 @@ async function main() {
         console.log('  (J: test parser config/overflow/busy saltati — richiedono fw 3.7)');
     }
 
+    // --- K. (fw 3.8, audit FW-03) fault locale encoder: NO FALSO POSITIVO ---
+    // Con encoder SANO uno scan completo NON deve mai emettere *fault. (Il
+    // true-positive — encoder scollegato → *fault — richiede lo scollegamento
+    // fisico del cavo encoder: NEEDS_HARDWARE, non automatizzabile da qui.)
+    var has38 = verNum >= 3.8;
+    if (has38) {
+        var kStart = Date.now();
+        send('S+60\n');                        // scan di 60 unità (>2 finestre da 30)
+        var kDone = await waitFor('*sdone', 60000);
+        var faulted = sawBetween('*fault', kStart, Date.now());
+        check('K: scan reale (encoder sano) completa senza *fault', !!kDone && !faulted,
+              (kDone ? '*sdone' : 'no *sdone') + (faulted ? ' + *fault SPURIO!' : ''));
+    } else {
+        console.log('  (K: test fault encoder saltato — richiede fw 3.8)');
+    }
+
     console.log('');
     if (fails > 0) console.log('RISULTATO: ' + fails + ' check FALLITI');
-    else console.log('VALIDATO AL BANCO: watchdog host, Concerto interrompibile, cmdBuf pulito, parser rigoroso, NACK busy.');
+    else console.log('VALIDATO AL BANCO: watchdog host, Concerto interrompibile, cmdBuf pulito, parser rigoroso, NACK busy, fault encoder senza falsi positivi.');
     kickOff();
     port.close(function () { process.exit(fails > 0 ? 1 : 0); });
     setTimeout(function () { process.exit(fails > 0 ? 1 : 0); }, 2000);

@@ -455,6 +455,19 @@ void emitEncoderQuery() {
 void autonomousScan(int8_t dir, uint16_t totalUnits) {
   uint16_t unstable = 0;   // punti accettati a budget scaduto (non stabilizzati)
   g_busyNacked = false;    // FW-09: un solo "*busy" per questa scansione
+  // AUDIT FW-03: fault locale encoder. Il motore gira in anello aperto; se il
+  // cavo encoder è staccato/rotto o l'albero è bloccato, il browser userebbe
+  // un riferimento di "zero virtuale" sbagliato senza accorgersene. Ogni
+  // ENC_CHK_WINDOW unità verifichiamo che l'encoder sia davvero avanzato.
+  // Caratterizzato al banco (2026-07-19, nuovo albero, r32): ~4 counts/unità =
+  // cfgStepsPerUnit/8. Soglia a 1/4 dell'atteso (min 3 counts): margine 4× sul
+  // sano (spread misurato 1,1%) → falsi allarmi praticamente impossibili;
+  // scatta sul caso reale (encoder ~0 counts mentre il motore ha mosso).
+  const uint16_t ENC_CHK_WINDOW = 30;
+  noInterrupts();
+  int32_t chkBaseCnt = encoderCount;
+  interrupts();
+  uint16_t chkBaseI = 0;
   for (uint16_t i = 1; i <= totalUnits; i++) {
     // abort: qualunque 'x' arrivato dal PC ferma la scansione
     while (Serial.available() > 0) {
@@ -482,6 +495,26 @@ void autonomousScan(int8_t dir, uint16_t totalUnits) {
     Serial.print(':');
     if (isnan(mm)) Serial.println(F("NaN"));
     else           Serial.println(mm, 2);
+
+    // AUDIT FW-03: verifica avanzamento encoder ogni ENC_CHK_WINDOW unità.
+    if ((uint16_t)(i - chkBaseI) >= ENC_CHK_WINDOW) {
+      uint16_t span   = i - chkBaseI;                        // unità mosse nella finestra
+      int32_t  d      = cnt - chkBaseCnt;
+      uint32_t moved  = (uint32_t)(d < 0 ? -d : d);          // counts effettivi (valore assoluto)
+      uint32_t expect = (uint32_t)span * cfgStepsPerUnit / 8; // ~counts attesi (r32→4/unità)
+      uint32_t minMv  = expect / 4;                           // soglia = 1/4 dell'atteso...
+      if (minMv < 3) minMv = 3;                               // ...ma almeno 3 counts
+      if (moved < minMv) {
+        Serial.print(F("*fault enc moved=")); Serial.print(moved);
+        Serial.print(F(" exp=")); Serial.print(expect);
+        Serial.print(F(" span=")); Serial.println(span);
+        Serial.println(F("*sabort"));   // stop pulito: il browser gestisce già *sabort
+        cmdLen = 0;
+        return;
+      }
+      chkBaseI   = i;
+      chkBaseCnt = cnt;
+    }
   }
   while (Serial.available() > 0) Serial.read();   // drain comandi accodati
   // Audit di stabilità: quanti punti sono stati accettati SENZA i due frame
@@ -530,7 +563,7 @@ void executeCommand() {
       // funzioni disponibili (scan=1 → scan autonomo 'S' supportato).
       // proto=3 = protocollo seriale v3 documentato (PROTOCOL.md). Campo additivo:
       // host/UI che leggono solo ver=/scan=/free= lo ignorano senza problemi.
-      Serial.print(F("ver=3.7 scan=1 proto=3 free=")); Serial.println(g_motorFree ? 1 : 0);
+      Serial.print(F("ver=3.8 scan=1 proto=3 free=")); Serial.println(g_motorFree ? 1 : 0);
       Serial.println(F("*ver"));
     }
     else if (c == '!') {
@@ -770,7 +803,7 @@ void setup() {
   // NON cambiarla. Subito dopo, l'handshake versionato con lo stato completo
   // e il reset reason (audit FW-11): l'host può loggare/diagnosticare.
   Serial.println(F("CAMMES Uno ready"));
-  Serial.print(F("*boot ver=3.7 r=")); Serial.print(cfgStepsPerUnit);
+  Serial.print(F("*boot ver=3.8 r=")); Serial.print(cfgStepsPerUnit);
   Serial.print(F(" samp="));   Serial.print(cfgSamples);
   Serial.print(F(" settle="));  Serial.print(cfgSettleMs);
   Serial.print(F(" free="));    Serial.print(g_motorFree ? 1 : 0);

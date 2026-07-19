@@ -6,12 +6,14 @@ dicitura "audit chiuso": lo stato reale è **beta tecnica migliorata** — le
 regressioni software note sono superate sui dataset disponibili, ma la
 validazione funzionale al banco e quella metrologica sono **ancora in corso**.
 
-> **Firmware 3.7 (Lotto B, 2026-07-19)**: parser di configurazione rigoroso
-> (FW-04), NACK "*busy" durante il moto (FW-09), scarto-fino-a-fine-riga
-> sull'overflow. **Flashato e VALIDATO al banco (COM5, DESKTOP-PN6EEA8, 2026-07-19):
-> `bench_fw34_test.js` 38/38, inclusa la sezione J sull'hardware reale.** Boot
-> handshake `*boot ver=3.7`, risposta `ver=3.7 scan=1 proto=3`. FW-04 e FW-09
-> passano a VERIFIED.
+> **Firmware 3.8 (Lotto B, 2026-07-19)**: 3.7 = parser config rigoroso (FW-04),
+> NACK "*busy" durante il moto (FW-09), scarto-fino-a-fine-riga sull'overflow;
+> 3.8 = fault locale encoder nello scan (FW-03). **Flashato e VALIDATO al banco
+> (COM5, DESKTOP-PN6EEA8, 2026-07-19): `bench_fw34_test.js` 39/39, sezioni J
+> (FW-04/09) e K (FW-03 no-falso-positivo) sull'hardware reale.** Encoder del
+> nuovo albero caratterizzato: ~4,00 counts/unità (spread 1,1%). Boot `*boot
+> ver=3.8`, risposta `ver=3.8 scan=1 proto=3`. FW-04/FW-09 VERIFIED; FW-03
+> FIXED_SOFTWARE (true-positive = unplug fisico, NEEDS_HARDWARE).
 
 Vocabolario stati: FIXED_SOFTWARE (patch + test software, non validato
 fisicamente) · PARTIAL (migliorato, criterio non del tutto soddisfatto) ·
@@ -38,7 +40,7 @@ questa fase (banco scollegato).
 | ID | Stato | Nota |
 |---|---|---|
 | FW-02 | FIXED_SOFTWARE / NEEDS_HARDWARE | TONE interrompibile; latenza STOP peggiore non misurata |
-| FW-03 | PARTIAL / NEEDS_HARDWARE | watchdog host presente; fault locale encoder rinviato: serve caratterizzare i counts/unità del NUOVO albero al banco prima di poter distinguere un jam da una risoluzione sub-tacca (un rilevatore mal tarato aborta scansioni buone) |
+| FW-03 | FIXED_SOFTWARE (fw 3.8) / true-positive NEEDS_HARDWARE | watchdog host + **fault locale encoder nello scan**: ogni 30 unità verifica l'avanzamento encoder (~cfgStepsPerUnit/8 counts/unità). **Encoder caratterizzato al banco (2026-07-19): ~4,00 counts/unità a r32, spread 1,1%, backlash 2 counts su ±360.** Soglia a 1/4 dell'atteso (min 3) → margine 4×. **No-falso-positivo validato al banco** (sez. K: scan reale → *sdone, nessun *fault) e nel browser (gestore `*fault` → toast + stop + posizione invalidata, senza errori). Il **true-positive** (scollegare fisicamente l'encoder → *fault) richiede l'unplug fisico: NEEDS_HARDWARE |
 | FW-04 | **VERIFIED (fw 3.7, banco)** | parser config c/r/w/u/a/g/k reso rigoroso (strtol + range, prima atoi accettava "c3xyz"→3 in silenzio); overflow di riga → scarto fino a fine riga + "*err ovf". Guardiano sorgente `test_fw_parser.js` in `npm test`; **flashato e validato al banco (COM5, 2026-07-19): `bench_fw34_test.js` sez. J verde — c99/c3xyz→*err c, r20→*err r, c3→*cfg, overflow→*err ovf senza moto spurio** |
 | FW-05/06 | PARTIAL | settle adattivo + 2 frame concordi presenti; heartbeat dedicato e metrica di qualità campione ancora da rifinire |
 | FW-07 | NEEDS_HARDWARE_VALIDATION | schema/BOM/pull-up/isteresi LM339 |

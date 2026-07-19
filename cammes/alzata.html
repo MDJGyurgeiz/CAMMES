@@ -667,6 +667,20 @@ var _engineOnMessage = function(event) {
         return;
     }
 
+    // AUDIT FW-03: guasto locale segnalato dal firmware (es. encoder fermo/
+    // scollegato mentre il motore girava). Il firmware fa seguire *sabort per
+    // lo stop pulito; qui mostriamo il MOTIVO e invalidiamo la posizione.
+    if (msg.indexOf('*fault') === 0) {
+        window._scanFaulted = true;
+        var faultBody = (msg.indexOf('enc') >= 0)
+            ? 'L\'encoder non ha registrato il movimento del motore: <b>cavo encoder scollegato/rotto o albero bloccato</b>. La scansione &egrave; stata fermata perch&eacute; la posizione non &egrave; affidabile. Controlla il collegamento dell\'encoder e rifai lo Zero virtuale.'
+            : 'Il firmware ha segnalato un guasto (' + msg.substring(6).trim() + '). Scansione fermata per sicurezza.';
+        currentEncoderCount = null;
+        if (typeof bumpEncEpoch === 'function') bumpEncEpoch('fault firmware');
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Guasto rilevato — scansione fermata', body: faultBody, duration: 12000 });
+        return;
+    }
+
     if (autoScanActive && (msg === '*sdone' || msg === '*sabort')) {
         var wasAborted = (msg === '*sabort');
         autoScanActive = false;
@@ -676,7 +690,9 @@ var _engineOnMessage = function(event) {
             if (scanEta) scanEta.stop();
             var smA = document.getElementById('scanMode');   if (smA) smA.disabled = false;
             var rsA = document.getElementById('scanRepeat'); if (rsA) rsA.disabled = false;
-            if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Scansione interrotta', body: 'Scan autonomo fermato.', duration: 3500 });
+            // Se un *fault ha appena spiegato il motivo, non sovrapporre il toast generico.
+            if (window.cammesToast && !window._scanFaulted) window.cammesToast({ kind: 'warn', title: 'Scansione interrotta', body: 'Scan autonomo fermato.', duration: 3500 });
+            window._scanFaulted = false;
         } else if (startflag === 1 && i < currentMode.totalSteps) {
             startflag = 0;
             if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Scansione incompleta',

@@ -53,6 +53,16 @@ check('FW-09: evento *busy presente', src.indexOf('*busy') !== -1);
 check('FW-09: nackBusyIfCmd chiamato in stepperMove e autonomousScan',
     (src.match(/nackBusyIfCmd\s*\(/g) || []).length >= 3);   // 1 def + >=2 chiamate
 
+// FW-03: fault locale encoder nello scan autonomo (encoder fermo mentre il
+// motore gira → *fault enc + *sabort). Guardia sulla presenza della logica.
+check('FW-03: evento *fault enc presente', src.indexOf('*fault enc') !== -1);
+check('FW-03: finestra di controllo encoder (ENC_CHK_WINDOW)', /ENC_CHK_WINDOW/.test(src));
+check('FW-03: soglia basata su cfgStepsPerUnit (counts attesi)',
+    /cfgStepsPerUnit\s*\/\s*8/.test(src));
+// Il browser deve gestire *fault (mostrare il motivo, fermare, invalidare pos).
+var alzata = fs.readFileSync(path.join(__dirname, '..', 'alzata.html'), 'utf8');
+check('FW-03: alzata.html gestisce *fault', alzata.indexOf("indexOf('*fault')") !== -1);
+
 // La versione annunciata deve essere allineata a fw/version.json.
 var vjson = require(path.join(__dirname, '..', 'fw', 'version.json'));
 var bootMatch = src.match(/\*boot ver=([\d.]+)/);

@@ -1,13 +1,13 @@
 {
-  "firmware": "3.7",
-  "vResponse": "ver=3.7 scan=1 proto=3 free=<0|1>",
+  "firmware": "3.8",
+  "vResponse": "ver=3.8 scan=1 proto=3 free=<0|1>",
   "protocol": "legacy-v3 (documentato in PROTOCOL.md; campo di capacita' 'proto=3' nella risposta 'v'). La rinumerazione versionata v4 (runId/seq/ACK/NACK) resta un deliverable aperto: e' una migrazione breaking firmware+server+UI da validare al banco.",
   "sketch": "master/master.ino",
-  "sourceCommit": "aa2f812",
+  "sourceCommit": "pending-commit-3.8",
   "fqbn": "arduino:avr:uno",
   "builtAt": "2026-07-19",
-  "benchValidated": "2026-07-19 su COM5 (DESKTOP-PN6EEA8): bench_fw34_test.js 38/38, sezione J (FW-04 config strict/overflow + FW-09 busy) verde su hardware",
+  "benchValidated": "2026-07-19 su COM5 (DESKTOP-PN6EEA8): 3.7 bench_fw34_test.js 38/38 (FW-04/FW-09); 3.8 encoder caratterizzato ~4 counts/unita' + fault FW-03 no-falso-positivo su scan reale (true-positive = test scollegamento fisico encoder, NEEDS_HARDWARE)",
   "avrdude": "8.0.0-arduino1",
-  "hexSha256": "2ae84e2857d598382fdfd579afea8d2a2dfe08b4a117c8980d33c43346368ea5",
-  "note": "3.7 (audit FW-04/FW-09): parser dei comandi di configurazione (c/r/w/u/a/g/k) reso RIGOROSO con strtol + range espliciti (prima atoi accettava 'c3xyz'->3 e overflowava in silenzio); overflow di riga -> scarto fino a fine riga con '*err ovf' (prima il frammento residuo formava un comando spurio); NACK '*busy' quando arriva un comando VERO durante un movimento/scan (prima scartato in silenzio). Nessuna modifica al formato dei comandi validi: retrocompatibile con server/UI 3.3.x. 3.6 (FW-01/06/11/12): FREE persistente (*locked), p/q con settle+2 frame, handshake '*boot ...' con reset reason (MCUSR), ordine pin PUL/ENA safe. 3.5 (FW-04/05): parser S/$ strtol 32bit + range (S<=1500, $<=3600), NaN azzera stabilita'. 3.4: watchdog host (5s -> *wdt+abort), Concerto interrompibile (*tabort), 'x' idle consumato subito. 3.3: *sstat. 3.2: overflow >2047. 3.1: STOP '*mabort'. NB: la corrispondenza riproducibile sorgente->HEX (build in CI con toolchain fissata) e' un deliverable ancora aperto (REL-07)."
+  "hexSha256": "1a983f82d90d10e1d53c59bfc86124113ddae099e9ca9a494001c57b45707694",
+  "note": "3.8 (audit FW-03): fault locale encoder nello scan autonomo — ogni 30 unita' verifica che l'encoder sia avanzato di ~cfgStepsPerUnit/8 counts/unita' (caratterizzato al banco: ~4 counts/unita' a r32, spread 1,1%); soglia 1/4 dell'atteso (min 3 counts) -> se l'encoder e' fermo/scollegato mentre il motore gira: '*fault enc ...' + '*sabort'. Margine 4x sul sano: nessun falso allarme. 3.7 (FW-04/FW-09): parser dei comandi di configurazione (c/r/w/u/a/g/k) reso RIGOROSO con strtol + range espliciti (prima atoi accettava 'c3xyz'->3 e overflowava in silenzio); overflow di riga -> scarto fino a fine riga con '*err ovf' (prima il frammento residuo formava un comando spurio); NACK '*busy' quando arriva un comando VERO durante un movimento/scan (prima scartato in silenzio). Nessuna modifica al formato dei comandi validi: retrocompatibile con server/UI 3.3.x. 3.6 (FW-01/06/11/12): FREE persistente (*locked), p/q con settle+2 frame, handshake '*boot ...' con reset reason (MCUSR), ordine pin PUL/ENA safe. 3.5 (FW-04/05): parser S/$ strtol 32bit + range (S<=1500, $<=3600), NaN azzera stabilita'. 3.4: watchdog host (5s -> *wdt+abort), Concerto interrompibile (*tabort), 'x' idle consumato subito. 3.3: *sstat. 3.2: overflow >2047. 3.1: STOP '*mabort'. NB: la corrispondenza riproducibile sorgente->HEX (build in CI con toolchain fissata) e' un deliverable ancora aperto (REL-07)."
 }
