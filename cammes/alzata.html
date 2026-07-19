@@ -570,6 +570,27 @@ var _engineOnOpen = function(event) {
 
 var _engineOnMessage = function(event) {
     msg = event.data;
+
+    // AUDIT MOT-04: messaggi di controllo del lease (server→client). Non sono
+    // dati Arduino: gestiscono il ruolo controllore/osservatore.
+    if (msg.indexOf('#ctl:') === 0) {
+        var role = msg.substring(5).split(' ')[0];
+        if (role === 'observer') {
+            window._cammesObserver = true;
+            if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Sola lettura',
+                body: 'Un altro client sta controllando il banco: qui vedi le misure ma i comandi sono disattivati. Chiudi l\'altra finestra per prendere il controllo.', duration: 8000 });
+        } else if (role === 'denied') {
+            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Comando ignorato (sola lettura)',
+                body: 'Il banco è controllato da un altro client. Solo STOP è sempre permesso.', duration: 5000 });
+        } else if (role === 'granted' || role === 'free') {
+            window._cammesObserver = false;
+        } else if (role === 'released') {
+            // il controllore precedente se n'è andato: questo client può ora prendere il controllo
+            window._cammesObserver = false;
+        }
+        return;
+    }
+
     lastFirmwareRx = Date.now();   // qualsiasi riga = Arduino vivo (LED Motore)
 
     // Ack di fine movimento ($+/$- terminato dal firmware): se stiamo

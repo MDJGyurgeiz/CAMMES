@@ -22,8 +22,9 @@ questa fase (banco scollegato).
 | MAT-03 (eventi asimmetrici) | PARTIAL | eventi = centro ± durata/2; su lobo asimmetrico errore ~60° | Fasatura apertura/chiusura/overlap sbagliata su camme reali | crossing reali ~408/646° a soglia 0,05 mm |
 | APP-09 (incompleto→CONFORME) | OPEN → in lavorazione | nominale con 30/360 punti → CONFORME | Verdetto di conformità su dati quasi vuoti | 30/360 → NON VALUTABILE |
 | MAT-07 (parser duplicati/frazionari) | PARTIAL | `parseCamFile`: `180,999` sovrascrive in silenzio; `106.5`→arrotondato | Dati corrotti accettati senza avviso | duplicato → errore; frazionario → esplicito |
-| MOT-04 (lease) | OPEN | nessun controller esclusivo; ogni WS scrive seriale | Due client/tab intercalano comandi al banco | `test_controller_lease.js` |
-| MOT-02/03 (FSM/perdita controller) | PARTIAL | busy solo client-side; keep-alive server maschera la perdita | Il moto non si ferma se il controller sparisce | FSM server + STOP su lease perso |
+| MOT-04 (lease) | **FIXED_SOFTWARE + validato banco** | controllore unico lato server; observer read-only; STOP a chiunque | risolto: `test_controller_lease.js` (arbitraggio) + validazione al banco remoto (perdita controllore→STOP, moto troncato 415°/2000°) | — |
+| MOT-03 (perdita controller) | **FIXED_SOFTWARE + validato banco** | ping/pong WS (robusto al throttling tab) + close → `releaseLease` scrive `x` sulla seriale | validato: motore fermo dopo disconnessione del controllore | — |
+| MOT-02 (FSM autorevole) | PARTIAL | interblocchi UI `_scanBusy` + lease server; manca la FSM di stato esplicita (SCANNING/MANUAL/FREE/FAULT) con ACK/eventi terminali (Lotto A completo + B) | il server non espone ancora uno stato autorevole per ACK | FSM server + protocollo v4 |
 
 ## Firmware (software fatto, fisica da validare)
 

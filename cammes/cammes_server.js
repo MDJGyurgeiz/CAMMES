@@ -1109,27 +1109,95 @@ wsServer.on('error', function (err) {
 // Tutti i client WebSocket connessi
 var wsClients = [];
 
+// ============================================================
+// AUDIT MOT-04 / MOT-03: CONTROLLER LEASE (autorità unica del banco)
+// ============================================================
+// Prima OGNI client WS scriveva sulla seriale: due tab o due dispositivi
+// potevano intercalare comandi al motore. Ora un solo client è il
+// "controllore"; gli altri sono OSSERVATORI in sola lettura (ricevono lo
+// stream ma non muovono nulla). STOP ('x') è permesso a CHIUNQUE.
+// Alla perdita del controllore (socket chiuso o ping/pong fallito) il server
+// invia STOP alla seriale: se nessuno controlla, il moto si ferma.
+var controller = null;              // il ws che detiene il lease
+var _wsSeq = 0;
+// Comandi che MUOVONO o configurano: richiedono il lease. STOP e i comandi di
+// sola lettura (query stato/misura) sono gestiti a parte.
+function isControlCommand(msg) {
+    var c = msg.charAt(0);
+    // p q m d ! @ f l v c r w u a g k t S $  → controllo; ? = query (read-only)
+    return 'pqmd!@flvcrwuagktS$'.indexOf(c) >= 0;
+}
+function grantLease(ws) {
+    controller = ws;
+    ws._isController = true;
+    try { ws.send('#ctl:granted'); } catch (e) {}
+    log('WS', 'Lease concesso al client #' + ws._id);
+}
+function releaseLease(reason) {
+    if (!controller) return;
+    var was = controller;
+    controller = null;
+    if (was) was._isController = false;
+    // AUDIT MOT-03: perdita controllore → STOP alla seriale (il keep-alive del
+    // server NON deve mascherare la perdita: qui fermiamo davvero).
+    if (serialPort && serialPort.isOpen) {
+        try { serialPort.write('x'); } catch (e) {}
+        log.warn('WS', 'Controllore perso (' + reason + ') → STOP inviato alla seriale');
+    }
+    wsBroadcast('#ctl:released ' + reason);
+}
+
 wsServer.on('connection', function (ws) {
+    ws._id = ++_wsSeq;
+    ws._alive = true;
+    ws.on('pong', function () { ws._alive = true; });
     wsClients.push(ws);
-    log('WS', 'Client connesso (' + wsClients.length + ' totali)');
+    log('WS', 'Client #' + ws._id + ' connesso (' + wsClients.length + ' totali)');
+    // Comunica il ruolo iniziale: se c'è già un controllore, questo è observer.
+    try { ws.send(controller ? '#ctl:observer' : '#ctl:free'); } catch (e) {}
 
     ws.on('message', function (data) {
         var msg = data.toString();
 
-        // Controlla se e' un comando di salvataggio file
-        if (msg.charAt(0) === '*') {
-            handleFileSave(msg);
+        // Messaggi di controllo client→server (mai inoltrati alla seriale)
+        if (msg.indexOf('#ctl:') === 0) {
+            var op = msg.substring(5).trim();
+            if (op === 'acquire') {
+                if (!controller) grantLease(ws);
+                else if (controller === ws) { try { ws.send('#ctl:granted'); } catch (e) {} }
+                else try { ws.send('#ctl:denied'); } catch (e) {}
+            } else if (op === 'release') {
+                if (controller === ws) releaseLease('rilascio esplicito');
+            } // 'hb' e altri: no-op (la vitalità è via ping/pong)
             return;
         }
 
-        // Altrimenti e' un comando per Arduino - invia sulla seriale
+        // Salvataggio file (non tocca la seriale/moto)
+        if (msg.charAt(0) === '*') { handleFileSave(msg); return; }
+
+        // STOP: consentito a CHIUNQUE, sempre inoltrato
+        if (msg.charAt(0) === 'x') {
+            if (serialPort && serialPort.isOpen) { try { serialPort.write(msg); } catch (e) {} }
+            return;
+        }
+
+        // Comandi di controllo/moto: serve il lease. Il primo che ne manda uno
+        // (senza controllore attivo) lo acquisisce; gli altri sono respinti.
+        if (isControlCommand(msg)) {
+            if (!controller) grantLease(ws);
+            if (controller !== ws) {
+                try { ws.send('#ctl:denied'); } catch (e) {}
+                log.debug('CMD', 'Comando da observer #' + ws._id + ' RIFIUTATO: "' + msg + '"');
+                return;
+            }
+        }
+
+        // Query di sola lettura ('?') e comandi del controllore → seriale
         if (serialPort && serialPort.isOpen) {
             serialPort.write(msg, function (err) {
-                if (err) {
-                    log.error('SERIAL', 'Errore invio: ' + err.message);
-                }
+                if (err) log.error('SERIAL', 'Errore invio: ' + err.message);
             });
-            log.debug('CMD', 'Browser -> Arduino: "' + msg + '"');
+            log.debug('CMD', 'Client #' + ws._id + ' -> Arduino: "' + msg + '"');
         } else {
             log.debug('CMD', 'Comando ricevuto (no serial): "' + msg + '"');
         }
@@ -1137,13 +1205,31 @@ wsServer.on('connection', function (ws) {
 
     ws.on('close', function () {
         wsClients = wsClients.filter(function (c) { return c !== ws; });
-        log('WS', 'Client disconnesso (' + wsClients.length + ' rimasti)');
+        if (controller === ws) releaseLease('socket chiuso');
+        log('WS', 'Client #' + ws._id + ' disconnesso (' + wsClients.length + ' rimasti)');
     });
 
     ws.on('error', function (err) {
-        log.warn('WS', 'Errore client: ' + err.message);
+        log.warn('WS', 'Errore client #' + ws._id + ': ' + err.message);
     });
 });
+
+// AUDIT MOT-03: vitalità via ping/pong WebSocket (a livello di protocollo,
+// NON via timer JS del browser che i tab in background throttlano ≥1s). Se un
+// client non risponde al ping entro il giro successivo è considerato morto;
+// se era il controllore, releaseLease() ferma il moto.
+var _wsPing = setInterval(function () {
+    wsClients.forEach(function (ws) {
+        if (ws._alive === false) {
+            log.warn('WS', 'Client #' + ws._id + ' non risponde al ping → chiudo');
+            try { ws.terminate(); } catch (e) {}
+            return;
+        }
+        ws._alive = false;
+        try { ws.ping(); } catch (e) {}
+    });
+}, 1500);
+_wsPing.unref && _wsPing.unref();
 
 // Broadcast: invia a tutti i client WebSocket
 function wsBroadcast(msg) {
