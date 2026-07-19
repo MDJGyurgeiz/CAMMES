@@ -8,11 +8,10 @@ validazione funzionale al banco e quella metrologica sono **ancora in corso**.
 
 > **Firmware 3.7 (Lotto B, 2026-07-19)**: parser di configurazione rigoroso
 > (FW-04), NACK "*busy" durante il moto (FW-09), scarto-fino-a-fine-riga
-> sull'overflow. **Compilato** (34% flash) e coperto dal guardiano sorgente
-> `tools/test_fw_parser.js` (in `npm test`); il bench harness ha la sezione J
-> pronta. **Non ancora flashato né validato al banco** (banco remoto offline
-> al momento del commit): l'Arduino sul banco esegue ancora la 3.6 finché non
-> si esegue il flash. Restano FIXED_SOFTWARE / NEEDS_HARDWARE.
+> sull'overflow. **Flashato e VALIDATO al banco (COM5, DESKTOP-PN6EEA8, 2026-07-19):
+> `bench_fw34_test.js` 38/38, inclusa la sezione J sull'hardware reale.** Boot
+> handshake `*boot ver=3.7`, risposta `ver=3.7 scan=1 proto=3`. FW-04 e FW-09
+> passano a VERIFIED.
 
 Vocabolario stati: FIXED_SOFTWARE (patch + test software, non validato
 fisicamente) · PARTIAL (migliorato, criterio non del tutto soddisfatto) ·
@@ -40,11 +39,11 @@ questa fase (banco scollegato).
 |---|---|---|
 | FW-02 | FIXED_SOFTWARE / NEEDS_HARDWARE | TONE interrompibile; latenza STOP peggiore non misurata |
 | FW-03 | PARTIAL / NEEDS_HARDWARE | watchdog host presente; fault locale encoder rinviato: serve caratterizzare i counts/unità del NUOVO albero al banco prima di poter distinguere un jam da una risoluzione sub-tacca (un rilevatore mal tarato aborta scansioni buone) |
-| FW-04 | FIXED_SOFTWARE / NEEDS_HARDWARE (fw 3.7) | parser config c/r/w/u/a/g/k reso rigoroso (strtol + range, prima atoi accettava "c3xyz"→3 in silenzio); overflow di riga → scarto fino a fine riga + "*err ovf" (prima il frammento residuo formava un comando spurio). Guardiano sorgente `test_fw_parser.js` in `npm test`; compila (34% flash). Flash+bench harness sez. J: **da eseguire quando il banco è online** |
+| FW-04 | **VERIFIED (fw 3.7, banco)** | parser config c/r/w/u/a/g/k reso rigoroso (strtol + range, prima atoi accettava "c3xyz"→3 in silenzio); overflow di riga → scarto fino a fine riga + "*err ovf". Guardiano sorgente `test_fw_parser.js` in `npm test`; **flashato e validato al banco (COM5, 2026-07-19): `bench_fw34_test.js` sez. J verde — c99/c3xyz→*err c, r20→*err r, c3→*cfg, overflow→*err ovf senza moto spurio** |
 | FW-05/06 | PARTIAL | settle adattivo + 2 frame concordi presenti; heartbeat dedicato e metrica di qualità campione ancora da rifinire |
 | FW-07 | NEEDS_HARDWARE_VALIDATION | schema/BOM/pull-up/isteresi LM339 |
 | FW-08/11 | PARTIAL (fw 3.7) | risposta 'v' espone `proto=3` (capacità protocollo); protocollo NON ancora rinumerato v4 (runId/seq/ACK/NACK): è una migrazione breaking firmware+server+UI da progettare e validare al banco insieme |
-| FW-09 | FIXED_SOFTWARE / NEEDS_HARDWARE (fw 3.7) | comando arrivato durante un movimento/scan → NACK "*busy" (una volta per operazione), prima scartato in silenzio. Verificato in `test_fw_parser.js`; bench harness sez. J pronta, flash **da eseguire** |
+| FW-09 | **VERIFIED (fw 3.7, banco)** | comando arrivato durante un movimento/scan → NACK "*busy" (una volta per operazione), prima scartato in silenzio. **Validato al banco (COM5, 2026-07-19): comando durante `$` → `*busy` e il moto prosegue fino a `*mv`** |
 | FW-12 | FIXED_SOFTWARE / NEEDS_HARDWARE | ordine pin a boot da verificare all'oscilloscopio |
 
 ## Rete / API / browser
