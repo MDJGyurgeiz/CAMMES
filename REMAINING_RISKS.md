@@ -54,7 +54,8 @@ questa fase (banco scollegato).
 | SEC-01 | PARTIAL | Host/Origin + header anti-clickjacking (CSP frame-ancestors/X-Frame-Options/nosniff) presenti; manca ancora **autenticazione a token** e CSP `default-src 'self'` (richiede spostare gli script inline in file). Decisione UX aperta col committente (token su dispositivi LAN) |
 | SEC-03 | PARTIAL | XSS memorizzato bonificato nei percorsi noti; toast ancora via innerHTML |
 | SEC-05/06 | FIXED_SOFTWARE | 400/413 per URL/body, scrittura atomica + coda settings, exception→safe (Lotto 12) |
-| SEC-07/08/09/10 | PARTIAL | backup manifest+hash presente; logging/limiti WS/firma updater da completare |
+| SEC-08 | FIXED_SOFTWARE | limiti WebSocket: `maxPayload` 1 MB (messaggio oversize → chiusura 1009) + rate limiter a finestra fissa 60 msg/s per connessione (STOP 'x' sempre ammesso). Regressione in `test_server_robustezza.js` |
+| SEC-07/09/10 | PARTIAL | backup manifest+hash presente; logging strutturato/firma updater da completare |
 
 ## Dinamica
 

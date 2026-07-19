@@ -1080,8 +1080,19 @@ httpServer.listen(HTTP_PORT, function () {
 // 2. WebSocket Server (porta 8080)
 // ============================================================
 
+// AUDIT SEC-08: tetto alla dimensione di un singolo messaggio WS. I comandi
+// sono di pochi byte; i salvataggi file ('*...') sono al più decine di KB (una
+// scansione ~720 righe). 1 MB è un margine ampio: oltre, ws chiude la
+// connessione (code 1009) invece di allocare memoria senza limiti.
+var WS_MAX_PAYLOAD = 1024 * 1024;
+// AUDIT SEC-08: limite di frequenza per connessione (anti-flood). Il traffico
+// legittimo è pochi messaggi/s (polling + keep-alive); oltre la soglia i
+// messaggi in eccesso vengono scartati. Lo STOP 'x' è SEMPRE ammesso.
+var WS_MSG_PER_SEC = 60;
+
 var wsServer = new WebSocket.Server({
     port: WS_PORT,
+    maxPayload: WS_MAX_PAYLOAD,
     // AUDIT SEC-01: solo pagine servite da questa macchina (o client
     // non-browser come i tool da banco). Una pagina web qualsiasi aperta su
     // un dispositivo della LAN prima poteva comandare il motore o avviare
@@ -1147,9 +1158,27 @@ function releaseLease(reason) {
     wsBroadcast('#ctl:released ' + reason);
 }
 
+// AUDIT SEC-08: rate limiter a finestra fissa di 1 s per connessione. Refill
+// pigro (nessun timer): al primo messaggio di ogni nuova finestra il credito
+// torna pieno. Ritorna false se il credito è esaurito.
+function wsAllowMsg(ws) {
+    var now = Date.now();
+    if (now - ws._bucketTs >= 1000) {
+        ws._bucket = WS_MSG_PER_SEC;
+        ws._bucketTs = now;
+        ws._throttleWarned = false;
+    }
+    if (ws._bucket <= 0) return false;
+    ws._bucket--;
+    return true;
+}
+
 wsServer.on('connection', function (ws) {
     ws._id = ++_wsSeq;
     ws._alive = true;
+    ws._bucket = WS_MSG_PER_SEC;   // SEC-08: credito iniziale del rate limiter
+    ws._bucketTs = Date.now();
+    ws._throttleWarned = false;
     ws.on('pong', function () { ws._alive = true; });
     wsClients.push(ws);
     log('WS', 'Client #' + ws._id + ' connesso (' + wsClients.length + ' totali)');
@@ -1158,6 +1187,17 @@ wsServer.on('connection', function (ws) {
 
     ws.on('message', function (data) {
         var msg = data.toString();
+
+        // AUDIT SEC-08: anti-flood. Lo STOP 'x' passa SEMPRE (sicurezza); ogni
+        // altro messaggio oltre la soglia viene scartato, con un solo warning
+        // per finestra per non intasare a sua volta il log.
+        if (msg.charAt(0) !== 'x' && !wsAllowMsg(ws)) {
+            if (!ws._throttleWarned) {
+                ws._throttleWarned = true;
+                log.warn('WS', 'Client #' + ws._id + ' oltre ' + WS_MSG_PER_SEC + ' msg/s: messaggi in eccesso scartati');
+            }
+            return;
+        }
 
         // Messaggi di controllo client→server (mai inoltrati alla seriale)
         if (msg.indexOf('#ctl:') === 0) {

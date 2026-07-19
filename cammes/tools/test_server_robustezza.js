@@ -16,6 +16,7 @@ var path = require('path');
 var http = require('http');
 var net = require('net');
 var spawn = require('child_process').spawn;
+var WebSocket = require(path.join(__dirname, '..', 'node_modules', 'ws'));
 
 var HTTP_PORT = 0, WS_PORT = 0;   // porte libere vere, assegnate a runtime
 var fails = 0;
@@ -59,7 +60,8 @@ function finish() {
     console.log('');
     if (fails > 0) { console.log('RISULTATO: ' + fails + ' check FALLITI'); process.exit(1); }
     console.log('VALIDATO: URL/body malformati gestiti (400/413, niente crash),');
-    console.log('POST settings concorrenti preservati, file sempre JSON valido.');
+    console.log('POST settings concorrenti preservati, file sempre JSON valido,');
+    console.log('backup+header sicurezza, limiti WS (maxPayload + rate limit).');
     process.exit(0);
 }
 
@@ -149,8 +151,57 @@ function secEight() {
         check('F: X-Frame-Options DENY', h['x-frame-options'] === 'DENY', h['x-frame-options']);
         check('F: CSP frame-ancestors none', /frame-ancestors 'none'/.test(h['content-security-policy'] || ''), h['content-security-policy']);
         check('F: X-Content-Type-Options nosniff', h['x-content-type-options'] === 'nosniff');
-        finish();
+        secEightWs();
     });
     r.on('error', function (e) { check('F: header di sicurezza', false, String(e)); finish(); });
     r.end();
+}
+
+// SEC-08 — limiti WebSocket: dimensione massima del messaggio (maxPayload) e
+// rate limiting anti-flood per connessione.
+function secEightWs() {
+    var wsUrl = 'ws://127.0.0.1:' + WS_PORT;
+
+    // (1) maxPayload: un messaggio > 1 MB deve far CHIUDERE la connessione
+    // (code 1009) invece di essere accettato/allocato.
+    var wsBig = new WebSocket(wsUrl);
+    var bigClosed = false;
+    var bigTimer = setTimeout(function () {
+        check('SEC-08: messaggio oversize (>1MB) → connessione chiusa', bigClosed, 'nessuna chiusura entro 3s');
+        rateTest();
+    }, 3000);
+    wsBig.on('open', function () {
+        // oltre il tetto WS_MAX_PAYLOAD (1 MB): ws rifiuta il frame a livello di
+        // protocollo (prima che arrivi al gestore) e chiude con 1009.
+        wsBig.send(new Array(1024 * 1024 + 16).join('A'));
+    });
+    wsBig.on('close', function (code) {
+        if (bigClosed) return;
+        bigClosed = true;
+        clearTimeout(bigTimer);
+        check('SEC-08: messaggio oversize (>1MB) → connessione chiusa', true, 'close code ' + code);
+        rateTest();
+    });
+    wsBig.on('error', function () { /* la chiusura per payload può arrivare come error+close */ });
+
+    // (2) rate limiting: una raffica di 120 '#ctl:acquire' in un'unica finestra
+    // da 1 s deve produrre AL PIÙ WS_MSG_PER_SEC (60) '#ctl:granted' — il resto
+    // è scartato. Osservabile perché ogni acquire ammesso risponde 'granted'.
+    var rateStarted = false;
+    function rateTest() {
+        if (rateStarted) return; rateStarted = true;
+        var ws = new WebSocket(wsUrl);
+        var granted = 0;
+        ws.on('message', function (d) { if (String(d).indexOf('#ctl:granted') === 0) granted++; });
+        ws.on('open', function () {
+            for (var i = 0; i < 120; i++) ws.send('#ctl:acquire');
+            setTimeout(function () {
+                check('SEC-08: raffica 120 msg/finestra → ≤60 ammessi (throttling)', granted <= 60 && granted < 120, granted + ' granted');
+                check('SEC-08: i messaggi legittimi passano comunque (>0 ammessi)', granted > 0, granted + ' granted');
+                try { ws.close(); } catch (e) {}
+                finish();
+            }, 800);
+        });
+        ws.on('error', function (e) { check('SEC-08: connessione WS per rate test', false, String(e)); finish(); });
+    }
 }
