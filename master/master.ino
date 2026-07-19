@@ -115,9 +115,40 @@ const int8_t ENC_LUT[16] = {
 volatile int32_t encoderCount  = 0;
 volatile uint8_t encoderState  = 0;   // (A<<1)|B
 
+#include <EEPROM.h>
+
 // ---- Comando seriale ----
-char    cmdBuf[16];
+// Buffer allargato a 48 per accogliere le righe del protocollo v4 (es.
+// "45 SCAN run=17 dir=- units=360"). I comandi v3 restano cortissimi (max
+// "t2000:5000:+:90" = 15 char): nessun impatto sul path v3.
+char    cmdBuf[48];
 uint8_t cmdLen = 0;
+
+// =============================================================
+//  AUDIT FW-08/11 · MOT-02 — PROTOCOLLO v4 (additivo, negoziato)
+// =============================================================
+// v4 convive con v3 senza romperlo: una riga che INIZIA CON UNA CIFRA è v4
+// ("<seq> VERBO args"); v3 non ha comandi che iniziano per cifra. La FSM
+// g_state è l'UNICA fonte di stato, aggiornata sia dai comandi v3 che v4.
+// g_runId governa il FORMATO di emissione delle primitive di moto condivise:
+//   g_runId < 0  → emissioni v3 (*mabort/*wdt/#i:enc:mm/*sdone…) — INVARIATE
+//   g_runId >= 0 → emissioni v4 (EVT SAMPLE/DONE/STOPPED/FAULT, ACK/NACK)
+enum FsmState { ST_BOOT, ST_FREE, ST_IDLE_LOCKED, ST_MOVING, ST_SCANNING, ST_TONE, ST_STOPPING, ST_FAULT };
+uint8_t g_state = ST_BOOT;
+// Fault LATCHED: una volta entrati in FAULT ci si resta (movimenti rifiutati)
+// finché non arriva RESET_FAULT da fermo. 0 = nessun fault.
+enum FaultCode { FAULT_NONE, FAULT_ENCODER_JAM, FAULT_HOST_TIMEOUT, FAULT_SENSOR };
+uint8_t g_fault = FAULT_NONE;
+int16_t g_runId = -1;              // run corrente (v4); -1 = nessun run / modo v3
+// Motivo dell'ultimo stop di una primitiva di moto (per EVT STOPPED v4).
+enum StopReason { STOPR_NONE, STOPR_USER, STOPR_WDT, STOPR_LOCKED, STOPR_FAULT };
+uint8_t g_stopReason = STOPR_NONE;
+// AUDIT: heartbeat DEDICATO v4. In v3 il watchdog è tenuto vivo da QUALSIASI
+// byte (il server manda '\n'); in v4 solo "<seq> HEARTBEAT" lo rinfresca, così
+// un byte spurio/echo non maschera la perdita reale dell'host.
+uint32_t g_lastHeartbeatMs = 0;
+// Device id stabile in EEPROM (con CRC) — non il solo nome COM (audit).
+uint32_t g_deviceId = 0;
 // AUDIT FW-04: dopo un overflow di riga (comando più lungo del buffer) il resto
 // della riga va SCARTATO fino al newline. Prima si azzerava solo cmdLen e i
 // caratteri residui formavano un comando spurio ("cccccccccccccccc32" → "32").
@@ -222,10 +253,85 @@ bool parseIntStrict(const char *s, long lo, long hi, long *out) {
 // STOP ('x', gestito a parte dal chiamante) NON contano: solo un comando che
 // avrebbe avviato un'azione. Prima venivano tutti scartati in silenzio.
 inline void nackBusyIfCmd(char cc) {
-  if (!g_busyNacked && cc != 'x' && cc != '?' && cc > ' ') {
-    Serial.println(F("*busy"));
+  if (!g_busyNacked && cc != 'x' && cc != '?' && cc != '~' && cc > ' ') {
+    // Rispetta l'invariante di formato: in un run v4 (g_runId>=0) NON deve
+    // trapelare il token v3 "*busy"; si emette l'evento v4 "EVT BUSY run=N".
+    if (g_runId >= 0) { Serial.print(F("EVT BUSY run=")); Serial.println(g_runId); }
+    else              Serial.println(F("*busy"));
     g_busyNacked = true;
   }
+}
+
+// =============================================================
+//  PROTOCOLLO v4 — helper stato / device id / eventi
+// =============================================================
+// Nome dello stato FSM per STATUS/HELLO/EVT.
+const __FlashStringHelper *stateName(uint8_t s) {
+  switch (s) {
+    case ST_BOOT:        return F("BOOT");
+    case ST_FREE:        return F("FREE");
+    case ST_IDLE_LOCKED: return F("IDLE_LOCKED");
+    case ST_MOVING:      return F("MOVING");
+    case ST_SCANNING:    return F("SCANNING");
+    case ST_TONE:        return F("TONE");
+    case ST_STOPPING:    return F("STOPPING");
+    default:             return F("FAULT");
+  }
+}
+const __FlashStringHelper *faultName(uint8_t f) {
+  switch (f) {
+    case FAULT_ENCODER_JAM:  return F("ENCODER_JAM");
+    case FAULT_HOST_TIMEOUT: return F("HOST_TIMEOUT");
+    case FAULT_SENSOR:       return F("SENSOR");
+    default:                 return F("NONE");
+  }
+}
+
+// Device id stabile: 4 byte + CRC8 in EEPROM. Alla PRIMA accensione (CRC non
+// valido) si semina da rumore ADC su un pin flottante — così ogni scheda ha un
+// id proprio, indipendente dal nome COM (audit: "id in EEPROM con CRC").
+uint8_t crc8(const uint8_t *p, uint8_t n) {
+  uint8_t c = 0;
+  for (uint8_t i = 0; i < n; i++) {
+    c ^= p[i];
+    for (uint8_t b = 0; b < 8; b++) c = (c & 0x80) ? (uint8_t)((c << 1) ^ 0x07) : (uint8_t)(c << 1);
+  }
+  return c;
+}
+void initDeviceId() {
+  uint8_t buf[5];
+  for (uint8_t i = 0; i < 5; i++) buf[i] = EEPROM.read(i);
+  if (crc8(buf, 4) == buf[4]) {
+    g_deviceId = ((uint32_t)buf[0] << 24) | ((uint32_t)buf[1] << 16) | ((uint32_t)buf[2] << 8) | buf[3];
+    return;
+  }
+  // Semina da rumore analogico (pin sensore DATA, ad alta impedenza a riposo).
+  uint32_t seed = 0x9E3779B9UL ^ micros();
+  for (uint8_t i = 0; i < 32; i++) seed = (seed << 1) ^ (analogRead(A0) & 1) ^ (seed >> 31);
+  g_deviceId = seed ? seed : 0xCA3350EEUL;
+  buf[0] = g_deviceId >> 24; buf[1] = g_deviceId >> 16; buf[2] = g_deviceId >> 8; buf[3] = g_deviceId;
+  buf[4] = crc8(buf, 4);
+  for (uint8_t i = 0; i < 5; i++) EEPROM.update(i, buf[i]);
+}
+
+// HELLO: risposta completa a STATUS (e annuncio capacità). Un'unica riga con
+// proto, fw, device id, stato, free, fault, reset reason.
+void emitHello() {
+  Serial.print(F("HELLO proto=4 fw=4.0 dev="));
+  Serial.print(g_deviceId, HEX);
+  Serial.print(F(" state=")); Serial.print(stateName(g_state));
+  Serial.print(F(" free=")); Serial.print(g_motorFree ? 1 : 0);
+  Serial.print(F(" fault=")); Serial.print(faultName(g_fault));
+  Serial.print(F(" rst=0x")); Serial.println(g_resetFlags, HEX);
+}
+void emitAck(long seq) {
+  Serial.print(F("ACK ")); Serial.print(seq);
+  Serial.print(F(" state=")); Serial.println(stateName(g_state));
+}
+void emitNack(long seq, const __FlashStringHelper *code) {
+  Serial.print(F("NACK ")); Serial.print(seq);
+  Serial.print(F(" code=")); Serial.print(code);
+  Serial.print(F(" state=")); Serial.println(stateName(g_state));
 }
 
 // =============================================================
@@ -245,10 +351,14 @@ inline void nackBusyIfCmd(char cc) {
 // vengono scartati per non intasare il buffer RX durante i movimenti lunghi.
 bool stepperMove(int16_t units) {
   if (units == 0) return true;
+  g_stopReason = STOPR_NONE;
+  // FAULT latched (v4): nessun movimento finché non arriva RESET_FAULT.
+  if (g_state == ST_FAULT) { g_stopReason = STOPR_FAULT; if (g_runId < 0) Serial.println(F("*fault")); return false; }
   // AUDIT FW-01: se il motore è in FREE non si muove finché non arriva 'l'.
   // Prima qualunque movimento rimetteva ENA=HIGH annullando il FREE in silenzio.
-  if (g_motorFree) { Serial.println(F("*locked")); return false; }
+  if (g_motorFree) { g_stopReason = STOPR_LOCKED; if (g_runId < 0) Serial.println(F("*locked")); return false; }
   g_busyNacked = false;   // FW-09: un solo "*busy" per questo movimento
+  if (g_runId >= 0) g_lastHeartbeatMs = millis();   // v4: azzera il timer heartbeat all'avvio
   digitalWrite(PIN_ENA, HIGH);
   digitalWrite(PIN_DIR, units > 0 ? HIGH : LOW);
   // 32 bit: con r32 già 2048 unità (2048°) superano i 65535 µstep e un
@@ -271,19 +381,23 @@ bool stepperMove(int16_t units) {
       while (Serial.available()) {
         char cc = (char)Serial.read();
         lastRxMs = millis();
+        if (cc == '~') g_lastHeartbeatMs = millis();   // v4: heartbeat DEDICATO
         if (cc == 'x') {
-          Serial.println(F("*mabort"));
+          g_stopReason = STOPR_USER;
+          if (g_runId < 0) Serial.println(F("*mabort"));   // v4: EVT STOPPED lo emette il chiamante
           if (cfgSettleMs) delay(cfgSettleMs);
           return false;
         }
         nackBusyIfCmd(cc);   // FW-09: comando durante il moto → "*busy" (una volta)
       }
-      // AUDIT FW-03: host muto durante il moto (cavo/PC/server morti) →
-      // abort di sicurezza. Il server invia '\n' ogni secondo, quindi in
-      // esercizio normale qui non si arriva mai.
-      if ((uint32_t)(millis() - lastRxMs) > WDT_TIMEOUT_MS) {
-        Serial.println(F("*wdt"));
-        Serial.println(F("*mabort"));
+      // AUDIT FW-03: host muto durante il moto (cavo/PC/server morti) → abort di
+      // sicurezza. v3: riferimento = QUALSIASI byte (il server manda '\n'). v4:
+      // riferimento = heartbeat DEDICATO '~' (un byte spurio non maschera la
+      // perdita reale dell'host).
+      uint32_t wdtRef = (g_runId >= 0) ? g_lastHeartbeatMs : lastRxMs;
+      if ((uint32_t)(millis() - wdtRef) > WDT_TIMEOUT_MS) {
+        g_stopReason = STOPR_WDT;
+        if (g_runId < 0) { Serial.println(F("*wdt")); Serial.println(F("*mabort")); }
         return false;
       }
     }
@@ -452,9 +566,15 @@ void emitEncoderQuery() {
 //  ogni grado (timing deterministico), settle adattivo (veloce sul cerchio
 //  base, paziente sul fianco ripido), abort pulito.
 //  I comandi p/q restano invariati per jog manuale e compatibilità.
-void autonomousScan(int8_t dir, uint16_t totalUnits) {
-  uint16_t unstable = 0;   // punti accettati a budget scaduto (non stabilizzati)
+// runId < 0 → scan v3 (stream "#i:enc:mm" … "*sdone"/"*sabort"/"*fault enc");
+// runId >= 0 → scan v4 (EVT SAMPLE/DONE/STOPPED/FAULT con run=runId).
+void autonomousScan(int8_t dir, uint16_t totalUnits, int16_t runId) {
+  bool v4 = (runId >= 0);
+  g_runId = runId;
+  g_state = ST_SCANNING;
   g_busyNacked = false;    // FW-09: un solo "*busy" per questa scansione
+  g_lastHeartbeatMs = millis();
+  uint16_t unstable = 0;   // punti accettati a budget scaduto (non stabilizzati)
   // AUDIT FW-03: fault locale encoder. Il motore gira in anello aperto; se il
   // cavo encoder è staccato/rotto o l'albero è bloccato, il browser userebbe
   // un riferimento di "zero virtuale" sbagliato senza accorgersene. Ogni
@@ -473,15 +593,23 @@ void autonomousScan(int8_t dir, uint16_t totalUnits) {
     while (Serial.available() > 0) {
       char sc = (char)Serial.read();
       lastRxMs = millis();
+      if (sc == '~') g_lastHeartbeatMs = millis();   // v4: heartbeat dedicato
       if (sc == 'x') {
-        Serial.println(F("*sabort"));
+        g_state = g_motorFree ? ST_FREE : ST_IDLE_LOCKED; g_runId = -1;
+        if (v4) { Serial.print(F("EVT STOPPED run=")); Serial.print(runId); Serial.println(F(" reason=USER state=IDLE_LOCKED")); }
+        else    Serial.println(F("*sabort"));
         cmdLen = 0;
         return;
       }
       nackBusyIfCmd(sc);   // FW-09: comando durante lo scan → "*busy" (una volta)
     }
-    if (!stepperMove(dir)) {             // 'x' arrivato DURANTE il movimento
-      Serial.println(F("*sabort"));
+    if (!stepperMove(dir)) {             // 'x' o wdt arrivato DURANTE il movimento
+      g_state = g_motorFree ? ST_FREE : ST_IDLE_LOCKED; g_runId = -1;
+      if (v4) {
+        Serial.print(F("EVT STOPPED run=")); Serial.print(runId);
+        Serial.print(F(" reason=")); Serial.print(g_stopReason == STOPR_WDT ? F("HOST_TIMEOUT") : F("USER"));
+        Serial.println(F(" state=IDLE_LOCKED"));
+      } else Serial.println(F("*sabort"));
       cmdLen = 0;
       return;
     }
@@ -490,11 +618,20 @@ void autonomousScan(int8_t dir, uint16_t totalUnits) {
     noInterrupts();
     int32_t cnt = encoderCount;
     interrupts();
-    Serial.print('#'); Serial.print(i);
-    Serial.print(':'); Serial.print(cnt);
-    Serial.print(':');
-    if (isnan(mm)) Serial.println(F("NaN"));
-    else           Serial.println(mm, 2);
+    if (v4) {
+      Serial.print(F("EVT SAMPLE run=")); Serial.print(runId);
+      Serial.print(F(" idx=")); Serial.print(i);
+      Serial.print(F(" enc=")); Serial.print(cnt);
+      Serial.print(F(" mm="));
+      if (isnan(mm)) Serial.print(F("NaN")); else Serial.print(mm, 2);
+      Serial.print(F(" q=")); Serial.println(isnan(mm) ? F("NAN") : (g_lastReadStable ? F("OK") : F("NOISY")));
+    } else {
+      Serial.print('#'); Serial.print(i);
+      Serial.print(':'); Serial.print(cnt);
+      Serial.print(':');
+      if (isnan(mm)) Serial.println(F("NaN"));
+      else           Serial.println(mm, 2);
+    }
 
     // AUDIT FW-03: verifica avanzamento encoder ogni ENC_CHK_WINDOW unità.
     if ((uint16_t)(i - chkBaseI) >= ENC_CHK_WINDOW) {
@@ -505,10 +642,21 @@ void autonomousScan(int8_t dir, uint16_t totalUnits) {
       uint32_t minMv  = expect / 4;                           // soglia = 1/4 dell'atteso...
       if (minMv < 3) minMv = 3;                               // ...ma almeno 3 counts
       if (moved < minMv) {
-        Serial.print(F("*fault enc moved=")); Serial.print(moved);
-        Serial.print(F(" exp=")); Serial.print(expect);
-        Serial.print(F(" span=")); Serial.println(span);
-        Serial.println(F("*sabort"));   // stop pulito: il browser gestisce già *sabort
+        if (v4) {
+          // v4: fault LATCHED — resta in FAULT finché non arriva RESET_FAULT.
+          g_fault = FAULT_ENCODER_JAM; g_state = ST_FAULT; g_runId = -1;
+          Serial.print(F("EVT FAULT run=")); Serial.print(runId);
+          Serial.print(F(" code=ENCODER_JAM moved=")); Serial.print(moved);
+          Serial.print(F(" exp=")); Serial.print(expect);
+          Serial.println(F(" state=FAULT"));
+        } else {
+          // v3: abort SENZA latch (fw 3.8) — il browser non ha RESET_FAULT.
+          g_state = g_motorFree ? ST_FREE : ST_IDLE_LOCKED; g_runId = -1;
+          Serial.print(F("*fault enc moved=")); Serial.print(moved);
+          Serial.print(F(" exp=")); Serial.print(expect);
+          Serial.print(F(" span=")); Serial.println(span);
+          Serial.println(F("*sabort"));   // stop pulito: il browser gestisce già *sabort
+        }
         cmdLen = 0;
         return;
       }
@@ -517,10 +665,129 @@ void autonomousScan(int8_t dir, uint16_t totalUnits) {
     }
   }
   while (Serial.available() > 0) Serial.read();   // drain comandi accodati
-  // Audit di stabilità: quanti punti sono stati accettati SENZA i due frame
-  // concordi entro 5 µm. 0 = ogni lettura era davvero assestata.
-  Serial.print(F("*sstat u=")); Serial.println(unstable);
-  Serial.println(F("*sdone"));
+  g_state = g_motorFree ? ST_FREE : ST_IDLE_LOCKED; g_runId = -1;
+  if (v4) {
+    Serial.print(F("EVT DONE run=")); Serial.print(runId);
+    Serial.print(F(" samples=")); Serial.print(totalUnits);
+    Serial.print(F(" unstable=")); Serial.print(unstable);
+    Serial.println(F(" state=IDLE_LOCKED"));
+  } else {
+    // Audit di stabilità: quanti punti sono stati accettati SENZA i due frame
+    // concordi entro 5 µm. 0 = ogni lettura era davvero assestata.
+    Serial.print(F("*sstat u=")); Serial.println(unstable);
+    Serial.println(F("*sdone"));
+  }
+}
+
+// =============================================================
+//  PROTOCOLLO v4 — parser key=value + dispatcher
+// =============================================================
+// Trova "key=" in s (all'inizio o dopo uno spazio) e ritorna il puntatore al
+// valore, altrimenti NULL.
+const char *kvFind(const char *s, const char *key) {
+  uint8_t kl = strlen(key);
+  for (const char *p = s; *p; p++) {
+    if ((p == s || p[-1] == ' ') && strncmp(p, key, kl) == 0 && p[kl] == '=') return p + kl + 1;
+  }
+  return NULL;
+}
+// Parsing intero RIGOROSO di "key=N": true+*out solo se presente, ben formato
+// (fine a spazio o fine stringa) e nel range. Niente atoi, niente trailing garbage.
+bool kvInt(const char *s, const char *key, long lo, long hi, long *out) {
+  const char *v = kvFind(s, key);
+  if (!v) return false;
+  char *end = NULL;
+  long n = strtol(v, &end, 10);
+  if (end == v || (*end != '\0' && *end != ' ')) return false;
+  if (n < lo || n > hi) return false;
+  *out = n;
+  return true;
+}
+char kvDir(const char *s) { const char *v = kvFind(s, "dir"); return v ? *v : '?'; }
+// Confronto verbo con controllo di confine di parola (spazio o fine).
+bool verbIs(const char *s, const char *verb) {
+  uint8_t n = strlen(verb);
+  return strncmp(s, verb, n) == 0 && (s[n] == '\0' || s[n] == ' ');
+}
+
+// Dispatcher v4: la riga inizia con una cifra → "<seq> VERBO args".
+void executeV4(char *line) {
+  char *end = NULL;
+  long seq = strtol(line, &end, 10);
+  if (end == line || *end != ' ') { emitNack(seq, F("BADSEQ")); return; }
+  char *r = end + 1;
+  while (*r == ' ') r++;
+
+  if (verbIs(r, "HEARTBEAT")) { g_lastHeartbeatMs = millis(); return; }   // silenzioso
+  if (verbIs(r, "STATUS"))    { emitHello(); return; }
+  // STOP immediato DURANTE il moto = il byte 'x' (priorità assoluta, letto nei
+  // drain di stepperMove/scan). Il VERBO "<seq> STOP" è la forma da fermo (la
+  // riga completa si processa solo a run terminato): qui è un ACK/no-op.
+  if (verbIs(r, "STOP"))      { g_stopReason = STOPR_USER; emitAck(seq); return; }
+  if (verbIs(r, "LOCK")) {
+    if (g_state == ST_FAULT) { emitNack(seq, F("FAULT")); return; }
+    g_motorFree = false; digitalWrite(PIN_ENA, HIGH); g_state = ST_IDLE_LOCKED; emitAck(seq); return;
+  }
+  if (verbIs(r, "FREE")) {
+    if (g_state == ST_FAULT) { emitNack(seq, F("FAULT")); return; }
+    g_motorFree = true; digitalWrite(PIN_ENA, LOW); g_state = ST_FREE; emitAck(seq); return;
+  }
+  if (verbIs(r, "RESET_FAULT")) {
+    // Valido solo da FAULT (siamo per forza fermi: firmware single-thread).
+    if (g_state != ST_FAULT) { emitNack(seq, F("NO_FAULT")); return; }
+    g_fault = FAULT_NONE; g_state = g_motorFree ? ST_FREE : ST_IDLE_LOCKED; emitAck(seq); return;
+  }
+  if (verbIs(r, "CONFIG")) {
+    // ATOMICO: si validano PRIMA tutte le chiavi in variabili di staging, poi
+    // si applicano solo se TUTTE valide (niente stato modificato su NACK). Si
+    // rifiutano chiavi ignote/malformate e il CONFIG vuoto (almeno 1 chiave nota).
+    const char *a = r + 6;                 // dopo "CONFIG"
+    long vstep = -1, vsamp = -1, vset = -1, v;
+    bool bad = false; uint8_t known = 0;
+    for (const char *p = a; *p && !bad; ) {
+      while (*p == ' ') p++;
+      if (!*p) break;
+      if      (!strncmp(p, "step=", 5))    { if (kvInt(a, "step", 1, 255, &v) && (v == 8 || v == 16 || v == 32 || v == 64)) { vstep = v; known++; } else bad = true; }
+      else if (!strncmp(p, "samples=", 8)) { if (kvInt(a, "samples", 1, 9, &v)) { vsamp = v; known++; } else bad = true; }
+      else if (!strncmp(p, "settle=", 7))  { if (kvInt(a, "settle", 0, 2000, &v)) { vset = v; known++; } else bad = true; }
+      else bad = true;                     // chiave ignota o token senza '='
+      while (*p && *p != ' ') p++;         // salta al prossimo token
+    }
+    if (bad || known == 0) { emitNack(seq, F("BADARG")); return; }
+    if (vstep >= 0) cfgStepsPerUnit = (uint8_t)vstep;
+    if (vsamp >= 0) cfgSamples      = (uint8_t)vsamp;
+    if (vset  >= 0) cfgSettleMs     = (uint16_t)vset;
+    emitAck(seq); return;
+  }
+  if (verbIs(r, "SCAN")) {
+    long run, units; char d = kvDir(r);
+    if (!kvInt(r, "run", 0, 32767, &run) || (d != '+' && d != '-') || !kvInt(r, "units", 1, 1500, &units)) { emitNack(seq, F("BADARG")); return; }
+    if (g_state == ST_FAULT) { emitNack(seq, F("FAULT")); return; }
+    if (g_motorFree)         { emitNack(seq, F("LOCKED")); return; }
+    Serial.print(F("ACK ")); Serial.print(seq); Serial.print(F(" state=SCANNING run=")); Serial.println(run);
+    autonomousScan(d == '+' ? +1 : -1, (uint16_t)units, (int16_t)run);   // emette EVT SAMPLE/DONE/…
+    return;
+  }
+  if (verbIs(r, "MOVE")) {
+    long run, units; char d = kvDir(r);
+    if (!kvInt(r, "run", 0, 32767, &run) || (d != '+' && d != '-') || !kvInt(r, "units", 1, 3600, &units)) { emitNack(seq, F("BADARG")); return; }
+    if (g_state == ST_FAULT) { emitNack(seq, F("FAULT")); return; }
+    if (g_motorFree)         { emitNack(seq, F("LOCKED")); return; }
+    g_runId = (int16_t)run; g_state = ST_MOVING;
+    Serial.print(F("ACK ")); Serial.print(seq); Serial.print(F(" state=MOVING run=")); Serial.println(run);
+    bool ok = stepperMove((d == '+' ? +1 : -1) * (int16_t)units);
+    while (Serial.available() > 0) { char dc = (char)Serial.read(); lastRxMs = millis(); if (dc == '~') g_lastHeartbeatMs = millis(); }
+    g_runId = -1; g_state = ST_IDLE_LOCKED;
+    if (ok) { Serial.print(F("EVT DONE run=")); Serial.print(run); Serial.println(F(" state=IDLE_LOCKED")); }
+    else {
+      Serial.print(F("EVT STOPPED run=")); Serial.print(run);
+      Serial.print(F(" reason=")); Serial.print(g_stopReason == STOPR_WDT ? F("HOST_TIMEOUT") : (g_stopReason == STOPR_LOCKED ? F("LOCKED") : F("USER")));
+      Serial.println(F(" state=IDLE_LOCKED"));
+    }
+    return;
+  }
+  if (verbIs(r, "TONE")) { emitNack(seq, F("UNSUPPORTED")); return; }   // Concerto: usare 't' v3
+  emitNack(seq, F("BADCMD"));
 }
 
 // =============================================================
@@ -528,6 +795,10 @@ void autonomousScan(int8_t dir, uint16_t totalUnits) {
 // =============================================================
 void executeCommand() {
   cmdBuf[cmdLen] = '\0';
+  // PROTOCOLLO v4: una riga che inizia con una CIFRA è v4 ("<seq> VERBO …").
+  // v3 non ha comandi che iniziano per cifra → discriminazione netta, zero
+  // impatto sul path v3 sottostante.
+  if (cmdBuf[0] >= '0' && cmdBuf[0] <= '9') { executeV4(cmdBuf); cmdLen = 0; return; }
   if (cmdLen == 1) {
     char c = cmdBuf[0];
     // AUDIT FW-06: p/q ora leggono con lo STESSO assestamento dello scan
@@ -543,6 +814,7 @@ void executeCommand() {
       // scartata) → il browser scambiava il silenzio per firmware vecchio e
       // degradava PER SEMPRE al motore di scansione classico.
     }
+    else if (c == '~') { g_lastHeartbeatMs = millis(); }   // v4: heartbeat dedicato (byte singolo)
     else if (c == 'm') { emitMeasureOnly(readSensorMm()); }
     else if (c == 'd') {
       // debug: dump raw sensor value (16 bit utili)
@@ -561,9 +833,10 @@ void executeCommand() {
     else if (c == 'v') {
       // Versione/capacità firmware: il browser la usa per abilitare le
       // funzioni disponibili (scan=1 → scan autonomo 'S' supportato).
-      // proto=3 = protocollo seriale v3 documentato (PROTOCOL.md). Campo additivo:
-      // host/UI che leggono solo ver=/scan=/free= lo ignorano senza problemi.
-      Serial.print(F("ver=3.8 scan=1 proto=3 free=")); Serial.println(g_motorFree ? 1 : 0);
+      // proto=4 = protocollo v4 SUPPORTATO (oltre a v3, retrocompatibile). La
+      // UI v3 legge solo ver=/scan=/free= e ignora proto= senza problemi; un
+      // client v4 usa STATUS/HELLO per la negoziazione completa.
+      Serial.print(F("ver=4.0 scan=1 proto=4 free=")); Serial.println(g_motorFree ? 1 : 0);
       Serial.println(F("*ver"));
     }
     else if (c == '!') {
@@ -587,12 +860,14 @@ void executeCommand() {
       // PERSISTENTE (audit FW-01): i movimenti restano rifiutati fino a 'l'.
       g_motorFree = true;
       digitalWrite(PIN_ENA, LOW);
+      if (g_state != ST_FAULT) g_state = ST_FREE;   // il FAULT latched ha precedenza
       Serial.println(F("*free"));
     }
     else if (c == 'l') {
       // LOCK: riabilita corrente stepper (torna in tenuta).
       g_motorFree = false;
       digitalWrite(PIN_ENA, HIGH);
+      if (g_state != ST_FAULT) g_state = ST_IDLE_LOCKED;
       Serial.println(F("*lock"));
     }
   } else if (cmdLen >= 2 && cmdBuf[0] == 'c') {
@@ -654,6 +929,12 @@ void executeCommand() {
   } else if (cmdLen >= 5 && cmdBuf[0] == 't' && (cmdBuf[1] >= '0' && cmdBuf[1] <= '9')) {
     // tFFFF:DDDD:S[:VV] (es. "t440:500:+:75") = suona FFFF Hz per DDDD ms
     // in direzione S, con duty cycle VV% (default 50, controlla il volume)
+    if (g_state == ST_FAULT) { Serial.println(F("*fault")); cmdLen = 0; return; }   // fault latched (v4)
+    // AUDIT FW-01 (chiuso anche qui): il TONE energizza/pulsa il motore, quindi
+    // in FREE va RIFIUTATO come p/q/$/S — prima era l'unico percorso di moto che
+    // ignorava g_motorFree (avrebbe mosso l'albero con la mano dell'operatore
+    // sopra, e lasciato ENA=HIGH desincronizzando lo stato FREE).
+    if (g_motorFree) { Serial.println(F("*locked")); cmdLen = 0; return; }
     char *p1 = strchr(&cmdBuf[1], ':');
     if (p1) {
       *p1 = '\0';
@@ -729,6 +1010,7 @@ void executeCommand() {
     // scansione legittima supera 720 unità (Race: 360° a passi da 0,5°) —
     // tetto 1500 con margine. Fuori grammatica/range → "*err" e nessun moto.
     if (cmdBuf[1] != '+' && cmdBuf[1] != '-') { Serial.println(F("*err S")); cmdLen = 0; return; }
+    if (g_state == ST_FAULT) { Serial.println(F("*fault")); cmdLen = 0; return; }   // fault latched (v4)
     char *endS = NULL;
     long valueS = strtol(&cmdBuf[2], &endS, 10);
     if (endS == &cmdBuf[2] || *endS != '\0' || valueS <= 0 || valueS > 1500) {
@@ -736,7 +1018,7 @@ void executeCommand() {
       cmdLen = 0;
       return;
     }
-    autonomousScan(cmdBuf[1] == '+' ? +1 : -1, (uint16_t)valueS);
+    autonomousScan(cmdBuf[1] == '+' ? +1 : -1, (uint16_t)valueS, -1);   // -1 = scan v3
   } else if (cmdLen >= 2 && cmdBuf[0] == '$') {
     // $±NNN — rotazione manuale. AUDIT FW-04: come sopra (strtol + range);
     // prima "$+70000" wrappava a 4464° eseguiti davvero e non c'era tetto.
@@ -798,16 +1080,26 @@ void setup() {
   PCICR  |= (1 << PCIE0);
   PCMSK0 |= (1 << PCINT0);
 
+  // Device id stabile (EEPROM, con CRC) prima di annunciare l'HELLO.
+  initDeviceId();
+  // Stato iniziale: motore in tenuta (ENA guidato), fermo. Nessuna partenza
+  // automatica dopo boot/reset (audit v4). Il fault NON è latched al boot.
+  g_state = ST_IDLE_LOCKED;
+  g_fault = FAULT_NONE;
+
   Serial.begin(9600);
   // "CAMMES Uno ready": stringa storica che l'host usa per rilevare i reboot —
   // NON cambiarla. Subito dopo, l'handshake versionato con lo stato completo
   // e il reset reason (audit FW-11): l'host può loggare/diagnosticare.
   Serial.println(F("CAMMES Uno ready"));
-  Serial.print(F("*boot ver=3.8 r=")); Serial.print(cfgStepsPerUnit);
+  Serial.print(F("*boot ver=4.0 r=")); Serial.print(cfgStepsPerUnit);
   Serial.print(F(" samp="));   Serial.print(cfgSamples);
   Serial.print(F(" settle="));  Serial.print(cfgSettleMs);
   Serial.print(F(" free="));    Serial.print(g_motorFree ? 1 : 0);
   Serial.print(F(" rst=0x"));   Serial.println(g_resetFlags, HEX);
+  // v4: annuncio HELLO completo al boot (proto/fw/dev/state/fault). La UI v3
+  // lo ignora (riga non riconosciuta); un client v4 lo usa per la negoziazione.
+  emitHello();
 }
 
 // =============================================================
@@ -829,7 +1121,7 @@ void loop() {
       // comandi a singolo carattere si eseguono immediatamente
       // ('x' incluso: a motore fermo è un no-op consumato subito, così non
       // avvelena il buffer della riga successiva — fix audit)
-      if (cmdLen == 1 && (c == 'p' || c == 'q' || c == 'm' || c == 'd' || c == '?' || c == '!' || c == '@' || c == 'f' || c == 'l' || c == 'v' || c == 'x')) {
+      if (cmdLen == 1 && (c == 'p' || c == 'q' || c == 'm' || c == 'd' || c == '?' || c == '!' || c == '@' || c == 'f' || c == 'l' || c == 'v' || c == 'x' || c == '~')) {
         executeCommand();
       }
     } else {

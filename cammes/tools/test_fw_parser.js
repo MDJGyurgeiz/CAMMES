@@ -63,6 +63,19 @@ check('FW-03: soglia basata su cfgStepsPerUnit (counts attesi)',
 var alzata = fs.readFileSync(path.join(__dirname, '..', 'alzata.html'), 'utf8');
 check('FW-03: alzata.html gestisce *fault', alzata.indexOf("indexOf('*fault')") !== -1);
 
+// PROTOCOLLO v4 (FW-08/11, MOT-02): additivo, discriminato dalla cifra iniziale.
+check('v4: dispatcher executeV4 definito', /void\s+executeV4\s*\(/.test(src));
+check('v4: riga che inizia per cifra → executeV4', /cmdBuf\[0\]\s*>=\s*'0'\s*&&\s*cmdBuf\[0\]\s*<=\s*'9'/.test(src));
+check('v4: FSM esplicita (enum FsmState)', /enum\s+FsmState/.test(src));
+check('v4: HELLO con proto=4', src.indexOf('HELLO proto=4') !== -1);
+check('v4: eventi EVT SAMPLE/DONE/STOPPED', src.indexOf('EVT SAMPLE') !== -1 && src.indexOf('EVT DONE') !== -1 && src.indexOf('EVT STOPPED') !== -1);
+check('v4: fault latched (EVT FAULT + RESET_FAULT)', src.indexOf('EVT FAULT') !== -1 && src.indexOf('RESET_FAULT') !== -1);
+check('v4: heartbeat dedicato (g_lastHeartbeatMs)', /g_lastHeartbeatMs/.test(src));
+check('v4: device id EEPROM con CRC', /initDeviceId/.test(src) && /crc8/.test(src) && /EEPROM/.test(src));
+check('v4: risposta v annuncia proto=4', /ver=4\.0 scan=1 proto=4/.test(src));
+// v3 resta byte-identico: le primitive scelgono il formato via g_runId.
+check('v4: g_runId governa il formato di emissione', /g_runId\s*>=\s*0/.test(src) && /g_runId\s*<\s*0/.test(src));
+
 // La versione annunciata deve essere allineata a fw/version.json.
 var vjson = require(path.join(__dirname, '..', 'fw', 'version.json'));
 var bootMatch = src.match(/\*boot ver=([\d.]+)/);

@@ -6,14 +6,18 @@ dicitura "audit chiuso": lo stato reale è **beta tecnica migliorata** — le
 regressioni software note sono superate sui dataset disponibili, ma la
 validazione funzionale al banco e quella metrologica sono **ancora in corso**.
 
-> **Firmware 3.8 (Lotto B, 2026-07-19)**: 3.7 = parser config rigoroso (FW-04),
-> NACK "*busy" durante il moto (FW-09), scarto-fino-a-fine-riga sull'overflow;
-> 3.8 = fault locale encoder nello scan (FW-03). **Flashato e VALIDATO al banco
-> (COM5, DESKTOP-PN6EEA8, 2026-07-19): `bench_fw34_test.js` 39/39, sezioni J
-> (FW-04/09) e K (FW-03 no-falso-positivo) sull'hardware reale.** Encoder del
-> nuovo albero caratterizzato: ~4,00 counts/unità (spread 1,1%). Boot `*boot
-> ver=3.8`, risposta `ver=3.8 scan=1 proto=3`. FW-04/FW-09 VERIFIED; FW-03
-> FIXED_SOFTWARE (true-positive = unplug fisico, NEEDS_HARDWARE).
+> **Firmware 4.0 (Lotto B, 2026-07-19) — PROTOCOLLO v4**: additivo e negoziato
+> (v3 resta byte-identico e pienamente funzionante; v4 discriminato dalla cifra
+> iniziale). FSM esplicita, ACK/NACK correlati per seq, EVT SAMPLE/DONE/STOPPED/
+> FAULT con run=, heartbeat dedicato `~`, fault latched + RESET_FAULT, HELLO/
+> STATUS con device id da EEPROM (CRC); server negozia `proto=4`. **Flashato e
+> VALIDATO al banco (COM5, 2026-07-19): regressione v3 `bench_fw34_test.js`
+> 39/39 + `bench_v4_test.js` 25/25.** Prima del flash: review avversariale in
+> parallelo → 5 difetti reali corretti (TONE ignorava FREE, scan v3 in FREE
+> desincronizzava la FSM, CONFIG non atomico/accettava chiavi ignote, `*busy`
+> trapelava nello stream v4). Storico: 3.8 fault encoder FW-03; 3.7 parser
+> config FW-04 + NACK busy FW-09. **La UI usa ancora v3** (bridge server↔v4 +
+> EVT nella UI = Fase 2).
 
 Vocabolario stati: FIXED_SOFTWARE (patch + test software, non validato
 fisicamente) · PARTIAL (migliorato, criterio non del tutto soddisfatto) ·
@@ -33,7 +37,7 @@ questa fase (banco scollegato).
 | MAT-07 (parser duplicati/frazionari) | PARTIAL | `parseCamFile`: `180,999` sovrascrive in silenzio; `106.5`→arrotondato | Dati corrotti accettati senza avviso | duplicato → errore; frazionario → esplicito |
 | MOT-04 (lease) | **FIXED_SOFTWARE + validato banco** | controllore unico lato server; observer read-only; STOP a chiunque | risolto: `test_controller_lease.js` (arbitraggio) + validazione al banco remoto (perdita controllore→STOP, moto troncato 415°/2000°) | — |
 | MOT-03 (perdita controller) | **FIXED_SOFTWARE + validato banco** | ping/pong WS (robusto al throttling tab) + close → `releaseLease` scrive `x` sulla seriale | validato: motore fermo dopo disconnessione del controllore | — |
-| MOT-02 (FSM autorevole) | PARTIAL | interblocchi UI `_scanBusy` + lease server; manca la FSM di stato esplicita (SCANNING/MANUAL/FREE/FAULT) con ACK/eventi terminali (Lotto A completo + B) | il server non espone ancora uno stato autorevole per ACK | FSM server + protocollo v4 |
+| MOT-02 (FSM autorevole) | PARTIAL→ FSM firmware FIXED (banco) | FSM esplicita ORA nel firmware (BOOT/FREE/IDLE_LOCKED/MOVING/SCANNING/TONE/STOPPING/FAULT) con ACK/EVT terminali via v4, esposta dal server (`/api/firmware-info`: deviceState/deviceFault/deviceProto/deviceId). Restano: FSM autorevole lato SERVER (coda comandi) e uso end-to-end dagli EVT nella UI (Fase 2) | il server ora legge lo stato ma non arbitra ancora una coda v4 | bridge server v4 + UI EVT |
 
 ## Firmware (software fatto, fisica da validare)
 
@@ -44,7 +48,7 @@ questa fase (banco scollegato).
 | FW-04 | **VERIFIED (fw 3.7, banco)** | parser config c/r/w/u/a/g/k reso rigoroso (strtol + range, prima atoi accettava "c3xyz"→3 in silenzio); overflow di riga → scarto fino a fine riga + "*err ovf". Guardiano sorgente `test_fw_parser.js` in `npm test`; **flashato e validato al banco (COM5, 2026-07-19): `bench_fw34_test.js` sez. J verde — c99/c3xyz→*err c, r20→*err r, c3→*cfg, overflow→*err ovf senza moto spurio** |
 | FW-05/06 | PARTIAL | settle adattivo + 2 frame concordi presenti; heartbeat dedicato e metrica di qualità campione ancora da rifinire |
 | FW-07 | NEEDS_HARDWARE_VALIDATION | schema/BOM/pull-up/isteresi LM339 |
-| FW-08/11 | PARTIAL (fw 3.7) | risposta 'v' espone `proto=3` (capacità protocollo); protocollo NON ancora rinumerato v4 (runId/seq/ACK/NACK): è una migrazione breaking firmware+server+UI da progettare e validare al banco insieme |
+| FW-08/11 | **VERIFIED (fw 4.0, banco)** | protocollo v4 versionato IMPLEMENTATO in modo additivo/negoziato (proto=4): righe `<seq> VERBO`, FSM esplicita, ACK/NACK correlati, EVT SAMPLE/DONE/STOPPED/FAULT con run=, heartbeat dedicato `~`, HELLO/STATUS con device id da EEPROM. **Validato al banco 2026-07-19: `bench_v4_test.js` 25/25 + regressione v3 39/39.** UI ancora v3 (bridge = Fase 2) |
 | FW-09 | **VERIFIED (fw 3.7, banco)** | comando arrivato durante un movimento/scan → NACK "*busy" (una volta per operazione), prima scartato in silenzio. **Validato al banco (COM5, 2026-07-19): comando durante `$` → `*busy` e il moto prosegue fino a `*mv`** |
 | FW-12 | FIXED_SOFTWARE / NEEDS_HARDWARE | ordine pin a boot da verificare all'oscilloscopio |
 

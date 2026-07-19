@@ -844,12 +844,19 @@ function handleRequest(req, res) {
     if (urlPath === '/api/firmware-info') {
         var fwInfo = readFwInfo();
         var devVer = deviceFw ? (deviceFw.match(/ver=([\d.]+)/) || [])[1] || null : null;
+        var devId = deviceHello ? (deviceHello.match(/dev=([0-9a-fA-F]+)/) || [])[1] || null : null;
+        var devState = deviceHello ? (deviceHello.match(/state=(\w+)/) || [])[1] || null : null;
+        var devFault = deviceHello ? (deviceHello.match(/fault=(\w+)/) || [])[1] || null : null;
         sendJson(res, 200, {
             bundled: fwInfo,
             appVersion: APP_VERSION,
             serialModule: !!SerialPort,      // false = modalità demo (driver mancanti)
             deviceFirmware: devVer,          // versione REALE sull'Arduino (probe 'v'), null se muto
             deviceFirmwareRaw: deviceFw,
+            deviceProto: deviceProto || null, // protocollo negoziato (4 = v4 supportato)
+            deviceId: devId,                  // id stabile da EEPROM (HELLO), null se legacy/muto
+            deviceState: devState,            // stato FSM autorevole (v4), es. IDLE_LOCKED
+            deviceFault: devFault,            // fault latched (v4), NONE se nessuno
             port: currentSerialPath(),
             serialConnected: !!(serialPort && serialPort.isOpen),
             flashInProgress: flashInProgress,
@@ -1333,6 +1340,12 @@ var serialPort = null;
 var SerialPort = null;
 var lastComPort = null;        // ultima porta aperta con successo (per il flash firmware)
 var deviceFw = null;           // risposta 'v' del firmware collegato (es. "ver=3.0 scan=1")
+// AUDIT FW-08/11, MOT-02: negoziazione protocollo v4. deviceProto = versione
+// del protocollo seriale annunciata dal firmware (proto= nella risposta 'v'; 3
+// se assente = firmware legacy). deviceHello = ultima riga HELLO (STATUS v4) con
+// device id e stato. Solo con proto>=4 il server usa l'heartbeat dedicato '~'.
+var deviceProto = 0;
+var deviceHello = null;
 var lastScanActivity = 0;      // timestamp ultima riga di scansione vista (guardia flash)
 var serialApiVersion = 'none'; // 'legacy' (v7-v8), 'v9' (v9), 'modern' (v10+), 'none'
 
@@ -1569,8 +1582,13 @@ function openSerialPort(comPort) {
         // qualcosa (verificato al banco: risposte consegnate solo al kick di
         // TX, ritardi di 30-50 s nel handshake di scansione). Un '\n' ogni
         // 100 ms scarica il buffer; il firmware ignora le righe vuote.
+        // Con firmware v4 (proto>=4) il keep-alive è l'heartbeat DEDICATO '~'
+        // (byte singolo, gestito silenziosamente, flusha comunque l'FTDI) così
+        // alimenta ANCHE il watchdog v4; con firmware legacy resta '\n'. Non si
+        // manda mai '~' a un firmware < 4.0 (non lo riconoscerebbe come byte
+        // singolo e lo accumulerebbe nel buffer comandi).
         var _kickTimer = setInterval(function () {
-            try { if (serialPort && serialPort.isOpen) serialPort.write('\n'); } catch (e) {}
+            try { if (serialPort && serialPort.isOpen) serialPort.write(deviceProto >= 4 ? '~' : '\n'); } catch (e) {}
         }, 100);
 
         serialPort.on('open', function () {
@@ -1580,10 +1598,16 @@ function openSerialPort(comPort) {
             // Probe versione firmware: 'v' dopo il boot (v3 risponde "ver=3.0 scan=1").
             // Serve alla card Sistema (versione REALE sull'Arduino) e al probe
             // delle porte non identificate.
-            deviceFw = null;
+            deviceFw = null; deviceProto = 0; deviceHello = null;
             setTimeout(function () {
                 try { if (serialPort && serialPort.isOpen) serialPort.write('v\n'); } catch (e) {}
             }, 1800);
+            // Negoziazione v4: poco dopo il probe 'v', se il firmware ha
+            // annunciato proto>=4 chiediamo lo STATUS completo (HELLO con device
+            // id e stato). Innocuo su firmware legacy (ignora la riga '0 STATUS').
+            setTimeout(function () {
+                try { if (serialPort && serialPort.isOpen && deviceProto >= 4) serialPort.write('0 STATUS\n'); } catch (e) {}
+            }, 2200);
         });
 
         serialPort.on('data', function (data) {
@@ -1599,8 +1623,18 @@ function openSerialPort(comPort) {
             lines.forEach(function (line) {
                 line = line.trim();
                 if (line.length > 0) {
-                    // Versione firmware (risposta al probe 'v')
-                    if (line.indexOf('ver=') === 0) deviceFw = line;
+                    // Versione firmware (risposta al probe 'v') + protocollo
+                    if (line.indexOf('ver=') === 0) {
+                        deviceFw = line;
+                        var pm = line.match(/proto=(\d+)/);
+                        deviceProto = pm ? parseInt(pm[1], 10) : 3;   // assente = legacy v3
+                    }
+                    // HELLO (STATUS v4): device id stabile + stato autorevole
+                    if (line.indexOf('HELLO ') === 0) {
+                        deviceHello = line;
+                        var hp = line.match(/proto=(\d+)/);
+                        if (hp) deviceProto = parseInt(hp[1], 10);
+                    }
                     // Attività di scansione: righe streaming '#i:...' (autonomo)
                     // o ack misura '*se' (classico) → guardia anti-flash
                     if (line.charAt(0) === '#' || line === '*se') lastScanActivity = Date.now();
@@ -1619,7 +1653,7 @@ function openSerialPort(comPort) {
             log('SERIAL', 'Porta chiusa');
             clearInterval(_kickTimer);
             serialPort = null;
-            deviceFw = null;
+            deviceFw = null; deviceProto = 0; deviceHello = null;
 
             // Durante il flash è avrdude a possedere la porta: la riapertura
             // la programma avrdudeDone() a fine scrittura. Durante il probe è

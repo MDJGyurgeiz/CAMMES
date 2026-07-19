@@ -99,7 +99,7 @@ async function main() {
     await sleep(500);
     var bootHs = lines.filter(function (e) { return e.line.indexOf('*boot') === 0; })[0];
     if (bootHs) {
-        check('H: handshake *boot con ver/r/samp/free/rst', /ver=3\.\d+ r=\d+ samp=\d+ settle=\d+ free=[01] rst=0x/.test(bootHs.line), bootHs.line);
+        check('H: handshake *boot con ver/r/samp/free/rst', /ver=\d\.\d+ r=\d+ samp=\d+ settle=\d+ free=[01] rst=0x/.test(bootHs.line), bootHs.line);
     } else {
         console.log('  (H: *boot assente — firmware < 3.6)');
     }
@@ -263,7 +263,7 @@ async function main() {
 
         // FW-04: overflow di riga → *err ovf, resto scartato, nessun comando spurio.
         var encJ = await readEncoder();
-        send('ccccccccccccccccccccc\n');       // 21 char > buffer 16 → overflow
+        send(new Array(62).join('c') + '\n');   // 61 char > buffer 48 (fw 4.0) → overflow
         var ovf = await waitFor('*err ovf', 2000);
         check('J: riga troppo lunga → *err ovf', !!ovf, ovf ? ovf.line : 'nessun *err ovf');
         await sleep(400);

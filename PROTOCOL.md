@@ -1,9 +1,13 @@
-# CAMMES — Protocollo seriale (v3 attuale + design v4)
+# CAMMES — Protocollo seriale (v3 + v4)
 
-> **Stato: v3 = IMPLEMENTATO (fw 3.6); v4 = DESIGN.** Documento richiesto dalla
-> controrevisione "prima di implementare" il protocollo versionato del Lotto B.
-> Il passaggio a v4 è una migrazione COORDINATA firmware+server+UI e va
-> **validata al banco** (bench disconnesso ora).
+> **Stato: v3 = IMPLEMENTATO; v4 = IMPLEMENTATO in modo ADDITIVO (fw 4.0),
+> VALIDATO AL BANCO il 2026-07-19** (COM5: regressione v3 39/39 +
+> `bench_v4_test.js` 25/25). v4 NON sostituisce v3: convive, discriminato dalla
+> cifra iniziale della riga. Il firmware annuncia `proto=4`; il server negozia
+> (keep-alive heartbeat `~`, STATUS, stato/deviceId esposti). **La UI usa ancora
+> v3** — il bridge server↔v4 per il data-path di misura e gli EVT nella UI sono
+> la **Fase 2** (non ancora fatta), così il flusso di misura funzionante non si
+> rompe. Storico design sotto: la maggior parte è ora realtà.
 
 ## Protocollo v3 (attuale, fw 3.6) — PC → Arduino
 
