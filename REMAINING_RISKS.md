@@ -1,10 +1,18 @@
 # CAMMES — Registro dei rischi residui
 
-Stato della verifica al **2026-07-18** dopo la controrevisione Codex del
+Stato della verifica al **2026-07-19** dopo la controrevisione Codex del
 documento `HANDOFF_CLAUDE_CORREZIONI_V3.3.0.md`. Questo registro sostituisce la
 dicitura "audit chiuso": lo stato reale è **beta tecnica migliorata** — le
 regressioni software note sono superate sui dataset disponibili, ma la
 validazione funzionale al banco e quella metrologica sono **ancora in corso**.
+
+> **Firmware 3.7 (Lotto B, 2026-07-19)**: parser di configurazione rigoroso
+> (FW-04), NACK "*busy" durante il moto (FW-09), scarto-fino-a-fine-riga
+> sull'overflow. **Compilato** (34% flash) e coperto dal guardiano sorgente
+> `tools/test_fw_parser.js` (in `npm test`); il bench harness ha la sezione J
+> pronta. **Non ancora flashato né validato al banco** (banco remoto offline
+> al momento del commit): l'Arduino sul banco esegue ancora la 3.6 finché non
+> si esegue il flash. Restano FIXED_SOFTWARE / NEEDS_HARDWARE.
 
 Vocabolario stati: FIXED_SOFTWARE (patch + test software, non validato
 fisicamente) · PARTIAL (migliorato, criterio non del tutto soddisfatto) ·
@@ -31,10 +39,12 @@ questa fase (banco scollegato).
 | ID | Stato | Nota |
 |---|---|---|
 | FW-02 | FIXED_SOFTWARE / NEEDS_HARDWARE | TONE interrompibile; latenza STOP peggiore non misurata |
-| FW-03 | PARTIAL / NEEDS_HARDWARE | watchdog host presente; fault locali encoder/sensore incompleti |
-| FW-04/05/06 | PARTIAL | parser strtol e settle migliorati; heartbeat dedicato e qualità campione ancora da rifinire (Lotto B) |
+| FW-03 | PARTIAL / NEEDS_HARDWARE | watchdog host presente; fault locale encoder rinviato: serve caratterizzare i counts/unità del NUOVO albero al banco prima di poter distinguere un jam da una risoluzione sub-tacca (un rilevatore mal tarato aborta scansioni buone) |
+| FW-04 | FIXED_SOFTWARE / NEEDS_HARDWARE (fw 3.7) | parser config c/r/w/u/a/g/k reso rigoroso (strtol + range, prima atoi accettava "c3xyz"→3 in silenzio); overflow di riga → scarto fino a fine riga + "*err ovf" (prima il frammento residuo formava un comando spurio). Guardiano sorgente `test_fw_parser.js` in `npm test`; compila (34% flash). Flash+bench harness sez. J: **da eseguire quando il banco è online** |
+| FW-05/06 | PARTIAL | settle adattivo + 2 frame concordi presenti; heartbeat dedicato e metrica di qualità campione ancora da rifinire |
 | FW-07 | NEEDS_HARDWARE_VALIDATION | schema/BOM/pull-up/isteresi LM339 |
-| FW-08/11 | PARTIAL | protocollo non ancora versionato v4; HELLO/STATUS completo previsto Lotto B |
+| FW-08/11 | PARTIAL (fw 3.7) | risposta 'v' espone `proto=3` (capacità protocollo); protocollo NON ancora rinumerato v4 (runId/seq/ACK/NACK): è una migrazione breaking firmware+server+UI da progettare e validare al banco insieme |
+| FW-09 | FIXED_SOFTWARE / NEEDS_HARDWARE (fw 3.7) | comando arrivato durante un movimento/scan → NACK "*busy" (una volta per operazione), prima scartato in silenzio. Verificato in `test_fw_parser.js`; bench harness sez. J pronta, flash **da eseguire** |
 | FW-12 | FIXED_SOFTWARE / NEEDS_HARDWARE | ordine pin a boot da verificare all'oscilloscopio |
 
 ## Rete / API / browser

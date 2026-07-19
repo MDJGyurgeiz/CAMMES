@@ -238,9 +238,49 @@ async function main() {
         console.log('  (I: test FREE persistente saltati — richiedono fw 3.6)');
     }
 
+    // --- J. (fw 3.7, audit FW-04/FW-09) parser config rigoroso + NACK busy ---
+    var has37 = verNum >= 3.7;
+    if (has37) {
+        // FW-04: comandi di configurazione con strtol + range → *err su input
+        // non valido (prima atoi accettava spazzatura/overflow in silenzio).
+        send('c99\n');                         // fuori range (1..9)
+        var cErr = await waitFor('*err c', 2000);
+        check('J: c99 (fuori range) → *err c', !!cErr, cErr ? cErr.line : 'nessun *err');
+        send('c3xyz\n');                       // spazzatura in coda
+        var cErr2 = await waitFor('*err c', 2000);
+        check('J: c3xyz (spazzatura in coda) → *err c', !!cErr2);
+        send('r20\n');                         // valore non nell'insieme {8,16,32,64}
+        var rErr = await waitFor('*err r', 2000);
+        check('J: r20 (fuori insieme) → *err r', !!rErr);
+        send('c3\n');                          // valido: deve ancora funzionare
+        var cOk = await waitFor('*cfg', 2000);
+        check('J: c3 (valido) → *cfg (retrocompatibile)', !!cOk && sawBetween('samp=3', Date.now() - 1500, Date.now()));
+
+        // FW-04: overflow di riga → *err ovf, resto scartato, nessun comando spurio.
+        var encJ = await readEncoder();
+        send('ccccccccccccccccccccc\n');       // 21 char > buffer 16 → overflow
+        var ovf = await waitFor('*err ovf', 2000);
+        check('J: riga troppo lunga → *err ovf', !!ovf, ovf ? ovf.line : 'nessun *err ovf');
+        await sleep(400);
+        var encJ2 = await readEncoder();
+        check('J: nessun moto spurio dopo overflow', encJ !== null && encJ2 !== null && Math.abs(encJ2 - encJ) <= 2,
+              'enc ' + encJ + ' → ' + encJ2);
+
+        // FW-09: un comando durante il moto → *busy (una volta), il moto prosegue.
+        send('$+150\n');                       // movimento abbastanza lungo
+        await sleep(400);                      // ...siamo dentro il moto
+        send('q\n');                           // comando "vero" durante il moto
+        var busy = await waitFor('*busy', 3000);
+        check('J: comando durante il moto → *busy (FW-09)', !!busy, busy ? busy.line : 'nessun *busy');
+        var mvJ = await waitFor('*mv', 12000);
+        check('J: il movimento prosegue e termina (*mv) nonostante il *busy', !!mvJ);
+    } else {
+        console.log('  (J: test parser config/overflow/busy saltati — richiedono fw 3.7)');
+    }
+
     console.log('');
     if (fails > 0) console.log('RISULTATO: ' + fails + ' check FALLITI');
-    else console.log('VALIDATO AL BANCO: watchdog host, Concerto interrompibile, cmdBuf pulito.');
+    else console.log('VALIDATO AL BANCO: watchdog host, Concerto interrompibile, cmdBuf pulito, parser rigoroso, NACK busy.');
     kickOff();
     port.close(function () { process.exit(fails > 0 ? 1 : 0); });
     setTimeout(function () { process.exit(fails > 0 ? 1 : 0); }, 2000);

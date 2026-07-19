@@ -118,6 +118,14 @@ volatile uint8_t encoderState  = 0;   // (A<<1)|B
 // ---- Comando seriale ----
 char    cmdBuf[16];
 uint8_t cmdLen = 0;
+// AUDIT FW-04: dopo un overflow di riga (comando più lungo del buffer) il resto
+// della riga va SCARTATO fino al newline. Prima si azzerava solo cmdLen e i
+// caratteri residui formavano un comando spurio ("cccccccccccccccc32" → "32").
+bool    g_discardLine = false;
+// AUDIT FW-09: NACK BUSY. Un comando arrivato MENTRE il motore è in moto veniva
+// scartato in silenzio; ora si risponde "*busy" (una volta per operazione) così
+// host/UI hanno un riscontro esplicito invece del vuoto.
+bool    g_busyNacked = false;
 
 // AUDIT FW-03: watchdog dell'host. Il server invia un keep-alive '\n' ogni
 // secondo; se durante un MOVIMENTO non arriva alcun byte per WDT_TIMEOUT_MS
@@ -193,6 +201,34 @@ void encoderAISR() { encoderUpdate(); }              // INT1 (D3 CHANGE)
 ISR(PCINT0_vect)   { encoderUpdate(); }              // PCINT0 (D8 CHANGE)
 
 // =============================================================
+//  Parsing intero RIGOROSO — comandi di configurazione (AUDIT FW-04)
+// =============================================================
+// atoi() accettava spazzatura in coda ("c3xyz" → 3) e overflowava senza alcun
+// segnale. Qui strtol + verifica che TUTTA la stringa sia consumata e che il
+// valore stia nel range [lo,hi]. Scrive *out e ritorna true solo se valido;
+// altrimenti ritorna false SENZA modificare *out (il chiamante emette "*err").
+bool parseIntStrict(const char *s, long lo, long hi, long *out) {
+  if (s == NULL || *s == '\0') return false;
+  char *end = NULL;
+  long v = strtol(s, &end, 10);
+  if (end == s || *end != '\0') return false;   // vuoto o caratteri estranei in coda
+  if (v < lo || v > hi) return false;            // fuori range
+  *out = v;
+  return true;
+}
+
+// AUDIT FW-09: segnala UNA volta per operazione che è arrivato un comando "vero"
+// mentre il motore era in moto. I keep-alive ('\n'/' ') e il polling ('?') e lo
+// STOP ('x', gestito a parte dal chiamante) NON contano: solo un comando che
+// avrebbe avviato un'azione. Prima venivano tutti scartati in silenzio.
+inline void nackBusyIfCmd(char cc) {
+  if (!g_busyNacked && cc != 'x' && cc != '?' && cc > ' ') {
+    Serial.println(F("*busy"));
+    g_busyNacked = true;
+  }
+}
+
+// =============================================================
 //  Stepper — pulse singolo con rampa di accelerazione inline
 // =============================================================
 // stepperMove genera 'steps' impulsi PUL spaziati nel tempo secondo un
@@ -212,6 +248,7 @@ bool stepperMove(int16_t units) {
   // AUDIT FW-01: se il motore è in FREE non si muove finché non arriva 'l'.
   // Prima qualunque movimento rimetteva ENA=HIGH annullando il FREE in silenzio.
   if (g_motorFree) { Serial.println(F("*locked")); return false; }
+  g_busyNacked = false;   // FW-09: un solo "*busy" per questo movimento
   digitalWrite(PIN_ENA, HIGH);
   digitalWrite(PIN_DIR, units > 0 ? HIGH : LOW);
   // 32 bit: con r32 già 2048 unità (2048°) superano i 65535 µstep e un
@@ -239,6 +276,7 @@ bool stepperMove(int16_t units) {
           if (cfgSettleMs) delay(cfgSettleMs);
           return false;
         }
+        nackBusyIfCmd(cc);   // FW-09: comando durante il moto → "*busy" (una volta)
       }
       // AUDIT FW-03: host muto durante il moto (cavo/PC/server morti) →
       // abort di sicurezza. Il server invia '\n' ogni secondo, quindi in
@@ -416,6 +454,7 @@ void emitEncoderQuery() {
 //  I comandi p/q restano invariati per jog manuale e compatibilità.
 void autonomousScan(int8_t dir, uint16_t totalUnits) {
   uint16_t unstable = 0;   // punti accettati a budget scaduto (non stabilizzati)
+  g_busyNacked = false;    // FW-09: un solo "*busy" per questa scansione
   for (uint16_t i = 1; i <= totalUnits; i++) {
     // abort: qualunque 'x' arrivato dal PC ferma la scansione
     while (Serial.available() > 0) {
@@ -426,6 +465,7 @@ void autonomousScan(int8_t dir, uint16_t totalUnits) {
         cmdLen = 0;
         return;
       }
+      nackBusyIfCmd(sc);   // FW-09: comando durante lo scan → "*busy" (una volta)
     }
     if (!stepperMove(dir)) {             // 'x' arrivato DURANTE il movimento
       Serial.println(F("*sabort"));
@@ -488,7 +528,9 @@ void executeCommand() {
     else if (c == 'v') {
       // Versione/capacità firmware: il browser la usa per abilitare le
       // funzioni disponibili (scan=1 → scan autonomo 'S' supportato).
-      Serial.print(F("ver=3.6 scan=1 free=")); Serial.println(g_motorFree ? 1 : 0);
+      // proto=3 = protocollo seriale v3 documentato (PROTOCOL.md). Campo additivo:
+      // host/UI che leggono solo ver=/scan=/free= lo ignorano senza problemi.
+      Serial.print(F("ver=3.7 scan=1 proto=3 free=")); Serial.println(g_motorFree ? 1 : 0);
       Serial.println(F("*ver"));
     }
     else if (c == '!') {
@@ -521,46 +563,57 @@ void executeCommand() {
       Serial.println(F("*lock"));
     }
   } else if (cmdLen >= 2 && cmdBuf[0] == 'c') {
-    int v = atoi(&cmdBuf[1]);
-    if (v >= 1 && v <= 9) cfgSamples = (uint8_t)v;
+    // AUDIT FW-04: parsing rigoroso. Prima atoi accettava "c3xyz"→3 e non
+    // segnalava overflow/spazzatura; ora fuori grammatica/range → "*err c".
+    long v;
+    if (!parseIntStrict(&cmdBuf[1], 1, 9, &v)) { Serial.println(F("*err c")); cmdLen = 0; return; }
+    cfgSamples = (uint8_t)v;
     Serial.print(F("samp=")); Serial.println(cfgSamples);
     Serial.println(F("*cfg"));
   } else if (cmdLen >= 2 && cmdBuf[0] == 'r') {
-    int v = atoi(&cmdBuf[1]);
-    if (v == 8 || v == 16 || v == 32 || v == 64) cfgStepsPerUnit = (uint8_t)v;
+    long v;
+    if (!parseIntStrict(&cmdBuf[1], 1, 255, &v) || !(v == 8 || v == 16 || v == 32 || v == 64)) {
+      Serial.println(F("*err r")); cmdLen = 0; return;
+    }
+    cfgStepsPerUnit = (uint8_t)v;
     Serial.print(F("step=")); Serial.println(cfgStepsPerUnit);
     Serial.println(F("*cfg"));
   } else if (cmdLen >= 2 && cmdBuf[0] == 'w') {
-    int v = atoi(&cmdBuf[1]);
-    if (v >= 0 && v <= 2000) cfgSettleMs = (uint16_t)v;
+    long v;
+    if (!parseIntStrict(&cmdBuf[1], 0, 2000, &v)) { Serial.println(F("*err w")); cmdLen = 0; return; }
+    cfgSettleMs = (uint16_t)v;
     Serial.print(F("settle=")); Serial.print(cfgSettleMs); Serial.println(F("ms"));
     Serial.println(F("*cfg"));
   } else if (cmdLen >= 2 && cmdBuf[0] == 'u') {
     // u<N>: pulse width base in μs (50..400)
-    int v = atoi(&cmdBuf[1]);
-    if (v >= 50 && v <= 400) cfgPulseUs = (uint16_t)v;
+    long v;
+    if (!parseIntStrict(&cmdBuf[1], 50, 400, &v)) { Serial.println(F("*err u")); cmdLen = 0; return; }
+    cfgPulseUs = (uint16_t)v;
     Serial.print(F("pulse=")); Serial.print(cfgPulseUs); Serial.println(F("us"));
     Serial.println(F("*cfg"));
   } else if (cmdLen >= 2 && cmdBuf[0] == 'a') {
     // a<N>: step rampa accel/decel (0..32)
-    int v = atoi(&cmdBuf[1]);
-    if (v >= 0 && v <= 32) cfgAccelSteps = (uint8_t)v;
+    long v;
+    if (!parseIntStrict(&cmdBuf[1], 0, 32, &v)) { Serial.println(F("*err a")); cmdLen = 0; return; }
+    cfgAccelSteps = (uint8_t)v;
     Serial.print(F("accel=")); Serial.println(cfgAccelSteps);
     Serial.println(F("*cfg"));
   } else if (cmdLen >= 2 && cmdBuf[0] == 'g') {
     // g<N>: extra delay rampa in μs (0..500)
-    int v = atoi(&cmdBuf[1]);
-    if (v >= 0 && v <= 500) cfgRampExtraUs = (uint16_t)v;
+    long v;
+    if (!parseIntStrict(&cmdBuf[1], 0, 500, &v)) { Serial.println(F("*err g")); cmdLen = 0; return; }
+    cfgRampExtraUs = (uint16_t)v;
     Serial.print(F("gentle=")); Serial.print(cfgRampExtraUs); Serial.println(F("us"));
     Serial.println(F("*cfg"));
   } else if (cmdLen >= 2 && cmdBuf[0] == 'k') {
     // k<S>: preset profilo movimento (0..3)
-    int v = atoi(&cmdBuf[1]);
+    long v;
+    if (!parseIntStrict(&cmdBuf[1], 0, 3, &v)) { Serial.println(F("*err k")); cmdLen = 0; return; }
     if (v == 0)      { cfgPulseUs = 50;  cfgAccelSteps = 0;  cfgRampExtraUs = 0;   }
     else if (v == 1) { cfgPulseUs = 80;  cfgAccelSteps = 4;  cfgRampExtraUs = 50;  }
     else if (v == 2) { cfgPulseUs = 120; cfgAccelSteps = 8;  cfgRampExtraUs = 120; }
     else if (v == 3) { cfgPulseUs = 180; cfgAccelSteps = 16; cfgRampExtraUs = 250; }
-    Serial.print(F("profile=")); Serial.print(v);
+    Serial.print(F("profile=")); Serial.print((int)v);
     Serial.print(F(" pulse=")); Serial.print(cfgPulseUs);
     Serial.print(F(" accel=")); Serial.print(cfgAccelSteps);
     Serial.print(F(" gentle=")); Serial.println(cfgRampExtraUs);
@@ -717,7 +770,7 @@ void setup() {
   // NON cambiarla. Subito dopo, l'handshake versionato con lo stato completo
   // e il reset reason (audit FW-11): l'host può loggare/diagnosticare.
   Serial.println(F("CAMMES Uno ready"));
-  Serial.print(F("*boot ver=3.6 r=")); Serial.print(cfgStepsPerUnit);
+  Serial.print(F("*boot ver=3.7 r=")); Serial.print(cfgStepsPerUnit);
   Serial.print(F(" samp="));   Serial.print(cfgSamples);
   Serial.print(F(" settle="));  Serial.print(cfgSettleMs);
   Serial.print(F(" free="));    Serial.print(g_motorFree ? 1 : 0);
@@ -732,7 +785,12 @@ void loop() {
     char c = Serial.read();
     lastRxMs = millis();                                // watchdog host (FW-03)
     if (c == '\r' || c == '\n') {
-      if (cmdLen > 0) executeCommand();
+      // AUDIT FW-04: se la riga era andata in overflow, il newline chiude lo
+      // scarto SENZA eseguire il frammento residuo.
+      if (g_discardLine) { g_discardLine = false; cmdLen = 0; }
+      else if (cmdLen > 0) executeCommand();
+    } else if (g_discardLine) {
+      // resto di una riga troppo lunga: scarta finché non arriva il newline
     } else if (cmdLen < sizeof(cmdBuf) - 1) {
       cmdBuf[cmdLen++] = c;
       // comandi a singolo carattere si eseguono immediatamente
@@ -742,7 +800,11 @@ void loop() {
         executeCommand();
       }
     } else {
-      // overflow → flush
+      // AUDIT FW-04: overflow. Prima si azzerava solo cmdLen e i caratteri
+      // successivi formavano un comando spurio; ora si scarta TUTTO il resto
+      // della riga fino al newline e si segnala una volta con "*err ovf".
+      Serial.println(F("*err ovf"));
+      g_discardLine = true;
       cmdLen = 0;
     }
   }
