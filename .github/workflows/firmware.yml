@@ -1,0 +1,55 @@
+# Riproducibilità del firmware (AUDIT REL-07): a ogni push/PR che tocca lo
+# sketch o il descrittore, ricompila master.ino con il core AVR PINNATO e
+# verifica che l'HEX prodotto abbia lo STESSO SHA256 dichiarato in
+# fw/version.json (e uguale all'HEX committato). Prova che sorgente → HEX è
+# deterministica: chiunque può rigenerare bit-per-bit il binario che gira sul
+# banco. Runner Windows come per la build della release (stesso toolchain host).
+name: firmware
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'master/**'
+      - 'cammes/fw/version.json'
+      - 'cammes/fw/master.ino.hex'
+      - 'cammes/tools/verify_firmware.js'
+      - '.github/workflows/firmware.yml'
+  pull_request:
+    paths:
+      - 'master/**'
+      - 'cammes/fw/version.json'
+      - 'cammes/fw/master.ino.hex'
+      - 'cammes/tools/verify_firmware.js'
+      - '.github/workflows/firmware.yml'
+
+jobs:
+  reproducible-hex:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      # Core AVR PINNATO alla stessa versione usata per generare l'HEX
+      # committato (arduino:avr@1.8.7 → avr-gcc 7.3.0-atmel3.6.1-arduino7).
+      # Se un domani si aggiorna il core, va rigenerato l'HEX + version.json e
+      # aggiornata questa riga: il mismatch fa fallire il job (comportamento
+      # voluto, è proprio la prova di riproducibilità).
+      - name: Installa arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Installa core AVR pinnato
+        shell: pwsh
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.7
+          arduino-cli version
+          arduino-cli core list
+
+      - name: Verifica riproducibilità (ricompila e confronta SHA256)
+        shell: pwsh
+        working-directory: cammes
+        run: node tools/verify_firmware.js --compile --fqbn arduino:avr:uno

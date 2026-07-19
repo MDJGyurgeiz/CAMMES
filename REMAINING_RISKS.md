@@ -68,10 +68,10 @@ questa fase (banco scollegato).
 
 | ID | Stato | Nota |
 |---|---|---|
-| REL-01 | PARTIAL | jsPDF vendorizzato (`jspdf.umd.min.js`) da aggiornare per advisory GHSA-w532-jxjh-hjhj — richiede download build aggiornata |
+| REL-01 | PARTIAL | jsPDF vendorizzato (`jspdf.umd.min.js`) da aggiornare per advisory GHSA-w532-jxjh-hjhj — richiede download build aggiornata (azione che va approvata dal committente) |
 | REL-02/05 | OPEN | `pkg@5.8.1` archiviato (advisory GHSA-22r3-9w55-cj54); exe non firmato Authenticode (serve certificato) |
-| REL-07 | OPEN | corrispondenza riproducibile sorgente→HEX (build firmware in CI) non dimostrata |
-| REL-10 | OPEN | SBOM e THIRD_PARTY_NOTICES da produrre |
+| REL-07 | FIXED_SOFTWARE (build deterministica dimostrata) | build firmware **bit-per-bit riproducibile** con core pinnato `arduino:avr@1.8.7`: due build locali + HEX committato + `version.json` tutti su SHA256 `2ae84e28…`. `tools/verify_firmware.js` confronta in `npm test` (livello 1) e ricompila+confronta in CI (`--compile`); workflow `.github/workflows/firmware.yml` (windows-latest) esegue la prova a ogni push su `master/**`. Resta da vedere il **primo run verde su GitHub** |
+| REL-10 | FIXED_SOFTWARE | SBOM CycloneDX 1.5 (`cammes/SBOM.json` + `SBOM.md`, 222 componenti: 26 runtime spediti + 196 dev) generato da `tools/gen_sbom.js` dal lockfile reale; `THIRD_PARTY_NOTICES.md` già presente |
 
 ## Metrologia / report (richiede hardware)
 
