@@ -774,7 +774,15 @@ select.input {
 .input-lg { font-size: 22px; padding: 10px 16px; }
 .input-save { color: var(--success); }
 
-/* Max display */
+/* Max display. L'input vive dentro <form name="mas">: il form è il flex item
+   della toolbar, quindi DEVE crescere lui (flex:1 + display:flex), altrimenti
+   l'input resta alla min-width e il valore mm del picco esce tagliato a destra
+   (visto al banco: "max 180 gradi 16…" troncato). */
+form[name="mas"] {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
 .max-display {
   font-family: var(--font-mono);
   font-size: 16px;
@@ -784,7 +792,13 @@ select.input {
   border-radius: var(--r-sm);
   border: 1px solid var(--border);
   flex: 1;
-  min-width: 200px;
+  width: 100%;
+  box-sizing: border-box;
+  /* 360px = la stringa più lunga (" max 359.50 gradi  16.234 mm (n=5)",
+     sommario delle ripetizioni) completa. Sotto questa soglia la toolbar
+     (flex-wrap) manda il campo a capo su una riga intera invece di troncare
+     il valore mm — era il difetto visto al banco. */
+  min-width: 360px;
   text-shadow: 0 0 8px var(--danger-glow);
 }
 
