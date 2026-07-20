@@ -2351,6 +2351,13 @@ function importIntake() {
         }
         window._metaIn = camLift.meta || {};               // metadati #k=v (data, runs, sigma…)
         window._metaIn.converted = _convIn || false;       // provenienza PER-LATO (audit APP-07)
+        // AUDIT DATA-01: la maschera di copertura NON sopravvive a .slice() (che
+        // scarta le proprietà custom). La conserviamo qui col metadato del lato,
+        // così "Salva profilo" può scrivere un incompleto in modo onesto.
+        window._metaIn.covered = camLift.covered;
+        window._metaIn.validCount = camLift.validCount;
+        window._metaIn.missingCount = camLift.missingCount || 0;
+        window._metaIn.incomplete = (camLift.missingCount || 0) > 0;
         rawIntake = camLift.slice();                       // curva sorgente gradi-camma
         camLift = applyVirtualFollower(camLift, 'intake');
         folIntake = camLift.slice();
@@ -2400,6 +2407,10 @@ function importExhaust() {
         }
         window._metaEx = camLift.meta || {};               // metadati #k=v (data, runs, sigma…)
         window._metaEx.converted = _convEx || false;       // provenienza PER-LATO (audit APP-07)
+        window._metaEx.covered = camLift.covered;          // AUDIT DATA-01: maschera per il salvataggio onesto
+        window._metaEx.validCount = camLift.validCount;
+        window._metaEx.missingCount = camLift.missingCount || 0;
+        window._metaEx.incomplete = (camLift.missingCount || 0) > 0;
         rawExhaust = camLift.slice();                      // curva sorgente gradi-camma
         camLift = applyVirtualFollower(camLift, 'exhaust');
         folExhaust = camLift.slice();
@@ -2456,6 +2467,15 @@ function saveProfileToArchive() {
         return conv ? applyVirtualFollower(analysisRaw(rawX), side) : rawX.slice();
     }
     function buildContentFor(rawX, side, meta) {
+        // AUDIT DATA-01: un profilo INCOMPLETO si salva in modo DIAGNOSTICO —
+        // solo i gradi realmente misurati + #stato=INCOMPLETO, mai 360 zeri.
+        // Niente conversione follower (una curva con buchi non è convertibile):
+        // si salva il grezzo coperto. Così il file resta incompleto alla rilettura.
+        if (meta && meta.incomplete && meta.covered) {
+            return serializeDiagnosticProfile(rawX, meta.covered, {
+                data: meta.data, verso: meta.verso, tastatore: meta.tastatore
+            });
+        }
         var lines = [hdrForSide(meta)];
         var curve = curveFor(rawX, side, meta);
         for (var i = 1; i <= 360; i++) { lines.push(i + ',' + (+(Number(curve[i] || 0)).toFixed(4))); }

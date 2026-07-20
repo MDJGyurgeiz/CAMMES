@@ -1017,6 +1017,29 @@ function parseCamFile(text) {
     return camLift;
 }
 
+// AUDIT DATA-01 (controrevisione v3.4.1): serializza un profilo INCOMPLETO come
+// salvataggio DIAGNOSTICO onesto — scrive SOLO i gradi realmente misurati
+// (covered) e marca lo stato nei metadati. Prima "Salva profilo" scriveva 360
+// righe con Number(curve[i]||0): un incompleto salvato e riletto tornava
+// "completo" pieno di zeri (i mancanti diventavano zeri fisici). Con questa
+// funzione i gradi mancanti RESTANO mancanti anche dopo salva+rilettura.
+//   values : array 1..360 (i valori misurati; gli indici non coperti ignorati)
+//   covered: array 1..360 di boolean (quali gradi sono reali)
+//   extra  : { data, provenienza... } → righe #k=v aggiuntive (opzionale)
+function serializeDiagnosticProfile(values, covered, extra) {
+    extra = extra || {};
+    var validCount = 0;
+    for (var c = 1; c <= 360; c++) if (covered && covered[c]) validCount++;
+    var lines = ['_pline', '#stato=INCOMPLETO', '#validCount=' + validCount, '#missingCount=' + (360 - validCount)];
+    if (extra.data) lines.push('#data=' + extra.data);
+    if (extra.verso) lines.push('#verso=' + extra.verso);
+    if (extra.tastatore) lines.push('#tastatore=' + extra.tastatore);
+    for (var i = 1; i <= 360; i++) {
+        if (covered && covered[i]) lines.push(i + ',' + (+Number(values[i]).toFixed(4)));
+    }
+    return lines.join('\r\n') + '\r\n';
+}
+
 // AUDIT MET-01 (controrevisione): media di N run SENZA zero-fill. Un grado con
 // nessun campione valido in nessun run resta INVALIDO (valid[grado]=false), non
 // diventa uno zero fisico. Ritorna { values[1..360], valid[1..360], count[],
@@ -1220,6 +1243,7 @@ var api = {
     findEvents: findEvents,
     effectiveCenters: effectiveCenters,
     parseCamFile: parseCamFile,
+    serializeDiagnosticProfile: serializeDiagnosticProfile,
     averageRuns: averageRuns,
     benchVerdict: benchVerdict,
     simulateCompliance: simulateCompliance,
