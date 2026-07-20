@@ -2930,19 +2930,15 @@ function analyze() {
         return;
     }
 
-    // AUDIT MET-04/MET-03: se i due file dichiarano provenienze diverse
-    // (verso di rotazione o tastatore) il confronto tra i lobi è falsato —
-    // fianchi specchiati nel primo caso, rampe diverse anche di mm nel
-    // secondo (visto al banco: puntalino vs piattello Ø33 = 1,26 mm RMS
-    // apparenti sullo stesso lobo). Avvisa PRIMA di mostrare i numeri.
+    // AUDIT MET-04: se i due file dichiarano versi di rotazione diversi il
+    // confronto tra i lobi è falsato (fianchi specchiati). Avvisa PRIMA di
+    // mostrare i numeri. NB: il banco misura sempre col puntalino (le altre
+    // punterie si applicano matematicamente qui in Analisi col follower
+    // virtuale), quindi non esiste più un metadato "tastatore" da confrontare.
     var _mIn = window._metaIn || {}, _mEx = window._metaEx || {};
     if (_mIn.verso && _mEx.verso && _mIn.verso !== _mEx.verso && window.cammesToast) {
         window.cammesToast({ kind: 'warn', title: 'Versi di rotazione diversi',
             body: 'Aspirazione misurata in senso <b>' + _mIn.verso + '</b>, scarico in senso <b>' + _mEx.verso + '</b>: i fianchi risultano specchiati tra i due lobi. Rimisura uno dei due nello stesso verso per un confronto corretto.', duration: 10000 });
-    }
-    if (_mIn.tastatore && _mEx.tastatore && _mIn.tastatore !== _mEx.tastatore && window.cammesToast) {
-        window.cammesToast({ kind: 'warn', title: 'Tastatori diversi tra i due file',
-            body: 'Aspirazione: <b>' + _mIn.tastatore + '</b> &middot; scarico: <b>' + _mEx.tastatore + '</b>. Le rampe non sono confrontabili alla pari (differenze anche di mm): usa lo stesso tastatore o il follower virtuale per uniformare.', duration: 10000 });
     }
 
     var intakeClear = Number(document.getElementById('intakeClearance').value);

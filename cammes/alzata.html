@@ -112,12 +112,6 @@
             </div>
 
             <div class="adv-row">
-                <span class="toggle-label">Tastatore</span>
-                <select id="probeType" class="input" style="width:180px;" onchange="try{localStorage.setItem('cammes-probe-type',this.value);}catch(e){}" data-tip="<strong>Cosa tocca la camma?</strong>Il flusso standard del banco &egrave; misurare <b>SEMPRE col puntalino</b>: bicchiere/piattello/bilanciere si applicano DOPO, matematicamente, in Analisi (follower virtuale). Da una misura a puntalino si deriva qualsiasi punteria; il contrario NO (il piattello perde informazione sui fianchi). Cambia questo campo SOLO se monti fisicamente altro (es. per validare la conversione): viene scritto nei metadati del file (.scr), perch&eacute; misure con tastatori diversi hanno fianchi diversi anche di millimetri e NON vanno confrontate alla pari."><option value="puntalino" selected>Puntalino sferico</option><option value="piattello33">Piattello &Oslash;33</option><option value="altro">Altro</option></select>
-                <span class="help-icon" data-tip="<strong>Perch&eacute; conta?</strong>Confrontando una scansione a puntalino con una a piattello dello stesso albero Clio la differenza apparente era 1,26 mm RMS; convertendo il puntalino a piattello (Analisi &rarr; follower virtuale) torna 0,047 mm. Il metadato ti dice subito con cosa &egrave; stata fatta la misura." tabindex="0">?</span>
-            </div>
-
-            <div class="adv-row">
                 <button type="button" class="btn btn-secondary btn-sm" onclick="benchVerifyStart();" data-tip="<strong>Verifica banco</strong>Controllo periodico della salute del banco: monta un <b>pezzo cilindrico rettificato</b> (alzata attesa = 0 ovunque), azzera il comparatore e premi. Una scansione Veloce misura il residuo: entro 0,02 mm RMS il banco &egrave; OK. L'esito (con data) compare in Home.">&#129514; Verifica banco</button>
             </div>
 
@@ -1061,16 +1055,11 @@ var _engineOnMessage = function(event) {
 connectEngine();
 
 // Provenienza misura (audit MET-03): versione firmware REALE dal server
-// (finisce nei metadati del .scr) e tastatore ricordato tra le sessioni.
+// (finisce nei metadati del .scr).
 window._deviceFw = null;
 fetch('/api/firmware-info').then(function (r) { return r.json(); })
     .then(function (d) { window._deviceFw = d.deviceFirmware || null; })
     .catch(function () {});
-try {
-    var _pt = localStorage.getItem('cammes-probe-type');
-    var _ptEl = document.getElementById('probeType');
-    if (_pt && _ptEl) _ptEl.value = _pt;
-} catch (e) {}
 </script>
 
 <script>
