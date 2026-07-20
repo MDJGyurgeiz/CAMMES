@@ -178,6 +178,33 @@ async function main() {
     var h2 = await waitFor('HELLO ', 2500);
     check('firmware vivo e IDLE dopo il timeout', !!h2 && /state=IDLE_LOCKED/.test(h2.line), h2 ? h2.line : 'muto');
 
+    // --- FW-01 (controrevisione v3.4.1): watchdog anche durante lo SCAN ---
+    // Prima lo scan si auto-rinfrescava (stepperMove per unità) e senza host
+    // arrivava a EVT DONE. Ora: SCAN lungo, si smette di mandare '~' → deve
+    // arrivare EVT STOPPED reason=HOST_TIMEOUT e MAI EVT DONE. Richiede fw>=4.1.
+    var v41 = false;
+    { var vv = h2 || {}; v41 = /fw=4\.[1-9]/.test(vv.line || ''); }
+    if (v41) {
+        hbOff();
+        var runSW = 30, sSW = seq(); var tSW = Date.now();
+        send(sSW + ' SCAN run=' + runSW + ' dir=+ units=1200\n');
+        await waitFor('ACK ' + sSW, 2500);
+        nlOn();   // solo '\n' (non heartbeat): non deve tenere vivo lo scan
+        var stopSW = await waitFor('EVT STOPPED run=' + runSW, 9000);
+        var doneSW = sawBetween('EVT DONE run=' + runSW, tSW, Date.now());
+        nlOff(); hbOn();
+        check('FW-01: SCAN senza heartbeat → EVT STOPPED HOST_TIMEOUT',
+              !!stopSW && /HOST_TIMEOUT/.test(stopSW.line), stopSW ? ('dopo ' + (stopSW.t - tSW) + ' ms') : 'NESSUNO STOP (watchdog scan NON scattato!)');
+        check('FW-01: nessun EVT DONE sul run andato in timeout', !doneSW);
+        // il firmware resta vivo e utilizzabile
+        await sleep(300);
+        var sHb2 = seq(); send(sHb2 + ' STATUS\n');
+        var h3 = await waitFor('HELLO ', 2500);
+        check('FW-01: firmware IDLE dopo il timeout scan', !!h3 && /state=IDLE_LOCKED/.test(h3.line), h3 ? h3.line : 'muto');
+    } else {
+        console.log('  (FW-01 watchdog SCAN: saltato — richiede fw >= 4.1)');
+    }
+
     console.log('');
     hbOff();
     if (fails > 0) console.log('RISULTATO: ' + fails + ' check FALLITI');

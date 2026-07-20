@@ -358,7 +358,11 @@ bool stepperMove(int16_t units) {
   // Prima qualunque movimento rimetteva ENA=HIGH annullando il FREE in silenzio.
   if (g_motorFree) { g_stopReason = STOPR_LOCKED; if (g_runId < 0) Serial.println(F("*locked")); return false; }
   g_busyNacked = false;   // FW-09: un solo "*busy" per questo movimento
-  if (g_runId >= 0) g_lastHeartbeatMs = millis();   // v4: azzera il timer heartbeat all'avvio
+  // AUDIT FW-01 (controrevisione v3.4.1): NON rinnovare qui l'heartbeat. Lo
+  // scan autonomo chiama stepperMove() a ogni unità: farlo qui teneva vivo da
+  // solo il watchdog v4 e lo scan poteva arrivare a EVT DONE anche con l'host
+  // muto. Il riferimento heartbeat va inizializzato UNA VOLTA all'accettazione
+  // del run (autonomousScan e gestore MOVE) e rinnovato SOLO da '~'/HEARTBEAT.
   digitalWrite(PIN_ENA, HIGH);
   digitalWrite(PIN_DIR, units > 0 ? HIGH : LOW);
   // 32 bit: con r32 già 2048 unità (2048°) superano i 65535 µstep e un
@@ -774,6 +778,7 @@ void executeV4(char *line) {
     if (g_state == ST_FAULT) { emitNack(seq, F("FAULT")); return; }
     if (g_motorFree)         { emitNack(seq, F("LOCKED")); return; }
     g_runId = (int16_t)run; g_state = ST_MOVING;
+    g_lastHeartbeatMs = millis();   // FW-01: init una volta all'accettazione del run
     Serial.print(F("ACK ")); Serial.print(seq); Serial.print(F(" state=MOVING run=")); Serial.println(run);
     bool ok = stepperMove((d == '+' ? +1 : -1) * (int16_t)units);
     while (Serial.available() > 0) { char dc = (char)Serial.read(); lastRxMs = millis(); if (dc == '~') g_lastHeartbeatMs = millis(); }
@@ -836,7 +841,7 @@ void executeCommand() {
       // proto=4 = protocollo v4 SUPPORTATO (oltre a v3, retrocompatibile). La
       // UI v3 legge solo ver=/scan=/free= e ignora proto= senza problemi; un
       // client v4 usa STATUS/HELLO per la negoziazione completa.
-      Serial.print(F("ver=4.0 scan=1 proto=4 free=")); Serial.println(g_motorFree ? 1 : 0);
+      Serial.print(F("ver=4.1 scan=1 proto=4 free=")); Serial.println(g_motorFree ? 1 : 0);
       Serial.println(F("*ver"));
     }
     else if (c == '!') {
@@ -1092,7 +1097,7 @@ void setup() {
   // NON cambiarla. Subito dopo, l'handshake versionato con lo stato completo
   // e il reset reason (audit FW-11): l'host può loggare/diagnosticare.
   Serial.println(F("CAMMES Uno ready"));
-  Serial.print(F("*boot ver=4.0 r=")); Serial.print(cfgStepsPerUnit);
+  Serial.print(F("*boot ver=4.1 r=")); Serial.print(cfgStepsPerUnit);
   Serial.print(F(" samp="));   Serial.print(cfgSamples);
   Serial.print(F(" settle="));  Serial.print(cfgSettleMs);
   Serial.print(F(" free="));    Serial.print(g_motorFree ? 1 : 0);
