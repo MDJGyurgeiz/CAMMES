@@ -2,7 +2,7 @@
   "schema": "cammes-release-manifest/1",
   "app": {
     "name": "CAMMES",
-    "version": "3.4.0",
+    "version": "3.4.1",
     "channel": "beta-tecnica",
     "note": "Secondo giro audit (controrevisione Codex) completato: P0 residui chiusi, protezioni firmware e data-path VALIDATI FISICAMENTE al banco remoto. Metrologia e alcuni test hardware restano aperti. Vedi REMAINING_RISKS.md."
   },

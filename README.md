@@ -2,7 +2,7 @@
 
 Sistema completo per misurare e analizzare i profili degli alberi a camme: hardware (Arduino Uno + stepper + encoder + comparatore), server PC (Node.js, distribuito come `.exe` standalone offline) e interfaccia web.
 
-**Versione corrente: v3.4.0** (firmware Arduino **4.0**, protocollo seriale v4) — la versione in esecuzione è mostrata in basso a destra in ogni pagina; il controllo aggiornamenti è automatico (GitHub Releases).
+**Versione corrente: v3.4.1** (firmware Arduino **4.0**, protocollo seriale v4) — la versione in esecuzione è mostrata in basso a destra in ogni pagina; il controllo aggiornamenti è automatico (GitHub Releases).
 
 > Per l'uso quotidiano in officina vedi **[MANUALE_OPERATORE.md](MANUALE_OPERATORE.md)** (1 pagina).
 

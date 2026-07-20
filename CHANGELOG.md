@@ -9,6 +9,29 @@ Sistema di misura profili alberi a camme per motori.
 
 ---
 
+## v3.4.1 — 2026-07-20: fix UI dal collaudo al banco (firmware 4.0 invariato)
+
+Tre correzioni emerse usando la v3.4.0 al banco con una camma reale:
+
+- **Meccanismo (live) ridisegnato come indicatore di POSIZIONE** (principio:
+  il banco è universale, nessuna forma/valore tarato su un modello specifico).
+  La camma disegnata è SCHEMATICA a proporzioni fisse: ruota all'angolo reale
+  dell'encoder (direzione corretta per lo scan `S-`, che conta all'indietro),
+  e dopo una scansione orienta il lobo dov'è quello vero (àncora automatica
+  sul picco, la stessa dello 0-virtuale). Il readout mostra i valori VERI
+  (gradi di scansione + alzata dal comparatore). Corretti anche: profilo
+  specchiato/sfasato, tacche a zero sui gradi mancanti, naso mozzato dal
+  bordo del canvas.
+- **Analisi: caselle parametri non tagliano più i valori** ("650(" per 6500,
+  "0,3(" per 0,30, "Bicchiere mec…"): padding compatto, spinner dei campi
+  numerici nascosti (Chrome ne riservava lo spazio DENTRO la casella), numeri
+  a destra, campi che crescono con lo spazio della riga, tendine in font
+  proporzionale. Audit programmatico: 38 campi, 0 tagli.
+- Rimosso ogni riferimento a modelli specifici come taratura (regola di
+  progetto, vedi sopra).
+
+---
+
 ## v3.4.0 — 2026-07-20: secondo giro audit (app 3.4.0, firmware 4.0) — BETA TECNICA
 
 Risposta completa alla controrevisione Codex di `HANDOFF_CLAUDE_CORREZIONI_V3.3.0.md`:
