@@ -4,10 +4,13 @@
 > VALIDATO AL BANCO il 2026-07-19** (COM5: regressione v3 39/39 +
 > `bench_v4_test.js` 25/25). v4 NON sostituisce v3: convive, discriminato dalla
 > cifra iniziale della riga. Il firmware annuncia `proto=4`; il server negozia
-> (keep-alive heartbeat `~`, STATUS, stato/deviceId esposti). **La UI usa ancora
-> v3** — il bridge server↔v4 per il data-path di misura e gli EVT nella UI sono
-> la **Fase 2** (non ancora fatta), così il flusso di misura funzionante non si
-> rompe. Storico design sotto: la maggior parte è ora realtà.
+> (keep-alive heartbeat `~`, STATUS, stato/deviceId esposti). **Bridge di scan
+> server↔v4 FATTO e validato al banco (2026-07-19)**: il server traduce lo
+> scan-start `S±N` della UI in `SCAN run=…` v4 e ritraduce gli `EVT SAMPLE/DONE/
+> STOPPED/FAULT` nel formato v3 (`#i:enc:mm`/`*sstat`/`*sdone`/`*sabort`) — la UI
+> resta INVARIATA ma il data-path di misura passa per v4 (runId, ACK, heartbeat
+> dedicato). Resta Fase 2b: EVT nativi nella UI + bridge di `$`/MOVE. Storico
+> design sotto: la maggior parte è ora realtà.
 
 ## Protocollo v3 (attuale, fw 3.6) — PC → Arduino
 

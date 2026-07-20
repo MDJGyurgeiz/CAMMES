@@ -1143,7 +1143,21 @@ var _wsSeq = 0;
 function isControlCommand(msg) {
     var c = msg.charAt(0);
     // p q m d ! @ f l v c r w u a g k t S $  → controllo; ? = query (read-only)
-    return 'pqmd!@flvcrwuagktS$'.indexOf(c) >= 0;
+    if ('pqmd!@flvcrwuagktS$'.indexOf(c) >= 0) return true;
+    // AUDIT MOT-04 (v4): una riga "<seq> VERBO ..." che MUOVE o configura richiede
+    // il lease. Senza questo, un comando v4 (che inizia per cifra) NON entrava
+    // nella lista e sarebbe finito sulla seriale SENZA passare per il lease —
+    // un observer avrebbe potuto muovere il motore. STATUS/HEARTBEAT (read-only/
+    // keep-alive) e STOP (permesso a chiunque, come 'x') restano fuori dal gate.
+    if (c >= '0' && c <= '9') {
+        var m = msg.match(/^\d+\s+([A-Z_]+)/);
+        if (m) {
+            var v = m[1];
+            return v === 'SCAN' || v === 'MOVE' || v === 'CONFIG' || v === 'LOCK' ||
+                   v === 'FREE' || v === 'RESET_FAULT' || v === 'TONE';
+        }
+    }
+    return false;
 }
 function grantLease(ws) {
     controller = ws;
@@ -1239,12 +1253,14 @@ wsServer.on('connection', function (ws) {
             }
         }
 
-        // Query di sola lettura ('?') e comandi del controllore → seriale
+        // Query di sola lettura ('?') e comandi del controllore → seriale.
+        // Con fw v4 lo scan-start "S±N" viene tradotto in "SCAN run=..." (bridge).
         if (serialPort && serialPort.isOpen) {
-            serialPort.write(msg, function (err) {
+            var outCmd = bridgeOutgoing(msg);
+            serialPort.write(outCmd, function (err) {
                 if (err) log.error('SERIAL', 'Errore invio: ' + err.message);
             });
-            log.debug('CMD', 'Client #' + ws._id + ' -> Arduino: "' + msg + '"');
+            log.debug('CMD', 'Client #' + ws._id + ' -> Arduino: "' + (outCmd === msg ? msg : ('[v4] ' + outCmd.trim())) + '"');
         } else {
             log.debug('CMD', 'Comando ricevuto (no serial): "' + msg + '"');
         }
@@ -1347,6 +1363,52 @@ var deviceFw = null;           // risposta 'v' del firmware collegato (es. "ver=
 var deviceProto = 0;
 var deviceHello = null;
 var lastScanActivity = 0;      // timestamp ultima riga di scansione vista (guardia flash)
+
+// ============================================================
+// AUDIT MOT-02 (Fase 2): BRIDGE server↔v4 per il data-path di SCAN
+// ============================================================
+// Con firmware v4 (proto>=4) il server diventa l'autorità: traduce lo scan
+// della UI ("S±N", protocollo v3) in un comando v4 correlato ("<seq> SCAN
+// run=R ...") e ritraduce gli EVT v4 nel formato v3 che la UI già capisce
+// ("#i:enc:mm", "*sstat", "*sdone"). Vantaggi: runId per scartare campioni di
+// un run vecchio (es. dopo un reboot), ACK, heartbeat dedicato. La UI resta
+// INVARIATA (nessun rischio sul flusso di misura). Solo lo SCAN è bridgiato;
+// $ (moto manuale), config, ?, x, tone restano v3 nativi (il fw li gestisce).
+var v4Seq = 1;                 // sequence id crescente per i comandi v4
+var v4RunCounter = 0;          // run id crescente (1..30000)
+var v4ActiveRun = -1;          // run di scan in corso via bridge (-1 = nessuno)
+function bridgeActive() { return deviceProto >= 4; }
+// WS→seriale: traduce lo scan-start della UI in SCAN v4. Tutto il resto invariato.
+function bridgeOutgoing(raw) {
+    if (!bridgeActive()) return raw;
+    var m = raw.match(/^S([+-])(\d+)/);          // "S±N" (eventuale \n finale ignorato dal match)
+    if (m) {
+        v4RunCounter = (v4RunCounter % 30000) + 1;
+        v4ActiveRun = v4RunCounter;
+        return v4Seq++ + ' SCAN run=' + v4ActiveRun + ' dir=' + m[1] + ' units=' + m[2] + '\n';
+    }
+    return raw;
+}
+// seriale→WS: ritraduce gli EVT v4 dello scan nel formato v3 della UI. Ritorna
+// l'ARRAY di righe da inoltrare (vuoto = inghiotti; es. ACK/HELLO interni).
+function bridgeIncoming(line) {
+    if (!bridgeActive()) return [line];
+    if (line.indexOf('ACK ') === 0)   return [];   // conferma correlata: uso interno
+    if (line.indexOf('HELLO ') === 0)  return [];   // già parsato per stato/deviceId
+    var m;
+    if ((m = line.match(/^EVT SAMPLE run=(\d+) idx=(\d+) enc=(-?\d+) mm=(\S+)/))) {
+        if (parseInt(m[1], 10) !== v4ActiveRun) return [];   // campione di un run vecchio → scarta
+        return ['#' + m[2] + ':' + m[3] + ':' + m[4]];        // formato v3 "#idx:enc:mm"
+    }
+    if ((m = line.match(/^EVT DONE run=\d+.*?unstable=(\d+)/))) { v4ActiveRun = -1; return ['*sstat u=' + m[1], '*sdone']; }
+    if (line.indexOf('EVT STOPPED') === 0) { v4ActiveRun = -1; return ['*sabort']; }
+    if ((m = line.match(/^EVT FAULT run=\d+ code=(\w+)/))) {
+        v4ActiveRun = -1;
+        return ['*fault ' + (m[1] === 'ENCODER_JAM' ? 'enc' : m[1].toLowerCase()) + ' (v4)', '*sabort'];
+    }
+    if (line.indexOf('EVT BUSY') === 0) return ['*busy'];
+    return [line];   // ver=, encoder=, *pos, *cfg, *mv, *free, *lock, boot… invariati
+}
 var serialApiVersion = 'none'; // 'legacy' (v7-v8), 'v9' (v9), 'modern' (v10+), 'none'
 
 // Tenta di caricare il modulo serialport da vari percorsi
@@ -1635,12 +1697,16 @@ function openSerialPort(comPort) {
                         var hp = line.match(/proto=(\d+)/);
                         if (hp) deviceProto = parseInt(hp[1], 10);
                     }
-                    // Attività di scansione: righe streaming '#i:...' (autonomo)
-                    // o ack misura '*se' (classico) → guardia anti-flash
-                    if (line.charAt(0) === '#' || line === '*se') lastScanActivity = Date.now();
-                    // Invia al browser via WebSocket
-                    wsBroadcast(line);
-                    log('DATA', 'Arduino -> Browser: "' + line + '"');
+                    // Attività di scansione: righe streaming '#i:...' (autonomo),
+                    // ack misura '*se' (classico) o 'EVT SAMPLE' (v4) → guardia anti-flash
+                    if (line.charAt(0) === '#' || line === '*se' || line.indexOf('EVT SAMPLE') === 0) lastScanActivity = Date.now();
+                    // Fase 2: traduci gli EVT v4 nel formato v3 della UI (bridge).
+                    // Con fw legacy bridgeIncoming ritorna [line] invariata.
+                    var outLines = bridgeIncoming(line);
+                    outLines.forEach(function (o) {
+                        wsBroadcast(o);
+                        log('DATA', 'Arduino -> Browser: "' + (o === line ? o : ('[v3←v4] ' + o)) + '"');
+                    });
                 }
             });
         });

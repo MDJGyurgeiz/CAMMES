@@ -69,6 +69,15 @@ Promise.all([freePort(), freePort()]).then(async function (ports) {
     b._msgs = []; b.send('x'); await sleep(200);
     check('B observer: STOP consentito (nessun denied)', lastCtl(b) === null, lastCtl(b));
 
+    // v4 (protocollo): un comando di controllo v4 da observer → RIFIUTATO.
+    // Prima le righe v4 (che iniziano per cifra) NON erano riconosciute come
+    // comandi di controllo e sarebbero finite sulla seriale SENZA lease.
+    b._msgs = []; b.send('7 SCAN run=1 dir=+ units=360'); await sleep(200);
+    check('B observer: comando v4 SCAN RIFIUTATO (#ctl:denied)', lastCtl(b) === '#ctl:denied', lastCtl(b));
+    // v4 STATUS è read-only → NON gated (nessun denied)
+    b._msgs = []; b.send('8 STATUS'); await sleep(200);
+    check('B observer: v4 STATUS consentito (nessun denied)', lastCtl(b) === null, lastCtl(b));
+
     // B prova ad acquisire mentre A controlla → negato
     b._msgs = []; b.send('#ctl:acquire'); await sleep(200);
     check('B non può prendere il lease mentre A controlla', lastCtl(b) === '#ctl:denied', lastCtl(b));
