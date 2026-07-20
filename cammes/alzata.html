@@ -482,46 +482,52 @@ function toggleScanAdvanced(force) {
 window.toggleScanAdvanced = toggleScanAdvanced;
 try { if (localStorage.getItem('cammes-scan-adv') === '1') toggleScanAdvanced(true); } catch (e) {}
 
-// Meccanismo live (~10 fps): mostra "cosa fa la macchina ORA" — camma orientata
-// all'angolo encoder reale + follower (puntalino) alla quota del comparatore.
-// Se è stata acquisita una scansione, disegna il profilo reale che ruota.
+// Meccanismo live (~10 fps): mostra "cosa fa la macchina ORA".
+// Il widget è un INDICATORE DI POSIZIONE, non una riproduzione della camma
+// reale: qui non ci sono campi di configurazione (raggio base ecc.) e il banco
+// è universale — nessuna forma o valore va tarato su un modello specifico.
+// Si disegna quindi una camma SCHEMATICA a proporzioni fisse che:
+//   - ruota all'angolo REALE dell'encoder (direzione corretta: lo scan 'S-'
+//     fa contare l'encoder all'indietro, −4 cnt/grado);
+//   - se una scansione ha individuato il picco (maxg/maxg_encoder, in modo
+//     automatico), orienta il lobo dove sta quello VERO sull'albero, così si
+//     confronta a colpo d'occhio con la camma montata;
+//   - anima il follower sul profilo schematico; il readout "alzata" mostra
+//     comunque il valore VERO del comparatore.
 var _liveMechCv = null;
+// Profilo schematico fisso: lobo a coseno (±60°) su cerchio base — proporzioni
+// scelte SOLO per leggibilità del disegno (base 16 "mm", alzata 8).
+var _MECH_RBASE = 16, _MECH_LIFT = 8, _mechProf = new Array(361);
+for (var _mp = 1; _mp <= 360; _mp++) {
+    var _dd = Math.min(Math.abs(_mp - 180), 360 - Math.abs(_mp - 180));   // distanza circolare dal "picco" a 180
+    var _c = Math.cos(Math.PI * _dd / 120);
+    _mechProf[_mp] = (_dd <= 60) ? _MECH_LIFT * _c * _c : 0;
+}
 setInterval(function () {
     if (!window.cammesCamAnim) return;
     if (!_liveMechCv) _liveMechCv = document.getElementById('liveMechCanvas');
     if (!_liveMechCv || _liveMechCv.offsetParent === null) return;
     var enc = (typeof currentEncoderCount === 'number') ? currentEncoderCount : 0;
-    var prof = (pdata && pdata.length >= 360) ? pdata : null;
-    // Mappa encoder → grado del PROFILO scansionato. Lo scan standard gira in
-    // direzione 'S-' (rsign=1): l'encoder conta all'INDIETRO (−4 cnt/grado,
-    // misurato al banco) mentre l'indice di pdata CRESCE — mappare enc/4
-    // dritto specchiava il profilo e lo sfasava (visto con la Clio). Se il
-    // picco è noto (maxg/maxg_encoder, gli stessi del 0-virtuale) lo usiamo
-    // come àncora: robusto anche se l'encoder non era a zero a inizio scan.
-    var camDeg;
-    if (prof) {
-        var dirS = (typeof rsign !== 'undefined' && rsign === -1) ? 1 : -1;
-        if (typeof maxg_encoder === 'number' && maxg_encoder !== null && maxg > 0) {
-            camDeg = maxg + dirS * (enc - maxg_encoder) / 4;
-        } else {
-            camDeg = dirS * enc / 4;
-        }
-    } else {
-        camDeg = enc / 4;              // nessun profilo: angolo fisico com'era
-    }
+    var dirS = (typeof rsign !== 'undefined' && rsign === -1) ? 1 : -1;
+    var haveAnchor = (typeof maxg_encoder === 'number' && maxg_encoder !== null && maxg > 0);
+    // Angolo in "gradi di scansione" (coerente con grafico e display gradi):
+    // con l'àncora del picco è esatto anche senza encoder azzerato.
+    var camDeg = haveAnchor ? (maxg + dirS * (enc - maxg_encoder) / 4) : (dirS * enc / 4);
     camDeg = ((camDeg % 360) + 360) % 360;
-    // Scala dal DATO reale: base ≈ 2× alzata max (proporzione tipica; per la
-    // Clio: 9,7 mm → base ~19 mm, che è quella vera). Con base fissa 14 il
-    // lobo appariva gonfio e irrealistico.
-    var liftMax = 0;
-    if (prof) for (var _dL = 1; _dL <= 360; _dL++) { var _vL = Number(prof[_dL]); if (isFinite(_vL) && _vL > liftMax) liftMax = _vL; }
+    // Il profilo schematico ha il lobo a 180: ruota l'INDICE così che il lobo
+    // del disegno appaia dov'è quello vero (picco a maxg) — solo orientamento,
+    // la forma resta schematica. Senza scansione il lobo fa da tacca di fase.
+    var lobeAt = haveAnchor ? maxg : 0;
+    var angDraw = ((camDeg - lobeAt + 180) % 360 + 360) % 360;
+    var visLift = _mechProf[Math.max(1, Math.round(angDraw) % 360 || 360)];
     try {
         window.cammesCamAnim.draw(_liveMechCv.getContext('2d'), {
             w: _liveMechCv.width, h: _liveMechCv.height,
-            camAngleDeg: camDeg, camLift: prof,
-            followerLift: window._liveLift || 0,
-            rBase: (prof && liftMax > 1) ? Math.max(10, 2 * liftMax) : 14,
-            maxLift: (prof && liftMax > 1) ? liftMax : 12,
+            camAngleDeg: angDraw, camLift: _mechProf,
+            followerLift: visLift,                      // geometria: sul profilo schematico
+            liftLabelMm: (window._liveLift || 0),       // readout: valore VERO del comparatore
+            camLabelDeg: camDeg,                        // readout: gradi di scansione reali
+            rBase: _MECH_RBASE, maxLift: _MECH_LIFT,
             followerType: 'punt', rocker: 1
         });
     } catch (e) {}

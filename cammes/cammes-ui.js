@@ -822,9 +822,14 @@
     ctx.restore();
 
     // ---- readout ----
+    // camLabelDeg/liftLabelMm: valori REALI da mostrare quando la geometria
+    // disegnata è schematica (widget live di Alzata: la camma è un indicatore
+    // di posizione, ma i numeri restano quelli veri di encoder e comparatore).
+    var labDeg = (typeof o.camLabelDeg === 'number') ? o.camLabelDeg : ang;
+    var labMm = (typeof o.liftLabelMm === 'number') ? o.liftLabelMm : fLift;
     ctx.fillStyle = muted; ctx.font = '11px monospace'; ctx.textAlign = 'left';
-    ctx.fillText('cam ' + Math.round(ang) + '°', 8, 14);
-    ctx.fillText('alzata ' + fLift.toFixed(2) + ' mm', 8, 28);
+    ctx.fillText('cam ' + Math.round(labDeg) + '°', 8, 14);
+    ctx.fillText('alzata ' + labMm.toFixed(2) + ' mm', 8, 28);
     // La riga valvola solo quando DIFFERISCE dall'alzata (bilanciere/follower
     // attivi, come in Analisi): nella vista live di Alzata (puntalino 1:1)
     // erano sempre identiche — un numero doppio senza informazione.
