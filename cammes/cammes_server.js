@@ -28,6 +28,7 @@ var WS_PORT = 8080;
 var SERIAL_BAUD = 9600;
 var SERIAL_COM = null;    // null = auto-detect
 var OPEN_BROWSER = true;
+var SERIAL_MOCK = false;   // --serial-mock: seriale finta per i test (CTRL-01)
 
 // Parse argomenti command line
 var args = process.argv.slice(2);
@@ -36,6 +37,7 @@ for (var a = 0; a < args.length; a++) {
     if (args[a] === '--ws-port' && args[a + 1]) { WS_PORT = parseInt(args[a + 1]); a++; }
     if (args[a] === '--com' && args[a + 1]) { SERIAL_COM = args[a + 1]; a++; }
     if (args[a] === '--no-browser') { OPEN_BROWSER = false; }
+    if (args[a] === '--serial-mock') { SERIAL_MOCK = true; }
 }
 
 // Directory dei file statici (dove si trova questo script)
@@ -1159,6 +1161,50 @@ function isControlCommand(msg) {
     }
     return false;
 }
+
+// AUDIT CTRL-01 (controrevisione v3.4.1): un frame WebSocket deve contenere UNA
+// SOLA operazione. Prima i frame concatenati ("?\nS+360", "0 STATUS\n1 SCAN…")
+// o con testo extra ("xS+360", "S+360junk") venivano classificati sul primo
+// carattere e inoltrati INTERI alla seriale, aggirando il lease e facendo
+// eseguire al firmware comandi non autorizzati. parseFrame():
+//  - accetta al più UN terminatore finale (\n o \r\n);
+//  - rifiuta qualsiasi \r, \n o NUL interno (concatenazione / iniezione);
+//  - riconosce SOLO forme ancorate ^…$ dell'allowlist di comandi;
+//  - restituisce la forma CANONICA esatta da scrivere sulla seriale.
+// Ritorna { valid, canonical, isStop } — canonical=null se non valido.
+var _FRAME_SINGLE = /^[pqmd?!@flvx~]$/;                 // comandi a singolo carattere
+var _FRAME_CFG    = /^[crwuagk]\d{1,4}$/;               // c/r/w/u/a/g/k + numero
+var _FRAME_SCAN   = /^S[+-]\d{1,5}$/;                   // scan autonomo
+var _FRAME_MOVE   = /^\$[+-]\d{1,4}$/;                  // rotazione manuale
+var _FRAME_TONE   = /^t\d{2,4}:\d{1,4}:[+-](?::\d{1,2})?$/; // Concerto
+var _FRAME_V4     = /^\d{1,6} [A-Z_]+(?: [A-Za-z0-9=+.\- ]*)?$/; // "<seq> VERBO args"
+var _V4_VERBS = { STATUS: 1, HEARTBEAT: 1, LOCK: 1, FREE: 1, CONFIG: 1, SCAN: 1, MOVE: 1, RESET_FAULT: 1, TONE: 1, STOP: 1 };
+function parseFrame(raw) {
+    var s = String(raw);
+    // un solo terminatore finale ammesso
+    if (s.slice(-2) === '\r\n') s = s.slice(0, -2);
+    else if (s.slice(-1) === '\n' || s.slice(-1) === '\r') s = s.slice(0, -1);
+    // nessun carattere di controllo residuo (newline interni, CR, NUL)
+    // (lo SPAZIO e ammesso: i frame v4 lo usano, "<seq> VERBO args")
+    for (var _i = 0; _i < s.length; _i++) {
+        var _cc = s.charCodeAt(_i);
+        if (_cc === 0 || _cc === 10 || _cc === 13) return { valid: false, canonical: null, isStop: false };
+    }
+    if (s.length === 0) return { valid: false, canonical: null, isStop: false };
+    // STOP: qualsiasi frame che INIZIA per 'x' è trattato come STOP e scrive la
+    // sola costante 'x' (mai il resto). La sicurezza ha priorità: uno STOP non
+    // va mai ignorato, e "xS+360" NON deve trascinare un moto dopo l'arresto.
+    if (s.charAt(0) === 'x') return { valid: true, canonical: 'x', isStop: true };
+    if (_FRAME_SINGLE.test(s)) return { valid: true, canonical: s, isStop: false };
+    if (_FRAME_CFG.test(s) || _FRAME_SCAN.test(s) || _FRAME_MOVE.test(s) || _FRAME_TONE.test(s)) {
+        return { valid: true, canonical: s + '\n', isStop: false };
+    }
+    if (_FRAME_V4.test(s)) {
+        var verb = s.match(/^\d{1,6} ([A-Z_]+)/)[1];
+        if (_V4_VERBS[verb]) return { valid: true, canonical: s + '\n', isStop: (verb === 'STOP') };
+    }
+    return { valid: false, canonical: null, isStop: false };
+}
 function grantLease(ws) {
     controller = ws;
     ws._isController = true;
@@ -1233,22 +1279,34 @@ wsServer.on('connection', function (ws) {
             return;
         }
 
-        // Salvataggio file (non tocca la seriale/moto)
+        // Salvataggio file (non tocca la seriale/moto): payload multi-riga
+        // legittimo, quindi NON passa da parseFrame.
         if (msg.charAt(0) === '*') { handleFileSave(msg); return; }
 
-        // STOP: consentito a CHIUNQUE, sempre inoltrato
-        if (msg.charAt(0) === 'x') {
-            if (serialPort && serialPort.isOpen) { try { serialPort.write(msg); } catch (e) {} }
+        // AUDIT CTRL-01: valida il frame PRIMA di ogni decisione di lease/bridge/
+        // scrittura. Un frame = una operazione; forme non riconosciute (frame
+        // concatenati, suffissi, caratteri di controllo interni) → scartate,
+        // nessun byte verso la seriale.
+        var fr = parseFrame(msg);
+        if (!fr.valid) {
+            log.warn('CMD', 'Frame WS non valido da #' + ws._id + ' scartato: ' + JSON.stringify(msg).slice(0, 60));
+            return;
+        }
+
+        // STOP: consentito a CHIUNQUE, e si scrive SEMPRE la costante 'x'
+        // (mai il testo ricevuto — così "xS+360" non trascina un moto).
+        if (fr.isStop) {
+            if (serialPort && serialPort.isOpen) { try { serialPort.write('x'); } catch (e) {} }
             return;
         }
 
         // Comandi di controllo/moto: serve il lease. Il primo che ne manda uno
         // (senza controllore attivo) lo acquisisce; gli altri sono respinti.
-        if (isControlCommand(msg)) {
+        if (isControlCommand(fr.canonical)) {
             if (!controller) grantLease(ws);
             if (controller !== ws) {
                 try { ws.send('#ctl:denied'); } catch (e) {}
-                log.debug('CMD', 'Comando da observer #' + ws._id + ' RIFIUTATO: "' + msg + '"');
+                log.debug('CMD', 'Comando da observer #' + ws._id + ' RIFIUTATO: "' + fr.canonical.trim() + '"');
                 return;
             }
         }
@@ -1256,13 +1314,13 @@ wsServer.on('connection', function (ws) {
         // Query di sola lettura ('?') e comandi del controllore → seriale.
         // Con fw v4 lo scan-start "S±N" viene tradotto in "SCAN run=..." (bridge).
         if (serialPort && serialPort.isOpen) {
-            var outCmd = bridgeOutgoing(msg);
+            var outCmd = bridgeOutgoing(fr.canonical);
             serialPort.write(outCmd, function (err) {
                 if (err) log.error('SERIAL', 'Errore invio: ' + err.message);
             });
-            log.debug('CMD', 'Client #' + ws._id + ' -> Arduino: "' + (outCmd === msg ? msg : ('[v4] ' + outCmd.trim())) + '"');
+            log.debug('CMD', 'Client #' + ws._id + ' -> Arduino: "' + (outCmd === fr.canonical ? fr.canonical.trim() : ('[v4] ' + outCmd.trim())) + '"');
         } else {
-            log.debug('CMD', 'Comando ricevuto (no serial): "' + msg + '"');
+            log.debug('CMD', 'Comando ricevuto (no serial): "' + fr.canonical.trim() + '"');
         }
     });
 
@@ -1381,7 +1439,11 @@ function bridgeActive() { return deviceProto >= 4; }
 // WS→seriale: traduce lo scan-start della UI in SCAN v4. Tutto il resto invariato.
 function bridgeOutgoing(raw) {
     if (!bridgeActive()) return raw;
-    var m = raw.match(/^S([+-])(\d+)/);          // "S±N" (eventuale \n finale ignorato dal match)
+    // AUDIT CTRL-01 (punto 8): regex ANCORATA a fine stringa. Prima /^S([+-])(\d+)/
+    // accettava suffissi ("S+360junk" → SCAN units=360); ora l'input è già la
+    // forma canonica validata da parseFrame ("S±N\n"), ma la regex resta ancorata
+    // come difesa in profondità (nessun trailing garbage possibile).
+    var m = raw.match(/^S([+-])(\d{1,5})\n?$/);
     if (m) {
         v4RunCounter = (v4RunCounter % 30000) + 1;
         v4ActiveRun = v4RunCounter;
@@ -1508,6 +1570,18 @@ function loadSerialPort() {
 loadSerialPort();
 
 function initSerial() {
+    // TEST (CTRL-01): con --serial-mock si installa una seriale FINTA che
+    // logga ogni write su stdout ("[MOCKSER] <json>"): i test di validazione
+    // dei frame WebSocket verificano ESATTAMENTE i byte che arriverebbero
+    // all'Arduino, senza hardware. Mai attiva in esercizio (flag esplicito).
+    if (SERIAL_MOCK) {
+        serialPort = {
+            isOpen: true,
+            write: function (data, cb) { console.log('[MOCKSER] ' + JSON.stringify(String(data))); if (cb) cb(); }
+        };
+        console.log('[SERIAL] Seriale MOCK attiva (--serial-mock): write loggate, nessun hardware');
+        return;
+    }
     if (!SerialPort) return;
 
     if (SERIAL_COM) {
