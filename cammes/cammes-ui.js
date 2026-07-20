@@ -731,9 +731,14 @@
     ctx.fillStyle = _cam_css('--bg-input', '#12121f'); ctx.fillRect(0, 0, w, h);
 
     var rMax = rBase + maxLift;                 // mm
-    var pivotX = w * 0.5, pivotY = h * 0.80;
-    // scala: il raggio max della camma occupa ~30% h; lascia spazio sopra per follower+valvola
-    var scale = Math.min((w * 0.40) / rMax, (h * 0.30) / rMax);
+    // Layout dai budget reali: sotto il perno deve starci l'INTERO raggio max
+    // (a riposo il lobo punta in basso, lontano dal follower — col perno fisso
+    // a 0.80h il naso usciva dal canvas e la camma appariva mozzata); sopra
+    // servono follower+molla+valvola (~96px) più il readout.
+    var topBudget = 96;
+    var pivotX = w * 0.5;
+    var scale = Math.min((w * 0.5 - 8) / rMax, (h - topBudget - 28) / (2 * rMax));
+    var pivotY = h - rMax * scale - 8;
     var DEG = Math.PI / 180;
 
     // ---- molla + valvola (sopra), disegnate prima così la camma le copre al contatto ----
@@ -789,9 +794,16 @@
     ctx.strokeStyle = accent; ctx.lineWidth = 2;
     ctx.beginPath();
     if (o.camLift && o.camLift.length >= 360) {
+      // Gradi MANCANTI (undefined/NaN, es. run ripetuti con buchi): tieni
+      // l'ultimo valore valido invece di crollare a 0 — prima ogni buco
+      // scavava una tacca finta fino al cerchio base. Il primo valido fa da
+      // innesco così anche un buco al grado 1 non parte da zero.
+      var lastLift = 0;
+      for (var s0 = 1; s0 <= 360; s0++) { var v0 = Number(o.camLift[s0]); if (isFinite(v0) && v0 >= 0) { lastLift = v0; break; } }
       for (var phi = 0; phi < 360; phi++) {
-        var liftP = Math.max(0, o.camLift[phi + 1] || 0);
-        var r = (rBase + liftP) * scale;
+        var rawL = Number(o.camLift[phi + 1]);
+        if (isFinite(rawL) && rawL >= 0) lastLift = rawL;
+        var r = (rBase + lastLift) * scale;
         // φ a "ore 12" quando φ===ang → angolo schermo = (φ - ang) - 90°
         var a = (phi - ang - 90) * DEG;
         var x = r * Math.cos(a), y = r * Math.sin(a);

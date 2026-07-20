@@ -491,14 +491,38 @@ setInterval(function () {
     if (!_liveMechCv) _liveMechCv = document.getElementById('liveMechCanvas');
     if (!_liveMechCv || _liveMechCv.offsetParent === null) return;
     var enc = (typeof currentEncoderCount === 'number') ? currentEncoderCount : 0;
-    var camDeg = (enc / 4) % 360; if (camDeg < 0) camDeg += 360;
     var prof = (pdata && pdata.length >= 360) ? pdata : null;
+    // Mappa encoder → grado del PROFILO scansionato. Lo scan standard gira in
+    // direzione 'S-' (rsign=1): l'encoder conta all'INDIETRO (−4 cnt/grado,
+    // misurato al banco) mentre l'indice di pdata CRESCE — mappare enc/4
+    // dritto specchiava il profilo e lo sfasava (visto con la Clio). Se il
+    // picco è noto (maxg/maxg_encoder, gli stessi del 0-virtuale) lo usiamo
+    // come àncora: robusto anche se l'encoder non era a zero a inizio scan.
+    var camDeg;
+    if (prof) {
+        var dirS = (typeof rsign !== 'undefined' && rsign === -1) ? 1 : -1;
+        if (typeof maxg_encoder === 'number' && maxg_encoder !== null && maxg > 0) {
+            camDeg = maxg + dirS * (enc - maxg_encoder) / 4;
+        } else {
+            camDeg = dirS * enc / 4;
+        }
+    } else {
+        camDeg = enc / 4;              // nessun profilo: angolo fisico com'era
+    }
+    camDeg = ((camDeg % 360) + 360) % 360;
+    // Scala dal DATO reale: base ≈ 2× alzata max (proporzione tipica; per la
+    // Clio: 9,7 mm → base ~19 mm, che è quella vera). Con base fissa 14 il
+    // lobo appariva gonfio e irrealistico.
+    var liftMax = 0;
+    if (prof) for (var _dL = 1; _dL <= 360; _dL++) { var _vL = Number(prof[_dL]); if (isFinite(_vL) && _vL > liftMax) liftMax = _vL; }
     try {
         window.cammesCamAnim.draw(_liveMechCv.getContext('2d'), {
             w: _liveMechCv.width, h: _liveMechCv.height,
             camAngleDeg: camDeg, camLift: prof,
             followerLift: window._liveLift || 0,
-            rBase: 14, maxLift: 12, followerType: 'punt', rocker: 1
+            rBase: (prof && liftMax > 1) ? Math.max(10, 2 * liftMax) : 14,
+            maxLift: (prof && liftMax > 1) ? liftMax : 12,
+            followerType: 'punt', rocker: 1
         });
     } catch (e) {}
 }, 100);
