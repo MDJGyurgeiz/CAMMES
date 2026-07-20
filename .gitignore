@@ -30,3 +30,9 @@ CAMMES_DIST/
 /package-lock.json
 
 DIST_v3.3.0/
+
+# Accesso remoto al banco (Tailscale/SSH): contengono IP della rete privata,
+# nome utente del PC del banco e istruzioni d'accesso — restano SOLO su Drive,
+# mai nel repo pubblico.
+SETUP_BANCO_REMOTO.md
+AVVIA_BANCO_REMOTO.bat

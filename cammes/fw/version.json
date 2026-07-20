@@ -3,7 +3,7 @@
   "vResponse": "ver=4.0 scan=1 proto=4 free=<0|1>",
   "protocol": "v4 SUPPORTATO in modo ADDITIVO e retrocompatibile (v3 resta pienamente funzionante). v4 = righe framed '<seq> VERBO args' (una riga che inizia per CIFRA e' v4; v3 non ne ha), FSM esplicita (BOOT/FREE/IDLE_LOCKED/MOVING/SCANNING/TONE/STOPPING/FAULT), ACK/NACK correlati per seq, EVT SAMPLE/DONE/STOPPED/FAULT con run=, heartbeat DEDICATO ('~' o '<seq> HEARTBEAT'; non un byte qualsiasi), fault LATCHED + RESET_FAULT, HELLO/STATUS con device id da EEPROM (CRC). Verbi: STATUS/HEARTBEAT/LOCK/FREE/CONFIG/SCAN/MOVE/RESET_FAULT/STOP (TONE via 't' v3). Migrazione: firmware v4 fatto; server negozia proto=4; UI usa ancora v3 (bridge server + EVT nella UI = Fase 2).",
   "sketch": "master/master.ino",
-  "sourceCommit": "pending-commit-4.0",
+  "sourceCommit": "7833b57",
   "fqbn": "arduino:avr:uno",
   "builtAt": "2026-07-19",
   "benchValidated": "2026-07-19 su COM5 (DESKTOP-PN6EEA8): 4.0 VALIDATO — regressione v3 bench_fw34_test.js 39/39 + bench_v4_test.js 25/25 (HELLO/STATUS, ACK/NACK, SCAN/MOVE EVT, heartbeat dedicato '~' vs '\\n', CONFIG atomico, TONE rifiutato in FREE, device id EEPROM). Review avversariale pre-flash: 5 difetti corretti",
