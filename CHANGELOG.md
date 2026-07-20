@@ -9,6 +9,73 @@ Sistema di misura profili alberi a camme per motori.
 
 ---
 
+## v3.4.0 — 2026-07-20: secondo giro audit (app 3.4.0, firmware 4.0) — BETA TECNICA
+
+Risposta completa alla controrevisione Codex di `HANDOFF_CLAUDE_CORREZIONI_V3.3.0.md`:
+chiusi i P0 residui, protocollo seriale versionato **v4**, firmware **4.0**
+flashato e **validato fisicamente al banco remoto** (Tailscale+SSH). Suite da
+137 a **185 check** verdi, lint 0. Stato: **beta tecnica** (vedi
+REMAINING_RISKS.md per il registro onesto dei rischi residui).
+
+**Integrità della misura (Lotto C/D/E)**
+- **MET-01 (regressione confermata e corretta)**: media dei run ripetuti senza
+  zero-fill (`averageRuns`): un grado assente in tutti i run resta NON valido,
+  prima diventava uno 0 fisico.
+- Parser `.scr` rigoroso: duplicati segnalati (first-wins), gradi frazionari
+  flaggati, righe invalide contate, flag `ok` complessivo (MAT-07).
+- APP-09: nominale incompleto → **NON VALUTABILE** (prima: CONFORME con 30/360 punti).
+- MAT-03: eventi di fasatura dai **crossing reali** sub-grado (`findEvents`),
+  non più centro±durata/2 (errore fino a ~60° su lobi asimmetrici); naso
+  piatto gestito (centro del plateau).
+- DYN-02: solver compliance 1/2/3-DOF con **convergenza periodica verificata**
+  (esito esplicito `converged`, il non-convergente è segnalato in UI).
+- MET-05: posizioni encoder legate a un'epoca dello zero (reset/reboot le invalidano).
+
+**Autorità del banco (Lotto A + Fase 2, validati al banco)**
+- **Controller lease** (MOT-04): un solo client comanda, gli altri osservano;
+  STOP consentito a chiunque; ping/pong robusto al throttling dei tab.
+- **MOT-03**: perdita del controllore → il server manda STOP alla seriale
+  (validato fisicamente: moto troncato a 415° su 2000° richiesti).
+- **Bridge v4** (MOT-02): con firmware ≥4.0 il server traduce lo scan della UI
+  in `SCAN run=…` v4 e ritraduce gli EVT nel formato v3 — UI invariata, ma il
+  data-path ha runId/ACK/heartbeat; campioni di run vecchi scartati.
+
+**Firmware 3.7 → 4.0 (Lotto B, tutto validato al banco: v3 39/39 + v4 25/25)**
+- 3.7 — FW-04: parser config `c/r/w/u/a/g/k` rigoroso (strtol+range, prima
+  atoi accettava "c3xyz"→3); overflow di riga → scarto fino a EOL + `*err ovf`.
+  FW-09: comando durante il moto → NACK `*busy` (prima scartato in silenzio).
+- 3.8 — FW-03: **fault locale encoder** nello scan (encoder caratterizzato al
+  banco: ~4,00 counts/unità, spread ≤1,5%); encoder fermo mentre il motore
+  gira → `*fault enc` + stop; gestito in UI con posizione invalidata.
+- 4.0 — **protocollo v4 additivo e negoziato** (v3 resta intatto): FSM
+  esplicita, `<seq> VERBO` con ACK/NACK correlati, EVT SAMPLE/DONE/STOPPED/
+  FAULT con run=, **heartbeat dedicato** `~` (un byte qualsiasi non tiene più
+  vivo il watchdog), fault latched + RESET_FAULT, device id stabile in EEPROM
+  (CRC), HELLO/STATUS. Review avversariale pre-flash: 5 difetti corretti
+  (tra cui il TONE che ignorava FREE — gap FW-01 chiuso anche lì).
+
+**Sicurezza e supply-chain (Lotto F/G)**
+- SEC-08: WebSocket con `maxPayload` 1 MB (oversize→chiusura) e rate limit
+  60 msg/s per connessione (STOP sempre ammesso); header anti-clickjacking.
+- **REL-07 chiuso**: build firmware **bit-per-bit riproducibile** (core AVR
+  pinnato), verificata in CI a ogni push (`firmware.yml`) e in `npm test`.
+- REL-10: **SBOM CycloneDX** (`cammes/SBOM.json` + `SBOM.md`, 222 componenti).
+
+**UI**
+- Display del picco: niente più troncamento del valore mm; formato compatto
+  con unità (`max 180 gradi  16.234 mm`).
+- Rimosso il selettore "Tastatore" (decisione committente): il banco misura
+  sempre col puntalino, le punterie si applicano matematicamente in Analisi.
+
+**Nota di onestà**: la validazione fisica copre le protezioni firmware e il
+data-path (banco remoto, COM5); restano NEEDS_HARDWARE il true-positive del
+fault encoder (scollegamento fisico del cavo), FW-07/12 (LM339/oscilloscopio)
+e la metrologia (REP-*). Aperti su decisione: auth token LAN (SEC-01),
+aggiornamento jsPDF (REL-01), firma exe (REL-02/05). Fase 2b v4 (EVT nativi
+nella UI, bridge `$`/MOVE) pianificata, non-breaking.
+
+---
+
 ## v3.3.0 — 2026-07-18: primo giro audit (app 3.3.0, firmware 3.6) — BETA TECNICA
 
 Primo giro completo sull'audit esterno di 94 rilievi: i 15 P0 corretti a livello

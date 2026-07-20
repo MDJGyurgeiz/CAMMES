@@ -1,5 +1,27 @@
 # CAMMES — Risposta all'audit esterno
 
+> **Secondo giro CHIUSO (agg. 2026-07-20, release v3.4.0, firmware 4.0).**
+> Tutti i rilievi della controrevisione sono stati affrontati e — dove il banco
+> lo consente — **validati fisicamente** (banco remoto via Tailscale+SSH, COM5):
+> - **MET-01** (regressione run ripetuti): corretta con `averageRuns` senza
+>   zero-fill; **MAT-03**: eventi dai crossing reali; **APP-09**: incompleto →
+>   NON VALUTABILE; parser `.scr` rigoroso (MAT-07); **DYN-02**: convergenza
+>   periodica verificata.
+> - **MOT-04/03** (lease + perdita controllore → STOP): implementati e
+>   **validati al banco** (moto troncato 415°/2000°). **MOT-02**: FSM esplicita
+>   nel firmware + server autorità del data-path di scan (bridge v4).
+> - **Firmware 3.7→4.0**: parser config rigoroso (FW-04), NACK busy (FW-09),
+>   fault locale encoder (FW-03, encoder caratterizzato ~4 counts/unità),
+>   **protocollo v4** (FSM, seq/ACK/NACK, EVT run=, heartbeat dedicato, fault
+>   latched, device id EEPROM) — bench 39/39 (v3) + 25/25 (v4).
+> - **REL-07 chiuso** (build firmware riproducibile, CI verde), **REL-10**
+>   (SBOM CycloneDX), **SEC-08** (limiti WebSocket).
+>
+> Lo stato per ID resta in [`REMAINING_RISKS.md`](REMAINING_RISKS.md); aperti
+> solo NEEDS_HARDWARE (true-positive fault encoder, LM339, oscilloscopio,
+> metrologia) e le decisioni del committente (auth LAN, jsPDF, firma exe).
+> Denominazione: **beta tecnica** — le misure non sono certificate.
+
 > **Stato onesto (agg. 2026-07-18).** Una controrevisione indipendente
 > (`HANDOFF_CLAUDE_CORREZIONI_V3.3.0.md`) ha mostrato che la dicitura "audit
 > chiuso / 15-15 P0 validati" usata sotto è **troppo forte**: molti P0 sono

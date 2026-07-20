@@ -2,28 +2,29 @@
   "schema": "cammes-release-manifest/1",
   "app": {
     "name": "CAMMES",
-    "version": "3.3.0",
+    "version": "3.4.0",
     "channel": "beta-tecnica",
-    "note": "Regressioni software superate sui dataset disponibili; validazione funzionale al banco e metrologica ancora in corso. Vedi REMAINING_RISKS.md."
+    "note": "Secondo giro audit (controrevisione Codex) completato: P0 residui chiusi, protezioni firmware e data-path VALIDATI FISICAMENTE al banco remoto. Metrologia e alcuni test hardware restano aperti. Vedi REMAINING_RISKS.md."
   },
   "firmware": {
-    "version": "3.6",
-    "protocol": "v3 (legacy); v4 in design (PROTOCOL.md)",
+    "version": "4.0",
+    "protocol": "v4 additivo/negoziato (proto=4) + v3 pienamente retrocompatibile (PROTOCOL.md); UI su v3, bridge server v4 per lo scan",
     "hex": "cammes/fw/master.ino.hex",
-    "hexSha256": "21031c77cf908ffeeb93a7b03e74b882175a5aceb29d3cb07e25360b79124f8d",
+    "hexSha256": "6968c1fe05985f6bebfd1e864e7557244c68d51cd4fcf813bc207ab935832fe4",
     "fqbn": "arduino:avr:uno",
-    "toolchain": "arduino-cli 1.4.1 / arduino:avr core",
-    "sourceReproducible": false,
-    "sourceReproducibleNote": "build firmware in CI + confronto hash = REL-07 aperto"
+    "toolchain": "arduino-cli / arduino:avr@1.8.7 (PINNATO)",
+    "sourceReproducible": true,
+    "sourceReproducibleNote": "REL-07 CHIUSO: build bit-per-bit riproducibile, verificata in CI (.github/workflows/firmware.yml) e in npm test (tools/verify_firmware.js)",
+    "benchValidated": "2026-07-19 COM5: regressione v3 39/39 (bench_fw34_test.js) + protocollo v4 25/25 (bench_v4_test.js) + bridge scan/STOP (bench_bridge_test.js)"
   },
-  "commit": "bd33de9 (round-2 controrevisione; aggiornare a ogni release)",
+  "commit": "aggiornato al commit di release (tag v3.4.0)",
   "gates": {
-    "npmTest": "168 check verdi (suite software)",
+    "npmTest": "185 check verdi (suite software)",
     "lint": "0 errori",
     "npmAudit": "1 moderata (pkg, devDep, no fix) — REL-02",
     "exeSigned": false,
     "tagSigned": false,
-    "sbom": false
+    "sbom": true
   },
   "signing": {
     "authenticode": "NON firmato (REL-05: richiede certificato di code-signing)",
@@ -31,16 +32,21 @@
   },
   "deliverables": {
     "REMAINING_RISKS.md": true,
-    "MOTION_CONTROL_MODEL.md": "design (Lotto A, impl. pendente + banco)",
-    "PROTOCOL.md": "v3 documentato + v4 design (Lotto B)",
+    "MOTION_CONTROL_MODEL.md": "design + implementazione: lease server (MOT-04) + FSM firmware (v4) validati al banco",
+    "PROTOCOL.md": "v3 documentato + v4 IMPLEMENTATO (fw 4.0, validato al banco); Fase 2b (EVT nativi in UI) pianificata",
     "MATH_SPEC.md": true,
     "THIRD_PARTY_NOTICES.md": true,
-    "SBOM": false
+    "SBOM": "cammes/SBOM.json (CycloneDX 1.5) + SBOM.md, generati da tools/gen_sbom.js"
   },
-  "openP0": [
-    "MOT-04 (lease esclusivo) — OPEN, Lotto A",
-    "MOT-02/03 (FSM/perdita controller) — PARTIAL, Lotto A",
-    "validazione fisica STOP/ENA/fault/metrologia — NEEDS_HARDWARE"
+  "openP0": [],
+  "openItems": [
+    "true-positive fault encoder (scollegamento fisico del cavo) — NEEDS_HARDWARE",
+    "FW-07 schema/BOM/isteresi LM339 + FW-12 ordine pin all'oscilloscopio — NEEDS_HARDWARE",
+    "metrologia banco (ripetibilita'/linearita'/closure) e REP-* — NEEDS_HARDWARE/INPUT",
+    "SEC-01 auth token LAN — decisione UX committente",
+    "REL-01 aggiornamento jsPDF — download da approvare",
+    "REL-02/05 pkg archiviato + exe non firmato — certificato/migrazione SEA",
+    "Fase 2b v4: EVT nativi nella UI + bridge $/MOVE — non-breaking"
   ],
-  "warning": "Questo manifest NON dichiara l'audit chiuso: alcuni P0 restano OPEN/PARTIAL e la validazione fisica non è stata eseguita. Non promuovere a release finale finché i gate exeSigned/sbom/openP0 non sono soddisfatti."
+  "warning": "Beta tecnica: le protezioni software/firmware sono validate al banco, ma la caratterizzazione metrologica non e' completa e l'exe non e' firmato. Non presentare le misure come certificate."
 }
