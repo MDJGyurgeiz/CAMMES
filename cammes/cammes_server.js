@@ -18,6 +18,10 @@ var fs = require('fs');
 var path = require('path');
 var WebSocket = require('ws');
 var { exec, spawn } = require('child_process');
+// Parser misure condiviso con la UI (serve all'export Excel: maschera di
+// copertura onesta — i gradi mancanti NON diventano zeri). Require statico
+// così pkg lo imbarca come script.
+var camMath = require('./lib/cammes-math.js');
 
 // ============================================================
 // Configurazione
@@ -417,6 +421,86 @@ function apiBackupZip(res) {
         });
         res.end(zip);
     });
+}
+
+// ============================================================
+// Export Excel (.xlsx) di una misura — un .xlsx È uno zip di XML (OOXML),
+// quindi lo generiamo con buildZip senza librerie esterne. Nasce perché
+// Windows tratta l'estensione .scr come SCREENSAVER (eseguibile): aprire la
+// misura fuori dall'app era scomodo e allarmante. Onestà dei dati (DATA-01):
+// i gradi MANCANTI restano celle VUOTE nel foglio, mai zeri.
+// ============================================================
+function _xmlEsc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function buildXlsxFromScr(scrText, baseName) {
+    var p = camMath.parseCamFile(scrText);
+    // Foglio 1 "Misura": Grado | Alzata (celle vuote sui gradi mancanti)
+    var rows = ['<row r="1">' +
+        '<c r="A1" t="inlineStr"><is><t>Grado camma (°)</t></is></c>' +
+        '<c r="B1" t="inlineStr"><is><t>Alzata (mm)</t></is></c></row>'];
+    var peak = 0, peakDeg = 0;
+    for (var d = 1; d <= 360; d++) {
+        var r = d + 1, cells = '<c r="A' + r + '"><v>' + d + '</v></c>';
+        if (p.covered && p.covered[d]) {
+            var v = Number(p[d]);
+            cells += '<c r="B' + r + '"><v>' + v + '</v></c>';
+            if (isFinite(v) && v > peak) { peak = v; peakDeg = d; }
+        }
+        rows.push('<row r="' + r + '">' + cells + '</row>');
+    }
+    var sheet1 = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+        '<sheetData>' + rows.join('') + '</sheetData></worksheet>';
+    // Foglio 2 "Info": provenienza e stato, onesti
+    var info = [
+        ['File', baseName],
+        ['Stato', (p.missingCount > 0 || (p.meta && p.meta.stato === 'INCOMPLETO')) ? 'INCOMPLETO' : 'COMPLETO'],
+        ['Gradi validi', p.validCount],
+        ['Gradi mancanti', p.missingCount],
+        ['Picco (mm)', peak ? (peak + ' @ grado ' + peakDeg) : 'n/d'],
+        ['Esportato da', 'CAMMES ' + APP_VERSION + ' — ' + new Date().toISOString()]
+    ];
+    Object.keys(p.meta || {}).forEach(function (k) { info.push(['#' + k, String(p.meta[k])]); });
+    var infoRows = info.map(function (kv, i) {
+        var r = i + 1;
+        return '<row r="' + r + '">' +
+            '<c r="A' + r + '" t="inlineStr"><is><t>' + _xmlEsc(kv[0]) + '</t></is></c>' +
+            '<c r="B' + r + '" t="inlineStr"><is><t>' + _xmlEsc(kv[1]) + '</t></is></c></row>';
+    });
+    var sheet2 = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+        '<sheetData>' + infoRows.join('') + '</sheetData></worksheet>';
+    var workbook = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+        '<sheets><sheet name="Misura" sheetId="1" r:id="rId1"/><sheet name="Info" sheetId="2" r:id="rId2"/></sheets></workbook>';
+    var wbRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>' +
+        '</Relationships>';
+    var rootRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+        '</Relationships>';
+    var contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+        '<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+        '</Types>';
+    var now = new Date();
+    return buildZip([
+        { name: '[Content_Types].xml', data: Buffer.from(contentTypes, 'utf8'), mtime: now },
+        { name: '_rels/.rels', data: Buffer.from(rootRels, 'utf8'), mtime: now },
+        { name: 'xl/workbook.xml', data: Buffer.from(workbook, 'utf8'), mtime: now },
+        { name: 'xl/_rels/workbook.xml.rels', data: Buffer.from(wbRels, 'utf8'), mtime: now },
+        { name: 'xl/worksheets/sheet1.xml', data: Buffer.from(sheet1, 'utf8'), mtime: now },
+        { name: 'xl/worksheets/sheet2.xml', data: Buffer.from(sheet2, 'utf8'), mtime: now }
+    ]);
 }
 
 // --- Impostazioni persistenti lato server (officina, verifiche banco) ----
@@ -944,6 +1028,38 @@ function handleRequest(req, res) {
             res.setHeader('Cache-Control', 'no-store');
             res.writeHead(err ? 500 : 200, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify(err ? { error: err.message } : { files: files }));
+        });
+        return;
+    }
+
+    // API: export Excel (.xlsx) di una misura — Windows tratta .scr come
+    // screensaver: questo dà un formato apribile con doppio click in Excel.
+    if (urlPath.indexOf('/api/export-xlsx/') === 0 && req.method === 'GET') {
+        var xname;
+        try { xname = decodeURIComponent(urlPath.substring('/api/export-xlsx/'.length)); }
+        catch (e) { return sendJson(res, 400, { error: 'Nome file non valido (URI)' }); }
+        if (!isSafeFilename(xname) || !/\.scr$/i.test(xname)) {
+            return sendJson(res, 400, { error: 'Nome file non valido', name: xname });
+        }
+        var xpath = path.join(PROVE_DIR, xname);
+        if (!isInside(PROVE_DIR, path.resolve(xpath))) {
+            return sendJson(res, 403, { error: 'Path traversal rifiutato' });
+        }
+        fs.readFile(xpath, 'utf8', function (xerr, xtext) {
+            if (xerr) return sendJson(res, 404, { error: 'File non trovato', name: xname });
+            try {
+                var xlsx = buildXlsxFromScr(xtext, xname);
+                var outName = xname.replace(/\.scr$/i, '') + '.xlsx';
+                log('API', 'export-xlsx: ' + xname + ' -> ' + outName + ' (' + xlsx.length + ' B)');
+                res.writeHead(200, {
+                    'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'Content-Disposition': 'attachment; filename="' + outName + '"',
+                    'Cache-Control': 'no-store'
+                });
+                res.end(xlsx);
+            } catch (e2) {
+                sendJson(res, 500, { error: 'Errore export Excel', detail: e2.message });
+            }
         });
         return;
     }

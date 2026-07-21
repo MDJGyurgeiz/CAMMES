@@ -1537,7 +1537,8 @@ function renderRecentsTable() {
             '<td class="fsize">' + fmtBytes(f.size) + '</td>' +
             '<td class="fdate">' + escapeHtml(fmtDate(f.mtime)) + '</td>' +
             '<td style="text-align:right;white-space:nowrap;">' +
-              '<a class="home-action-btn" href="/api/file/' + encodeURIComponent(f.name) + '" target="_blank" download="' + safeName + '" title="Scarica">&darr;</a>' +
+              '<a class="home-action-btn" href="/api/file/' + encodeURIComponent(f.name) + '" target="_blank" download="' + safeName + '" title="Scarica il file .scr originale">&darr;</a>' +
+              '<a class="home-action-btn" href="/api/export-xlsx/' + encodeURIComponent(f.name) + '" title="Esporta in Excel (.xlsx): gradi e alzate + foglio Info. Comodo perché Windows tratta .scr come screensaver.">&#128202;</a>' +
               '<button class="delete-btn" title="Elimina" data-act="del" data-name="' + safeName + '">&times;</button>' +
             '</td>' +
             '</tr>';
@@ -1817,6 +1818,7 @@ function _renderQuickView(fileName, fileType, text) {
         '<div class="quickview-chart-wrap"><canvas id="quickviewCanvas"></canvas></div>' +
         '<div class="quickview-actions">' +
         '  <a class="btn btn-secondary" href="/api/file/' + encodeURIComponent(fileName) + '" download="' + safeName + '">&darr; Scarica</a>' +
+        '  <a class="btn btn-secondary" href="/api/export-xlsx/' + encodeURIComponent(fileName) + '" title="Esporta gradi e alzate in un file Excel (.xlsx) con foglio Info">&#128202; Excel</a>' +
         '  <button class="btn btn-secondary" id="qvPdfBtn" title="Esporta scheda tecnica PDF di questo file">&#128196; Scheda PDF</button>' +
         '  <a class="btn btn-accent" href="grafici.html?files=' + encodeURIComponent(fileName) + '" title="Apri pagina Confronto con questo file già caricato">Apri in Confronto</a>' +
         '  <button class="btn btn-secondary" onclick="closeQuickView();">Chiudi</button>' +
