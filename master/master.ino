@@ -317,7 +317,7 @@ void initDeviceId() {
 // HELLO: risposta completa a STATUS (e annuncio capacità). Un'unica riga con
 // proto, fw, device id, stato, free, fault, reset reason.
 void emitHello() {
-  Serial.print(F("HELLO proto=4 fw=4.0 dev="));
+  Serial.print(F("HELLO proto=4 fw=4.1 dev="));
   Serial.print(g_deviceId, HEX);
   Serial.print(F(" state=")); Serial.print(stateName(g_state));
   Serial.print(F(" free=")); Serial.print(g_motorFree ? 1 : 0);

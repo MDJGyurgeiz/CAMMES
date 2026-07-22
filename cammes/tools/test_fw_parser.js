@@ -95,6 +95,11 @@ check('versione *boot allineata a version.json', bootMatch && bootMatch[1] === v
     (bootMatch ? bootMatch[1] : '?') + ' vs ' + vjson.firmware);
 check("versione risposta 'v' allineata a version.json", vMatch && vMatch[1] === vjson.firmware,
     (vMatch ? vMatch[1] : '?') + ' vs ' + vjson.firmware);
+// il fw dichiarato in HELLO (v4) deve coincidere: una divergenza farebbe
+// saltare il gate fw>=4.1 del bench harness e confonderebbe il server.
+var helloFw = (src.match(/HELLO proto=4 fw=([\d.]+)/) || [])[1];
+check("versione HELLO v4 allineata a version.json", helloFw === vjson.firmware,
+    (helloFw || '?') + ' vs ' + vjson.firmware);
 
 console.log('');
 if (fails) { console.log('RISULTATO: ' + fails + ' FALLITI\n'); process.exit(1); }
