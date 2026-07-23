@@ -3209,19 +3209,26 @@ function analyze() {
         intakeCloseABC = inEv.closeIdx - 540;   // gradi dopo il BDC
         durIntake = Math.round(inEv.durationDeg);
     } else {
-        intakeOpenBTC  = -(intakeCenter - durIntake / 2);
-        intakeCloseABC = intakeCenter + durIntake / 2 - 180;
+        // AUDIT MAT-01: NIENTE ricostruzione centro±durata/2 — eventi ambigui
+        // (due lobi, plateau equivalenti, sotto soglia) restano NON valutabili.
+        intakeOpenBTC = NaN; intakeCloseABC = NaN;
     }
     if (!exEv.ambiguous) {
         exOpenBBC   = 180 - exEv.openIdx;       // gradi prima del BDC
         exCloseATC  = exEv.closeIdx - 360;      // gradi dopo il TDC
         durExhaust = Math.round(exEv.durationDeg);
     } else {
-        exOpenBBC   = exhaustCenter + durExhaust / 2 - 180;
-        exCloseATC  = -(exhaustCenter - durExhaust / 2);
+        exOpenBBC = NaN; exCloseATC = NaN;      // AUDIT MAT-01: mai centro±dur/2
+    }
+    if ((inEv.ambiguous || exEv.ambiguous) && window.cammesToast) {
+        window.cammesToast({ kind: 'warn', title: 'Eventi di fasatura AMBIGUI',
+            body: (inEv.ambiguous ? 'Aspirazione: ' + (inEv.reason || 'ambiguo') + '. ' : '') +
+                  (exEv.ambiguous ? 'Scarico: ' + (exEv.reason || 'ambiguo') + '.' : '') +
+                  ' Apertura/chiusura non determinabili in modo univoco: valori mostrati come n.d.',
+            duration: 8000 });
     }
 
-    // Overlap (da eventi reali)
+    // Overlap (da eventi reali; NaN se ambigui)
     var overlap = intakeOpenBTC + exCloseATC;
 
     // ====== KINEMATIC ANALYSIS ======
@@ -3347,11 +3354,12 @@ function analyze() {
     document.getElementById('resLSA').textContent = LSA.toFixed(1) + '\u00B0';
     document.getElementById('resIntCenter').textContent = intakeCenter.toFixed(1) + '\u00B0';
     document.getElementById('resExCenter').textContent = exhaustCenter.toFixed(1) + '\u00B0';
-    document.getElementById('resIntOpen').textContent = intakeOpenBTC.toFixed(1) + '\u00B0';
-    document.getElementById('resIntClose').textContent = intakeCloseABC.toFixed(1) + '\u00B0';
-    document.getElementById('resExOpen').textContent = exOpenBBC.toFixed(1) + '\u00B0';
-    document.getElementById('resExClose').textContent = exCloseATC.toFixed(1) + '\u00B0';
-    document.getElementById('resOverlap').textContent = overlap.toFixed(1) + '\u00B0';
+    // AUDIT MAT-01: eventi ambigui -> 'n.d.', mai numeri ricostruiti
+    document.getElementById('resIntOpen').textContent = fmtDeg(intakeOpenBTC, 1);
+    document.getElementById('resIntClose').textContent = fmtDeg(intakeCloseABC, 1);
+    document.getElementById('resExOpen').textContent = fmtDeg(exOpenBBC, 1);
+    document.getElementById('resExClose').textContent = fmtDeg(exCloseATC, 1);
+    document.getElementById('resOverlap').textContent = fmtDeg(overlap, 1);
     document.getElementById('resLiftInTDC').textContent = liftInTDC.toFixed(3) + ' mm';
     document.getElementById('resLiftExTDC').textContent = liftExTDC.toFixed(3) + ' mm';
 
@@ -3403,7 +3411,9 @@ function analyze() {
 
     // Update timing diagram — AUDIT APP-04: passa i CENTRI reali e l'overlap
     // calcolato, così gli eventi sono posizionati agli angoli veri.
-    updateTimingDiagram(intakeCenter, exhaustCenter, durIntake, durExhaust, overlap);
+    // AUDIT MAT-01: il doughnut riceve gli EVENTI reali (openIdx/closeIdx),
+    // non centro±durata/2
+    updateTimingDiagram(inEv, exEv, durIntake, durExhaust, overlap);
 
     // Update main chart with rocker-applied data
     updateChartWithData(anlIn, anlEx);
@@ -3449,6 +3459,10 @@ function analyze() {
             durThresh: DUR_EPS,   // soglia usata per la durata (audit APP-05: riportata ovunque)
             durRefIn: durRefIn, durRefEx: durRefEx,
             LSA: LSA, intakeCenter: intakeCenter, exhaustCenter: exhaustCenter,
+            // AUDIT MAT-01: oggetto eventi COMPLETO nello snapshot (openIdx/
+            // closeIdx interpolati, ambiguous, candidates) — la fonte unica
+            // per diagramma, tabella, cam card e PDF.
+            events: { intake: inEv, exhaust: exEv },
             intakeOpenBTC: intakeOpenBTC, intakeCloseABC: intakeCloseABC,
             exOpenBBC: exOpenBBC, exCloseATC: exCloseATC,
             overlap: overlap, liftInTDC: liftInTDC, liftExTDC: liftExTDC,
@@ -3857,6 +3871,16 @@ function createForceChart(forcesIn, forcesEx, rpm) {
     });
 }
 
+// AUDIT MAT-01: formattazione onesta dei gradi — NaN (eventi ambigui) = 'n.d.',
+// mai un numero ricostruito.
+function fmtDeg(v, dec) {
+    return isFinite(v) ? v.toFixed(dec === undefined ? 1 : dec) + '°' : 'n.d.';
+}
+// Variante senza simbolo ° (CSV e PDF jsPDF, che usano testo ASCII)
+function fmtNum(v, dec) {
+    return isFinite(v) ? v.toFixed(dec === undefined ? 1 : dec) : 'n.d.';
+}
+
 // ========== TIMING DIAGRAM (Doughnut) ==========
 
 // AUDIT APP-04: diagramma di FASATURA, non pi\u00F9 di sole proporzioni. Due anelli
@@ -3871,42 +3895,62 @@ function createForceChart(forcesIn, forcesEx, rpm) {
 // entrambe le valvole sono chiuse: \u00E8 l'unico punto SEMPRE fuori dagli eventi
 // (che si addensano attorno al PMS incrocio=360), cos\u00EC nessun arco attraversa
 // la cucitura del doughnut e non viene troncato. w(c) = c % 720.
-function updateTimingDiagram(intakeCenter, exhaustCenter, durIn, durEx, overlap) {
-    // Centro lobo in angolo di manovella: aspirazione 360+centro (ATDC),
-    // scarico 360-centro (BTDC). L'arco aperto \u00E8 centrato l\u00EC, largo = durata.
+// AUDIT MAT-01 (controrevisione): gli archi escono DIRETTAMENTE da
+// openIdx/closeIdx interpolati di findEvents (passati come oggetti evento),
+// NON pi\u00F9 da centro\u00B1durata/2 che su lobi asimmetrici contraddiceva la
+// tabella. Il wrap sulla cucitura (crank 720\u21921) \u00E8 gestito spezzando l'arco
+// in due segmenti. Eventi ambigui \u2192 nessun arco + nota in legenda.
+function updateTimingDiagram(inEv, exEv, durIn, durEx, overlap) {
     function wheel(c) { return ((c % 720) + 720) % 720; }
-    function slices(centerCrank, dur) {
-        var start = wheel(centerCrank - dur / 2);
-        var pre = Math.max(0, start);
-        var arc = Math.max(0, Math.min(dur, 720 - pre));
-        var post = Math.max(0, 720 - pre - arc);
-        return [pre, arc, post];
+    // Da un evento {openIdx, closeIdx} a fette del doughnut. Ritorna
+    // {data:[...], on:[...bool...]}: on[i] dice se la fetta i \u00E8 "aperta".
+    function slicesFromEvent(ev) {
+        if (!ev || ev.ambiguous || !isFinite(ev.openIdx) || !isFinite(ev.closeIdx)) {
+            return { data: [720], on: [false] };            // niente arco: non valutabile
+        }
+        var start = wheel(ev.openIdx), end = wheel(ev.closeIdx);
+        if (end >= start) {                                  // arco senza cucitura
+            return { data: [start, end - start, 720 - end], on: [false, true, false] };
+        }
+        // arco a cavallo della cucitura: [0..end] acceso, gap, [start..720] acceso
+        return { data: [end, start - end, 720 - start], on: [true, false, true] };
     }
-    var inSl = slices(360 + intakeCenter, durIn);
-    var exSl = slices(360 - exhaustCenter, durEx);
+    function colors(sl, rgba, solid) {
+        var TR = 'rgba(0,0,0,0)';
+        return {
+            bg: sl.on.map(function (o) { return o ? rgba : TR; }),
+            border: sl.on.map(function (o) { return o ? solid : TR; })
+        };
+    }
+    var inSl = slicesFromEvent(inEv);
+    var exSl = slicesFromEvent(exEv);
+    var inCol = colors(inSl, 'rgba(0, 212, 255, 0.85)', '#00d4ff');
+    var exCol = colors(exSl, 'rgba(255, 82, 82, 0.85)', '#ff5252');
     var ov = (overlap > 0 ? overlap : 0);
+    var amb = (inEv && inEv.ambiguous) || (exEv && exEv.ambiguous);
 
     if (timingChartInstance) timingChartInstance.destroy();
-    var TRANSP = 'rgba(0,0,0,0)';
     var ctx = document.getElementById('timingChart').getContext('2d');
     timingChartInstance = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['gap', 'aperta', 'gap'],
+            labels: ['a', 'b', 'c'],
             datasets: [
                 {   // anello ESTERNO = aspirazione
                     label: 'Aspirazione',
-                    data: inSl,
-                    backgroundColor: [TRANSP, 'rgba(0, 212, 255, 0.85)', TRANSP],
-                    borderColor: [TRANSP, '#00d4ff', TRANSP],
-                    borderWidth: 1
+                    data: inSl.data,
+                    backgroundColor: inCol.bg,
+                    borderColor: inCol.border,
+                    borderWidth: 1,
+                    _on: inSl.on
                 },
                 {   // anello INTERNO = scarico
                     label: 'Scarico',
-                    data: exSl,
-                    backgroundColor: [TRANSP, 'rgba(255, 82, 82, 0.85)', TRANSP],
-                    borderColor: [TRANSP, '#ff5252', TRANSP],
-                    borderWidth: 1
+                    data: exSl.data,
+                    backgroundColor: exCol.bg,
+                    borderColor: exCol.border,
+                    borderWidth: 1,
+                    _on: exSl.on
                 }
             ]
         },
@@ -3923,20 +3967,28 @@ function updateTimingDiagram(intakeCenter, exhaustCenter, durIn, durEx, overlap)
                         font: { size: 11 },
                         padding: 8,
                         generateLabels: function () {
-                            return [
-                                { text: 'Aspirazione: ' + durIn + '\u00B0', fillStyle: 'rgba(0,212,255,0.85)', strokeStyle: '#00d4ff', lineWidth: 1, index: 0 },
-                                { text: 'Scarico: ' + durEx + '\u00B0', fillStyle: 'rgba(255,82,82,0.85)', strokeStyle: '#ff5252', lineWidth: 1, index: 1 },
-                                { text: 'Overlap: ' + ov.toFixed(1) + '\u00B0', fillStyle: 'rgba(255,215,64,0.8)', strokeStyle: '#ffd740', lineWidth: 1, index: 2 }
+                            // AUDIT MAT-01: ambiguo -> dichiarato in legenda, non nascosto
+                            var labels = [
+                                { text: 'Aspirazione: ' + ((inEv && !inEv.ambiguous) ? durIn + '\u00B0' : 'n.d.'), fillStyle: 'rgba(0,212,255,0.85)', strokeStyle: '#00d4ff', lineWidth: 1, index: 0 },
+                                { text: 'Scarico: ' + ((exEv && !exEv.ambiguous) ? durEx + '\u00B0' : 'n.d.'), fillStyle: 'rgba(255,82,82,0.85)', strokeStyle: '#ff5252', lineWidth: 1, index: 1 },
+                                { text: 'Overlap: ' + (isFinite(ov) && !amb ? ov.toFixed(1) + '\u00B0' : 'n.d.'), fillStyle: 'rgba(255,215,64,0.8)', strokeStyle: '#ffd740', lineWidth: 1, index: 2 }
                             ];
+                            if (amb) labels.push({ text: '\u26A0 eventi AMBIGUI (vedi tabella)', fillStyle: 'rgba(255,180,0,0.85)', strokeStyle: '#ffb400', lineWidth: 1, index: 3 });
+                            return labels;
                         }
                     }
                 },
                 tooltip: {
-                    filter: function (item) { return item.dataIndex === 1; },   // solo l'arco "aperta"
+                    // AUDIT MAT-01: sono "aperta" solo le fette accese (_on),
+                    // che con wrap possono essere due per anello
+                    filter: function (item) {
+                        var on = item.dataset && item.dataset._on;
+                        return !!(on && on[item.dataIndex]);
+                    },
                     callbacks: {
                         label: function (c) {
                             var v = (c.datasetIndex === 0) ? 'Aspirazione' : 'Scarico';
-                            return v + ' aperta: ' + c.parsed + '\u00B0';
+                            return v + ' aperta: ' + c.parsed.toFixed(1) + '\u00B0';
                         }
                     }
                 }
@@ -4300,11 +4352,18 @@ function exportCSV() {
     lines.push('LSA [deg],' + R.LSA.toFixed(2));
     lines.push('Centro asp. ATDC [deg],' + R.intakeCenter.toFixed(2));
     lines.push('Centro scar. BTDC [deg],' + R.exhaustCenter.toFixed(2));
-    lines.push('Apertura asp. BTC [deg],' + R.intakeOpenBTC.toFixed(2));
-    lines.push('Chiusura asp. ABC [deg],' + R.intakeCloseABC.toFixed(2));
-    lines.push('Apertura scar. BBC [deg],' + R.exOpenBBC.toFixed(2));
-    lines.push('Chiusura scar. ATC [deg],' + R.exCloseATC.toFixed(2));
-    lines.push('Overlap [deg],' + R.overlap.toFixed(2));
+    // AUDIT MAT-01: eventi ambigui -> 'n.d.' anche nel CSV (stesso stato della UI)
+    lines.push('Apertura asp. BTC [deg],' + fmtNum(R.intakeOpenBTC, 2));
+    lines.push('Chiusura asp. ABC [deg],' + fmtNum(R.intakeCloseABC, 2));
+    lines.push('Apertura scar. BBC [deg],' + fmtNum(R.exOpenBBC, 2));
+    lines.push('Chiusura scar. ATC [deg],' + fmtNum(R.exCloseATC, 2));
+    lines.push('Overlap [deg],' + fmtNum(R.overlap, 2));
+    if (R.events && (R.events.intake.ambiguous || R.events.exhaust.ambiguous)) {
+        lines.push('Eventi fasatura,AMBIGUI (' +
+            (R.events.intake.ambiguous ? 'asp: ' + (R.events.intake.reason || '?') : '') +
+            (R.events.intake.ambiguous && R.events.exhaust.ambiguous ? '; ' : '') +
+            (R.events.exhaust.ambiguous ? 'scar: ' + (R.events.exhaust.reason || '?') : '') + ')');
+    }
     lines.push('Alzata asp. al PMS [mm],' + R.liftInTDC.toFixed(3));
     lines.push('Alzata scar. al PMS [mm],' + R.liftExTDC.toFixed(3));
     lines.push('Max alzata asp. [mm],' + R.maxLiftIn.toFixed(3));
@@ -4578,10 +4637,12 @@ function exportCamCard(testMode) {
     row('alzata valvola', R.maxLiftIn.toFixed(2) + ' mm', R.maxLiftEx.toFixed(2) + ' mm', true);
     row('alzata camma', camPkIn.toFixed(2) + ' mm', camPkEx.toFixed(2) + ' mm');
     row('angolo lobo', R.intakeCenter.toFixed(1) + '° ATDC', R.exhaustCenter.toFixed(1) + '° BTDC', true);
-    row('apre', R.intakeOpenBTC.toFixed(1) + '° BTDC', R.exOpenBBC.toFixed(1) + '° BBDC');
-    row('chiude', R.intakeCloseABC.toFixed(1) + '° ABDC', R.exCloseATC.toFixed(1) + '° ATDC');
+    row('apre', isFinite(R.intakeOpenBTC) ? R.intakeOpenBTC.toFixed(1) + '° BTDC' : 'n.d.',
+                isFinite(R.exOpenBBC) ? R.exOpenBBC.toFixed(1) + '° BBDC' : 'n.d.');
+    row('chiude', isFinite(R.intakeCloseABC) ? R.intakeCloseABC.toFixed(1) + '° ABDC' : 'n.d.',
+                  isFinite(R.exCloseATC) ? R.exCloseATC.toFixed(1) + '° ATDC' : 'n.d.');
     row('alzata al PMS', R.liftInTDC.toFixed(2) + ' mm', R.liftExTDC.toFixed(2) + ' mm', true);
-    row('incrocio (overlap)', R.overlap.toFixed(1) + '°', '');
+    row('incrocio (overlap)', fmtDeg(R.overlap, 1), '');
     row('LSA', R.LSA.toFixed(1) + '°', '');
 
     // ---- note metodo ----
@@ -4687,7 +4748,7 @@ function exportCamCard(testMode) {
     g.fillText('gradi motore (0 = PMS incrocio)', mL + plotW / 2, mT + plotH + 52);
     // fasatura testuale sotto
     g.font = 'bold 19px Arial';
-    g.fillText('ASP  ' + R.intakeOpenBTC.toFixed(0) + '° BTDC – ' + R.intakeCloseABC.toFixed(0) + '° ABDC          SCA  ' + R.exOpenBBC.toFixed(0) + '° BBDC – ' + R.exCloseATC.toFixed(0) + '° ATDC          overlap ' + R.overlap.toFixed(0) + '°', mL + plotW / 2, ch - 8);
+    g.fillText('ASP  ' + fmtDeg(R.intakeOpenBTC, 0) + ' BTDC – ' + fmtDeg(R.intakeCloseABC, 0) + ' ABDC          SCA  ' + fmtDeg(R.exOpenBBC, 0) + ' BBDC – ' + fmtDeg(R.exCloseATC, 0) + ' ATDC          overlap ' + fmtDeg(R.overlap, 0), mL + plotW / 2, ch - 8);
     var img = cv.toDataURL('image/png');
     var iw = 168, ih = iw * ch / cw;
     doc.addImage(img, 'PNG', 117, 26, iw, ih);
@@ -4941,9 +5002,9 @@ function exportPDF() {
         ['Max alzata',                         R.maxLiftIn.toFixed(3) + ' mm',                R.maxLiftEx.toFixed(3) + ' mm'],
         ['LSA',                                R.LSA.toFixed(1) + ' deg',                     ''],
         ['Centro lobo',                        R.intakeCenter.toFixed(1) + ' ATDC',           R.exhaustCenter.toFixed(1) + ' BTDC'],
-        ['Apertura',                           R.intakeOpenBTC.toFixed(1) + ' BTC',           R.exOpenBBC.toFixed(1) + ' BBC'],
-        ['Chiusura',                           R.intakeCloseABC.toFixed(1) + ' ABC',          R.exCloseATC.toFixed(1) + ' ATC'],
-        ['Overlap',                            R.overlap.toFixed(1) + ' deg',                 ''],
+        ['Apertura',                           fmtNum(R.intakeOpenBTC, 1) + ' BTC',           fmtNum(R.exOpenBBC, 1) + ' BBC'],
+        ['Chiusura',                           fmtNum(R.intakeCloseABC, 1) + ' ABC',          fmtNum(R.exCloseATC, 1) + ' ATC'],
+        ['Overlap',                            fmtNum(R.overlap, 1) + ' deg',                 ''],
         ['Alzata al PMS',                      R.liftInTDC.toFixed(3) + ' mm',                R.liftExTDC.toFixed(3) + ' mm'],
         ['Area sotto curva',                   R.areaIn.toFixed(1) + ' mm*deg',               R.areaEx.toFixed(1) + ' mm*deg'],
         ['Asimmetria lobo',                    R.asymIn.toFixed(1) + ' %',                    R.asymEx.toFixed(1) + ' %'],

@@ -932,40 +932,66 @@ function camPeakPos(camLift) {
 // gioco sottratto) trova il picco, poi l'attraversamento CRESCENTE della soglia
 // prima del picco (apertura) e quello DECRESCENTE dopo (chiusura), interpolati
 // sub-grado. Gestisce il wrap 720→1. Ritorna indici crank frazionari.
-function findEvents(crank, threshold) {
+// AUDIT MAT-01 (controrevisione): scansione a REGIONI di tutto il giro, non
+// più la sola coppia attorno al picco globale (che ignorava silenziosamente
+// un secondo lobo). Regole documentate:
+//  - una regione sopra-soglia è un LOBO CANDIDATO se il suo picco supera
+//    thr + max(20% dell'escursione del picco globale, risoluzione strumento):
+//    gli spuntoni di rumore appena sopra soglia non contano;
+//  - 1 candidato  -> eventi da openIdx/closeIdx interpolati (wrap gestito);
+//  - >1 candidati (due lobi, due plateau equivalenti, ...) -> ambiguous=true,
+//    openIdx/closeIdx NaN e TUTTE le coppie in .candidates: il chiamante non
+//    deve scegliere in silenzio.
+// resolution (mm) = risoluzione dello strumento di misura; default 0.01
+// (una tacca del comparatore centesimale del banco).
+function findEvents(crank, threshold, resolution) {
     var thr = (typeof threshold === 'number' && threshold > 0) ? threshold : 0.05;
+    var res = (typeof resolution === 'number' && resolution > 0) ? resolution : 0.01;
     function at(i) { return Number(crank[((i - 1) % 720 + 720) % 720 + 1]) || 0; }
+    function norm(x) { return ((x - 1) % 720 + 720) % 720 + 1; }
     // picco globale
     var pk = 1, best = -Infinity;
     for (var d = 1; d <= 720; d++) { var v = at(d); if (v > best) { best = v; pk = d; } }
-    if (!(best > thr)) return { openIdx: NaN, closeIdx: NaN, durationDeg: 0, peakIdx: pk, ambiguous: true };
-    // apertura: cammina indietro dal picco finché si scende sotto soglia
-    var i, prev, cur, frac;
-    var openIdx = NaN, closeIdx = NaN, guard;
-    guard = 0;
-    for (i = pk; guard++ < 720; i--) {
-        cur = at(i); prev = at(i - 1);
-        if (prev < thr && cur >= thr) {                 // crossing crescente tra (i-1) e i
-            frac = (thr - prev) / (cur - prev);         // 0..1
-            openIdx = (i - 1) + frac;
-            break;
-        }
+    if (!(best > thr)) return { openIdx: NaN, closeIdx: NaN, durationDeg: 0, peakIdx: pk, ambiguous: true, reason: 'profilo sotto soglia', candidates: [] };
+    // Tutti i crossing del giro, interpolati sub-grado.
+    // rising tra i e i+1: at(i) < thr <= at(i+1); falling: at(i) >= thr > at(i+1)
+    var rising = [], falling = [];
+    for (var i = 1; i <= 720; i++) {
+        var a = at(i), b = at(i + 1);
+        if (a < thr && b >= thr) rising.push(i + (thr - a) / (b - a));
+        if (a >= thr && b < thr) falling.push(i + (a - thr) / (a - b));
     }
-    guard = 0;
-    for (i = pk; guard++ < 720; i++) {
-        cur = at(i); var nxt = at(i + 1);
-        if (cur >= thr && nxt < thr) {                  // crossing decrescente tra i e (i+1)
-            frac = (cur - thr) / (cur - nxt);
-            closeIdx = i + frac;
-            break;
-        }
+    if (!rising.length || !falling.length) {
+        // sopra soglia per l'intero giro: nessun evento definibile
+        return { openIdx: NaN, closeIdx: NaN, durationDeg: 0, peakIdx: pk, ambiguous: true, reason: 'nessun attraversamento della soglia', candidates: [] };
     }
-    if (isNaN(openIdx) || isNaN(closeIdx)) return { openIdx: openIdx, closeIdx: closeIdx, durationDeg: 0, peakIdx: pk, ambiguous: true };
-    var dur = closeIdx - openIdx;
-    if (dur <= 0) dur += 720;                            // wrap
-    // normalizza gli indici a 1..720 mantenendo la frazione
-    function norm(x) { return ((x - 1) % 720 + 720) % 720 + 1; }
-    return { openIdx: norm(openIdx), closeIdx: norm(closeIdx), durationDeg: dur, peakIdx: pk, ambiguous: false };
+    // Regioni: ogni rising accoppiato col primo falling successivo (circolare)
+    var regions = [];
+    for (var r = 0; r < rising.length; r++) {
+        var o = rising[r], c = null, gapBest = Infinity;
+        for (var f = 0; f < falling.length; f++) {
+            var gap = falling[f] - o; if (gap <= 0) gap += 720;
+            if (gap < gapBest) { gapBest = gap; c = falling[f]; }
+        }
+        // picco della regione (scansione dall'apertura alla chiusura)
+        var rp = -Infinity;
+        for (var s = 0, lim = Math.ceil(gapBest); s <= lim; s++) {
+            var vv = at(Math.ceil(o) + s); if (vv > rp) rp = vv;
+        }
+        regions.push({ openIdx: norm(o), closeIdx: norm(c), durationDeg: gapBest, peak: rp });
+    }
+    // Regola documentata: candidato = picco regione >= thr + max(20% escursione, risoluzione)
+    var minPeak = thr + Math.max(0.2 * (best - thr), res);
+    var candidates = regions.filter(function (g) { return g.peak >= minPeak; });
+    if (!candidates.length) candidates = regions;   // difensivo: mai lista vuota qui
+    if (candidates.length > 1) {
+        return { openIdx: NaN, closeIdx: NaN, durationDeg: 0, peakIdx: pk,
+                 ambiguous: true, reason: candidates.length + ' lobi/regioni equivalenti sopra soglia',
+                 candidates: candidates };
+    }
+    var reg = candidates[0];
+    return { openIdx: reg.openIdx, closeIdx: reg.closeIdx, durationDeg: reg.durationDeg,
+             peakIdx: pk, ambiguous: false, candidates: [reg] };
 }
 
 // Centri lobo EFFETTIVI con anticipo applicato (audit MAT-04): montare la
