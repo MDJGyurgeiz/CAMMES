@@ -657,7 +657,7 @@ var _engineOnMessage = function(event) {
     // Fine movimento manuale: spegni subito il blu del LED Motore
     if (msg === '*mv' || msg === '*mabort') window._motorMovingUntil = 0;
 
-    // STOP di emergenza confermato dal firmware (movimento interrotto a metà)
+    // STOP software confermato dal firmware (movimento interrotto a metà) — REL-03
     if (msg === '*mabort') {
         if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Movimento interrotto',
             body: 'Il motore si &egrave; fermato su richiesta. La posizione &egrave; a met&agrave; movimento: usa l\'encoder o lo Zero virtuale per riorientarti.', duration: 6000 });
@@ -1311,7 +1311,8 @@ function stop() {
     // creato in futuro un bottone RIPRENDI dedicato.
     // 'x' viene inviato SEMPRE (non solo con scan autonomo attivo): dal
     // firmware 3.1 interrompe anche i movimenti lunghi in corso ($±NNN,
-    // p/q a metà passo) — è lo STOP di emergenza del banco.
+    // p/q a metà passo) — è lo STOP software del banco (REL-03: nessun
+    // sistema di emergenza fisica richiesto dal perimetro prodotto).
     if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1) {
         try { sendSocket.send('x'); } catch (e) {}
     }

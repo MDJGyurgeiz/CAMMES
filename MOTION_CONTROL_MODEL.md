@@ -9,9 +9,9 @@
 
 - Il **server** è l'unica entità che scrive sulla seriale. Nessun testo
   WebSocket arbitrario raggiunge l'Arduino.
-- Non si aggiunge hardware di arresto (perimetro concordato col committente).
-  STOP, FREE e controllo unico sono requisiti **software**. L'E-stop fisico NC
-  resta una raccomandazione hardware separata (fuori scope).
+- Non si aggiunge hardware di arresto (perimetro concordato col committente:
+  non sono richiesti sistemi di emergenza fisica — REL-03). STOP software,
+  watchdog, FREE e controllo unico sono requisiti **software** del prodotto.
 
 ## 2. Controller lease
 

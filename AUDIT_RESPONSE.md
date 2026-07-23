@@ -266,9 +266,10 @@ Tutti i **15 P0** e la grande maggioranza dei P1/P2 sono chiusi (21 lotti,
 commit `24473ad`→HEAD). Suite **137 check verdi**, lint 0, `npm audit` pulito
 salvo `pkg` (devDep, nessun fix a monte). Restano fuori, con motivazione:
 
-- **Richiede hardware / azione fisica**: **FW-03** (E-stop NC e rischio fisico
-  residuo — validato il watchdog software, l'E-stop resta un fungo in serie
-  all'alimentazione); **FW-07/FW-12** (schema/BOM e verifica LM339/impulso pin
+- **Richiede hardware / azione fisica**: **FW-03** (watchdog software
+  VALIDATO; per decisione del proprietario NON sono richiesti sistemi di
+  emergenza fisica — REL-03: il perimetro del prodotto è lo STOP software);
+  **FW-07/FW-12** (schema/BOM e verifica LM339/impulso pin
   all'oscilloscopio); **flash+bench del fw 3.6** (COM8 bloccata da un processo
   wedged: serve un replug USB, poi `bench_fw34_test.js`); **REP-01..04**
   (rigenerazione report VW: serve la ri-scansione delle camme rimontate).

@@ -346,7 +346,7 @@ void emitNack(long seq, const __FlashStringHelper *code) {
 // delay aggiuntivo di cfgRampExtraUs μs. Lo step centrale usa solo
 // cfgPulseUs. Il jolt iniziale/finale (che eccita le risonanze) sparisce.
 // INTERROMPIBILE: ogni 16 passi controlla la seriale — 'x' ferma il movimento
-// (STOP di emergenza: prima un "Ruota 300°" sbagliato non era fermabile se non
+// (STOP software: prima un "Ruota 300°" sbagliato non era fermabile se non
 // staccando la corrente). Ritorna false se interrotto; i '\n' del keep-alive
 // vengono scartati per non intasare il buffer RX durante i movimenti lunghi.
 bool stepperMove(int16_t units) {

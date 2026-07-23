@@ -172,7 +172,7 @@ async function main() {
     check('heartbeat dedicato: \\n non tiene vivo → EVT STOPPED HOST_TIMEOUT',
           !!stopW && /HOST_TIMEOUT/.test(stopW.line), stopW ? ('dopo ' + (stopW.t - tW) + ' ms: ' + stopW.line) : 'nessuno stop (watchdog v4 NON scattato!)');
     hbOn();
-    // STOP di emergenza universale ancora attivo
+    // STOP software universale ancora attivo (REL-03)
     await sleep(300);
     var sHb = seq(); send(sHb + ' STATUS\n');
     var h2 = await waitFor('HELLO ', 2500);
