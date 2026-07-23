@@ -1132,11 +1132,30 @@ function start() {
 function _showRepeatedRunsStats() {
     var N = repeatedRuns.length;
     if (N < 2) return;
+    // AUDIT DATA-03 (controrevisione v3.4.1): la media UFFICIALE include SOLO
+    // i run COMPLETI — un run con buchi non entra (prima creava un profilo
+    // ibrido: gradi con count diversi da run diversi). Gli esclusi vengono
+    // dichiarati. Se NESSUN run è completo, niente media ufficiale: resta
+    // l'ultimo run (incompleto, marcato #stato=INCOMPLETO al salvataggio).
+    var cls = window.averageCompleteRuns(repeatedRuns);
+    if (cls.excluded.length > 0 && window.cammesToast) {
+        window.cammesToast({ kind: 'warn', title: cls.excluded.length + ' run esclusi dalla media',
+            body: cls.excluded.map(function (e) { return 'run ' + e.run + ' (' + e.missing + ' gradi mancanti)'; }).join(' &middot; ') +
+                  '. La media ufficiale usa solo i run completi' + (cls.official ? ' (' + cls.included.join(', ') + ')' : '') + '.',
+            duration: 10000 });
+    }
+    if (!cls.official) {
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Nessun run completo: media NON calcolata',
+            body: 'Tutti i ' + N + ' run hanno gradi mancanti: nessuna media ufficiale. Resta l\'ultimo run, INCOMPLETO (il salvataggio lo marca #stato=INCOMPLETO). Controlla comparatore/fissaggi e ripeti.', duration: 12000 });
+        window._lastRepeatStats = { runs: N, runsIncluded: 0, sigmaMax: NaN, sigmaPeak: NaN, cvMax: NaN };
+        return;
+    }
+    var Nused = cls.included.length;
     // AUDIT MET-01 (controrevisione): media SENZA zero-fill. Prima un grado
     // mancante in TUTTI i run diventava 0 fisico (count>0?mean:0) e il profilo
     // salvato sembrava completo. Ora averageRuns lascia il grado INVALIDO e la
     // logica di completamento (che conta pdata non-finiti) lo segnala.
-    var agg = window.averageRuns(repeatedRuns);
+    var agg = cls.avg;
     var avgLift = agg.values, stdLift = agg.std;
     var peakStdAtMaxg = 0, maxStd = 0, maxStdDeg = 0, maxCv = 0;
     for (var d = 1; d <= 360; d++) {
@@ -1165,10 +1184,11 @@ function _showRepeatedRunsStats() {
             body: 'Alcuni gradi risultano mancanti in tutti i ' + N + ' run: NON vengono azzerati. Il profilo medio è INCOMPLETO.', duration: 10000 });
     }
     max = maxAvg; maxg = maxAvgDeg;
-    document.mas.mas.value = " max " + maxg + " gradi  " + max.toFixed(3) + " mm (n=" + N + ")";
+    document.mas.mas.value = " max " + maxg + " gradi  " + max.toFixed(3) + " mm (n=" + Nused + ")";
     // Statistiche di ripetibilità per i metadati del file salvato (sav):
     // sono la prova documentale della misura, prima vivevano solo nel toast.
-    window._lastRepeatStats = { runs: N, sigmaMax: maxStd, sigmaPeak: peakStdAtMaxg, cvMax: maxCv };
+    // runs = run ENTRATI in media (DATA-03); runsTotal = eseguiti.
+    window._lastRepeatStats = { runs: Nused, runsTotal: N, sigmaMax: maxStd, sigmaPeak: peakStdAtMaxg, cvMax: maxCv };
 
     if (config && config.data) {
         config.data.labels.length = 0;
@@ -1189,7 +1209,7 @@ function _showRepeatedRunsStats() {
     else                  { verdict = 'scadente';   kind = 'err'; }
     if (window.cammesToast) {
         window.cammesToast({
-            kind: kind, title: N + ' run completati &middot; ripetibilit&agrave; ' + verdict,
+            kind: kind, title: Nused + '/' + N + ' run in media &middot; ripetibilit&agrave; ' + verdict,
             body: 'Picco medio <b>' + maxAvg.toFixed(3) + ' mm</b> a <b>' + maxAvgDeg +
                   '&deg;</b> &middot; &sigma; max <b>' + maxStd.toFixed(3) + ' mm</b> @ ' + maxStdDeg +
                   '&deg; &middot; CV max <b>' + maxCv.toFixed(2) + '%</b>',

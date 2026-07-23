@@ -1104,6 +1104,53 @@ function averageRuns(runs) {
     return { values: values, valid: valid, count: count, std: std, missingCount: missingCount };
 }
 
+// AUDIT DATA-04 (controrevisione v3.4.1): gate UNICO di valutabilità. Un
+// output CONCLUSIVO (analisi ufficiale, confronto A/B, conformità nominale,
+// cam card, CSV/PDF) è ammesso solo per un profilo COMPLETO e pulito. Il gate
+// va usato da TUTTI i percorsi, non ricostruito caso per caso — e controlla
+// anche #stato=INCOMPLETO nei metadati: un file legacy zero-riempito con
+// 360 righe ha missingCount=0 ma NON è una misura completa.
+// Ritorna { ok, reason } (reason in italiano, mostrabile all'utente).
+function canProduceOfficialResult(p) {
+    if (!p) return { ok: false, reason: 'nessun profilo caricato' };
+    if (p.meta && String(p.meta.stato || '').toUpperCase() === 'INCOMPLETO') {
+        return { ok: false, reason: 'file marcato #stato=INCOMPLETO (misura interrotta o con buchi)' };
+    }
+    if (p.conventionMixed) return { ok: false, reason: 'convenzione dei gradi mista (0..359 e 1..360 nello stesso file)' };
+    if ((p.missingCount || 0) > 0) return { ok: false, reason: p.missingCount + ' gradi senza misura' };
+    if (p.ok === false) return { ok: false, reason: 'anomalie nel file (duplicati/frazionari/righe invalide)' };
+    return { ok: true, reason: '' };
+}
+
+// AUDIT DATA-03 (controrevisione v3.4.1): media dei run ripetuti SOLO sui run
+// COMPLETI. La media naive di tutti i run produceva un profilo IBRIDO: run A
+// completo (tutti=1) + run B incompleto (grado 42 mancante, altri=3) dava
+// grado 42=1/count=1 e grado 43=2/count=2 — né il run completo né una media
+// omogenea. Qui: un run è COMPLETO se ogni grado 1..360 ha un valore finito
+// (null/''/undefined = assenza, DATA-02); gli incompleti sono ESCLUSI dalla
+// media ufficiale e dichiarati (run 1-based + gradi mancanti), così la UI può
+// dire cosa è entrato e cosa no. official=false se nessun run è completo.
+function averageCompleteRuns(runs) {
+    var included = [], excluded = [];
+    for (var r = 0; r < (runs ? runs.length : 0); r++) {
+        var missing = 0;
+        for (var d = 1; d <= 360; d++) {
+            if (parseFiniteMeasurement(runs[r] ? runs[r][d] : null) === null) missing++;
+        }
+        if (missing === 0) included.push(r);
+        else excluded.push({ run: r + 1, missing: missing });
+    }
+    var avg = included.length
+        ? averageRuns(included.map(function (i) { return runs[i]; }))
+        : null;
+    return {
+        included: included.map(function (i) { return i + 1; }),   // 1-based per la UI
+        excluded: excluded,
+        avg: avg,
+        official: included.length >= 1
+    };
+}
+
 // ---- VERIFICA BANCO (audit MET-02): verdetto di salute su pezzo cilindrico --
 // pdata[1..360] = letture sul cilindro rettificato (alzata attesa 0 ovunque).
 // REGOLA: un campione mancante o invalido non può MAI migliorare l'esito.
@@ -1282,6 +1329,8 @@ var api = {
     parseFiniteMeasurement: parseFiniteMeasurement,
     serializeDiagnosticProfile: serializeDiagnosticProfile,
     averageRuns: averageRuns,
+    averageCompleteRuns: averageCompleteRuns,
+    canProduceOfficialResult: canProduceOfficialResult,
     benchVerdict: benchVerdict,
     simulateCompliance: simulateCompliance,
     simulateCompliance2DOF: simulateCompliance2DOF,

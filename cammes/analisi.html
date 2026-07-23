@@ -2358,6 +2358,8 @@ function importIntake() {
         window._metaIn.validCount = camLift.validCount;
         window._metaIn.missingCount = camLift.missingCount || 0;
         window._metaIn.incomplete = (camLift.missingCount || 0) > 0;
+        window._metaIn.parseOk = camLift.ok;                       // DATA-04: per il gate
+        window._metaIn.conventionMixed = !!camLift.conventionMixed;
         rawIntake = camLift.slice();                       // curva sorgente gradi-camma
         camLift = applyVirtualFollower(camLift, 'intake');
         folIntake = camLift.slice();
@@ -2411,6 +2413,8 @@ function importExhaust() {
         window._metaEx.validCount = camLift.validCount;
         window._metaEx.missingCount = camLift.missingCount || 0;
         window._metaEx.incomplete = (camLift.missingCount || 0) > 0;
+        window._metaEx.parseOk = camLift.ok;               // DATA-04: per il gate
+        window._metaEx.conventionMixed = !!camLift.conventionMixed;
         rawExhaust = camLift.slice();                      // curva sorgente gradi-camma
         camLift = applyVirtualFollower(camLift, 'exhaust');
         folExhaust = camLift.slice();
@@ -2960,6 +2964,15 @@ function smoothArray(arr, windowSize) {
 
 // ========== ANALYSIS ==========
 
+// AUDIT DATA-04: adatta il metadato per-lato (catturato all'import) alla forma
+// che il gate canProduceOfficialResult si aspetta ({meta, missingCount, ok,
+// conventionMixed}). Un lato mai caricato → oggetto nullo → gate ok:false.
+function _sideProfileMeta(m) {
+    if (!m) return null;
+    return { meta: m, missingCount: m.missingCount || 0,
+             ok: m.parseOk !== false, conventionMixed: !!m.conventionMixed };
+}
+
 function analyze() {
     if (!intakeLoaded || !exhaustLoaded) {
         if (window.cammesToast) {
@@ -2968,6 +2981,21 @@ function analyze() {
         } else {
             alert('Importare entrambi i file aspirazione e scarico prima di analizzare.');
         }
+        return;
+    }
+
+    // AUDIT DATA-04 (controrevisione v3.4.1): gate UNICO di valutabilità.
+    // L'analisi UFFICIALE (da cui derivano risultati, cam card, PDF, CSV) è
+    // ammessa solo su profili COMPLETI e puliti — l'import diagnostico resta
+    // possibile (grafico), ma qui ci si ferma con il MOTIVO esplicito.
+    var _gIn = canProduceOfficialResult(_sideProfileMeta(window._metaIn));
+    var _gEx = canProduceOfficialResult(_sideProfileMeta(window._metaEx));
+    if (!_gIn.ok || !_gEx.ok) {
+        var _gWhy = [];
+        if (!_gIn.ok) _gWhy.push('aspirazione: ' + _gIn.reason);
+        if (!_gEx.ok) _gWhy.push('scarico: ' + _gEx.reason);
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Analisi NON VALUTABILE',
+            body: _gWhy.join('<br>') + '<br>L\'analisi ufficiale richiede misure complete e pulite: la vista resta solo diagnostica.', duration: 12000 });
         return;
     }
 

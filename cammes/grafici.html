@@ -524,10 +524,13 @@ function loadNominal() {
 function evalNominal() {
     var box = document.getElementById('verdictBox');
     if (!_nominal) { if (box) box.innerHTML = ''; return; }
-    // AUDIT APP-09 (controrevisione): un profilo INCOMPLETO non può produrre un
-    // verdetto di conformità. Se il nominale ha buchi, niente collaudo affatto.
-    if (_nominal.missingCount > 0) {
-        if (box) box.innerHTML = '<div style="font-size:13px;color:var(--danger,#e74c3c);font-weight:700;">&#9888; NON VALUTABILE — profilo nominale INCOMPLETO (' + _nominal.missingCount + ' gradi mancanti). Carica un nominale completo (360 gradi) per il collaudo.</div>';
+    // AUDIT APP-09 + DATA-04 (controrevisione): il verdetto di conformità passa
+    // dal gate UNICO canProduceOfficialResult — copre anche il file legacy
+    // zero-riempito con #stato=INCOMPLETO (missingCount=0 ma NON completo),
+    // le anomalie del parser e la convenzione gradi mista.
+    var _nomGate = canProduceOfficialResult(_nominal);
+    if (!_nomGate.ok) {
+        if (box) box.innerHTML = '<div style="font-size:13px;color:var(--danger,#e74c3c);font-weight:700;">&#9888; NON VALUTABILE — profilo nominale: ' + (window.cammesEscape ? window.cammesEscape(_nomGate.reason) : _nomGate.reason) + '. Carica un nominale completo e pulito (360 gradi) per il collaudo.</div>';
         // banda comunque disegnata sotto, ma nessun verdetto certificabile
     }
     var tol = Math.abs(Number(document.getElementById('tolMm').value)) || 0.10;
@@ -548,7 +551,7 @@ function evalNominal() {
     window.myLine.update('none');
 
     // verdetto per ogni curva caricata (ognuna col PROPRIO allineamento)
-    var nominalOk = _nominal.missingCount === 0;
+    var nominalOk = _nomGate.ok;   // DATA-04: gate unico, non solo missingCount
     var rows = '';
     for (var c = 0; c < 4; c++) {
         if (!ds[c] || !ds[c].data.length) continue;

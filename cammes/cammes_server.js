@@ -1415,8 +1415,12 @@ wsServer.on('connection', function (ws) {
     // '#ctl:info ...': i client v3 che non lo conoscono lo ignorano.
     try {
         var _fwv = deviceFw ? (deviceFw.match(/ver=([\d.]+)/) || [])[1] : null;
+        // stateAge (s): da quanto lo stato è stato confermato dal device.
+        // -1 = mai visto uno "state=" (il client non deve fidarsi del campo state).
+        var _age = deviceStateAt ? Math.round((Date.now() - deviceStateAt) / 1000) : -1;
         ws.send('#ctl:info proto=' + (deviceProto || 0) + ' fw=' + (_fwv || '?') +
-                ' state=' + (deviceState || '?') + ' serial=' + ((serialPort && serialPort.isOpen) ? 1 : 0));
+                ' state=' + (deviceState || '?') + ' stateAge=' + _age +
+                ' serial=' + ((serialPort && serialPort.isOpen) ? 1 : 0));
     } catch (e) {}
 
     ws.on('message', function (data) {

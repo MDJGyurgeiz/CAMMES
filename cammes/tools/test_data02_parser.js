@@ -89,7 +89,35 @@ for (var k2 = 1; k2 <= 360; k2++) empt[k2] = '';
 var bv2 = M.benchVerdict(empt);
 check('benchVerdict su 360 stringhe vuote -> NON_VALUTABILE', bv2.status === 'NON_VALUTABILE', bv2.status);
 
+// --- DATA-04: gate UNICO di valutabilità -------------------------------
+console.log('--- gate canProduceOfficialResult (DATA-04) ---');
+var full = [];
+full.push('_pline');
+for (var q = 1; q <= 360; q++) full.push(q + ',1.000');
+var gOK = M.canProduceOfficialResult(M.parseCamFile(full.join('\r\n') + '\r\n'));
+check('gate: profilo completo e pulito -> OK', gOK.ok === true);
+
+var gInc = M.canProduceOfficialResult(M.parseCamFile('_pline\r\n1,1.0\r\n2,1.0\r\n'));
+check('gate: 2/360 -> NO (gradi senza misura)', gInc.ok === false && /senza misura/i.test(gInc.reason), gInc.reason);
+
+// T15: file legacy ZERO-RIEMPITO (360 righe) ma marcato #stato=INCOMPLETO:
+// missingCount=0, eppure NON deve superare il gate.
+var t15 = ['_pline', '#stato=INCOMPLETO'];
+for (var w = 1; w <= 360; w++) t15.push(w + ',0.0000');
+var gT15 = M.canProduceOfficialResult(M.parseCamFile(t15.join('\r\n') + '\r\n'));
+check('gate T15: 360 righe zero-riempite + #stato=INCOMPLETO -> NO', gT15.ok === false && /INCOMPLETO/.test(gT15.reason), gT15.reason);
+
+var dup = full.slice(); dup.push('180,9.999');   // duplicato
+var gDup = M.canProduceOfficialResult(M.parseCamFile(dup.join('\r\n') + '\r\n'));
+check('gate: duplicati -> NO (anomalie)', gDup.ok === false, gDup.reason);
+
+var gMix = M.canProduceOfficialResult(M.parseCamFile('_pline\r\n0,1.0\r\n5,1.1\r\n360,1.2\r\n'));
+check('gate: convenzione mista -> NO', gMix.ok === false, gMix.reason);
+
+check('gate: profilo nullo -> NO', M.canProduceOfficialResult(null).ok === false);
+
 console.log('');
 if (fails) { console.log('RISULTATO: ' + fails + ' FALLITI\n'); process.exit(1); }
 console.log('VALIDATO: assenza e zero sono distinti in parser, media e verdetto banco;');
-console.log('convenzione 0..359 riconosciuta, mista rifiutata, 1..360 invariato.\n');
+console.log('convenzione 0..359 riconosciuta, mista rifiutata, 1..360 invariato;');
+console.log('gate di valutabilità unico (incl. caso T15 zero-riempito).\n');
