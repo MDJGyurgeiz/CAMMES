@@ -1363,52 +1363,14 @@ function removeCamBaseline(raw) {
     return out;
 }
 
-// Re-indicizza il profilo (alzata per grado-passo) sulla posizione REALE letta
-// dall'encoder (4 conteggi/° camma). Immune a slittamento dello stepper e a
-// errori di passi/grado. Ritorna un nuovo array [1..360] oppure null (→ il
-// chiamante tiene il profilo a passi) se i dati encoder sono insufficienti.
-//   - riferisce il conteggio al primo campione valido (offset libero)
-//   - ricava direzione dal segno dello span
-//   - aggrega i campioni per grado-encoder e interpola eventuali buchi
-function reindexByEncoder(pd, pdEnc) {
-    var COUNTS_PER_DEG = 4, i;
-    var first = -1, last = -1;
-    for (i = 1; i <= 360; i++) { if (typeof pdEnc[i] === 'number' && !isNaN(pdEnc[i])) { if (first < 0) first = i; last = i; } }
-    if (first < 0 || first === last) return null;
-    var E0 = pdEnc[first], span = pdEnc[last] - E0;
-    // AUDIT MAT-08: soglia RELATIVA al giro atteso (~1440 cnt). La vecchia
-    // soglia assoluta (|span| >= 360 cnt) accettava anche MEZZO giro (718
-    // cnt) come giro completo, ripiegando la camma su se stessa in silenzio.
-    // Sotto il 70% del giro atteso i dati encoder non descrivono un giro.
-    if (Math.abs(span) < 0.7 * 360 * COUNTS_PER_DEG) return null;
-    var sign = span >= 0 ? 1 : -1;
-    var acc = new Array(361), cnt = new Array(361);
-    for (i = 1; i <= 360; i++) { acc[i] = 0; cnt[i] = 0; }
-    var maxDiv = 0;
-    for (i = 1; i <= 360; i++) {
-        if (typeof pdEnc[i] !== 'number' || isNaN(pdEnc[i])) continue;
-        var v = pd[i]; if (typeof v !== 'number' || isNaN(v)) continue;
-        var deg = ((Math.round((pdEnc[i] - E0) * sign / COUNTS_PER_DEG)) % 360 + 360) % 360 + 1;
-        acc[deg] += v; cnt[deg]++;
-        var dv = Math.abs(deg - i); if (dv > 180) dv = 360 - dv; if (dv > maxDiv) maxDiv = dv;
-    }
-    var out = new Array(361); out[0] = 0;
-    var have = 0;
-    for (i = 1; i <= 360; i++) { if (cnt[i] > 0) { out[i] = acc[i] / cnt[i]; have++; } else out[i] = null; }
-    if (have < 180) return null;                      // troppi buchi → non affidabile
-    for (i = 1; i <= 360; i++) {                       // interpola i buchi (lineare, circolare)
-        if (out[i] !== null) continue;
-        var pv = null, qv = null, pd2 = 0, qd = 0, s;
-        for (s = 1; s <= 360; s++) { var pi = ((i - s - 1) % 360 + 360) % 360 + 1; if (out[pi] !== null) { pv = out[pi]; pd2 = s; break; } }
-        for (s = 1; s <= 360; s++) { var qi = ((i + s - 1) % 360 + 360) % 360 + 1; if (out[qi] !== null) { qv = out[qi]; qd = s; break; } }
-        if (pv === null && qv === null) out[i] = 0;
-        else if (pv === null) out[i] = qv;
-        else if (qv === null) out[i] = pv;
-        else out[i] = pv + (qv - pv) * pd2 / (pd2 + qd);
-    }
-    window._encReindexDivergence = maxDiv;
-    return out;
-}
+// AUDIT MAT-02 (controrevisione): reindexByEncoder RIMOSSA (2026-07-23).
+// La re-indicizzazione su encoder non è più usata dalla UI dal 2026-07-05
+// (al banco passi ed encoder coincidono entro 1° sull'intero giro, opzione
+// ritirata da alzata.html); la validazione era troppo permissiva (accettava
+// un giro al 90%, span 150%, inversioni) e tenerla in lib la faceva sembrare
+// un percorso affidabile. L'encoder resta in uso per zero virtuale, reset e
+// allarme slittamento (alzata.html). Storia completa: git log lib/cammes-math.js
+// e tools/test_encoder_reindex.js (rimosso insieme).
 
 var api = {
     _det3: _det3,
@@ -1435,8 +1397,7 @@ var api = {
     simulateCompliance3DOF: simulateCompliance3DOF,
     detectValveFloat: detectValveFloat,
     springSurgeFreqHz: springSurgeFreqHz,
-    simulateSpringSurge: simulateSpringSurge,
-    reindexByEncoder: reindexByEncoder
+    simulateSpringSurge: simulateSpringSurge
 };
 for (var k in api) root[k] = api[k];   // browser: stessi nomi globali di prima
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

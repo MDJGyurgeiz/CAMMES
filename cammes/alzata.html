@@ -1473,7 +1473,9 @@ function sav() {
     // Asse angolare = passi motore: al banco (07-05) passi ed encoder coincidono
     // entro 1° sull'intero giro, quindi l'opzione di re-indicizzazione encoder è
     // stata ritirata dalla UI (l'encoder resta in uso per zero virtuale, reset
-    // e allarme slittamento; reindexByEncoder vive in lib/cammes-math.js).
+    // e allarme slittamento). AUDIT MAT-02: reindexByEncoder rimossa anche
+    // dalla lib (2026-07-23) — validazione troppo permissiva per un percorso
+    // non più usato; storia in git.
     // AUDIT MET-01: si scrivono SOLO i gradi con lettura valida — prima i bin
     // mai riempiti finivano nel file come "undefined,undefined" e alla
     // rilettura diventavano zeri indistinguibili da misure vere. I gradi
