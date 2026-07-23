@@ -2,24 +2,24 @@
   "schema": "cammes-release-manifest/1",
   "app": {
     "name": "CAMMES",
-    "version": "3.4.1",
+    "version": "3.4.2",
     "channel": "beta-tecnica",
-    "note": "Secondo giro audit (controrevisione Codex) completato: P0 residui chiusi, protezioni firmware e data-path VALIDATI FISICAMENTE al banco remoto. Metrologia e alcuni test hardware restano aperti. Vedi REMAINING_RISKS.md."
+    "note": "Terzo giro (controrevisione funzionale v3.4.1): i 3 P0 (DATA-01, CTRL-01, FW-01) sono FIXED con test che fallivano prima della patch; FW-01 e FW-03 validati AL BANCO (fw 4.1). P1/P2 del handoff in lavorazione (CTRL-02 parziale, FLASH-01, DATA-02 fatti). Vedi REMAINING_RISKS.md."
   },
   "firmware": {
-    "version": "4.0",
+    "version": "4.1",
     "protocol": "v4 additivo/negoziato (proto=4) + v3 pienamente retrocompatibile (PROTOCOL.md); UI su v3, bridge server v4 per lo scan",
     "hex": "cammes/fw/master.ino.hex",
-    "hexSha256": "6968c1fe05985f6bebfd1e864e7557244c68d51cd4fcf813bc207ab935832fe4",
+    "hexSha256": "604c00c2cc4968b489b1a18bf406ea58df30a3b9ffae485eca48726d5c2c9f4b",
     "fqbn": "arduino:avr:uno",
     "toolchain": "arduino-cli / arduino:avr@1.8.7 (PINNATO)",
     "sourceReproducible": true,
     "sourceReproducibleNote": "REL-07 CHIUSO: build bit-per-bit riproducibile, verificata in CI (.github/workflows/firmware.yml) e in npm test (tools/verify_firmware.js)",
-    "benchValidated": "2026-07-19 COM5: regressione v3 39/39 (bench_fw34_test.js) + protocollo v4 25/25 (bench_v4_test.js) + bridge scan/STOP (bench_bridge_test.js)"
+    "benchValidated": "2026-07-23 COM5: v3 39/39 + v4 28/28 (incl. FW-01 watchdog SCAN e true-positive FW-03 su guasto encoder reale)"
   },
-  "commit": "aggiornato al commit di release (tag v3.4.0)",
+  "commit": "tag v3.4.2 (il commit esatto e il tag coincidono alla release)",
   "gates": {
-    "npmTest": "185 check verdi (suite software)",
+    "npmTest": "280+ check verdi (suite software, incl. mock-seriale e round-trip profili)",
     "lint": "0 errori",
     "npmAudit": "1 moderata (pkg, devDep, no fix) — REL-02",
     "exeSigned": false,
@@ -40,13 +40,13 @@
   },
   "openP0": [],
   "openItems": [
-    "true-positive fault encoder (scollegamento fisico del cavo) — NEEDS_HARDWARE",
-    "FW-07 schema/BOM/isteresi LM339 + FW-12 ordine pin all'oscilloscopio — NEEDS_HARDWARE",
-    "metrologia banco (ripetibilita'/linearita'/closure) e REP-* — NEEDS_HARDWARE/INPUT",
-    "SEC-01 auth token LAN — decisione UX committente",
-    "REL-01 aggiornamento jsPDF — download da approvare",
-    "REL-02/05 pkg archiviato + exe non firmato — certificato/migrazione SEA",
-    "Fase 2b v4: EVT nativi nella UI + bridge $/MOVE — non-breaking"
+    "CTRL-02 completamento: coda un-comando-pendente, FREE/LOCK/STOP pending in UI, keepalive contestuale, lease TTL applicativo — PARTIAL",
+    "DATA-03/04: media solo run COMPLETE + gate valutabilita' centralizzato — in lavorazione",
+    "FW-02/03 (fw): stati/verbi nominali, dedup seq, pipeline acquisizione unica — in lavorazione",
+    "APP-01, DYN-01/02, MAT-01/02, TEST-01: in lavorazione (handoff v3.4.1)",
+    "true-positive fault encoder: OSSERVATO su guasto reale 2026-07-23 (chiuso)",
+    "FW-07 LM339 + FW-12 oscilloscopio + metrologia banco — NEEDS_HARDWARE",
+    "SEC-01 auth token LAN / REL-01 jsPDF / REL-02-05 firma exe — decisioni committente"
   ],
   "warning": "Beta tecnica: le protezioni software/firmware sono validate al banco, ma la caratterizzazione metrologica non e' completa e l'exe non e' firmato. Non presentare le misure come certificate."
 }

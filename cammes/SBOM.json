@@ -6,7 +6,7 @@
     "component": {
       "type": "application",
       "name": "cammes",
-      "version": "3.3.0",
+      "version": "3.4.2",
       "description": "CAMMES - Sistema di misura profili alberi a camme",
       "licenses": [
         {
@@ -27,7 +27,7 @@
       },
       {
         "name": "cammes:builtAt",
-        "value": "2026-07-19"
+        "value": "2026-07-23"
       }
     ]
   },
@@ -5793,13 +5793,13 @@
     {
       "type": "firmware",
       "name": "cammes-firmware",
-      "version": "3.7",
+      "version": "4.1",
       "scope": "required",
       "bom-ref": "firmware/cammes",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "2ae84e2857d598382fdfd579afea8d2a2dfe08b4a117c8980d33c43346368ea5"
+          "content": "604c00c2cc4968b489b1a18bf406ea58df30a3b9ffae485eca48726d5c2c9f4b"
         }
       ],
       "properties": [

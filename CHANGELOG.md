@@ -9,6 +9,51 @@ Sistema di misura profili alberi a camme per motori.
 
 ---
 
+## v3.4.2 — 2026-07-23: P0 controrevisione funzionale + export Excel (firmware 4.1)
+
+Risposta al terzo giro di revisione esterna (`HANDOFF_CLAUDE_CORREZIONI_V3.4.1_
+FUNZIONALI.md`): i **3 P0 chiusi con test che fallivano prima della patch**,
+più i primi P1 e una funzione nuova richiesta dal proprietario.
+
+**P0 (tutti con test-prima):**
+- **CTRL-01 — un frame WebSocket = una sola operazione.** Frame concatenati
+  ("?\nS+360", "xS+360", v4 multipli) venivano inoltrati INTERI alla seriale
+  aggirando il controllore unico. Ora `parseFrame()` valida forme ancorate di
+  un'allowlist e lo STOP scrive sempre la costante `x`. Test con seriale mock
+  che verifica i **byte esatti** scritti.
+- **DATA-01 — un profilo incompleto non diventa più "completo".** "Salva
+  profilo" scriveva 360 righe zero-riempite: un 30/360 salvato e riletto
+  tornava 360/360. Ora il salvataggio diagnostico scrive SOLO i gradi misurati
+  + `#stato=INCOMPLETO`; round-trip 30/330 preservato, zero vero distinto.
+- **FW-01 — watchdog v4 efficace anche durante lo SCAN** (firmware **4.1**,
+  **validato al banco**: scan senza heartbeat → `EVT STOPPED HOST_TIMEOUT` a
+  ~5,3 s, mai `EVT DONE`). Prima lo scan si auto-rinfrescava il timer.
+
+**P1 già chiusi:**
+- **FLASH-01**: interlock del flash sincrono (mai due avrdude), rilascio
+  garantito su ogni errore, flash rifiutato con moto/scan in corso.
+- **CTRL-02 (parziale)**: stato device VIVO da ACK/EVT (non solo HELLO),
+  terminali filtrati per runId (un DONE tardivo di un run vecchio non chiude
+  più il run corrente), finestra STOPPING sul takeover del lease, snapshot di
+  stato a ogni client al collegamento.
+- **DATA-02**: assenza ≠ zero ovunque ("42," non è più uno zero valido; null
+  non entra in media; verdetto banco mai OK su dati assenti); convenzione
+  0..359 riconosciuta e normalizzata, mista rifiutata.
+
+**Novità:**
+- **Export Excel (.xlsx)** delle misure dall'archivio (Home): Windows tratta
+  `.scr` come screensaver — ora ogni misura si esporta in un Excel vero (fogli
+  "Misura" + "Info"), coi gradi mancanti come celle VUOTE, mai zeri.
+- **True-positive del fault encoder osservato su guasto reale**: durante le
+  prove il cavo encoder era davvero guasto → `*fault enc` durante lo scan,
+  come da progetto (FW-03 ora VERIFIED su entrambi i fronti).
+
+Suite a **280+ check** (nuovi: frame WS, round-trip profili, parser rigoroso,
+FSM moto, interlock flash, export xlsx). Lockfile e SBOM riallineati (REL-01
+parziale). Restano in lavorazione i P1 rimanenti del handoff.
+
+---
+
 ## v3.4.1 — 2026-07-20: fix UI dal collaudo al banco (firmware 4.0 invariato)
 
 Tre correzioni emerse usando la v3.4.0 al banco con una camma reale:

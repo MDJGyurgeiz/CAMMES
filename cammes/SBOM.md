@@ -4,7 +4,7 @@ Generato da `tools/gen_sbom.js` a partire da `package-lock.json` (albero
 reale). Formato macchina: [`SBOM.json`](SBOM.json) (CycloneDX 1.5).
 Rigenerare dopo ogni cambio di dipendenze: `node tools/gen_sbom.js`.
 
-- Applicazione: **cammes v3.3.0** (UNLICENSED)
+- Applicazione: **cammes v3.4.2** (UNLICENSED)
 - Componenti totali: **222** — runtime (spediti nell'exe): **26**, dev/build (non spediti): **196**
 
 ## Runtime — finiscono nell'eseguibile
@@ -27,7 +27,7 @@ Rigenerare dopo ogni cambio di dipendenze: `node tools/gen_sbom.js`.
 | @serialport/parser-slip-encoder | 12.0.0 | MIT |
 | @serialport/parser-spacepacket | 12.0.0 | MIT |
 | @serialport/stream | 12.0.0 | MIT |
-| cammes-firmware | 3.7 | ? |
+| cammes-firmware | 4.1 | ? |
 | chart.js | vendored | MIT |
 | debug | 4.3.4 | MIT |
 | jspdf | vendored | MIT |
