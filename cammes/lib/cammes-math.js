@@ -966,6 +966,12 @@ function parseCamFile(text) {
     var fractionalDegrees = [];
     var invalidRows = 0, outOfRangeRows = 0;
     for (var z = 1; z <= 360; z++) { camLift[z] = 0; covered[z] = false; }
+    // PASSO 1 (AUDIT DATA-02): raccogli le righe con parsing RIGOROSO — un
+    // token vuoto/whitespace/testo è una riga INVALIDA, mai uno zero (prima
+    // "42," diventava un grado 42 = 0.000 valido perché Number('')===0) — e
+    // rileva la convenzione dei gradi sull'INTERO insieme (0..359 vs 1..360).
+    var rows = [];
+    var has0 = false, has360 = false;
     for (var r = 0; r < righe.length; r++) {
         var line = righe[r].trim();
         if (!line) continue;
@@ -984,21 +990,35 @@ function parseCamFile(text) {
             parts = line.split(',');
         }
         if (parts.length < 2) continue;
-        var degRaw = Number(parts[0]);
-        var val = Number(parts[1]);
-        if (!isFinite(degRaw) || !isFinite(val)) { invalidRows++; continue; }
+        var degRaw = parseFiniteMeasurement(parts[0]);
+        var val = parseFiniteMeasurement(parts[1]);
+        if (degRaw === null || val === null) { invalidRows++; continue; }
         // grado frazionario: NON arrotondare in silenzio — segnalalo e scarta
         if (Math.abs(degRaw - Math.round(degRaw)) > 1e-9) { fractionalDegrees.push(degRaw); continue; }
         var deg = Math.round(degRaw);
-        if (deg < 1 || deg > 360) { outOfRangeRows++; continue; }
-        if (covered[deg]) {                                 // duplicato: il primo vince
-            if (duplicateDegrees.indexOf(deg) < 0) duplicateDegrees.push(deg);
+        if (deg === 0) has0 = true;
+        if (deg === 360) has360 = true;
+        rows.push([deg, val]);
+    }
+    // Convenzione: file coerente 0..359 (c'è il grado 0 e MAI il 360) →
+    // normalizzato internamente a 1..360 (shift +1). Convenzione MISTA (sia 0
+    // sia 360 presenti) → anomalia esplicita, non indovinabile: ok=false.
+    var zeroBased = has0 && !has360;
+    var conventionMixed = has0 && has360;
+    // PASSO 2: riempi 1..360 (range e duplicati come prima)
+    for (var q = 0; q < rows.length; q++) {
+        var dg = rows[q][0] + (zeroBased ? 1 : 0);
+        if (dg < 1 || dg > 360) { outOfRangeRows++; continue; }
+        if (covered[dg]) {                                  // duplicato: il primo vince
+            if (duplicateDegrees.indexOf(dg) < 0) duplicateDegrees.push(dg);
             continue;
         }
-        camLift[deg] = val;
-        covered[deg] = true; valid++;                       // gradi UNICI (audit MAT-07)
+        camLift[dg] = rows[q][1];
+        covered[dg] = true; valid++;                        // gradi UNICI (audit MAT-07)
     }
     camLift.meta = meta;
+    camLift.zeroBased = zeroBased;
+    camLift.conventionMixed = conventionMixed;
     // validCount = gradi 1..360 realmente coperti (non il numero di righe).
     // missingCount/covered rendono un run incompleto riconoscibile alla
     // rilettura: i gradi mancanti restano 0 nell'array per compatibilità, ma
@@ -1013,8 +1033,20 @@ function parseCamFile(text) {
     // ok = file "pulito": nessuna anomalia. NON implica completezza (per quella
     // c'è missingCount): un file può essere ok=true ma incompleto.
     camLift.ok = (duplicateDegrees.length === 0 && fractionalDegrees.length === 0 &&
-                  invalidRows === 0 && outOfRangeRows === 0);
+                  invalidRows === 0 && outOfRangeRows === 0 && !conventionMixed);
     return camLift;
+}
+
+// AUDIT DATA-02: parsing RIGOROSO di un valore di misura. Distinzione netta
+// tra ASSENZA (null/undefined/stringa vuota/whitespace/testo → null) e ZERO
+// misurato ('0' → 0). Prima Number('')===0 e Number(null)===0 trasformavano
+// l'assenza in uno zero fisico in parser, medie e verdetto banco.
+function parseFiniteMeasurement(tok) {
+    if (tok === null || tok === undefined) return null;
+    var s = String(tok).trim();
+    if (s === '') return null;
+    var v = Number(s);
+    return isFinite(v) ? v : null;
 }
 
 // AUDIT DATA-01 (controrevisione v3.4.1): serializza un profilo INCOMPLETO come
@@ -1050,8 +1082,10 @@ function averageRuns(runs) {
     for (var d = 1; d <= 360; d++) {
         var sum = 0, n = 0;
         for (var r = 0; r < runs.length; r++) {
-            var v = runs[r] ? Number(runs[r][d]) : NaN;
-            if (isFinite(v)) { sum += v; n++; }
+            // AUDIT DATA-02: null/''/undefined = campione ASSENTE, non zero
+            // (prima Number(null)===0 lo faceva entrare in media come 0 valido)
+            var v = runs[r] ? parseFiniteMeasurement(runs[r][d]) : null;
+            if (v !== null) { sum += v; n++; }
         }
         if (n === 0) {
             values[d] = NaN; valid[d] = false; count[d] = 0; std[d] = NaN;
@@ -1060,8 +1094,8 @@ function averageRuns(runs) {
             var mean = sum / n;
             var sq = 0;
             for (var r2 = 0; r2 < runs.length; r2++) {
-                var v2 = runs[r2] ? Number(runs[r2][d]) : NaN;
-                if (isFinite(v2)) sq += (v2 - mean) * (v2 - mean);
+                var v2 = runs[r2] ? parseFiniteMeasurement(runs[r2][d]) : null;
+                if (v2 !== null) sq += (v2 - mean) * (v2 - mean);
             }
             values[d] = mean; valid[d] = true; count[d] = n;
             std[d] = n > 1 ? Math.sqrt(sq / (n - 1)) : 0;
@@ -1085,10 +1119,12 @@ function benchVerdict(pdata, thresholds) {
     var vals = new Array(361), covered = 0, missing = 0, i;
     vals[0] = 0;
     for (i = 1; i <= 360; i++) {
-        var v = Number(pdata[i]);
+        // AUDIT DATA-02: null/''/undefined = campione ASSENTE (prima
+        // Number(null)===0 rendeva "perfetto" un canale morto → falso PASS)
+        var v = parseFiniteMeasurement(pdata[i]);
         // valido = numerico e fisicamente plausibile per un residuo su cilindro
         // (il LM339N con ingresso flottante produce numeri casuali fuori scala)
-        if (isFinite(v) && v > -1 && v < 32) { vals[i] = v; covered++; }
+        if (v !== null && v > -1 && v < 32) { vals[i] = v; covered++; }
         else { vals[i] = null; missing++; }
     }
     if (missing > 0) {
@@ -1243,6 +1279,7 @@ var api = {
     findEvents: findEvents,
     effectiveCenters: effectiveCenters,
     parseCamFile: parseCamFile,
+    parseFiniteMeasurement: parseFiniteMeasurement,
     serializeDiagnosticProfile: serializeDiagnosticProfile,
     averageRuns: averageRuns,
     benchVerdict: benchVerdict,
