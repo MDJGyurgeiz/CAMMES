@@ -35,7 +35,11 @@ function connect(wsPort) {
     });
 }
 function lastCtl(ws) {
-    for (var i = ws._msgs.length - 1; i >= 0; i--) if (ws._msgs[i].indexOf('#ctl:') === 0) return ws._msgs[i];
+    // ignora lo snapshot informativo '#ctl:info ...' (CTRL-02): qui contano i
+    // soli messaggi di RUOLO (free/observer/granted/denied/released)
+    for (var i = ws._msgs.length - 1; i >= 0; i--) {
+        if (ws._msgs[i].indexOf('#ctl:') === 0 && ws._msgs[i].indexOf('#ctl:info') !== 0) return ws._msgs[i];
+    }
     return null;
 }
 

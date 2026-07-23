@@ -675,6 +675,10 @@ function apiFlashFirmware(res) {
     if (Date.now() - lastScanActivity < 10000) {
         return sendJson(res, 409, { error: 'Scansione in corso: attendi la fine del giro (o annullala) e riprova' });
     }
+    // AUDIT FLASH-01: anche un run v4 attivo (scan via bridge) blocca il flash.
+    if (typeof v4ActiveRun === 'number' && v4ActiveRun >= 0) {
+        return sendJson(res, 409, { error: 'Run v4 in corso (scan via bridge): attendi il termine e riprova' });
+    }
     var info = readFwInfo();
     if (!info || !fs.existsSync(path.join(FW_DIR, 'master.ino.hex'))) {
         return sendJson(res, 500, { error: 'Firmware non incluso in questa build (manca fw/master.ino.hex)' });
@@ -683,6 +687,14 @@ function apiFlashFirmware(res) {
     if (!port) {
         return sendJson(res, 400, { error: 'Nessuna porta Arduino nota: collega l\'Arduino e riprova' });
     }
+    // AUDIT FLASH-01 (controrevisione v3.4.1): il flag va acquisito in modo
+    // SINCRONO prima di qualsiasi operazione asincrona. Prima veniva impostato
+    // dentro launchFlash() DOPO la SerialPort.list() asincrona: due richieste
+    // quasi simultanee superavano entrambe il check iniziale e partivano DUE
+    // processi avrdude sulla stessa porta. Da qui in poi OGNI percorso di
+    // uscita che non arriva ad avrdudeDone() deve rilasciare il flag.
+    flashInProgress = true;
+    var failFlash = function (code, obj) { flashInProgress = false; return sendJson(res, code, obj); };
 
     // AUDIT SER-03: se la seriale è APERTA, port = serialPort.path è
     // autorevole → procedi. Se NON è aperta, `port` viene da lastComPort,
@@ -691,7 +703,6 @@ function apiFlashFirmware(res) {
     // avrdude, altrimenti si flasherebbe un dispositivo sbagliato o si
     // fallirebbe in modo oscuro.
     var launchFlash = function () {
-        flashInProgress = true;
         log('FLASH', 'Avvio flash firmware ' + (info.firmware || '?') + ' su ' + port);
         _doFlash(res, info, port);
     };
@@ -703,7 +714,7 @@ function apiFlashFirmware(res) {
         var present = ports.some(function (p) { return (p.path || p.comName) === port; });
         if (!present) {
             var avail = ports.map(function (p) { return p.path || p.comName; });
-            return sendJson(res, 409, {
+            return failFlash(409, {
                 error: 'La porta ' + port + ' non è più presente (Arduino scollegato o su un\'altra COM). '
                      + (avail.length ? 'Porte disponibili: ' + avail.join(', ') + '. ' : '')
                      + 'Ricollega e attendi che il LED Motore torni verde, poi riprova.'
@@ -931,7 +942,8 @@ function handleRequest(req, res) {
         var fwInfo = readFwInfo();
         var devVer = deviceFw ? (deviceFw.match(/ver=([\d.]+)/) || [])[1] || null : null;
         var devId = deviceHello ? (deviceHello.match(/dev=([0-9a-fA-F]+)/) || [])[1] || null : null;
-        var devState = deviceHello ? (deviceHello.match(/state=(\w+)/) || [])[1] || null : null;
+        // CTRL-02: stato VIVO (aggiornato da ogni ACK/NACK/EVT), con fallback HELLO
+        var devState = deviceState || (deviceHello ? (deviceHello.match(/state=(\w+)/) || [])[1] || null : null);
         var devFault = deviceHello ? (deviceHello.match(/fault=(\w+)/) || [])[1] || null : null;
         sendJson(res, 200, {
             bundled: fwInfo,
@@ -1019,6 +1031,17 @@ function handleRequest(req, res) {
     // API: flash del firmware incluso sull'Arduino collegato
     if (urlPath === '/api/flash-firmware' && req.method === 'POST') {
         apiFlashFirmware(res);
+        return;
+    }
+
+    // TEST (CTRL-02): iniezione di righe seriali nella pipeline REALE
+    // (processSerialLine) — esiste SOLO con --serial-mock, mai in esercizio.
+    if (SERIAL_MOCK && urlPath === '/api/_mock-rx' && req.method === 'POST') {
+        readBody(req, res, 100000, function (err, body) {
+            if (err) return;
+            String(body).split(/\r?\n/).forEach(processSerialLine);
+            sendJson(res, 200, { ok: true });
+        });
         return;
     }
 
@@ -1321,11 +1344,25 @@ function parseFrame(raw) {
     }
     return { valid: false, canonical: null, isStop: false };
 }
+// AUDIT CTRL-02: finestra STOPPING. Dopo lo STOP inviato per perdita/rilascio
+// del controllore CON moto plausibilmente in corso, il lease NON si riassegna
+// finché il firmware non conferma un terminale (*mabort/*sabort/EVT STOPPED…,
+// azzerata in processSerialLine) o scade il timeout di guardia. Prima un
+// secondo client poteva prendere il lease e comandare mentre lo STOP del
+// predecessore era ancora in volo.
+var _stopPendingUntil = 0;
+var STOP_SETTLE_MS = 4000;
 function grantLease(ws) {
+    if (_stopPendingUntil && Date.now() < _stopPendingUntil) {
+        try { ws.send('#ctl:denied'); } catch (e) {}
+        log.warn('WS', 'Lease NEGATO al client #' + ws._id + ': STOP del controllore precedente ancora in corso');
+        return false;
+    }
     controller = ws;
     ws._isController = true;
     try { ws.send('#ctl:granted'); } catch (e) {}
     log('WS', 'Lease concesso al client #' + ws._id);
+    return true;
 }
 function releaseLease(reason) {
     if (!controller) return;
@@ -1337,6 +1374,12 @@ function releaseLease(reason) {
     if (serialPort && serialPort.isOpen) {
         try { serialPort.write('x'); } catch (e) {}
         log.warn('WS', 'Controllore perso (' + reason + ') → STOP inviato alla seriale');
+        // CTRL-02: se c'era un run bridge attivo o attività di scan recente, il
+        // moto potrebbe essere ancora in decelerazione: blocca il takeover
+        // finché non arriva il terminale (o il timeout di guardia).
+        if (v4ActiveRun >= 0 || (Date.now() - lastScanActivity) < 5000) {
+            _stopPendingUntil = Date.now() + STOP_SETTLE_MS;
+        }
     }
     wsBroadcast('#ctl:released ' + reason);
 }
@@ -1367,6 +1410,14 @@ wsServer.on('connection', function (ws) {
     log('WS', 'Client #' + ws._id + ' connesso (' + wsClients.length + ' totali)');
     // Comunica il ruolo iniziale: se c'è già un controllore, questo è observer.
     try { ws.send(controller ? '#ctl:observer' : '#ctl:free'); } catch (e) {}
+    // AUDIT CTRL-02: snapshot di stato al collegamento — il client parte dallo
+    // stato REALE del device, non da una previsione locale. Formato additivo
+    // '#ctl:info ...': i client v3 che non lo conoscono lo ignorano.
+    try {
+        var _fwv = deviceFw ? (deviceFw.match(/ver=([\d.]+)/) || [])[1] : null;
+        ws.send('#ctl:info proto=' + (deviceProto || 0) + ' fw=' + (_fwv || '?') +
+                ' state=' + (deviceState || '?') + ' serial=' + ((serialPort && serialPort.isOpen) ? 1 : 0));
+    } catch (e) {}
 
     ws.on('message', function (data) {
         var msg = data.toString();
@@ -1537,6 +1588,11 @@ var deviceFw = null;           // risposta 'v' del firmware collegato (es. "ver=
 var deviceProto = 0;
 var deviceHello = null;
 var lastScanActivity = 0;      // timestamp ultima riga di scansione vista (guardia flash)
+// AUDIT CTRL-02 (controrevisione v3.4.1): stato autorevole VIVO del firmware.
+// Prima derivava solo dall'HELLO (una tantum) e diventava stale; ora ogni
+// ACK/NACK/EVT/HELLO che porta "state=..." lo aggiorna (v. processSerialLine).
+var deviceState = null;
+var deviceStateAt = 0;
 
 // ============================================================
 // AUDIT MOT-02 (Fase 2): BRIDGE server↔v4 per il data-path di SCAN
@@ -1578,14 +1634,68 @@ function bridgeIncoming(line) {
         if (parseInt(m[1], 10) !== v4ActiveRun) return [];   // campione di un run vecchio → scarta
         return ['#' + m[2] + ':' + m[3] + ':' + m[4]];        // formato v3 "#idx:enc:mm"
     }
-    if ((m = line.match(/^EVT DONE run=\d+.*?unstable=(\d+)/))) { v4ActiveRun = -1; return ['*sstat u=' + m[1], '*sdone']; }
-    if (line.indexOf('EVT STOPPED') === 0) { v4ActiveRun = -1; return ['*sabort']; }
-    if ((m = line.match(/^EVT FAULT run=\d+ code=(\w+)/))) {
+    // AUDIT CTRL-02: TUTTI i terminali sono filtrati per runId, non solo i
+    // SAMPLE. Prima un DONE/STOPPED/FAULT tardivo di un run VECCHIO (o di un
+    // MOVE v4 esterno) chiudeva il run corrente della UI; e a run inattivo
+    // (v4ActiveRun=-1) produceva un *sabort spurio.
+    if ((m = line.match(/^EVT DONE run=(\d+).*?unstable=(\d+)/))) {
+        if (parseInt(m[1], 10) !== v4ActiveRun) { log.debug('BRIDGE', 'DONE di run non attivo ignorato: ' + line); return []; }
+        v4ActiveRun = -1; return ['*sstat u=' + m[2], '*sdone'];
+    }
+    if ((m = line.match(/^EVT STOPPED run=(\d+)/))) {
+        if (parseInt(m[1], 10) !== v4ActiveRun) { log.debug('BRIDGE', 'STOPPED di run non attivo ignorato: ' + line); return []; }
+        v4ActiveRun = -1; return ['*sabort'];
+    }
+    if ((m = line.match(/^EVT FAULT run=(\d+) code=(\w+)/))) {
+        // il FAULT latched va comunque mostrato: se è del run attivo chiude il
+        // run; se è di un run vecchio si segnala il fault SENZA *sabort spurio.
+        var faultLine = '*fault ' + (m[2] === 'ENCODER_JAM' ? 'enc' : m[2].toLowerCase()) + ' (v4)';
+        if (parseInt(m[1], 10) !== v4ActiveRun) { log.warn('BRIDGE', 'FAULT di run non attivo: ' + line); return [faultLine]; }
         v4ActiveRun = -1;
-        return ['*fault ' + (m[1] === 'ENCODER_JAM' ? 'enc' : m[1].toLowerCase()) + ' (v4)', '*sabort'];
+        return [faultLine, '*sabort'];
     }
     if (line.indexOf('EVT BUSY') === 0) return ['*busy'];
+    if (line.indexOf('NACK ') === 0) return [];   // correlazione interna (stato già tracciato)
     return [line];   // ver=, encoder=, *pos, *cfg, *mv, *free, *lock, boot… invariati
+}
+
+// AUDIT CTRL-02 (parziale, controrevisione v3.4.1): il flusso seriale→WS passa
+// da UN'unica funzione — così i test la esercitano iniettando righe (mock RX,
+// /api/_mock-rx) e lo stato del device resta VIVO: ogni ACK/NACK/EVT/HELLO che
+// porta "state=..." aggiorna deviceState (prima solo l'HELLO, che diventava
+// stale). I terminali di moto chiudono la finestra STOPPING del lease.
+function processSerialLine(line) {
+    line = String(line).trim();
+    if (line.length === 0) return;
+    // Versione firmware (risposta al probe 'v') + protocollo
+    if (line.indexOf('ver=') === 0) {
+        deviceFw = line;
+        var pm = line.match(/proto=(\d+)/);
+        deviceProto = pm ? parseInt(pm[1], 10) : 3;   // assente = legacy v3
+    }
+    // HELLO (STATUS v4): device id stabile + stato autorevole
+    if (line.indexOf('HELLO ') === 0) {
+        deviceHello = line;
+        var hp = line.match(/proto=(\d+)/);
+        if (hp) deviceProto = parseInt(hp[1], 10);
+    }
+    // Stato autorevole vivo (ACK/NACK/EVT/HELLO portano "state=...")
+    var sm = line.match(/\bstate=([A-Z_]+)/);
+    if (sm) { deviceState = sm[1]; deviceStateAt = Date.now(); }
+    // Un terminale di moto chiude la finestra STOPPING (takeover di nuovo lecito)
+    if (/^(\*mabort|\*sabort|\*sdone|\*mv)$/.test(line) || /^EVT (STOPPED|DONE|FAULT)\b/.test(line)) {
+        _stopPendingUntil = 0;
+    }
+    // Attività di scansione: righe streaming '#i:...' (autonomo),
+    // ack misura '*se' (classico) o 'EVT SAMPLE' (v4) → guardia anti-flash
+    if (line.charAt(0) === '#' || line === '*se' || line.indexOf('EVT SAMPLE') === 0) lastScanActivity = Date.now();
+    // Fase 2: traduci gli EVT v4 nel formato v3 della UI (bridge).
+    // Con fw legacy bridgeIncoming ritorna [line] invariata.
+    var outLines = bridgeIncoming(line);
+    outLines.forEach(function (o) {
+        wsBroadcast(o);
+        log('DATA', 'Arduino -> Browser: "' + (o === line ? o : ('[v3←v4] ' + o)) + '"');
+    });
 }
 var serialApiVersion = 'none'; // 'legacy' (v7-v8), 'v9' (v9), 'modern' (v10+), 'none'
 
@@ -1693,7 +1803,9 @@ function initSerial() {
     if (SERIAL_MOCK) {
         serialPort = {
             isOpen: true,
-            write: function (data, cb) { console.log('[MOCKSER] ' + JSON.stringify(String(data))); if (cb) cb(); }
+            path: 'COMMOCK',
+            write: function (data, cb) { console.log('[MOCKSER] ' + JSON.stringify(String(data))); if (cb) cb(); },
+            close: function (cb) { if (cb) cb(); }
         };
         console.log('[SERIAL] Seriale MOCK attiva (--serial-mock): write loggate, nessun hardware');
         return;
@@ -1727,6 +1839,7 @@ function scheduleSerialRetry() {
 }
 
 function autoDetectSerial() {
+    if (SERIAL_MOCK) return;  // test: la seriale mock non va mai sostituita
     if (!SerialPort) return;
     if (serialPort) return;   // già connessi
     if (flashInProgress) return;   // avrdude sta usando la porta: non toccarla
@@ -1872,33 +1985,7 @@ function openSerialPort(comPort) {
             // L'ultimo elemento potrebbe essere incompleto
             serialBuffer = lines.pop();
 
-            lines.forEach(function (line) {
-                line = line.trim();
-                if (line.length > 0) {
-                    // Versione firmware (risposta al probe 'v') + protocollo
-                    if (line.indexOf('ver=') === 0) {
-                        deviceFw = line;
-                        var pm = line.match(/proto=(\d+)/);
-                        deviceProto = pm ? parseInt(pm[1], 10) : 3;   // assente = legacy v3
-                    }
-                    // HELLO (STATUS v4): device id stabile + stato autorevole
-                    if (line.indexOf('HELLO ') === 0) {
-                        deviceHello = line;
-                        var hp = line.match(/proto=(\d+)/);
-                        if (hp) deviceProto = parseInt(hp[1], 10);
-                    }
-                    // Attività di scansione: righe streaming '#i:...' (autonomo),
-                    // ack misura '*se' (classico) o 'EVT SAMPLE' (v4) → guardia anti-flash
-                    if (line.charAt(0) === '#' || line === '*se' || line.indexOf('EVT SAMPLE') === 0) lastScanActivity = Date.now();
-                    // Fase 2: traduci gli EVT v4 nel formato v3 della UI (bridge).
-                    // Con fw legacy bridgeIncoming ritorna [line] invariata.
-                    var outLines = bridgeIncoming(line);
-                    outLines.forEach(function (o) {
-                        wsBroadcast(o);
-                        log('DATA', 'Arduino -> Browser: "' + (o === line ? o : ('[v3←v4] ' + o)) + '"');
-                    });
-                }
-            });
+            lines.forEach(processSerialLine);
         });
 
         serialPort.on('error', function (err) {
@@ -1910,6 +1997,7 @@ function openSerialPort(comPort) {
             clearInterval(_kickTimer);
             serialPort = null;
             deviceFw = null; deviceProto = 0; deviceHello = null;
+            deviceState = null; deviceStateAt = 0;   // CTRL-02: stato non più autorevole
 
             // Durante il flash è avrdude a possedere la porta: la riapertura
             // la programma avrdudeDone() a fine scrittura. Durante il probe è
