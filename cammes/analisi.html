@@ -1096,14 +1096,18 @@ function rpmSweep(camLift720, baseRpm, springParams, opts) {
 
     var results = [];
     var criticalRpm = null;
+    var nonConverged = 0;   // AUDIT DYN-01: punti non convergenti = non valutabili
     for (var i = 0; i < nPoints; i++) {
         var rpm = rpmMin + (rpmMax - rpmMin) * i / (nPoints - 1);
         var valve = runComplianceModel(camLift720, rpm, springParams);   // audit APP-02: rispetta il modello scelto
+        var conv = valve.status ? valve.status === 'CONVERGED' : valve.converged !== false;
         var fl = detectValveFloat(camLift720, valve);
-        results.push({ rpm: rpm, float: fl.maxGap, floatDeg: fl.gapIdx - 360 });
+        results.push({ rpm: rpm, float: fl.maxGap, floatDeg: fl.gapIdx - 360, converged: conv });
+        if (!conv) { nonConverged++; continue; }   // MAI usare un punto non convergente come soluzione
         if (!criticalRpm && fl.maxGap > floatThreshold) criticalRpm = rpm;
     }
-    return { points: results, criticalRpm: criticalRpm, threshold: floatThreshold };
+    return { points: results, criticalRpm: criticalRpm, threshold: floatThreshold,
+             nonConvergedCount: nonConverged, evaluable: nonConverged === 0 };
 }
 
 // Optimizer molla: griglia di ricerca (k, F0) per minimizzare k+F0 mantenendo
@@ -1115,12 +1119,16 @@ function springOptimizer(camLift720, targetRpm, baseParams, opts) {
     var nK = 11, nF0 = 8;  // 88 combinazioni
 
     var best = null;  // {k, F0, maxFloat, costScore}
+    var skippedNonConverged = 0;   // AUDIT DYN-01: candidate scartate perche non convergenti
     for (var i = 0; i < nK; i++) {
         var k = kRange[0] + (kRange[1] - kRange[0]) * i / (nK - 1);
         for (var j = 0; j < nF0; j++) {
             var F0 = F0Range[0] + (F0Range[1] - F0Range[0]) * j / (nF0 - 1);
             var p = Object.assign({}, baseParams, { kSpringN_mm: k, F0N: F0 });
             var valve = runComplianceModel(camLift720, targetRpm, p);   // audit APP-02
+            // AUDIT DYN-01: una simulazione non convergente NON e una candidata
+            var _conv = valve.status ? valve.status === 'CONVERGED' : valve.converged !== false;
+            if (!_conv) { skippedNonConverged++; continue; }
             var fl = detectValveFloat(camLift720, valve);
             if (fl.maxGap < threshold) {
                 // Cost: combinazione di k (più rigida = più coppia richiesta + più
@@ -1134,7 +1142,10 @@ function springOptimizer(camLift720, targetRpm, baseParams, opts) {
             }
         }
     }
-    return best;  // null se nessuna combinazione rispetta il vincolo
+    // AUDIT DYN-01: il chiamante deve sapere quante candidate erano
+    // NON VALUTABILI (best === null con skipped > 0 NON significa
+    // "nessuna molla funziona": significa "non lo sappiamo per tutte").
+    return { best: best, skippedNonConverged: skippedNonConverged, tested: nK * nF0 };
 }
 
 // UI handlers
@@ -1162,12 +1173,17 @@ function runRpmSweep() {
                 kTrainN_mm: Number(document.getElementById("kTrain").value) || 5000,
                 kSpringN_mm: inp.springK,
                 F0N: inp.springPreload,
-                dampingRatio: Number(document.getElementById('dampingRatio').value) || 0.06
+                dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
             };
             var result = rpmSweep(anlIn, inp.rpm, springParams, { nPoints: 12 });
 
             // Render tabella + verdict
             var rows = result.points.map(function (p) {
+                // AUDIT DYN-01: punto non convergente = diagnostico, non un dato
+                if (p.converged === false) {
+                    return '<tr><td style="padding:2px 8px;color:var(--text-secondary);">' + Math.round(p.rpm) + ' rpm</td>' +
+                           '<td style="padding:2px 8px;text-align:right;color:var(--text-muted);font-family:var(--font-mono);">non conv.</td></tr>';
+                }
                 var cls = p.float > 0.5 ? 'red' : (p.float > 0.1 ? 'yellow' : 'green');
                 var col = cls === 'red' ? 'var(--danger)' : (cls === 'yellow' ? 'var(--warning)' : 'var(--success)');
                 return '<tr><td style="padding:2px 8px;color:var(--text-secondary);">' + Math.round(p.rpm) + ' rpm</td>' +
@@ -1179,12 +1195,21 @@ function runRpmSweep() {
                 ? '<b style="color:var(--danger);">RPM critico dinamico:</b> ~' + Math.round(result.criticalRpm).toLocaleString('it-IT') +
                   ' rpm (oltre questo: valve float &gt; ' + result.threshold + ' mm).'
                 : '<b style="color:var(--success);">Margine ampio</b>: a tutti i regimi testati il float resta sotto ' + result.threshold + ' mm. Motore sicuro.';
+            // AUDIT DYN-01: sweep parziale = verdetto NON conclusivo
+            if (result.nonConvergedCount > 0) {
+                critMsg = '<b style="color:var(--warning);">&#9888; Sweep NON conclusivo:</b> ' + result.nonConvergedCount +
+                          ' regimi su ' + result.points.length + ' non raggiungono un regime periodico (esclusi dal verdetto). ' +
+                          (result.criticalRpm ? 'RPM critico ~' + Math.round(result.criticalRpm).toLocaleString('it-IT') + ' rpm stimato SOLO sui punti convergenti.'
+                                              : 'Nessun verdetto di sicurezza possibile.');
+            }
             body.innerHTML = critMsg +
                 '<table style="margin-top:8px;width:100%;border-collapse:collapse;"><thead><tr><th style="text-align:left;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Regime</th><th style="text-align:right;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Valve float max</th></tr></thead><tbody>' + rows + '</tbody></table>';
             if (window.cammesToast) window.cammesToast({
-                kind: result.criticalRpm ? 'warn' : 'success',
-                title: 'Sweep RPM completato',
-                body: result.criticalRpm ? ('Critico ~' + Math.round(result.criticalRpm) + ' rpm') : 'Nessun valve float significativo nel range testato',
+                kind: result.nonConvergedCount > 0 ? 'warn' : (result.criticalRpm ? 'warn' : 'success'),
+                title: result.nonConvergedCount > 0 ? 'Sweep RPM NON conclusivo' : 'Sweep RPM completato',
+                body: result.nonConvergedCount > 0
+                    ? (result.nonConvergedCount + ' regimi non convergenti: verdetto non affidabile')
+                    : (result.criticalRpm ? ('Critico ~' + Math.round(result.criticalRpm) + ' rpm') : 'Nessun valve float significativo nel range testato'),
                 duration: 4500
             });
         } catch (e) {
@@ -1215,20 +1240,32 @@ function runSpringOptimizer() {
             var baseParams = {
                 massEqG: inp.massEqIntake,
                 kTrainN_mm: Number(document.getElementById("kTrain").value) || 5000,
-                dampingRatio: Number(document.getElementById('dampingRatio').value) || 0.06
+                dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
             };
             // Range esteso per coprire camme race con accelerazioni alte.
             // Soglia 0.3 mm = "valvola segue bene la cam senza bouncing
             // significativo". Soglia 0.1 mm sarebbe "perfetta" ma quasi
             // mai raggiungibile su camme race con alzata > 7 mm.
-            var result = springOptimizer(anlIn, inp.rpm, baseParams, {
+            var optOut = springOptimizer(anlIn, inp.rpm, baseParams, {
                 threshold: 0.3,
                 kRange: [20, 400],      // fino a molle race rigide (300+ N/mm)
                 F0Range: [100, 1500]    // precarichi fino a 1500 N (race)
             });
+            var result = optOut.best;   // AUDIT DYN-01: candidate non convergenti scartate
 
             title.textContent = 'Esplorazione molla — soglia float 0.3 mm @ ' + inp.rpm + ' rpm';
-            if (!result) {
+            if (!result && optOut.skippedNonConverged > 0) {
+                // AUDIT DYN-01: non "nessuna molla funziona" ma "non valutabile"
+                body.innerHTML = '<b style="color:var(--warning);">&#9888; Esplorazione NON conclusiva:</b> ' +
+                                 optOut.skippedNonConverged + ' combinazioni su ' + optOut.tested +
+                                 ' non raggiungono un regime periodico (scartate) e nessuna delle restanti tiene il float sotto 0.3 mm.<br>' +
+                                 'Rivedi massa/rigidezze o RPM target: con questi parametri il modello non produce un verdetto affidabile.';
+                if (window.cammesToast) window.cammesToast({
+                    kind: 'warn', title: 'Esplorazione non conclusiva',
+                    body: optOut.skippedNonConverged + ' candidate non convergenti scartate, nessuna valida tra le restanti.',
+                    duration: 6000
+                });
+            } else if (!result) {
                 body.innerHTML = '<b style="color:var(--danger);">Nessuna combinazione trovata</b> nel range k=20..400 N/mm, F&#8320;=100..1500 N che mantenga il valve float sotto 0.3 mm al regime ' + inp.rpm + ' rpm.<br><br>' +
                                  'Possibili soluzioni:<br>' +
                                  '&bull; Riduci la massa equivalente del treno (' + inp.massEqIntake + ' g attuali)<br>' +
@@ -1253,6 +1290,10 @@ function runSpringOptimizer() {
                       '<span style="color:' + (diffF0 >= 0 ? 'var(--warning)' : 'var(--success)') + ';">(' + (diffF0 >= 0 ? '+' : '') + diffF0.toFixed(0) + ' vs attuale)</span></div>' +
                       '<div style="color:var(--text-muted);">Float max:</div><div><b style="color:var(--success);">' + result.maxFloat.toFixed(3) + ' mm</b> <span style="color:var(--text-muted);">(margine ' + margin.toFixed(3) + ' mm alla soglia)</span></div>' +
                     '</div>' +
+                    (optOut.skippedNonConverged > 0
+                        ? '<p style="margin-top:8px;font-size:11px;color:var(--warning,orange);">&#9888; ' + optOut.skippedNonConverged +
+                          ' combinazioni non convergenti sono state SCARTATE (non valutate), la candidata viene dalle sole simulazioni convergenti.</p>'
+                        : '') +
                     '<p style="margin-top:8px;font-size:11px;color:var(--warning,orange);">' +
                     '&#9888; Esplora solo lo spazio (k, F&#8320;) rispetto al valve float. NON verifica coil bind, stress del filo, fatica n&eacute; geometria della molla: vanno controllati a parte prima di adottare i valori.</p>' +
                     '<p style="margin-top:4px;font-size:11px;color:var(--text-muted);">' +
@@ -1280,11 +1321,15 @@ function springMap(camLift720, targetRpm, baseParams, opts) {
     var minFloat = Infinity, maxFloat = -Infinity;
     for (var iK = 0; iK < nK; iK++) kVals.push(kRange[0] + (kRange[1]-kRange[0])*iK/(nK-1));
     for (var iF = 0; iF < nF0; iF++) F0Vals.push(F0Range[0] + (F0Range[1]-F0Range[0])*iF/(nF0-1));
+    var nonConverged = 0;   // AUDIT DYN-01: celle non valutabili
     for (var jf = 0; jf < nF0; jf++) {
         var row = [];
         for (var jk = 0; jk < nK; jk++) {
             var p = Object.assign({}, baseParams, { kSpringN_mm: kVals[jk], F0N: F0Vals[jf] });
             var valve = runComplianceModel(camLift720, targetRpm, p);   // audit APP-02
+            // AUDIT DYN-01: cella non convergente = null (non un float "vero")
+            var _conv = valve.status ? valve.status === 'CONVERGED' : valve.converged !== false;
+            if (!_conv) { row.push(null); nonConverged++; continue; }
             var fl = detectValveFloat(camLift720, valve);
             row.push(fl.maxGap);
             if (fl.maxGap < minFloat) minFloat = fl.maxGap;
@@ -1292,7 +1337,8 @@ function springMap(camLift720, targetRpm, baseParams, opts) {
         }
         grid.push(row);
     }
-    return { grid: grid, kVals: kVals, F0Vals: F0Vals, minFloat: minFloat, maxFloat: maxFloat };
+    return { grid: grid, kVals: kVals, F0Vals: F0Vals, minFloat: minFloat, maxFloat: maxFloat,
+             nonConvergedCount: nonConverged };
 }
 
 // Colore cella heatmap: verde (<0.1) → giallo (0.1-0.3) → rosso (>0.3)
@@ -1332,7 +1378,9 @@ function renderSpringMap(map, curK, curF0, opts) {
     // Celle (F0 cresce verso l'alto → inverto l'indice riga)
     for (var jf = 0; jf < nF0; jf++) {
         for (var jk = 0; jk < nK; jk++) {
-            ctx.fillStyle = _floatToColor(map.grid[jf][jk]);
+            // AUDIT DYN-01: cella non convergente = grigio, NON un verde/rosso finto
+            var _cv = map.grid[jf][jk];
+            ctx.fillStyle = (_cv === null || _cv === undefined) ? (forPrint ? '#cccccc' : '#555566') : _floatToColor(_cv);
             var x = padL + jk * cellW;
             var y = padT + (nF0 - 1 - jf) * cellH;
             ctx.fillRect(x, y, cellW + 0.5, cellH + 0.5);
@@ -1374,7 +1422,10 @@ function renderSpringMap(map, curK, curF0, opts) {
     if (legend) legend.innerHTML = '&#9678; = molla attuale &middot; ' +
         '<span style="color:rgb(0,200,90);">verde</span> float&lt;0.1 &middot; ' +
         '<span style="color:rgb(255,200,30);">giallo</span> 0.1-0.3 &middot; ' +
-        '<span style="color:rgb(220,50,50);">rosso</span> &gt;0.3 mm';
+        '<span style="color:rgb(220,50,50);">rosso</span> &gt;0.3 mm' +
+        (map.nonConvergedCount > 0
+            ? ' &middot; <span style="color:#8888aa;">grigio</span> non convergente (' + map.nonConvergedCount + ' celle, NON valutabili)'
+            : '');
 }
 
 function runSpringMap() {
@@ -1399,19 +1450,25 @@ function runSpringMap() {
             var baseParams = {
                 massEqG: inp.massEqIntake,
                 kTrainN_mm: Number(document.getElementById('kTrain').value) || 5000,
-                dampingRatio: Number(document.getElementById('dampingRatio').value) || 0.06
+                dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
             };
             var map = springMap(anlIn, inp.rpm, baseParams, { nK: 16, nF0: 14 });
             title.textContent = 'Mappa molla k×F₀ — valve float @ ' + inp.rpm + ' rpm (aspirazione)';
-            // Conta celle sicure
+            // Conta celle sicure — AUDIT DYN-01: le celle non convergenti (null)
+            // NON sono "sicure": sono non valutabili.
             var safeCells = 0, total = 0;
-            map.grid.forEach(function (row) { row.forEach(function (f) { total++; if (f < 0.3) safeCells++; }); });
+            map.grid.forEach(function (row) { row.forEach(function (f) { total++; if (f !== null && f !== undefined && f < 0.3) safeCells++; }); });
             body.innerHTML = '<b>' + safeCells + '/' + total + '</b> combinazioni mantengono float &lt; 0.3 mm. ' +
+                (map.nonConvergedCount > 0
+                    ? '<b style="color:var(--warning);">' + map.nonConvergedCount + ' celle NON convergenti (grigie, non valutabili).</b> '
+                    : '') +
                 'La tua molla attuale (k=' + inp.springK + ', F&#8320;=' + inp.springPreload + ') &egrave; marcata con &#9678;.';
             renderSpringMap(map, inp.springK, inp.springPreload);
             if (window.cammesToast) window.cammesToast({
-                kind: 'success', title: 'Mappa molla completata',
-                body: safeCells + '/' + total + ' combinazioni nella zona sicura',
+                kind: map.nonConvergedCount > 0 ? 'warn' : 'success',
+                title: map.nonConvergedCount > 0 ? 'Mappa molla parziale' : 'Mappa molla completata',
+                body: safeCells + '/' + total + ' combinazioni nella zona sicura' +
+                      (map.nonConvergedCount > 0 ? ', ' + map.nonConvergedCount + ' non valutabili' : ''),
                 duration: 4000
             });
         } catch (e) {
@@ -1515,9 +1572,9 @@ function runSurgeSweep() {
             var anlIn = lastAnalysis.arrays.anlIn;
             var springParams = {
                 kSpringN_mm: inp.springK,
-                springMassG: Number(document.getElementById('springMass').value) || 50,
-                springCoils: Number(document.getElementById('springCoils').value) || 12,
-                dampingRatio: Number(document.getElementById('dampingRatio').value) || 0.06
+                springMassG: finiteOr(document.getElementById('springMass').value, 50),
+                springCoils: finiteOr(document.getElementById('springCoils').value, 12),
+                dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
             };
             var sweep = surgeSweep(anlIn, springParams, {});
             title.textContent = 'Surge vs RPM — risonanza molla (aspirazione)';
@@ -1560,7 +1617,7 @@ function sweep3D(camLift720, baseParams, opts) {
     for (var a = 0; a < nK;   a++) kVals.push(kRange[0]   + (kRange[1]-kRange[0])     * a/(nK-1));
     for (var b = 0; b < nF0;  b++) F0Vals.push(F0Range[0] + (F0Range[1]-F0Range[0])   * b/(nF0-1));
     for (var c = 0; c < nRpm; c++) rpmVals.push(rpmRange[0] + (rpmRange[1]-rpmRange[0])* c/(nRpm-1));
-    var pts = [], maxF = 0;
+    var pts = [], maxF = 0, nonConverged = 0;
     for (var ik = 0; ik < nK; ik++) {
         for (var jf = 0; jf < nF0; jf++) {
             var p = Object.assign({}, baseParams);
@@ -1568,18 +1625,22 @@ function sweep3D(camLift720, baseParams, opts) {
             p.F0N         = F0Vals[jf];
             for (var lr = 0; lr < nRpm; lr++) {
                 var v  = runComplianceModel(camLift720, rpmVals[lr], p);   // audit APP-02
-                var fl = detectValveFloat(camLift720, v).maxGap;
-                if (fl > maxF) maxF = fl;
+                // AUDIT DYN-01: punto non convergente marcato, non un float "vero"
+                var _cv = v.status ? v.status === 'CONVERGED' : v.converged !== false;
+                var fl = _cv ? detectValveFloat(camLift720, v).maxGap : null;
+                if (_cv && fl > maxF) maxF = fl;
+                if (!_cv) nonConverged++;
                 pts.push({
                     nx: (nK   > 1 ? ik/(nK-1)   : 0.5) * 2 - 1,
                     ny: (nF0  > 1 ? jf/(nF0-1)  : 0.5) * 2 - 1,
                     nz: (nRpm > 1 ? lr/(nRpm-1) : 0.5) * 2 - 1,
-                    k: kVals[ik], f0: F0Vals[jf], rpm: rpmVals[lr], float: fl
+                    k: kVals[ik], f0: F0Vals[jf], rpm: rpmVals[lr], float: fl, converged: _cv
                 });
             }
         }
     }
-    return { pts: pts, kRange: kRange, F0Range: F0Range, rpmRange: rpmRange, maxFloat: maxF };
+    return { pts: pts, kRange: kRange, F0Range: F0Range, rpmRange: rpmRange, maxFloat: maxF,
+             nonConvergedCount: nonConverged };
 }
 
 // Proietta un punto normalizzato (nx,ny,nz∈[-1,1]) sullo schermo dato
@@ -1637,7 +1698,8 @@ function render3DSweep() {
     proj.sort(function (a, b) { return a.depth - b.depth; });   // lontani prima
     proj.forEach(function (q) {
         ctx.beginPath();
-        ctx.fillStyle = _floatToColor(q.float);
+        // AUDIT DYN-01: punto non convergente = grigio (non valutabile)
+        ctx.fillStyle = (q.float === null || q.float === undefined) ? '#555566' : _floatToColor(q.float);
         ctx.globalAlpha = 0.85;
         ctx.arc(q.sx, q.sy, 3.5, 0, Math.PI*2);
         ctx.fill();
@@ -1705,22 +1767,27 @@ function run3DSweep() {
             var baseParams = {
                 massEqG: inp.massEqIntake,
                 kTrainN_mm: Number(document.getElementById('kTrain').value) || 5000,
-                dampingRatio: Number(document.getElementById('dampingRatio').value) || 0.06
+                dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
             };
             var data = sweep3D(anlIn, baseParams, {});
             _sweep3d = { data: data, az: 0.6, el: 0.5, curK: inp.springK, curF0: inp.springPreload,
                          dragging: false, lastX: 0, lastY: 0 };
-            var safe = 0; data.pts.forEach(function (p) { if (p.float < 0.3) safe++; });
+            // AUDIT DYN-01: i punti non convergenti (float null) NON sono sicuri
+            var safe = 0; data.pts.forEach(function (p) { if (p.float !== null && p.float !== undefined && p.float < 0.3) safe++; });
             title.textContent = 'Sweep 3D — valve float su k × F₀ × RPM (aspirazione)';
             body.innerHTML = '<b>' + safe + '/' + data.pts.length + '</b> combinazioni (k×F&#8320;×RPM) con float &lt; 0.3 mm. ' +
+                (data.nonConvergedCount > 0
+                    ? '<b style="color:var(--warning);">' + data.nonConvergedCount + ' punti NON convergenti (grigi, non valutabili).</b> '
+                    : '') +
                 'Verticale = RPM, piano orizzontale = k×F&#8320;. Linea gialla = molla attuale. <b>Trascina il grafico per ruotarlo.</b>';
             if (canvas) canvas.style.display = '';
             if (legend) {
                 legend.style.display = '';
                 legend.innerHTML = '<span style="color:#22c55e;">&#9679;</span> &lt;0.1mm &nbsp; ' +
                                    '<span style="color:#eab308;">&#9679;</span> 0.1-0.3 &nbsp; ' +
-                                   '<span style="color:#ef4444;">&#9679;</span> &gt;0.3 &nbsp;|&nbsp; RPM ' +
-                                   data.rpmRange[0] + '-' + data.rpmRange[1];
+                                   '<span style="color:#ef4444;">&#9679;</span> &gt;0.3 &nbsp; ' +
+                                   (data.nonConvergedCount > 0 ? '<span style="color:#8888aa;">&#9679;</span> non conv. &nbsp;' : '') +
+                                   '|&nbsp; RPM ' + data.rpmRange[0] + '-' + data.rpmRange[1];
             }
             _bindSweep3dDrag(canvas);
             render3DSweep();
@@ -1758,7 +1825,7 @@ function exportRaceReport() {
             var baseParams = {
                 massEqG: inp.massEqIntake,
                 kTrainN_mm: Number(document.getElementById('kTrain').value) || 5000,
-                dampingRatio: Number(document.getElementById('dampingRatio').value) || 0.06
+                dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
             };
 
             // ===== Cover =====
@@ -1808,7 +1875,18 @@ function exportRaceReport() {
             }
             y += half * 5 + 4;
             doc.setTextColor(40,46,60); doc.setFontSize(9);
-            if (sweep.criticalRpm) {
+            // AUDIT DYN-01: il report dichiara lo sweep non conclusivo
+            if (sweep.nonConvergedCount > 0) {
+                doc.setTextColor(200,120,0);
+                doc.text('SWEEP NON CONCLUSIVO: ' + sweep.nonConvergedCount + ' regimi su ' + sweep.points.length +
+                         ' non convergenti (esclusi dal verdetto).', margin, y); y += 5;
+                doc.setTextColor(40,46,60);
+                if (sweep.criticalRpm) {
+                    doc.text('RPM critico ~' + Math.round(sweep.criticalRpm) + ' rpm stimato SOLO sui punti convergenti.', margin, y);
+                } else {
+                    doc.text('Nessun verdetto di sicurezza possibile sui punti convergenti.', margin, y);
+                }
+            } else if (sweep.criticalRpm) {
                 doc.text('RPM critico dinamico: ~' + Math.round(sweep.criticalRpm) + ' rpm (float > ' + sweep.threshold + ' mm)', margin, y);
             } else {
                 doc.text('Nessun valve float > ' + sweep.threshold + ' mm nel range testato. Margine ampio.', margin, y);
@@ -1817,8 +1895,15 @@ function exportRaceReport() {
 
             // ===== 3. Esplorazione molla (AUDIT APP-03: non "ottimizzazione") =====
             sect('Esplorazione molla (solo valve float)');
-            var opt = springOptimizer(anlIn, inp.rpm, baseParams, { threshold: 0.3, kRange: [20,400], F0Range: [100,1500] });
+            var optOutR = springOptimizer(anlIn, inp.rpm, baseParams, { threshold: 0.3, kRange: [20,400], F0Range: [100,1500] });
+            var opt = optOutR.best;   // AUDIT DYN-01
             doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60,66,80);
+            if (optOutR.skippedNonConverged > 0) {
+                doc.setTextColor(200,120,0);
+                doc.text('NON CONCLUSIVO: ' + optOutR.skippedNonConverged + ' combinazioni su ' + optOutR.tested +
+                         ' non convergenti (scartate).', margin, y); y += 5;
+                doc.setTextColor(60,66,80);
+            }
             if (opt) {
                 doc.text('Candidata (float < 0.3 mm): k=' + opt.k.toFixed(0) + ' N/mm, F0=' + opt.F0.toFixed(0) + ' N -> float ' + opt.maxFloat.toFixed(3) + ' mm', margin, y); y += 5;
                 var dK = opt.k - inp.springK, dF = opt.F0 - inp.springPreload;
@@ -3166,9 +3251,10 @@ function analyze() {
                        document.getElementById('complianceEnabled').value === '1';
     var valveLiftIn = null, valveLiftEx = null;
     var floatIn = null, floatEx = null;
+    var compInfo = null;   // AUDIT DYN-01: esito tipizzato della compliance
     if (complianceOn && rpm > 0) {
         var kTrain  = Number(document.getElementById("kTrain").value) || 5000;
-        var damping = Number(document.getElementById('dampingRatio').value) || 0.06;
+        var damping = finiteOr(document.getElementById('dampingRatio').value, 0.06);
         var modelSel = document.getElementById('complianceModel');
         var modelVal = modelSel ? modelSel.value : '1dof';
         var baseParams = {
@@ -3210,7 +3296,19 @@ function analyze() {
         // AUDIT DYN-02: convergenza REALE del solver (non più solo l'euristica
         // >3× picco). Un modello NON convergente non deve produrre verdetti di
         // float/regime affidabili.
-        window._complianceConverged = (valveLiftIn.converged !== false) && (valveLiftEx.converged !== false);
+        // AUDIT DYN-01: esito TIPIZZATO + tolleranza/residuo per lo snapshot.
+        var _stIn = valveLiftIn.status || (valveLiftIn.converged !== false ? 'CONVERGED' : 'NON_CONVERGED');
+        var _stEx = valveLiftEx.status || (valveLiftEx.converged !== false ? 'CONVERGED' : 'NON_CONVERGED');
+        compInfo = {
+            status: (_stIn === 'INVALID_INPUT' || _stEx === 'INVALID_INPUT') ? 'INVALID_INPUT'
+                  : (_stIn !== 'CONVERGED' || _stEx !== 'CONVERGED') ? 'NON_CONVERGED' : 'CONVERGED',
+            statusIn: _stIn, statusEx: _stEx,
+            cyclesIn: valveLiftIn.cyclesRun, cyclesEx: valveLiftEx.cyclesRun,
+            residualIn: valveLiftIn.residualX, residualEx: valveLiftEx.residualX,
+            tolX: valveLiftIn.tolX, tolV: valveLiftIn.tolV
+        };
+        window._complianceInfo = compInfo;
+        window._complianceConverged = compInfo.status === 'CONVERGED';
         if ((!_vfin || (_cmax > 0 && _vmax > 3 * _cmax) || !window._complianceConverged) && window.cammesToast) {
             window.cammesToast({ kind: 'warn', title: 'Compliance NON convergente',
                 body: 'La simulazione dinamica non raggiunge un regime periodico stabile a questi parametri (rigidezze/masse estreme o RPM molto alto): float e regime NON sono affidabili. Riduci k sede/RPM o rivedi i parametri.',
@@ -3227,9 +3325,9 @@ function analyze() {
     if (surgeOn && rpm > 0) {
         var surgeParams = {
             kSpringN_mm: springK,
-            springMassG: Number(document.getElementById('springMass').value) || 50,
-            springCoils: Number(document.getElementById('springCoils').value) || 12,
-            dampingRatio: Number(document.getElementById('dampingRatio').value) || 0.06
+            springMassG: finiteOr(document.getElementById('springMass').value, 50),
+            springCoils: finiteOr(document.getElementById('springCoils').value, 12),
+            dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
         };
         surgeIn = simulateSpringSurge(valveLiftIn || anlIn, rpm, surgeParams);
     }
@@ -3367,6 +3465,11 @@ function analyze() {
             // Compliance (race-grade dynamic simulation), null se OFF
             complianceOn:    complianceOn,
             complianceModel: complianceOn ? (modelVal === '3dof' ? '3-DOF (sede)' : modelVal === '2dof' ? '2-DOF (catena)' : '1-DOF') : null,
+            // AUDIT DYN-01: esito tipizzato salvato nello snapshot (per UI/CSV/PDF)
+            complianceStatus:   compInfo ? compInfo.status : null,
+            complianceCycles:   compInfo ? Math.max(compInfo.cyclesIn || 0, compInfo.cyclesEx || 0) : null,
+            complianceResidual: compInfo ? Math.max(compInfo.residualIn || 0, compInfo.residualEx || 0) : null,
+            complianceTolX:     compInfo ? compInfo.tolX : null,
             valveFloatIn:    floatIn ? floatIn.maxGap : null,
             valveFloatInDeg: floatIn ? floatIn.gapIdx - 360 : null,
             valveFloatEx:    floatEx ? floatEx.maxGap : null,
@@ -3436,8 +3539,11 @@ function analyze() {
             }, 500);
         }
 
-        // Toast aggiuntivo se compliance attiva e valve float dinamico significativo
-        if (complianceOn && (floatIn || floatEx)) {
+        // Toast aggiuntivo se compliance attiva e valve float dinamico significativo.
+        // AUDIT DYN-01: SOLO se il solver e' convergente — un modello non
+        // convergente non produce verdetti (ne' negativi ne' "Compliance OK");
+        // il toast 'Compliance NON convergente' sopra ha gia' avvisato.
+        if (complianceOn && (floatIn || floatEx) && compInfo && compInfo.status === 'CONVERGED') {
             var maxFloatDyn = Math.max(floatIn ? floatIn.maxGap : 0, floatEx ? floatEx.maxGap : 0);
             setTimeout(function () {
                 var detail = '';
@@ -4220,10 +4326,23 @@ function exportCSV() {
     lines.push('RPM critico scar.,' + (isFinite(R.rpmCritEx) ? Math.round(R.rpmCritEx) : 'inf'));
     if (R.complianceOn && R.valveFloatIn !== null && R.valveFloatIn !== undefined) {
         lines.push('Modello compliance,' + (R.complianceModel || '1-DOF'));
-        lines.push('Valve float dinamico asp. [mm],' + R.valveFloatIn.toFixed(3));
-        lines.push('Valve float dinamico asp. [deg],' + R.valveFloatInDeg);
-        lines.push('Valve float dinamico scar. [mm],' + R.valveFloatEx.toFixed(3));
-        lines.push('Valve float dinamico scar. [deg],' + R.valveFloatExDeg);
+        // AUDIT DYN-01: il CSV dichiara lo stesso stato della UI. Se il solver
+        // non converge i float restano DIAGNOSTICI, non risultati.
+        if (R.complianceStatus) {
+            lines.push('Compliance stato,' + R.complianceStatus);
+            lines.push('Compliance cicli,' + (R.complianceCycles !== null ? R.complianceCycles : '-'));
+            if (R.complianceResidual !== null && R.complianceTolX) {
+                lines.push('Compliance residuo [m],' + R.complianceResidual.toExponential(2) + ' (tolleranza ' + R.complianceTolX.toExponential(0) + ')');
+            }
+        }
+        if (!R.complianceStatus || R.complianceStatus === 'CONVERGED') {
+            lines.push('Valve float dinamico asp. [mm],' + R.valveFloatIn.toFixed(3));
+            lines.push('Valve float dinamico asp. [deg],' + R.valveFloatInDeg);
+            lines.push('Valve float dinamico scar. [mm],' + R.valveFloatEx.toFixed(3));
+            lines.push('Valve float dinamico scar. [deg],' + R.valveFloatExDeg);
+        } else {
+            lines.push('Valve float dinamico,NON_VALUTABILE (solver ' + R.complianceStatus + ')');
+        }
     }
     if (R.surgeOn && R.surgeFreqHz) {
         lines.push('Surge molla freq. [Hz],' + Math.round(R.surgeFreqHz));
@@ -4834,11 +4953,18 @@ function exportPDF() {
         ['RPM critico',                        rpmCritInStr,                                  rpmCritExStr]
     ];
     // Riga valve float dinamico (solo se compliance attiva)
+    // AUDIT DYN-01: il PDF dichiara lo stesso stato di UI e CSV.
     if (R.complianceOn && R.valveFloatIn !== null && R.valveFloatIn !== undefined) {
-        rows.push(['Modello compliance', (R.complianceModel || '1-DOF'), '']);
-        rows.push(['Valve float dinamico',
-            R.valveFloatIn.toFixed(3) + ' mm @ ' + R.valveFloatInDeg + ' deg',
-            R.valveFloatEx.toFixed(3) + ' mm @ ' + R.valveFloatExDeg + ' deg']);
+        rows.push(['Modello compliance',
+            (R.complianceModel || '1-DOF') +
+            (R.complianceStatus && R.complianceStatus !== 'CONVERGED' ? ' — ' + R.complianceStatus : ''), '']);
+        if (!R.complianceStatus || R.complianceStatus === 'CONVERGED') {
+            rows.push(['Valve float dinamico',
+                R.valveFloatIn.toFixed(3) + ' mm @ ' + R.valveFloatInDeg + ' deg',
+                R.valveFloatEx.toFixed(3) + ' mm @ ' + R.valveFloatExDeg + ' deg']);
+        } else {
+            rows.push(['Valve float dinamico', 'NON VALUTABILE', 'NON VALUTABILE']);
+        }
     }
     // Riga spring surge (solo se attivo)
     if (R.surgeOn && R.surgeFreqHz) {

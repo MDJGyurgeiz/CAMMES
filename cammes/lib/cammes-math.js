@@ -237,7 +237,17 @@ function convertPuntToRoller(camLiftRaw, rBase, rRoll, rPunt) {
 // AUDIT DYN-04: default con nullish, NON con `||` — così 0 è un valore fisico
 // valido (smorzamento nullo, molla senza precarico) e non viene silenziosamente
 // sostituito dal default.
-function _num(v, d) { return (typeof v === 'number' && !isNaN(v)) ? v : d; }
+// AUDIT DYN-02: helper UNICO assenza/zero. Lo zero finito è un valore VALIDO
+// (damping 0 = non smorzato): il default si applica SOLO a input assente,
+// vuoto o non numerico. Accetta anche stringhe (campi input della UI).
+// Il pattern `Number(x) || default` è vietato per i parametri che ammettono 0.
+function finiteOr(v, d) {
+    if (v === null || v === undefined) return d;
+    if (typeof v === 'string' && v.trim() === '') return d;
+    var n = Number(v);
+    return isFinite(n) ? n : d;
+}
+function _num(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : d; }
 
 // Lettura circolare di camLift720 a grado FRAZIONARIO, interpolazione lineare,
 // mm → m. Condivisa dai tre solver. Audit DYN-03: prima ogni solver usava
@@ -251,6 +261,23 @@ function _camAtM(camLift720, degIdx) {
     return ((camLift720[i0] || 0) * (1 - fr) + (camLift720[i1] || 0) * fr) * 1e-3;
 }
 
+// AUDIT DYN-01 (controrevisione): esito TIPIZZATO dei solver di compliance.
+//   status: 'CONVERGED' | 'NON_CONVERGED' | 'INVALID_INPUT'
+//   tolX/tolV: tolleranze di periodicita (m, m/s); residualX/residualV: lo
+//   scarto misurato tra gli ultimi due cicli (null se mai confrontati).
+// Il chiamante NON deve produrre regime critico, badge positivi,
+// ottimizzazioni o report conclusivi se status !== 'CONVERGED'.
+function _dynInvalid(tolX, tolV) {
+    var out = new Array(722);
+    for (var i = 0; i <= 721; i++) out[i] = 0;
+    out.maxSeparation = 0; out.floatIdx = 0;
+    out.converged = false; out.cyclesRun = 0;
+    out.status = 'INVALID_INPUT';
+    out.tolX = tolX; out.tolV = tolV;
+    out.residualX = null; out.residualV = null;
+    return out;
+}
+
 // Output: array crank[1..720] con la posizione valvola REALE (compliance).
 // L'array porta anche .maxSeparation (mm) e .floatIdx (1..720): la massima
 // perdita di contatto cam-punteria (follower sopra la camma) — audit DYN-01.
@@ -261,6 +288,12 @@ function simulateCompliance(camLift720, rpm, params) {
     var k_spring = _num(p.kSpringN_mm, 30) * 1000; // N/m
     var F0       = _num(p.F0N, 200);              // N preload
     var damping  = _num(p.dampingRatio, 0.06);    // ζ critico
+
+    // AUDIT DYN-01: input invalido TIPIZZATO (prima un profilo null crashava
+    // e uno zero esplicito su massa/rigidezza passava dai default).
+    if (!camLift720 || !(rpm > 0) || m_kg <= 0 || k_train <= 0 || k_spring < 0) {
+        return _dynInvalid(5e-6, 5e-3);
+    }
 
     // Pulsazione naturale e smorzamento equivalente
     var omega_n  = Math.sqrt(k_train / m_kg);     // rad/s
@@ -313,6 +346,7 @@ function simulateCompliance(camLift720, rpm, params) {
     var maxCycles = _num(p.maxCycles, 30);
     var tolX = 5e-6, tolV = 5e-3;   // m, m/s: stato di fine ciclo a regime
     var prevX = null, prevV = null, converged = false, cyclesRun = 0;
+    var residX = null, residV = null;   // AUDIT DYN-01: residuo esposto
     // Registriamo out[]/maxSep a OGNI giro (ognuno sovrascrive il precedente):
     // dopo il loop out[] è l'ULTIMO giro. Confronto lo stato di fine giro N con
     // quello di N-1: due giri consecutivi identici (entro tol) = orbita
@@ -344,7 +378,8 @@ function simulateCompliance(camLift720, rpm, params) {
             out[deg] = x * 1000;  // m → mm
         }
         cyclesRun = pass + 1;
-        if (prevX !== null && Math.abs(x - prevX) <= tolX && Math.abs(v - prevV) <= tolV && cyclesRun >= minCycles) {
+        if (prevX !== null) { residX = Math.abs(x - prevX); residV = Math.abs(v - prevV); }
+        if (residX !== null && residX <= tolX && residV <= tolV && cyclesRun >= minCycles) {
             converged = true;
             break;
         }
@@ -354,6 +389,9 @@ function simulateCompliance(camLift720, rpm, params) {
     out.floatIdx = floatIdx;
     out.converged = converged;
     out.cyclesRun = cyclesRun;
+    out.status = converged ? 'CONVERGED' : 'NON_CONVERGED';
+    out.tolX = tolX; out.tolV = tolV;
+    out.residualX = residX; out.residualV = residV;
     return out;
 }
 
@@ -389,6 +427,11 @@ function simulateCompliance2DOF(camLift720, rpm, params) {
     var k_spring = _num(p.kSpringN_mm, 30) * 1000;       // rigidezza molla valvola
     var F0       = _num(p.F0N, 200);
     var damping  = _num(p.dampingRatio, 0.06);
+
+    // AUDIT DYN-01: input invalido TIPIZZATO
+    if (!camLift720 || !(rpm > 0) || m1_kg <= 0 || m2_kg <= 0 || k_push <= 0 || k_train <= 0 || k_spring < 0) {
+        return _dynInvalid(5e-6, 5e-3);
+    }
 
     var omega_n1 = Math.sqrt(k_push / m1_kg);
     var omega_n2 = Math.sqrt(k_train / m2_kg);
@@ -435,6 +478,7 @@ function simulateCompliance2DOF(camLift720, rpm, params) {
     var minCycles = _num(p.minCycles, 3), maxCycles = _num(p.maxCycles, 30);
     var tolX = 5e-6, tolV = 5e-3;
     var pX1 = null, pV1 = null, pX2 = null, pV2 = null, converged = false, cyclesRun = 0;
+    var residX = null, residV = null;   // AUDIT DYN-01: residuo esposto
     for (var pass = 0; pass < maxCycles; pass++) {
         maxSep = 0; floatIdx = 0;
         for (var deg = 1; deg <= 720; deg++) {
@@ -458,8 +502,11 @@ function simulateCompliance2DOF(camLift720, rpm, params) {
             out[deg] = x2 * 1000;   // lift VALVOLA osservato all'esterno
         }
         cyclesRun = pass + 1;
-        if (pX1 !== null && Math.abs(x1-pX1)<=tolX && Math.abs(v1-pV1)<=tolV &&
-            Math.abs(x2-pX2)<=tolX && Math.abs(v2-pV2)<=tolV && cyclesRun >= minCycles) {
+        if (pX1 !== null) {
+            residX = Math.max(Math.abs(x1 - pX1), Math.abs(x2 - pX2));
+            residV = Math.max(Math.abs(v1 - pV1), Math.abs(v2 - pV2));
+        }
+        if (residX !== null && residX <= tolX && residV <= tolV && cyclesRun >= minCycles) {
             converged = true; break;
         }
         pX1 = x1; pV1 = v1; pX2 = x2; pV2 = v2;
@@ -468,6 +515,9 @@ function simulateCompliance2DOF(camLift720, rpm, params) {
     out.floatIdx = floatIdx;
     out.converged = converged;
     out.cyclesRun = cyclesRun;
+    out.status = converged ? 'CONVERGED' : 'NON_CONVERGED';
+    out.tolX = tolX; out.tolV = tolV;
+    out.residualX = residX; out.residualV = residV;
     return out;
 }
 
@@ -517,6 +567,12 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
     var k_pivot  = (p.kPivotN_mm && p.kPivotN_mm > 0) ? p.kPivotN_mm * 1000 : 0;
     var F0       = _num(p.F0N, 200);
     var damping  = _num(p.dampingRatio, 0.06);
+
+    // AUDIT DYN-01: input invalido TIPIZZATO
+    if (!camLift720 || !(rpm > 0) || m1_kg <= 0 || m2_kg <= 0 || m3_kg <= 0 ||
+        k_push <= 0 || k_train <= 0 || k_seat <= 0 || k_spring < 0) {
+        return _dynInvalid(5e-6, 5e-3);
+    }
 
     // Rigidezza di contatto valvola-sede: stesso ordine della sede.
     var k_contact = k_seat;
@@ -576,6 +632,7 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
     var minCycles = _num(p.minCycles, 3), maxCycles = _num(p.maxCycles, 30);
     var tolX = 5e-6, tolV = 5e-3;
     var pX1 = null, pV1 = null, pX2 = null, pV2 = null, pX3 = null, pV3 = null, converged = false, cyclesRun = 0;
+    var residX = null, residV = null;   // AUDIT DYN-01: residuo esposto
     for (var pass = 0; pass < maxCycles; pass++) {
         maxSep = 0; floatIdx = 0;
         for (var deg = 1; deg <= 720; deg++) {
@@ -602,9 +659,11 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
             out[deg] = Math.max(0, x2) * 1000;
         }
         cyclesRun = pass + 1;
-        if (pX1 !== null && Math.abs(x1-pX1)<=tolX && Math.abs(v1-pV1)<=tolV &&
-            Math.abs(x2-pX2)<=tolX && Math.abs(v2-pV2)<=tolV &&
-            Math.abs(x3-pX3)<=tolX && Math.abs(v3-pV3)<=tolV && cyclesRun >= minCycles) {
+        if (pX1 !== null) {
+            residX = Math.max(Math.abs(x1 - pX1), Math.abs(x2 - pX2), Math.abs(x3 - pX3));
+            residV = Math.max(Math.abs(v1 - pV1), Math.abs(v2 - pV2), Math.abs(v3 - pV3));
+        }
+        if (residX !== null && residX <= tolX && residV <= tolV && cyclesRun >= minCycles) {
             converged = true; break;
         }
         pX1=x1;pV1=v1;pX2=x2;pV2=v2;pX3=x3;pV3=v3;
@@ -613,6 +672,9 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
     out.floatIdx = floatIdx;
     out.converged = converged;
     out.cyclesRun = cyclesRun;
+    out.status = converged ? 'CONVERGED' : 'NON_CONVERGED';
+    out.tolX = tolX; out.tolV = tolV;
+    out.residualX = residX; out.residualV = residV;
     return out;
 }
 
@@ -660,20 +722,25 @@ function detectValveFloat(camLift720, valveLift720) {
 // convergenza. Il modello NON e' stato validato indipendentemente: usare i
 // risultati come indicazione qualitativa, non come dato metrologico.
 function springSurgeFreqHz(kSpringN_mm, springMassG) {
-    var k = (kSpringN_mm || 30) * 1000;       // N/m
-    var m = (springMassG || 50) / 1000;       // kg
+    // AUDIT DYN-02: default SOLO se assente/invalido; uno 0 esplicito
+    // finisce nella guardia (risultato nullo), non nel default.
+    var k = finiteOr(kSpringN_mm, 30) * 1000; // N/m
+    var m = finiteOr(springMassG, 50) / 1000; // kg
     if (m <= 0 || k <= 0) return 0;
     return 0.5 * Math.sqrt(k / m);            // Hz (fondamentale estremi fissi)
 }
 
 function simulateSpringSurge(valveLift720, rpm, params) {
     var p = params || {};
-    var k_spring = (p.kSpringN_mm || 30) * 1000;        // N/m (totale)
-    var m_spring = (p.springMassG || 50) / 1000;        // kg (massa molla)
-    var N = Math.max(4, Math.min(24, Math.round(p.springCoils || 12)));
-    var zeta = (p.dampingRatio || 0.06);
+    var k_spring = finiteOr(p.kSpringN_mm, 30) * 1000;  // N/m (totale)
+    var m_spring = finiteOr(p.springMassG, 50) / 1000;  // kg (massa molla)
+    var N = Math.max(4, Math.min(24, Math.round(finiteOr(p.springCoils, 12))));
+    // AUDIT DYN-02: damping 0 esplicito è VALIDO (non smorzato); prima
+    // `p.dampingRatio || 0.06` lo sostituiva col default, e un testo invalido
+    // propagava NaN in tutta la simulazione. Range [0,1] applicato a parte.
+    var zeta = Math.max(0, Math.min(1, finiteOr(p.dampingRatio, 0.06)));
     if (m_spring <= 0 || k_spring <= 0 || rpm <= 0) {
-        return { surgeFreqHz: 0, surgeRatio: 0, maxCoilAmpMm: 0, harmonicOrder: 0 };
+        return { surgeFreqHz: 0, surgeRatio: 0, maxCoilAmpMm: 0, harmonicOrder: 0, preliminary: true, settleCycles: 0 };
     }
 
     var m_i   = m_spring / N;                  // massa per nodo interno
@@ -693,7 +760,7 @@ function simulateSpringSurge(valveLift720, rpm, params) {
         slope[d2] = (lift[dn] - lift[dp]) / 2;  // m per grado
     }
     var maxLift = 0; for (var dm = 1; dm <= 720; dm++) if (lift[dm] > maxLift) maxLift = lift[dm];
-    if (maxLift <= 0) return { surgeFreqHz: springSurgeFreqHz(p.kSpringN_mm, p.springMassG), surgeRatio: 0, maxCoilAmpMm: 0, harmonicOrder: 0 };
+    if (maxLift <= 0) return { surgeFreqHz: springSurgeFreqHz(p.kSpringN_mm, p.springMassG), surgeRatio: 0, maxCoilAmpMm: 0, harmonicOrder: 0, preliminary: true, settleCycles: 0 };
 
     function driveAt(crankDeg) {
         var dd = ((crankDeg - 1) % 720 + 720) % 720 + 1;
@@ -761,7 +828,7 @@ function simulateSpringSurge(valveLift720, rpm, params) {
                 var yStatic = sNow * (c + 1) / (N + 1);
                 var dev = Math.abs(y[c] - yStatic);
                 if (dev > maxDev) maxDev = dev;
-                if (!isFinite(y[c])) return { surgeFreqHz: springSurgeFreqHz(p.kSpringN_mm, p.springMassG), surgeRatio: Infinity, maxCoilAmpMm: Infinity, harmonicOrder: 0, diverged: true };
+                if (!isFinite(y[c])) return { surgeFreqHz: springSurgeFreqHz(p.kSpringN_mm, p.springMassG), surgeRatio: Infinity, maxCoilAmpMm: Infinity, harmonicOrder: 0, diverged: true, preliminary: true, settleCycles: nCycles };
             }
         }
     }
@@ -774,7 +841,11 @@ function simulateSpringSurge(valveLift720, rpm, params) {
         surgeRatio: maxDev / maxLift,            // ampiezza interna / corsa valvola
         maxCoilAmpMm: maxDev * 1000,
         harmonicOrder: nHarm,                    // armonica cam ~ surge a questo rpm
-        criticalRpm: nHarm > 0 ? Math.round(fSurge * 120 / nHarm) : null
+        criticalRpm: nHarm > 0 ? Math.round(fSurge * 120 / nHarm) : null,
+        // AUDIT DYN-02: cicli FISSI senza verifica di convergenza — il
+        // risultato è dichiaratamente preliminare (modello esplorativo).
+        preliminary: true,
+        settleCycles: nCycles
     };
 }
 
@@ -1327,6 +1398,7 @@ var api = {
     effectiveCenters: effectiveCenters,
     parseCamFile: parseCamFile,
     parseFiniteMeasurement: parseFiniteMeasurement,
+    finiteOr: finiteOr,
     serializeDiagnosticProfile: serializeDiagnosticProfile,
     averageRuns: averageRuns,
     averageCompleteRuns: averageCompleteRuns,
