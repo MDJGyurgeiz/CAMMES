@@ -69,7 +69,7 @@ async function main() {
     var s1 = seq();
     send(s1 + ' STATUS\n');
     var hello = await waitFor('HELLO ', 2500);
-    check('STATUS → HELLO proto=4 fw=4.0', !!hello && /proto=4/.test(hello.line) && /fw=4\.0/.test(hello.line), hello ? hello.line : 'nessun HELLO');
+    check('STATUS → HELLO proto=4 fw=4.x', !!hello && /proto=4/.test(hello.line) && /fw=4\.\d+/.test(hello.line), hello ? hello.line : 'nessun HELLO');
     check('HELLO: device id presente e non zero', !!hello && /dev=[0-9a-fA-F]+/.test(hello.line) && !/dev=0 /.test(hello.line));
     check('HELLO: stato IDLE_LOCKED, fault NONE', !!hello && /state=IDLE_LOCKED/.test(hello.line) && /fault=NONE/.test(hello.line));
 
