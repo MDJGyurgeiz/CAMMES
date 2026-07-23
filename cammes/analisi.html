@@ -2463,6 +2463,7 @@ function importIntake() {
         document.getElementById('intakeStatus').textContent =
             nom[0] + ' | Max: ' + intakeMaxLift.toFixed(2) + 'mm @ ' + intakeMaxPos + '\u00B0';
         updateChart();
+        markAnalysisStale();   // AUDIT APP-01: nuovo profilo -> risultati vecchi non esportabili
     };
     fr.readAsText(file);
 }
@@ -2518,6 +2519,7 @@ function importExhaust() {
         document.getElementById('exhaustStatus').textContent =
             nom[0] + ' | Max: ' + exhaustMaxLift.toFixed(2) + 'mm @ ' + exhaustMaxPos + '\u00B0';
         updateChart();
+        markAnalysisStale();   // AUDIT APP-01: nuovo profilo -> risultati vecchi non esportabili
     };
     fr.readAsText(file);
 }
@@ -2796,6 +2798,23 @@ function applyForceResults(forcesIn, forcesEx, rpm) {
     setRpmCell('resRpmCritEx', forcesEx.rpmCrit, rpm);
 }
 
+// AUDIT APP-01: display cinematica condiviso tra analyze() e retune live
+// (la cinematica in dominio tempo dipende da rpm: se il retune non la
+// riscrivesse, schermo ed export divergerebbero).
+function applyKinematicResults(resIn, resEx) {
+    document.getElementById('resVelOpenIn').textContent = formatKinValue(resIn.velOpen) + ' ' + resIn.unitVel;
+    document.getElementById('resVelCloseIn').textContent = formatKinValue(resIn.velClose) + ' ' + resIn.unitVel;
+    document.getElementById('resAccPosIn').textContent = formatKinValue(resIn.accPos) + ' ' + resIn.unitAcc;
+    document.getElementById('resAccNegIn').textContent = formatKinValue(resIn.accNeg) + ' ' + resIn.unitAcc;
+    document.getElementById('resJerkIn').textContent = formatKinValue(resIn.jerkMax) + ' ' + resIn.unitJerk;
+
+    document.getElementById('resVelOpenEx').textContent = formatKinValue(resEx.velOpen) + ' ' + resEx.unitVel;
+    document.getElementById('resVelCloseEx').textContent = formatKinValue(resEx.velClose) + ' ' + resEx.unitVel;
+    document.getElementById('resAccPosEx').textContent = formatKinValue(resEx.accPos) + ' ' + resEx.unitAcc;
+    document.getElementById('resAccNegEx').textContent = formatKinValue(resEx.accNeg) + ' ' + resEx.unitAcc;
+    document.getElementById('resJerkEx').textContent = formatKinValue(resEx.jerkMax) + ' ' + resEx.unitJerk;
+}
+
 // Live tuning: ricomputa le forze e aggiorna DOM + forceChart al volo
 // quando l'utente cambia RPM, k, F0 o massa eq, SENZA dover ri-premere
 // "Analizza". Usa il contesto cacheato (lift e accel) dell'ultima analisi.
@@ -2847,13 +2866,34 @@ function liveRetuneForces() {
         window.lastAnalysis.inputs.springPreload = springF0;
         window.lastAnalysis.inputs.massEqIntake = mEqIn;
         window.lastAnalysis.inputs.massEqExhaust = mEqEx;
+        // AUDIT APP-01 (controrevisione): il retune è ATOMICO — anche gli
+        // ARRAY per grado (dump CSV) e la cinematica in dominio tempo
+        // (dipende da rpm) vengono ricalcolati, non solo il riepilogo.
+        // Prima il CSV esportava forze per-grado VECCHIE sotto un riepilogo
+        // nuovo.
+        if (window.lastAnalysis.arrays) {
+            window.lastAnalysis.arrays.fSpringIn = fIn.fSpring;
+            window.lastAnalysis.arrays.fSpringEx = fEx.fSpring;
+            window.lastAnalysis.arrays.fInertiaIn = fIn.fInertia;
+            window.lastAnalysis.arrays.fInertiaEx = fEx.fInertia;
+        }
+        if (typeof velIntake !== 'undefined' && velIntake.length) {
+            R.kinIntake  = extractKinematicResults(velIntake, accIntake, jerkIntake, intakeMaxIdx, rpm);
+            R.kinExhaust = extractKinematicResults(velExhaust, accExhaust, jerkExhaust, exhaustMaxIdx, rpm);
+            applyKinematicResults(R.kinIntake, R.kinExhaust);   // schermo = export
+        }
     }
-    // AUDIT APP-01: il live tuning aggiorna le FORZE ma NON ricalcola la
-    // compliance/valve-float (resta al regime dell'ultima analisi). Se la
-    // compliance è attiva, l'export mescolerebbe forze nuove e float vecchio
-    // → marca stale così il report resta coerente solo dopo un nuovo Analizza.
+    // AUDIT APP-01: con compliance o surge ATTIVI il retune non ricalcola
+    // float/surge (restano al regime dell'ultima analisi) → stale, export
+    // bloccato fino a un nuovo Analizza. Con entrambi OFF il ricalcolo qui
+    // sopra è completo → l'hash viene ri-fotografato e l'export resta valido.
     var cEn = document.getElementById('complianceEnabled');
-    if (cEn && cEn.value === '1') markAnalysisStale();
+    var sEn = document.getElementById('surgeEnabled');
+    if ((cEn && cEn.value === '1') || (sEn && sEn.value === '1')) {
+        markAnalysisStale();
+    } else if (window.lastAnalysis && window.lastAnalysis.parameterHash) {
+        window.lastAnalysis.parameterHash = paramsHash();
+    }
 }
 
 // AUDIT APP-01: stale-ness dell'analisi. Il live tuning ricalcola le forze dai
@@ -2879,6 +2919,45 @@ function clearAnalysisStale() {
     var btn = document.getElementById('analyzeBtn');
     if (btn) btn.classList.remove('btn-attention');
 }
+// AUDIT APP-01 (controrevisione): hash dei parametri influenti. I listener
+// stale coprono i casi noti, ma la garanzia FORTE è questa: al momento di
+// ogni export si ricalcola l'hash di TUTTI gli input influenti + impronta
+// dei profili caricati e lo si confronta con quello fotografato da analyze().
+// Qualsiasi drift (anche da un listener dimenticato) blocca l'export.
+var INFLUENTIAL_IDS = ['intakeType', 'intakeAngle', 'intakeClearance',
+    'exhaustType', 'exhaustAngle', 'exhaustClearance', 'advance', 'durationRef',
+    'baselineCorrect', 'rpmInput', 'rockerIntake', 'rockerExhaust', 'smoothWindow',
+    'followerType', 'diamBicch', 'rRoll', 'lArm', 'lValve', 'fingerTilt',
+    'rBase', 'rBaseExhaust', 'rPunt', 'springK', 'springPreload',
+    'massEqIntake', 'massEqExhaust', 'complianceEnabled', 'kTrain', 'dampingRatio',
+    'complianceModel', 'massEqIntermediate', 'kPushrod', 'massSeat', 'kSeat',
+    'kPivot', 'surgeEnabled', 'springMass', 'springCoils'];
+function collectInfluentialParams() {
+    var parts = [];
+    for (var i = 0; i < INFLUENTIAL_IDS.length; i++) {
+        var el = document.getElementById(INFLUENTIAL_IDS[i]);
+        parts.push(INFLUENTIAL_IDS[i] + '=' + (el ? String(el.value) : ''));
+    }
+    // Impronta dei profili sorgente: un re-import cambia l'hash anche
+    // senza toccare alcun campo.
+    parts.push('profIn=' + (typeof intakeFileBase !== 'undefined' ? intakeFileBase : '') + ',' +
+               (typeof intakeMaxLift !== 'undefined' ? intakeMaxLift : '') + ',' +
+               (typeof intakeMaxPos !== 'undefined' ? intakeMaxPos : '') + ',' +
+               ((window._metaIn && window._metaIn.validCount) || ''));
+    parts.push('profEx=' + (typeof exhaustFileBase !== 'undefined' ? exhaustFileBase : '') + ',' +
+               (typeof exhaustMaxLift !== 'undefined' ? exhaustMaxLift : '') + ',' +
+               (typeof exhaustMaxPos !== 'undefined' ? exhaustMaxPos : '') + ',' +
+               ((window._metaEx && window._metaEx.validCount) || ''));
+    return parts.join('|');
+}
+function _djb2(s) {
+    var h = 5381;
+    for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(16);
+}
+function paramsHash() { return _djb2(collectInfluentialParams()); }
+var _analysisCounter = 0;
+
 // true se l'export deve fermarsi (analisi assente o stale)
 function exportBlockedByStale() {
     if (!lastAnalysis) {
@@ -2888,6 +2967,15 @@ function exportBlockedByStale() {
     if (_analysisStale) {
         if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Analisi non aggiornata',
             body: 'Hai cambiato parametri che modificano la curva. Premi <b>Analizza</b> prima di esportare, altrimenti il report mescolerebbe dati nuovi e vecchi.', duration: 6000 });
+        return true;
+    }
+    // AUDIT APP-01: verifica dell'HASH — cintura oltre alle bretelle dei
+    // listener. Se un qualsiasi input influente è cambiato dall'ultima
+    // analisi (anche per una via non ascoltata), l'export si ferma.
+    if (lastAnalysis.parameterHash && lastAnalysis.parameterHash !== paramsHash()) {
+        markAnalysisStale();
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Parametri cambiati',
+            body: 'Gli input attuali non corrispondono a quelli dell\'ultima analisi (hash diverso). Premi <b>Analizza</b> prima di esportare.', duration: 6000 });
         return true;
     }
     return false;
@@ -2901,11 +2989,18 @@ function initLiveTuning() {
         if (el) el.addEventListener('input', scheduleLiveRetune);
     });
     // Input che CAMBIANO la curva → analisi stale finché non si ri-analizza.
+    // AUDIT APP-01 (controrevisione): aggiunti follower (diamBicch/rRoll/
+    // lArm/lValve/fingerTilt), tipi lato e surge (surgeEnabled/springMass/
+    // springCoils) che prima non erano ascoltati. La rete di sicurezza vera
+    // resta comunque il confronto di parameterHash in exportBlockedByStale().
     var curveIds = ['followerType', 'rBase', 'rBaseExhaust', 'rPunt',
+        'diamBicch', 'rRoll', 'lArm', 'lValve', 'fingerTilt',
+        'intakeType', 'exhaustType',
         'rockerIntake', 'rockerExhaust', 'intakeAngle', 'exhaustAngle', 'advance',
         'intakeClearance', 'exhaustClearance', 'smoothWindow', 'durationRef',
         'complianceEnabled', 'complianceModel', 'kTrain', 'dampingRatio',
         'massEqIntermediate', 'kPushrod', 'massSeat', 'kSeat', 'kPivot',
+        'surgeEnabled', 'springMass', 'springCoils',
         'baselineCorrect'];
     curveIds.forEach(function (id) {
         var el = document.getElementById(id);
@@ -3384,17 +3479,7 @@ function analyze() {
     // ====== KINEMATIC RESULTS ======
     document.getElementById('kinematicsCard').style.display = 'block';
 
-    document.getElementById('resVelOpenIn').textContent = formatKinValue(resIn.velOpen) + ' ' + resIn.unitVel;
-    document.getElementById('resVelCloseIn').textContent = formatKinValue(resIn.velClose) + ' ' + resIn.unitVel;
-    document.getElementById('resAccPosIn').textContent = formatKinValue(resIn.accPos) + ' ' + resIn.unitAcc;
-    document.getElementById('resAccNegIn').textContent = formatKinValue(resIn.accNeg) + ' ' + resIn.unitAcc;
-    document.getElementById('resJerkIn').textContent = formatKinValue(resIn.jerkMax) + ' ' + resIn.unitJerk;
-
-    document.getElementById('resVelOpenEx').textContent = formatKinValue(resEx.velOpen) + ' ' + resEx.unitVel;
-    document.getElementById('resVelCloseEx').textContent = formatKinValue(resEx.velClose) + ' ' + resEx.unitVel;
-    document.getElementById('resAccPosEx').textContent = formatKinValue(resEx.accPos) + ' ' + resEx.unitAcc;
-    document.getElementById('resAccNegEx').textContent = formatKinValue(resEx.accNeg) + ' ' + resEx.unitAcc;
-    document.getElementById('resJerkEx').textContent = formatKinValue(resEx.jerkMax) + ' ' + resEx.unitJerk;
+    applyKinematicResults(resIn, resEx);   // AUDIT APP-01: condiviso col retune live
 
     // Chart titles with units
     var omega = rpm > 0 ? rpm * 6 : 0;
@@ -3508,6 +3593,11 @@ function analyze() {
     // Animazione meccanismo: ora che lastAnalysis è popolato, mostra e disegna
     var mechCard = document.getElementById('mechAnimCard');
     if (mechCard) { mechCard.style.display = 'block'; mechAnimRefresh(); }
+
+    // AUDIT APP-01: fotografa identita e hash dei parametri di QUESTA analisi.
+    // Ogni export verifica l'hash prima di generarsi.
+    lastAnalysis.analysisId = ++_analysisCounter;
+    lastAnalysis.parameterHash = paramsHash();
 
     clearAnalysisStale();   // audit APP-01: risultati ora allineati al DOM
 
@@ -4322,6 +4412,11 @@ function exportCSV() {
     // Section: parametri
     lines.push('# CAMMES - Report analisi camme');
     lines.push('# Timestamp,' + L.timestamp);
+    // AUDIT APP-01: identita dell'analisi — riepilogo, array e grafici di
+    // questo file provengono TUTTI dalla stessa analyze() (hash verificato
+    // in exportBlockedByStale prima di generare).
+    lines.push('# AnalysisId,' + (L.analysisId || '-'));
+    lines.push('# ParameterHash,' + (L.parameterHash || '-'));
     lines.push('# File asp.,' + csvEscape(L.inputs.intakeFile));
     lines.push('# File scar.,' + csvEscape(L.inputs.exhaustFile));
     lines.push('# Tipologia asp.,' + L.inputs.intakeType);
@@ -4828,7 +4923,9 @@ function exportPDF() {
         doc.line(margin, fy - 3, pageW - margin, fy - 3);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
         setText(COL.muted);
-        doc.text('CAMMES · Report analisi camme', margin, fy);
+        // AUDIT APP-01: identita analisi nel footer (id + hash parametri)
+        doc.text('CAMMES · Report analisi camme' +
+            (L.analysisId ? ' · #' + L.analysisId + '/' + (L.parameterHash || '-') : ''), margin, fy);
         var pageStr = 'Pagina ' + pageNum + ' di ' + pageTotal;
         doc.text(pageStr, pageW - margin - doc.getTextWidth(pageStr), fy);
         var tsStr = L.timestamp || '';
