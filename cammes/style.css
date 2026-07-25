@@ -133,6 +133,21 @@
   --text-muted:     #6b7588;
   --text-disabled:  #4a5365;
 
+  /* Alias usati da analisi.html ma mai definiti: senza questi, ogni
+     "1px solid var(--border-card)" e' invalido a tempo di calcolo e diventa
+     border-style:none — tutti i separatori fra i gruppi di parametri e le
+     sottolineature delle sezioni risultavano INVISIBILI (verificato: 0px). */
+  --border-card: var(--border);
+  --text:        var(--text-primary);
+
+  /* Colori dei VALORI numerici. Gli accenti sopra sono pensati per fondo
+     scuro: su fondo chiaro danno 1,4-1,8:1 (illeggibili). Qui in tema scuro
+     valgono quanto gli accenti; il blocco light li ridefinisce. */
+  --accent-text:   var(--accent);
+  --success-text:  var(--success);
+  --warning-text:  var(--warning);
+  --danger-text:   var(--danger);
+
   --grid:        #232a36;
   --grid-zero:   #ffd740;
 
@@ -169,6 +184,15 @@
 
   /* In light theme i glow di accent restano cyan ma vanno smorzati */
   --accent-glow:   rgba(0, 212, 255, 0.18);
+
+  /* Valori numerici leggibili su fondo chiaro. Gli accenti nativi davano
+     1,40:1 (LSA), 1,67:1 (overlap), 1,77:1 (durate): 37 valori sotto lo
+     standard. Questi restano riconoscibili come "lo stesso colore" ma
+     scuriti fino a superare 4,5:1 su --bg-elev-1. */
+  --accent-text:   #00697f;
+  --success-text:  #0a7a3d;
+  --warning-text:  #8a6a00;
+  --danger-text:   #c62828;
 
   /* Elevation più sottili in light */
   --e-1: 0 1px 2px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(15, 23, 42, 0.04) inset;
@@ -1078,6 +1102,11 @@ input:checked + .slider:before { transform: translateX(22px); }
   border-radius: var(--r-sm);
 }
 .toast-close:hover { color: var(--text-primary); }
+/* Il corpo del banner resta trasparente ai click (vedi sopra), ma i suoi
+   elementi interattivi no: il toast di aggiornamento contiene il link
+   "Scarica cammes.exe" e senza questa riga sarebbe inerte. */
+.toast-body a,
+.toast-body button { pointer-events: auto; }
 .toast.success { border-left: 3px solid var(--success); }
 .toast.warn    { border-left: 3px solid var(--warning); }
 .toast.err     { border-left: 3px solid var(--danger); }

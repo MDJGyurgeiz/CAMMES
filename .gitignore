@@ -41,3 +41,6 @@ AVVIA_BANCO_REMOTO.bat
 # scaricati per confronto): materiale altrui protetto da copyright, non nostro
 # da ridistribuire. Il repo è pubblico: resta SOLO su Drive.
 smartcam-manual-VR3/
+
+# Prove di interfaccia locali, non parte del prodotto distribuito
+cammes-ui-demo/

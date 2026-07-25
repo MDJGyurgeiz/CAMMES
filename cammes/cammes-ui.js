@@ -491,7 +491,7 @@
       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
       body: 'Sistema completo di misura, confronto e analisi di alberi a camme.<br><br>L\'hardware ' +
             '(stepper + comparatore + encoder) scansiona automaticamente il profilo a 360&deg;; ' +
-            'il software calcola durata, LSA, forze inerziali e RPM critico.<br><br>' +
+            'il software calcola durata, LSA, forze inerziali e limite di distacco valvola.<br><br>' +
             'Questa guida mostra il flusso di lavoro tipico. Premi <kbd>?</kbd> in alto a destra per riaprirla.'
     },
     {
@@ -518,7 +518,7 @@
             'camme diverse).<br><br>' +
             '<b>Analisi</b>: importa la coppia <b>asp.</b> + <b>scar.</b>, inserisci parametri reali del motore ' +
             '(angolo lobo, gioco valvola, RPM, molla, massa eq.) e premi <b>Analizza</b>. ' +
-            'Ottieni durata, LSA, velocit&agrave;/accelerazione, forze, RPM critico, esportabili in CSV/PDF.'
+            'Ottieni durata, LSA, velocit&agrave;/accelerazione, forze, limite di distacco valvola, esportabili in CSV/PDF.'
     },
     {
       title: 'Suggerimenti finali',
@@ -678,7 +678,7 @@
       { sel: '#btnModules',        title: 'Funzioni aggiuntive', body: 'Di default vedi solo il flusso essenziale. Da qui attivi i moduli extra: <b>molla</b>, <b>dinamica valvole</b>, <b>strumenti race</b>, <b>animazione</b>, <b>confronto A/B</b>. Col modulo Dinamica valvole compaiono anche <b>Compliance treno valvole</b> (valve float, modelli 1/2/3-DOF) e <b>Surge molla</b> (risonanza spire ad alto regime). La scelta viene ricordata.' },
       { sel: '#modeBaseBtn',       title: 'Base / Avanzato', body: 'In <b>Base</b> vedi i campi minimi; <b>Avanzato</b> aggiunge i parametri fini (anticipo, bilancieri, smoothing, baseline).' },
       { sel: '#fileIntake',        title: 'Importa la camma', body: 'Carica i file di aspirazione e scarico, poi premi Analizza.' },
-      { sel: 'button[onclick^="analyze"]', title: 'Analizza', body: 'Calcola durata, LSA, alzata, velocità/accelerazione, forze e RPM critico.' }
+      { sel: 'button[onclick^="analyze"]', title: 'Analizza', body: 'Calcola durata, LSA, alzata, velocità/accelerazione, forze e limite di distacco valvola.' }
     ]
   };
 
