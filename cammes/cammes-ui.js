@@ -86,7 +86,8 @@
     const kind = o.kind || o.type || 'info';
     const title = o.title || '';
     const body = o.body || '';
-    const ttl = o.duration || 4000;
+    // duration:0 = messaggio persistente (prima lo 0 era falsy e cadeva sui 4 s)
+    const ttl = (o.duration == null) ? 4000 : o.duration;
 
     const stack = ensureToastStack();
     const el = document.createElement('div');
@@ -95,17 +96,130 @@
       '<div class="toast-body">' +
       (title ? '<div class="toast-title">' + title + '</div>' : '') +
       '<div>' + body + '</div>' +
-      '</div>';
+      '</div>' +
+      '<button type="button" class="toast-close" aria-label="Chiudi messaggio">&#10005;</button>';
+    el.querySelector('.toast-close').addEventListener('click', function () { el.remove(); });
     stack.appendChild(el);
+    // Una sola analisi puo' generare 7 messaggi: oltre i 4 piu' recenti la pila
+    // usciva dallo schermo. I precedenti restano nel registro (campanella).
+    while (stack.children.length > 4) stack.removeChild(stack.firstChild);
 
-    setTimeout(() => {
-      el.style.transition = 'opacity 200ms, transform 200ms';
-      el.style.opacity = '0';
-      el.style.transform = 'translateX(20px)';
-      setTimeout(() => el.remove(), 220);
-    }, ttl);
+    if (ttl > 0) {
+      setTimeout(() => {
+        el.style.transition = 'opacity 200ms, transform 200ms';
+        el.style.opacity = '0';
+        el.style.transform = 'translateX(20px)';
+        setTimeout(() => el.remove(), 220);
+      }, ttl);
+    }
+
+    recordMessage(kind, title, body);
   }
   window.cammesToast = showToast;
+
+  // -------- REGISTRO MESSAGGI --------------------------------------------
+  // I toast sparivano dopo 4-9 s e i verdetti (LSA, RPM critico, valve float,
+  // avvisi di misura incompleta) andavano persi: l'utente non aveva modo di
+  // rileggerli. Ogni messaggio finisce qui e resta consultabile dal pulsante
+  // in alto (campanella) finche' la pagina e' aperta.
+  const MSG_KEY = 'cammes-msglog-v1';
+  const MSG_MAX = 150;
+  // sessionStorage: il registro sopravvive al passaggio fra le pagine
+  // (Analisi -> Home -> Analisi) ma si azzera chiudendo la scheda.
+  const MSG_LOG = (function () {
+    try { return JSON.parse(sessionStorage.getItem(MSG_KEY)) || []; } catch (e) { return []; }
+  })();
+  let msgUnread = 0;
+
+  function persistMsgLog() {
+    try { sessionStorage.setItem(MSG_KEY, JSON.stringify(MSG_LOG)); } catch (e) {}
+  }
+
+  function recordMessage(kind, title, body) {
+    const d = new Date();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    MSG_LOG.push({ kind: kind, title: title, body: body, ora: hh + ':' + mm + ':' + ss });
+    if (MSG_LOG.length > MSG_MAX) MSG_LOG.shift();
+    persistMsgLog();
+    const panel = document.getElementById('msglog-panel');
+    if (panel && panel.classList.contains('visible')) { renderMsgLog(); }
+    else { msgUnread++; updateMsgBadge(); }
+  }
+
+  function updateMsgBadge() {
+    const b = document.getElementById('msglog-badge');
+    if (!b) return;
+    b.textContent = msgUnread > 99 ? '99+' : String(msgUnread);
+    b.style.display = msgUnread > 0 ? 'flex' : 'none';
+  }
+
+  function renderMsgLog() {
+    const list = document.getElementById('msglog-list');
+    if (!list) return;
+    if (!MSG_LOG.length) {
+      list.innerHTML = '<p class="msglog-empty">Nessun messaggio in questa sessione.</p>';
+      return;
+    }
+    let html = '';
+    for (let i = MSG_LOG.length - 1; i >= 0; i--) {
+      const m = MSG_LOG[i];
+      html += '<div class="msglog-item ' + m.kind + '">' +
+        '<div class="msglog-meta"><span class="msglog-ora">' + m.ora + '</span>' +
+        (m.title ? '<span class="msglog-title">' + m.title + '</span>' : '') + '</div>' +
+        '<div class="msglog-body">' + m.body + '</div></div>';
+    }
+    list.innerHTML = html;
+  }
+
+  function ensureMsgPanel() {
+    let panel = document.getElementById('msglog-panel');
+    if (panel) return panel;
+    panel = document.createElement('div');
+    panel.id = 'msglog-panel';
+    panel.className = 'msglog-panel';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-label', 'Registro messaggi');
+    panel.innerHTML =
+      '<div class="msglog-head">' +
+        '<span class="msglog-h-title">Messaggi della sessione</span>' +
+        '<button type="button" id="msglog-clear" class="msglog-btn">Svuota</button>' +
+        '<button type="button" id="msglog-close" class="msglog-btn" aria-label="Chiudi">&#10005;</button>' +
+      '</div><div id="msglog-list" class="msglog-list"></div>';
+    document.body.appendChild(panel);
+    panel.querySelector('#msglog-close').addEventListener('click', toggleMsgLog);
+    panel.querySelector('#msglog-clear').addEventListener('click', function () {
+      MSG_LOG.length = 0; persistMsgLog(); renderMsgLog();
+    });
+    return panel;
+  }
+
+  function toggleMsgLog() {
+    const panel = ensureMsgPanel();
+    const aperto = panel.classList.toggle('visible');
+    if (aperto) { msgUnread = 0; updateMsgBadge(); renderMsgLog(); }
+  }
+  window.cammesMsgLog = { toggle: toggleMsgLog, entries: function () { return MSG_LOG.slice(); } };
+
+  function installMsgLogButton() {
+    if (document.getElementById('msglog-toggle')) return;
+    const ref = document.getElementById('help-toggle');
+    if (!ref || !ref.parentNode) return;
+    const btn = document.createElement('button');
+    btn.id = 'msglog-toggle';
+    btn.type = 'button';
+    btn.className = 'help-toggle msglog-toggle';
+    btn.setAttribute('aria-label', 'Registro messaggi');
+    btn.title = 'Rivedi i messaggi (verdetti, avvisi) di questa sessione';
+    btn.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">' +
+      '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>' +
+      '<span id="msglog-badge" class="msglog-badge" style="display:none;">0</span>';
+    btn.addEventListener('click', toggleMsgLog);
+    ref.parentNode.insertBefore(btn, ref);
+    updateMsgBadge();
+  }
 
   // -------- SCAN PROGRESS BAR --------------------------------------------
   function setScanProgress(current, total, etaSec) {
@@ -886,6 +1000,13 @@
         helpBtn.parentNode.insertBefore(tb, helpBtn);
       }
     }
+    installMsgLogButton();
+    // Esc chiude il registro messaggi se aperto
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      var p = document.getElementById('msglog-panel');
+      if (p && p.classList.contains('visible')) toggleMsgLog();
+    });
     refreshTooltips();
     showWizardIfFirstTime();
     // Badge versione (assistenza: sapere quale build gira su un PC d'officina)

@@ -1042,6 +1042,7 @@ input:checked + .slider:before { transform: translateX(22px); }
   gap: var(--sp-3);
   z-index: var(--z-toast);
   pointer-events: none;
+  max-height: calc(100vh - 96px);
 }
 .toast {
   display: flex;
@@ -1056,9 +1057,27 @@ input:checked + .slider:before { transform: translateX(22px); }
   -webkit-backdrop-filter: blur(20px);
   min-width: 260px;
   max-width: 420px;
-  pointer-events: auto;
+  /* I messaggi coprono la colonna dei parametri: se intercettassero i click
+     (pointer-events:auto, com'era) l'utente clicca su un campo, il click
+     finisce sul banner, il campo non prende il fuoco e le frecce scorrono la
+     pagina. Solo la X resta cliccabile. */
+  pointer-events: none;
   animation: slide-in-right var(--t-slow) var(--ease);
 }
+.toast-close {
+  pointer-events: auto;
+  flex-shrink: 0;
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+}
+.toast-close:hover { color: var(--text-primary); }
 .toast.success { border-left: 3px solid var(--success); }
 .toast.warn    { border-left: 3px solid var(--warning); }
 .toast.err     { border-left: 3px solid var(--danger); }
@@ -1696,10 +1715,111 @@ input.input-error {
   box-shadow: 0 0 12px var(--accent-glow);
 }
 
+/* ---------- REGISTRO MESSAGGI -------------------------------------------- */
+/* I toast durano pochi secondi: qui restano consultabili per tutta la
+   sessione (verdetti LSA/RPM critico/valve float, avvisi di misura). */
+.msglog-toggle { position: relative; }
+.msglog-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background: var(--danger);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+}
+.msglog-panel {
+  position: fixed;
+  top: 74px;
+  right: var(--sp-5);
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(60vh, 520px);
+  display: none;
+  flex-direction: column;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--e-3);
+  z-index: var(--z-toast);
+  overflow: hidden;
+}
+.msglog-panel.visible { display: flex; }
+.msglog-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev-3);
+}
+.msglog-h-title {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-secondary);
+}
+.msglog-btn {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.msglog-btn:hover { color: var(--text-primary); border-color: var(--accent); }
+.msglog-list { overflow-y: auto; padding: var(--sp-2); }
+.msglog-empty {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+  text-align: center;
+  padding: var(--sp-4);
+  margin: 0;
+}
+.msglog-item {
+  border-left: 3px solid var(--info);
+  background: var(--bg-elev-1);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-2);
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+.msglog-item.success { border-left-color: var(--success); }
+.msglog-item.warn    { border-left-color: var(--warning); }
+.msglog-item.err     { border-left-color: var(--danger); }
+.msglog-meta { display: flex; gap: var(--sp-2); align-items: baseline; margin-bottom: 2px; }
+.msglog-ora {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.msglog-title {
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+.msglog-body { color: var(--text-secondary); line-height: 1.45; }
+
 /* ---------- PRINT -------------------------------------------------------- */
 @media print {
   body { background: white; color: black; }
   .header, .controls-row, .btn, .scan-progress-wrap,
-  .cammes-wizard-backdrop, .help-toggle, .theme-toggle { display: none; }
+  .cammes-wizard-backdrop, .help-toggle, .theme-toggle,
+  .msglog-panel, .msglog-toggle { display: none; }
   .card { box-shadow: none; border: 1px solid #ddd; }
 }
