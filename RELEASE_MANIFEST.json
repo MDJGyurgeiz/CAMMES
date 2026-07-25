@@ -2,9 +2,9 @@
   "schema": "cammes-release-manifest/1",
   "app": {
     "name": "CAMMES",
-    "version": "3.4.2",
+    "version": "3.4.3",
     "channel": "beta-tecnica",
-    "note": "Terzo giro (controrevisione funzionale v3.4.1): i 3 P0 (DATA-01, CTRL-01, FW-01) sono FIXED con test che fallivano prima della patch; FW-01 e FW-03 validati AL BANCO (fw 4.1). P1/P2 del handoff in lavorazione (CTRL-02 parziale, FLASH-01, DATA-02 fatti). Vedi REMAINING_RISKS.md."
+    "note": "Usabilita' della pagina Analisi dal collaudo in officina (firmware INVARIATO: chi ha la 4.1 non riflasha). Risolta la causa dei campi che non rispondevano ai tasti (i banner intercettavano i click sulla colonna parametri); registro messaggi persistente; 'RPM critico' rinominato 'Distacco valvola' con la precisazione che non e' un limite imposto; parametri molla dichiarati 'valori di esempio' con gate propagato anche a CSV/PDF; tema chiaro portato sopra la soglia di leggibilita' (era 1,40:1). Restano aperti i P1/P2 del terzo giro Codex. Vedi REMAINING_RISKS.md."
   },
   "firmware": {
     "version": "4.1",
@@ -17,7 +17,7 @@
     "sourceReproducibleNote": "REL-07 CHIUSO: build bit-per-bit riproducibile, verificata in CI (.github/workflows/firmware.yml) e in npm test (tools/verify_firmware.js)",
     "benchValidated": "2026-07-23 COM5: v3 39/39 + v4 28/28 (incl. FW-01 watchdog SCAN e true-positive FW-03 su guasto encoder reale)"
   },
-  "commit": "tag v3.4.2 (il commit esatto e il tag coincidono alla release)",
+  "commit": "tag v3.4.3 (il commit esatto e il tag coincidono alla release)",
   "gates": {
     "npmTest": "280+ check verdi (suite software, incl. mock-seriale e round-trip profili)",
     "lint": "0 errori",
@@ -41,9 +41,10 @@
   "openP0": [],
   "openItems": [
     "CTRL-02 completamento: coda un-comando-pendente, FREE/LOCK/STOP pending in UI, keepalive contestuale, lease TTL applicativo — PARTIAL",
-    "DATA-03/04: media solo run COMPLETE + gate valutabilita' centralizzato — in lavorazione",
-    "FW-02/03 (fw): stati/verbi nominali, dedup seq, pipeline acquisizione unica — in lavorazione",
-    "APP-01, DYN-01/02, MAT-01/02, TEST-01: in lavorazione (handoff v3.4.1)",
+    "DATA-03/04, APP-01, DYN-01/02, MAT-01/02: CHIUSI (v3.4.2->v3.4.3)",
+    "FW-02/03 (fw): stati/verbi nominali, dedup seq, pipeline acquisizione unica — NEEDS_HARDWARE (flash+validazione al banco)",
+    "TEST-01: oracle indipendenti — in lavorazione",
+    "UI Analisi, rilievi noti dalla revisione della v3.4.3: 'Margine minimo' resta numerico mentre le celle accanto dicono 'non valutabile'; gate dei valori di esempio globale invece che per lato; 'valve float' resta in ~20 punti accanto alle celle rinominate 'Distacco valvola'; icone '?' non piu' raggiungibili da tastiera",
     "true-positive fault encoder: OSSERVATO su guasto reale 2026-07-23 (chiuso)",
     "FW-07 LM339 + FW-12 oscilloscopio + metrologia banco — NEEDS_HARDWARE",
     "SEC-01 auth token LAN / REL-01 jsPDF / REL-02-05 firma exe — decisioni committente"

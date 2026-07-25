@@ -9,6 +9,64 @@ Sistema di misura profili alberi a camme per motori.
 
 ---
 
+## v3.4.3 — 2026-07-25: usabilità della pagina Analisi (firmware 4.1 INVARIATO)
+
+Release nata dal collaudo in officina. **Il firmware non cambia**: chi ha già
+la 4.1 non deve riflashare nulla, basta il nuovo exe.
+
+**I campi non rispondevano ai tasti — non era il PC.**
+L'utente segnalava: "completo i campi molla, rallenta, non risponde ai tasti
+freccia su/giù e poi va da solo a inizio o fine pagina". Misurato: il
+ricalcolo costa 2-6 ms, `analyze()` 300 ms, e in Analisi non c'è nessun
+codice che sposti la pagina. La causa erano i **banner dei messaggi**: il
+contenitore lasciava passare i click ma i singoli banner no, e la pila (260-420 px)
+copre esattamente la colonna dei parametri (360 px). Per 4-12 secondi dopo
+"Analizza" i banner si mangiavano i click sui campi: il campo non prendeva
+mai il fuoco, quindi le frecce scorrevano la pagina. Concorreva il fuoco che
+si fermava su ognuna delle 43 icone "?".
+- banner trasparenti ai click (resta cliccabile solo la ✕, nuova);
+- pila limitata a 4 messaggi e contenuta nello schermo;
+- `tabindex` tolto dalle 43 icone "?".
+
+**I messaggi non si perdono più.** Nuovo **registro** (campanella in alto):
+ogni verdetto resta consultabile con l'ora, sopravvive al passaggio fra le
+pagine, si azzera chiudendo la scheda. Prima 143 messaggi in tutta l'app
+sparivano dopo 4-9 secondi senza modo di recuperarli.
+
+**Il "3500 giri" non era un limite del programma.** Il campo RPM non ha
+alcun massimo: quel numero era l'**RPM critico** (3559), che resta identico
+qualunque regime si scriva — dipende solo da molla e masse — mentre l'icona
+accanto diventava una croce rossa. Rinominato **"Distacco valvola"** ovunque
+(schermo, CSV, PDF, wizard, tour, home) con la spiegazione esplicita che non
+è un tetto imposto. Lo sweep dichiara che è riferito alla sola aspirazione e
+arrotondato per eccesso.
+
+**I valori di esempio sono dichiarati tali.** I campi molla nascono con
+numeri generici: aprendo l'analisi su una camma vera usciva un allarme rosso
+calcolato su una molla mai inserita. Ora finché non li si conferma: bordo
+tratteggiato ambra, nota in pagina, celle "non valutabile", nessun allarme.
+Il flag viaggia nello snapshot, quindi **anche CSV e PDF** dicono "non
+valutabile" invece di stampare un banner "CRITICO" su dati non dell'utente.
+Un preset motore NON conferma da solo (sono valori tipici di categoria).
+
+**Leggibilità.** Tema chiaro: 37 valori erano sotto la soglia di leggibilità,
+il peggiore a 1,40:1; ora 0 sotto soglia, peggiore 5,07:1 (tema scuro
+invariato). Due variabili CSS usate 10 volte ma mai definite rendevano
+**invisibili tutti i separatori** fra i gruppi di parametri: risolto.
+Aggiunte 12 spiegazioni "?" sulle celle dei risultati (prima nessuna).
+
+**Correttezza verificata, non solo dichiarata.** Ricalcolo indipendente sulle
+camme VW reali: alzata massima, durata, area, LSA e overlap coincidono al
+100% con quanto mostrato. Suite 0 FAIL, lint 0.
+
+**Resta aperto** (dalla revisione avversariale di questa stessa release):
+"Margine minimo" resta numerico mentre le celle accanto dicono "non
+valutabile"; il gate è globale invece che per lato; "valve float" resta in
+~20 punti accanto alle celle rinominate; le icone "?" non sono più
+raggiungibili da tastiera.
+
+---
+
 ## v3.4.2 — 2026-07-23: P0 controrevisione funzionale + export Excel (firmware 4.1)
 
 Risposta al terzo giro di revisione esterna (`HANDOFF_CLAUDE_CORREZIONI_V3.4.1_
