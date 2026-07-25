@@ -13,9 +13,17 @@ var ROOT = path.join(__dirname, '..');
 var pkg = require(path.join(ROOT, 'package.json'));
 var lock = require(path.join(ROOT, 'package-lock.json'));
 
+// Hash del contenuto NORMALIZZATO a LF, non dei byte grezzi.
+// Git converte i fine-riga al checkout secondo la piattaforma: gli stessi
+// identici file davano hash diversi fra la copia di lavoro (LF) e il runner
+// CI (CRLF), quindi il gate "SBOM riproducibile" della release non poteva
+// passare mai. Normalizzando, l'hash identifica il CONTENUTO ed e' stabile
+// ovunque — che e' lo scopo dell'SBOM.
 function sha256File(p) {
-    try { return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex'); }
-    catch (e) { return null; }
+    try {
+        var testo = fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+        return crypto.createHash('sha256').update(testo, 'utf8').digest('hex');
+    } catch (e) { return null; }
 }
 
 // --- Componenti dalle dipendenze npm ---
