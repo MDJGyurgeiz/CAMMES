@@ -249,6 +249,74 @@ function finiteOr(v, d) {
 }
 function _num(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : d; }
 
+// -------------------------------------------------------------------------
+// AUDIT v3.4.3 P1-12 — motore di validazione numerica unico.
+//
+// Il pattern `Number(el.value) || default` sparso per la UI confondeva tre
+// situazioni che vanno tenute distinte:
+//   - campo VUOTO         -> il default e' legittimo (l'utente non ha scelto);
+//   - ZERO scritto a mano  -> e' una scelta (rPunt 0 = tastatore a coltello,
+//                             damping 0, perno rigido) e non va sostituita;
+//   - valore NON AMMESSO   -> va BLOCCATO, non fatto scivolare nel default:
+//                             un raggio base -17 arrivava fino alla curva
+//                             convertita e produceva un'alzata di 31 mm.
+//
+// Regola: { min, max, minEsclusivo, maxEsclusivo, richiesto, def, avvisoSopra,
+//           avvisoSotto }. Nessun campo obbligatorio: una regola vuota accetta
+//   qualunque numero finito (serve per anticipo, angoli, offset con segno).
+//
+// `avvisoSopra`/`avvisoSotto` NON limitano: segnalano soltanto. Il banco e'
+// universale — un valore fuori dall'ordinario puo' essere quello giusto per
+// una camma che non abbiamo mai visto, quindi si avvisa e si calcola.
+//
+// Esito: { ok, valore, usatoDefault, avviso, motivo, messaggio }.
+// motivo ∈ 'vuoto' | 'non-numerico' | 'fuori-intervallo'.
+// -------------------------------------------------------------------------
+function validaNumero(grezzo, regola) {
+    var r = regola || {};
+    var vuoto = (grezzo === null || grezzo === undefined ||
+                 (typeof grezzo === 'string' && grezzo.trim() === ''));
+    if (vuoto) {
+        if (r.def !== undefined && !r.richiesto) {
+            return { ok: true, valore: r.def, usatoDefault: true, avviso: false };
+        }
+        return { ok: false, motivo: 'vuoto', messaggio: 'Campo obbligatorio: inserire un valore.' };
+    }
+    // Virgola decimale italiana: "0,25" e' quello che scrive chi sta al banco.
+    var testo = (typeof grezzo === 'string') ? grezzo.trim().replace(',', '.') : grezzo;
+    // Number('') e Number(' ') valgono 0: qui il vuoto e' gia' stato escluso,
+    // ma Number('0x10') vale 16 e Number(true) vale 1 — non sono misure.
+    if (typeof testo === 'boolean') {
+        return { ok: false, motivo: 'non-numerico', messaggio: 'Valore non numerico.' };
+    }
+    if (typeof testo === 'string' && !/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(testo)) {
+        return { ok: false, motivo: 'non-numerico', messaggio: 'Valore non numerico: usare cifre e un solo separatore decimale.' };
+    }
+    var n = Number(testo);
+    if (!isFinite(n)) {
+        return { ok: false, motivo: 'non-numerico', messaggio: 'Valore non numerico o infinito.' };
+    }
+    if (r.min !== undefined) {
+        if (r.minEsclusivo ? !(n > r.min) : !(n >= r.min)) {
+            return { ok: false, motivo: 'fuori-intervallo', valore: n,
+                     messaggio: 'Deve essere ' + (r.minEsclusivo ? 'maggiore di ' : 'almeno ') + r.min + '.' };
+        }
+    }
+    if (r.max !== undefined) {
+        if (r.maxEsclusivo ? !(n < r.max) : !(n <= r.max)) {
+            return { ok: false, motivo: 'fuori-intervallo', valore: n,
+                     messaggio: 'Deve essere ' + (r.maxEsclusivo ? 'minore di ' : 'al massimo ') + r.max + '.' };
+        }
+    }
+    var avviso = (r.avvisoSopra !== undefined && n > r.avvisoSopra) ||
+                 (r.avvisoSotto !== undefined && n < r.avvisoSotto);
+    var out = { ok: true, valore: n, usatoDefault: false, avviso: avviso };
+    if (avviso) {
+        out.messaggio = 'Valore insolito (' + n + '): verificare che sia voluto. Il calcolo procede.';
+    }
+    return out;
+}
+
 // Lettura circolare di camLift720 a grado FRAZIONARIO, interpolazione lineare,
 // mm → m. Condivisa dai tre solver. Audit DYN-03: prima ogni solver usava
 // Math.round (nearest-neighbor a 1°), che introduceva gradini spuri sul fianco
@@ -375,7 +443,12 @@ function simulateCompliance(camLift720, rpm, params) {
                 var sep = x - camAt(degAt);
                 if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
             }
-            out[deg] = x * 1000;  // m → mm
+            // AUDIT v3.4.3 P1-04: il sotto-ciclo integra da `deg` fino a
+            // `deg+1`, quindi `x` e' lo stato all'angolo deg+1. Scriverlo in
+            // out[deg] anticipava la curva valvola di 1 grado rispetto alla
+            // camma, e faceva comparire un "distacco" fantasma di ~0,06 mm
+            // anche a regime quasi statico. Si scrive all'indice reale.
+            out[(deg % 720) + 1] = x * 1000;  // m → mm
         }
         cyclesRun = pass + 1;
         if (prevX !== null) { residX = Math.abs(x - prevX); residV = Math.abs(v - prevV); }
@@ -499,7 +572,8 @@ function simulateCompliance2DOF(camLift720, rpm, params) {
                 var sep = x1 - camAt(degAt);   // contatto perso = bilancere sopra la camma
                 if (sep > maxSep) { maxSep = sep; floatIdx = deg; }
             }
-            out[deg] = x2 * 1000;   // lift VALVOLA osservato all'esterno
+            // AUDIT v3.4.3 P1-04: stato all'angolo deg+1, scritto al suo indice
+            out[(deg % 720) + 1] = x2 * 1000;   // lift VALVOLA osservato all'esterno
         }
         cyclesRun = pass + 1;
         if (pX1 !== null) {
@@ -564,7 +638,18 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
     // 0 = perno libero → comportamento 3-DOF originale (bilanciere massa libera
     // tra k_push e k_train). Valori finiti = perno con rigidezza propria
     // (cede sotto carico). Più alto = perno più rigido/vincolato.
-    var k_pivot  = (p.kPivotN_mm && p.kPivotN_mm > 0) ? p.kPivotN_mm * 1000 : 0;
+    // AUDIT v3.4.3 P1-06 — cedevolezza del perno bilanciere DISATTIVATA.
+    // Il modello precedente applicava una molla a terra direttamente sulla
+    // coordinata di lavoro del bilanciere (k_pivot * x1): irrigidire il perno
+    // ne IMPEDIVA il movimento invece di lasciarlo cedere. Misurato: perno 0
+    // -> valvola 9,69 mm; 20.000 -> 0,34; 1.000.000 -> 0,00, con distacco 0 e
+    // semaforo verde su un risultato privo di senso. Il limite fisico corretto
+    // (perno infinitamente rigido = perno fermo) deve dare il caso base.
+    // Modellarlo davvero richiede una quarta coordinata (traslazione del perno)
+    // piu' i bracci di leva, e una validazione che non e' stata fatta: finche'
+    // non esiste, il parametro viene IGNORATO invece di produrre numeri falsi.
+    var k_pivot  = 0;
+    var kPivotIgnorato = !!(p.kPivotN_mm && p.kPivotN_mm > 0);
     var F0       = _num(p.F0N, 200);
     var damping  = _num(p.dampingRatio, 0.06);
 
@@ -656,7 +741,8 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
             }
             // Lift valvola osservato: mai negativo (la valvola non affonda nella
             // testata oltre la flessione sede).
-            out[deg] = Math.max(0, x2) * 1000;
+            // AUDIT v3.4.3 P1-04: stato all'angolo deg+1, scritto al suo indice
+            out[(deg % 720) + 1] = Math.max(0, x2) * 1000;
         }
         cyclesRun = pass + 1;
         if (pX1 !== null) {
@@ -675,6 +761,9 @@ function simulateCompliance3DOF(camLift720, rpm, params) {
     out.status = converged ? 'CONVERGED' : 'NON_CONVERGED';
     out.tolX = tolX; out.tolV = tolV;
     out.residualX = residX; out.residualV = residV;
+    // AUDIT P1-06: se l'utente ha compilato "k perno bilanciere" deve sapere
+    // che il valore NON e' stato usato (modello non validato, vedi sopra).
+    out.kPivotIgnorato = kPivotIgnorato;
     return out;
 }
 
@@ -849,19 +938,23 @@ function simulateSpringSurge(valveLift720, rpm, params) {
     };
 }
 
-function convertPuntToFinger(camLiftRaw, rBase, lArm, lValve, rPunt, tiltDeg) {
+// AUDIT v3.4.3 P1-09 — il parametro "inclinazione finger" e' stato RIMOSSO
+// perche' matematicamente inerte, non per semplificazione. Dimostrazione:
+// col modello speculare theta_val0 = -theta_cam0 si ha
+//     dPhi      = asin(sin(t) + L/lArm) - t     =>  sin(t + dPhi) = sin(t) + L/lArm
+//     deltaVal  = lValve*sin(-t - dPhi) + lValve*sin(t)
+//               = -lValve*(sin(t) + L/lArm) + lValve*sin(t) = -lValve*L/lArm
+// il termine in t si elide per QUALUNQUE inclinazione: restava solo rumore di
+// virgola mobile (misurato 4,9e-15 mm fra 0 e 30 gradi). Il modello e' quindi
+// un puro rapporto di leva, e ora lo dichiara apertamente.
+//
+// USCITA: moto lato VALVOLA, gia' amplificato di lValve/lArm. Chi lo usa NON
+// deve applicare un secondo rapporto di leva (vedi FOLLOWER_OUTPUT_DOMAIN).
+function convertPuntToFinger(camLiftRaw, rBase, lArm, lValve, rPunt) {
     rPunt = (typeof rPunt === 'number' && rPunt > 0) ? rPunt : 0;
     if (!lArm || lArm <= 0)     lArm = 25;
     if (!lValve || lValve <= 0) lValve = 30;
-    var tilt = (typeof tiltDeg === 'number') ? tiltDeg : 0;
-    var thetaCam0 = tilt * Math.PI / 180;
-    // Convenzione: braccio valvola è simmetrico opposto rispetto al pivot,
-    // a riposo gira nello stesso verso del braccio camma per via della leva.
-    // Quando braccio camma sale, braccio valvola scende → la valvola si apre.
-    // Per simplicità tecnica: θ_val_0 = -θ_cam_0 (specularmente)
-    var thetaVal0 = -thetaCam0;
-    var sinCam0 = Math.sin(thetaCam0);
-    var sinVal0 = Math.sin(thetaVal0);
+    var rapporto = lValve / lArm;
 
     var out = new Array(361);
     out[0] = 0;
@@ -870,22 +963,25 @@ function convertPuntToFinger(camLiftRaw, rBase, lArm, lValve, rPunt, tiltDeg) {
     for (var t = 1; t <= 360; t++) {
         var ltrue = lt[t];
         if (ltrue <= 0) { out[t] = 0; continue; }
-        // Calcolo rotazione finger
-        var argAsin = sinCam0 + ltrue / lArm;
-        // Saturazione: alzata > geometria leva (asin fuori da [-1,1]) → curva
-        // troncata. Segnaliamo invece di clampare in silenzio.
-        if (argAsin > 1)  { argAsin = 1;  saturated = true; }
-        if (argAsin < -1) { argAsin = -1; saturated = true; }
-        var dPhi = Math.asin(argAsin) - thetaCam0;
-        // Movimento estremità lato valvola (positivo = apertura)
-        // Il braccio valvola ruota di -dPhi (specularmente), quindi:
-        var deltaVal = lValve * Math.sin(thetaVal0 - dPhi) - lValve * sinVal0;
-        // Convenzione segno: voglio lift positivo = valvola aperta
-        out[t] = Math.abs(deltaVal);
+        // Saturazione geometrica: alzata oltre la corsa del braccio camma.
+        // Segnalata invece di essere clampata in silenzio.
+        if (ltrue / lArm > 1) saturated = true;
+        out[t] = ltrue * rapporto;
     }
     window._fingerSaturated = saturated;   // letto dal dispatcher per l'avviso
     return out;
 }
+
+// Dominio del moto restituito da ciascun convertitore follower.
+// 'cam'   = moto lato camma: il chiamante DEVE applicare il rapporto leva.
+// 'valve' = moto gia' riportato alla valvola: applicare un secondo rapporto
+//           gonfia l'alzata (il finger dava +50%: 15,75 invece di 10,5 mm).
+var FOLLOWER_OUTPUT_DOMAIN = {
+    punt:   'cam',
+    bicch:  'cam',
+    roller: 'cam',
+    finger: 'valve'
+};
 
 // ========== HELPER: Map cam degrees to crankshaft degrees ==========
 
@@ -1015,6 +1111,104 @@ function effectiveCenters(intakeCenter, exhaustCenter, advance) {
 // versione diretta scriveva crank[d*2±angle] e con centri frazionari (che la
 // UI accetta a step 0.5) produceva indici frazionari → curva azzerata in
 // silenzio. Ora per ogni slot intero p si legge camLift interpolato.
+// AUDIT v3.4.3 P1-05 — il gioco si registra fra bilanciere e stelo, cioe' a
+// VALLE del rapporto di leva, mentre mapCamToCrank lo sottrae dalla curva
+// LATO CAMMA (a monte). Componendo con applyRockerRatio si otteneva
+//     (alzata_camma - gioco) * rocker
+// invece della relazione coerente col nome del campo ("Gioco valvola"):
+//     max(0, alzata_camma * rocker - gioco)
+// cioe' un gioco gonfiato del rapporto stesso (0,20 con leva 1,5 si comportava
+// come 0,30: durata al sedile e fasatura piu' corte del vero).
+// Riportando il gioco lato camma prima della mappatura le due espressioni
+// coincidono, perche' max(0, L - g/r) * r === max(0, L*r - g) per r > 0.
+// Con bicchiere (rapporto 1,00) non cambia nulla: le misure gia' fatte su
+// Clio e VW restano identiche bit per bit.
+function lashLatoCamma(clearanceValvola, rocker) {
+    var g = Number(clearanceValvola);
+    if (!isFinite(g) || g <= 0) return 0;
+    var r = Number(rocker);
+    if (!isFinite(r) || r <= 0) r = 1;
+    return g / r;
+}
+
+// -------------------------------------------------------------------------
+// AUDIT v3.4.3 P2-03 — riepilogo di convergenza SENZA perdita di informazione.
+//
+// Prima lo snapshot conservava:
+//     residual: Math.max(compInfo.residualIn || 0, compInfo.residualEx || 0)
+// che perde tre cose. (1) `|| 0` trasforma un residuo MAI MISURATO (null, il
+// caso INVALID_INPUT) in "0.00e+0", cioe' in una convergenza perfetta: il
+// foglio esportato dichiarava zero errore proprio dove non c'era alcun
+// calcolo. (2) Math.max schiaccia i due lati: non si sa piu' QUALE non
+// converge. (3) si conservava il solo residuo di POSIZIONE, mentre il criterio
+// di convergenza guarda anche la VELOCITA': un caso che fallisce sulla sola
+// velocita' risultava con residuo dentro tolleranza e stato NON_CONVERGED,
+// contraddizione apparente senza spiegazione.
+//
+// Qui si conserva tutto per lato e si dichiara chi ha fallito e su quale
+// criterio. Nessun confronto fra grandezze di dimensione diversa: dove serve
+// un ordinamento si usa il rapporto residuo/tolleranza, che e' adimensionale.
+// -------------------------------------------------------------------------
+function riassuntoConvergenza(vIn, vEx) {
+    function stato(v) {
+        if (!v) return null;
+        return v.status || (v.converged !== false ? 'CONVERGED' : 'NON_CONVERGED');
+    }
+    function val(x) { return (typeof x === 'number' && isFinite(x)) ? x : null; }
+    var sIn = stato(vIn), sEx = stato(vEx);
+    var agg = (sIn === 'INVALID_INPUT' || sEx === 'INVALID_INPUT') ? 'INVALID_INPUT'
+            : (sIn !== 'CONVERGED' || sEx !== 'CONVERGED') ? 'NON_CONVERGED'
+            : 'CONVERGED';
+    var rXIn = val(vIn && vIn.residualX), rVIn = val(vIn && vIn.residualV);
+    var rXEx = val(vEx && vEx.residualX), rVEx = val(vEx && vEx.residualV);
+    var tolX = val(vIn && vIn.tolX), tolV = val(vIn && vIn.tolV);
+
+    // Quale lato non converge, e su quale criterio.
+    var lato = null;
+    if (sIn !== 'CONVERGED' && sEx !== 'CONVERGED') lato = 'entrambi';
+    else if (sIn !== 'CONVERGED') lato = 'aspirazione';
+    else if (sEx !== 'CONVERGED') lato = 'scarico';
+
+    function criterio(rX, rV) {
+        if (rX === null && rV === null) return 'non calcolato';
+        var fuoriX = (tolX !== null && rX !== null && rX > tolX);
+        var fuoriV = (tolV !== null && rV !== null && rV > tolV);
+        if (fuoriX && fuoriV) return 'entrambi';
+        if (fuoriX) return 'posizione';
+        if (fuoriV) return 'velocita';
+        return null;
+    }
+    var critIn = (sIn === 'CONVERGED') ? null : criterio(rXIn, rVIn);
+    var critEx = (sEx === 'CONVERGED') ? null : criterio(rXEx, rVEx);
+    var crit = null;
+    if (lato === 'entrambi') crit = (critIn === critEx) ? critIn : 'entrambi';
+    else if (lato === 'aspirazione') crit = critIn;
+    else if (lato === 'scarico') crit = critEx;
+
+    return {
+        status: agg,
+        statusIn: sIn, statusEx: sEx,
+        cyclesIn: val(vIn && vIn.cyclesRun), cyclesEx: val(vEx && vEx.cyclesRun),
+        residualXIn: rXIn, residualVIn: rVIn,
+        residualXEx: rXEx, residualVEx: rVEx,
+        tolX: tolX, tolV: tolV,
+        latoFallito: lato,
+        criterioFallito: crit,
+        // compatibilita' con i consumatori esistenti (grafico, gate float,
+        // gate surge): il campo storico continua a esistere, ma senza `|| 0`.
+        residualIn: rXIn, residualEx: rXEx
+    };
+}
+
+// Formattazione unica di un residuo, per schermo, CSV e PDF: un residuo mai
+// misurato si scrive "non calcolato", non "0.00e+0".
+function fmtResiduo(v, tol) {
+    if (v === null || v === undefined || !isFinite(v)) return 'non calcolato';
+    var s = Number(v).toExponential(2);
+    if (tol !== null && tol !== undefined && isFinite(tol)) s += ' (tolleranza ' + Number(tol).toExponential(0) + ')';
+    return s;
+}
+
 function mapCamToCrank(camLift, centerDeg, clearance, type) {
     var crank = new Array(722);
     for (var j = 0; j <= 721; j++) crank[j] = 0;
@@ -1387,6 +1581,12 @@ var api = {
     parseCamFile: parseCamFile,
     parseFiniteMeasurement: parseFiniteMeasurement,
     finiteOr: finiteOr,
+    validaNumero: validaNumero,
+    FOLLOWER_OUTPUT_DOMAIN: FOLLOWER_OUTPUT_DOMAIN,
+    FINGER_TILT_RIMOSSO: true,   // AUDIT P1-09: parametro inerte, tolto
+    lashLatoCamma: lashLatoCamma,
+    riassuntoConvergenza: riassuntoConvergenza,
+    fmtResiduo: fmtResiduo,
     serializeDiagnosticProfile: serializeDiagnosticProfile,
     averageRuns: averageRuns,
     averageCompleteRuns: averageCompleteRuns,

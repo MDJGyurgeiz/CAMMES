@@ -105,23 +105,35 @@ console.log('CHECK 3 (float cresce col regime):');
 console.log('   max gap cam-valvola @2000 = ' + gapLo.toFixed(4) + ' mm,  @9000 = ' + gapHi.toFixed(4) + ' mm');
 if (gapHi >= gapLo) { console.log('   PASS'); } else { console.log('   FAIL'); fails++; }
 
-// ---- CHECK 4: cedevolezza pivot bilanciere (k_pivot) ----
-// k_pivot=0 (o assente) ≡ 3-DOF originale (retrocompatibilità). Un k_pivot
-// finito vincola il bilanciere → cambia il lift valvola.
-var noPivot   = simulateCompliance3DOF(cam, rpm2, realParams);
-var p0 = Object.assign({}, realParams); p0.kPivotN_mm = 0;
-var withZero  = simulateCompliance3DOF(cam, rpm2, p0);
-var pBig = Object.assign({}, realParams); pBig.kPivotN_mm = 30000;
-var withPivot = simulateCompliance3DOF(cam, rpm2, pBig);
-var diffZero = 0, diffBig = 0;
-for (var dd = 1; dd <= 720; dd++) {
-    diffZero = Math.max(diffZero, Math.abs((noPivot[dd]||0) - (withZero[dd]||0)));
-    diffBig  = Math.max(diffBig,  Math.abs((noPivot[dd]||0) - (withPivot[dd]||0)));
+// ---- CHECK 4: pivot bilanciere — ORACOLO FISICO (audit v3.4.3 P1-06) ----
+// Il controllo precedente verificava solo che "il parametro cambiasse
+// qualcosa", e per questo NON si accorgeva che cambiava nel verso sbagliato:
+// la molla del perno era applicata alla coordinata di lavoro del bilanciere,
+// quindi irrigidire il perno lo INCHIODAVA (perno 20.000 -> valvola 0,34 mm
+// invece di 9,69) e il distacco risultava 0 con semaforo verde.
+// Il modello corretto richiede una quarta coordinata non ancora validata:
+// il parametro e' quindi IGNORATO, e questo oracolo lo verifica in positivo.
+// Requisito fisico: un perno piu' rigido non puo' ridurre l'alzata, e il
+// limite di perno infinitamente rigido deve coincidere col perno fermo.
+var noPivot = simulateCompliance3DOF(cam, rpm2, realParams);
+function piccoCon(kp) {
+    var pp = Object.assign({}, realParams); pp.kPivotN_mm = kp;
+    var v = simulateCompliance3DOF(cam, rpm2, pp);
+    var m = 0; for (var i = 1; i <= 720; i++) if ((v[i]||0) > m) m = v[i];
+    return m;
 }
-console.log('CHECK 4 (cedevolezza pivot bilanciere):');
-console.log('   k_pivot=0 vs assente: max diff = ' + diffZero.toFixed(5) + ' mm (atteso ~0)');
-console.log('   k_pivot=30000 vs base: max diff = ' + diffBig.toFixed(4) + ' mm (atteso > 0)');
-if (diffZero < 1e-6 && diffBig > 1e-3) { console.log('   PASS'); } else { console.log('   FAIL'); fails++; }
+var piccoBase = 0;
+for (var nb = 1; nb <= 720; nb++) if ((noPivot[nb]||0) > piccoBase) piccoBase = noPivot[nb];
+var p20k = piccoCon(20000), p1M = piccoCon(1000000);
+var dichiarato = simulateCompliance3DOF(cam, rpm2,
+    Object.assign({}, realParams, { kPivotN_mm: 20000 })).kPivotIgnorato;
+console.log('CHECK 4 (pivot bilanciere - oracolo fisico):');
+console.log('   picco valvola: perno fermo = ' + piccoBase.toFixed(3) +
+            ' | 20.000 = ' + p20k.toFixed(3) + ' | 1.000.000 = ' + p1M.toFixed(3) + ' mm');
+console.log('   il solver dichiara di ignorare il parametro: ' + dichiarato);
+if (p20k > piccoBase * 0.9 && p1M > piccoBase * 0.9 && dichiarato === true) {
+    console.log('   PASS');
+} else { console.log('   FAIL'); fails++; }
 
 console.log('');
 if (fails === 0) { console.log('TUTTI I CHECK PASSANO (4/4)'); process.exit(0); }

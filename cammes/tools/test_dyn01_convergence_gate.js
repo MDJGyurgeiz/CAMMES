@@ -47,11 +47,14 @@ check('cicli eseguiti dichiarati', nom.cyclesRun >= 3, 'cyclesRun=' + nom.cycles
 
 // Oracle FISICO (non tautologico): al quasi-statico la valvola resta dietro
 // la cam ESATTAMENTE della deflessione statica del treno (F0+k_molla*L)/k_train.
-// NB: out[deg] e lo stato DOPO l'integrazione del grado -> confronto con
-// cam[deg+1] per compensare lo shift di campionamento di 1 grado.
+// STORIA: questo confronto compensava lo shift di 1 grado dei solver leggendo
+// cam[deg+1], e il commento lo dichiarava come se fosse normale. Era invece il
+// difetto P1-04 (audit esterno v3.4.3) cucito dentro l'oracolo: un test che
+// assorbe il bug che dovrebbe scoprire. Corretto il solver, il confronto e'
+// tornato quello giusto — stesso indice per valvola e camma.
 function devVsCam(sim) {
     var m = 0;
-    for (var q = 1; q <= 720; q++) m = Math.max(m, Math.abs((sim[q] || 0) - crank[(q % 720) + 1]));
+    for (var q = 1; q <= 720; q++) m = Math.max(m, Math.abs((sim[q] || 0) - crank[q]));
     return m;
 }
 var slow = M.simulateCompliance(crank, 500, { massEqG: 95, kTrainN_mm: 6000, kSpringN_mm: 45, F0N: 320, dampingRatio: 0.06 });
