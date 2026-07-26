@@ -19,7 +19,11 @@ var fs = require('fs');
 var path = require('path');
 var vm = require('vm');
 
-var HTML = fs.readFileSync(path.join(__dirname, '..', 'analisi.html'), 'utf8');
+// Fine riga NORMALIZZATO a LF prima di qualunque ricerca. Il file e' committato
+// con eol=lf ma git lo consegna con CRLF su Windows: senza questa riga il test
+// passa sulla macchina di sviluppo e fallisce sul runner, che e' esattamente il
+// modo in cui il gate SBOM (REL-02) era gia' stato preso in giro una volta.
+var HTML = fs.readFileSync(path.join(__dirname, '..', 'analisi.html'), 'utf8').replace(/\r\n/g, '\n');
 var fails = 0;
 function check(label, cond, detail) {
     console.log((cond ? '  PASS  ' : '  FAIL  ') + label + (detail ? '  [' + detail + ']' : ''));
