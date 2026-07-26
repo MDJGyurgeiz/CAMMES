@@ -34,8 +34,10 @@ release.)
 
 - Arduino AVR core (`arduino:avr:uno`), compilato con arduino-cli 1.4.1.
 - HEX distribuito: `cammes/fw/master.ino.hex`, SHA-256
-  `21031c77cf908ffeeb93a7b03e74b882175a5aceb29d3cb07e25360b79124f8d`.
-- Corrispondenza riproducibile sorgente→HEX (build in CI) = REL-07, ancora aperto.
+  `604c00c2cc4968b489b1a18bf406ea58df30a3b9ffae485eca48726d5c2c9f4b`.
+- Corrispondenza riproducibile sorgente→HEX = REL-07, **chiuso**: la ricompila
+  il job `reproducible-hex` di `.github/workflows/firmware.yml` con il core
+  pinnato `arduino:avr@1.8.7` e confronta lo SHA-256 con l HEX committato.
 
 ## Note aperte (REMAINING_RISKS)
 
