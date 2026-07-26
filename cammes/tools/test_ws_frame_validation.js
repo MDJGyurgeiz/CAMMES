@@ -67,13 +67,31 @@ Promise.all([freePort(), freePort()]).then(async function (ports) {
         { stdio: ['ignore', 'pipe', 'pipe'], cwd: path.join(__dirname, '..') });
     server.stdout.on('data', function (d) { stdoutBuf += d; });
     server.stderr.on('data', function (d) { stdoutBuf += d; });
-    // attende il banner del mock (fino a ~4s) invece di un controllo one-shot
-    for (var _t = 0; _t < 40 && stdoutBuf.indexOf('Seriale MOCK attiva') < 0; _t++) await sleep(100);
-    check('server avviato con seriale MOCK', stdoutBuf.indexOf('Seriale MOCK attiva') >= 0);
-    await sleep(300);   // margine per l'apertura del WS server
+    // AUDIT v3.4.3 P2-11: prontezza con budget generoso, criterio DOPPIO.
+    // Il banner del mock dice che la seriale finta e' su; l'handshake WS dice
+    // che il server sa davvero rispondere. Prima: 40x100 ms per il banner e
+    // poi un margine fisso di 300 ms, che sotto carico non basta — misurato
+    // 62,5% di fallimenti con CPU occupata, 0% a riposo.
+    // Il budget e' UNO SOLO per entrambi i criteri: dare 30 s alla porta e 10
+    // all'handshake significherebbe abbondare sull'evento che costa 400 ms e
+    // tirare su quello che ne costa 1.300 (ed e' quello che cede sotto carico).
+    var BUDGET_AVVIO_MS = 30000;
+    var scadutoAvvio = Date.now() + BUDGET_AVVIO_MS;
+    while (Date.now() < scadutoAvvio && stdoutBuf.indexOf('Seriale MOCK attiva') < 0) await sleep(50);
+    check('server avviato con seriale MOCK', stdoutBuf.indexOf('Seriale MOCK attiva') >= 0,
+        'atteso fino a ' + BUDGET_AVVIO_MS + ' ms');
 
-    var A = await connect(ports[1]);   // diventera' controllore
-    var B = await connect(ports[1]);   // observer
+    async function connettiQuandoPronto(porta) {
+        var ultimo;
+        while (Date.now() < scadutoAvvio) {
+            try { return await connect(porta); }
+            catch (e) { ultimo = e; await sleep(250); }
+        }
+        throw new Error('server non pronto su ' + porta + ' entro il budget di avvio: ' + (ultimo && ultimo.message));
+    }
+
+    var A = await connettiQuandoPronto(ports[1]);   // diventera' controllore
+    var B = await connect(ports[1]);                // observer
     await sleep(200);
     var base, w;
 

@@ -1,0 +1,23 @@
+# CI applicativa: gli stessi gate della release, ma su OGNI push e OGNI pull
+# request, non solo al tag.
+#
+# AUDIT v3.4.3 P2-10. Prima di questo file, in .github/workflows/ c'erano solo
+# firmware.yml (che gira su push/PR ma unicamente se cambiano lo sketch o il
+# descrittore del firmware) e release.yml (solo su tag v*). Un push che
+# rompeva lint, suite o SBOM non veniva intercettato da nulla: lo si scopriva
+# al momento di pubblicare, con il tag gia' creato.
+#
+# I gate non sono ripetuti qui: si chiama preflight.yml, che ne e' l'unica
+# definizione ed e' chiamato anche da release.yml.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # utile per rilanciarla a mano dopo una modifica al workflow stesso
+  workflow_dispatch:
+
+jobs:
+  preflight:
+    uses: ./.github/workflows/preflight.yml

@@ -2,15 +2,15 @@
 # con i GATE di pubblicazione (AUDIT REL-02, controrevisione v3.4.1):
 #   1. firmware-gate: ricompila master.ino ALL'ESATTO tag e verifica lo
 #      SHA256 dichiarato in fw/version.json (riproducibilità = REL-07);
-#   2. npm ci dal lockfile (niente drift di dipendenze);
+#   2. preflight: npm ci dal lockfile, lint, sintassi degli script inline
+#      delle pagine, suite completa e SBOM rigenerato e confrontato con
+#      quello committato. NON e' definito qui: e' .github/workflows/preflight.yml,
+#      lo stesso che ci.yml esegue su ogni push e pull request (P2-10);
 #   3. tag == package.json (coerenza versioni; test_version.js copre il resto);
-#   4. lint + suite completa;
-#   5. SBOM rigenerato in CI e confrontato coi file committati (fallisce se
-#      differiscono);
-#   6. smoke test dell'EXE senza hardware: avvio su porte alternative,
+#   4. smoke test dell'EXE senza hardware: avvio su porte alternative,
 #      home + /api/firmware-info raggiungibili con appVersion == tag,
 #      chiusura e rilascio porta;
-#   7. allega exe + sha256 + zip + RELEASE_MANIFEST + SBOM alla release.
+#   5. allega exe + sha256 + zip + RELEASE_MANIFEST + SBOM alla release.
 # Se un gate fallisce NON si pubblica nulla.
 name: release
 
@@ -49,9 +49,16 @@ jobs:
         working-directory: cammes
         run: node tools/verify_firmware.js --compile --fqbn arduino:avr:uno
 
+  # GATE APPLICATIVI: gli STESSI che girano su ogni push e pull request.
+  # AUDIT P2-10: non sono piu' scritti qui. La loro unica definizione e'
+  # preflight.yml, chiamato anche da ci.yml: cosi' la release non puo' avere
+  # gate diversi (o piu' deboli) di quelli esercitati ogni giorno.
+  preflight:
+    uses: ./.github/workflows/preflight.yml
+
   build:
     runs-on: windows-latest
-    needs: firmware-gate
+    needs: [firmware-gate, preflight]
     defaults:
       run:
         working-directory: cammes
@@ -65,25 +72,14 @@ jobs:
       - name: Installa dipendenze (npm ci, dal lockfile)
         run: npm ci
 
+      # Unico controllo specifico della release: il tag deve dire la stessa
+      # versione di package.json. Gli altri gate li ha gia' passati preflight.
       - name: Verifica che il tag corrisponda a package.json
         shell: pwsh
         run: |
           $pkg = (Get-Content package.json | ConvertFrom-Json).version
           $tag = "${{ github.ref_name }}".TrimStart('v')
           if ($pkg -ne $tag) { Write-Error "Tag v$tag ma package.json dice $pkg"; exit 1 }
-
-      - name: Lint (gate di pubblicazione)
-        run: npm run lint
-
-      - name: Test (gate di pubblicazione)
-        run: npm test
-
-      - name: SBOM riproducibile (rigenera e confronta col committato)
-        shell: pwsh
-        run: |
-          node tools/gen_sbom.js
-          git diff --exit-code -- SBOM.json SBOM.md
-          if ($LASTEXITCODE -ne 0) { Write-Error "SBOM rigenerato diverso da quello committato"; exit 1 }
 
       - name: Build exe (pkg)
         run: npm run build

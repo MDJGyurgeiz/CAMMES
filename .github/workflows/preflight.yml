@@ -1,0 +1,58 @@
+# Gate di qualita' dell'APPLICAZIONE, in un solo posto.
+#
+# AUDIT v3.4.3 P2-10: prima questi gate esistevano solo dentro release.yml e
+# giravano SOLO al tag. Conseguenza reale: i gate committati il 23 luglio non
+# sono mai stati esercitati fino al tag del 25, e la prima esecuzione di
+# v3.4.3 e' fallita — su un difetto (SBOM non riproducibile fra Windows e
+# Linux) che una CI su push avrebbe intercettato due giorni prima.
+#
+# Questo file NON e' una copia dei gate della release: e' la loro UNICA
+# definizione. Lo chiamano sia ci.yml (push e pull request) sia release.yml
+# (tag), cosi' non possono divergere. La richiesta dell'audit era
+# testualmente "la release deve riusare lo stesso preflight".
+name: preflight
+
+on:
+  workflow_call:
+
+jobs:
+  gate:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: cammes
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      # Dal lockfile: niente drift di dipendenze fra la macchina di sviluppo
+      # e il runner.
+      - name: Installa dipendenze (npm ci)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # I file .js sono ~10.000 righe, ma altre ~9.900 vivono dentro i tag
+      # <script> delle pagine e il lint non le vede. Qui si verifica almeno
+      # che compilino: un errore di sintassi in analisi.html altrimenti si
+      # scopre aprendo la pagina in officina.
+      - name: Sintassi degli script inline delle pagine
+        run: npm run test:html-inline
+
+      - name: Suite completa
+        run: npm test
+
+      # Il SBOM deve essere rigenerabile identico: se il rigenerato differisce
+      # da quello committato, o e' cambiata una dipendenza senza aggiornarlo,
+      # o il generatore non e' deterministico (era il caso: hash sensibili al
+      # fine riga fra Windows e Linux, REL-02).
+      - name: SBOM riproducibile (rigenera e confronta col committato)
+        shell: pwsh
+        run: |
+          node tools/gen_sbom.js
+          git diff --exit-code -- SBOM.json SBOM.md
+          if ($LASTEXITCODE -ne 0) { Write-Error "SBOM rigenerato diverso da quello committato"; exit 1 }
