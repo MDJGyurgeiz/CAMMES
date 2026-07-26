@@ -2,9 +2,9 @@
   "schema": "cammes-release-manifest/1",
   "app": {
     "name": "CAMMES",
-    "version": "3.4.3",
+    "version": "3.5.0",
     "channel": "beta-tecnica",
-    "note": "Usabilita' della pagina Analisi dal collaudo in officina (firmware INVARIATO: chi ha la 4.1 non riflasha). Risolta la causa dei campi che non rispondevano ai tasti (i banner intercettavano i click sulla colonna parametri); registro messaggi persistente; 'RPM critico' rinominato 'Distacco valvola' con la precisazione che non e' un limite imposto; parametri molla dichiarati 'valori di esempio' con gate propagato anche a CSV/PDF; tema chiaro portato sopra la soglia di leggibilita' (era 1,40:1). Restano aperti i P1/P2 del terzo giro Codex. Vedi REMAINING_RISKS.md."
+    "note": "Terzo giro di revisione esterna: correttezza dei numeri della pagina Analisi. Il firmware NON cambia (chi ha la 4.1 non riflasha). Correzioni di fisica: il rapporto di leva non viene piu contato due volte, il gioco valvole si toglie dal lato giusto della leva, la curva valvola non e piu sfasata di un grado, la cedevolezza del perno bilanciere non inverte l effetto. Gate onesti: i verdetti non escono piu da valori di esempio (per lato), il surge non gira su una compliance non convergente, la velocita di appoggio e quella alla sede. Strumenti Race non bloccanti e annullabili. Validazione dei campi con errori accanto al campo. CI applicativa su ogni push. Restano aperti P2-01 (contrasti tema chiaro), P2-07 (nomi accessibili), P2-09 (SBOM CycloneDX), P2-12 (copertura test). Vedi CHANGELOG.md e REMAINING_RISKS.md."
   },
   "firmware": {
     "version": "4.1",
@@ -17,9 +17,9 @@
     "sourceReproducibleNote": "REL-07 CHIUSO: build bit-per-bit riproducibile, verificata in CI (.github/workflows/firmware.yml) e in npm test (tools/verify_firmware.js)",
     "benchValidated": "2026-07-23 COM5: v3 39/39 + v4 28/28 (incl. FW-01 watchdog SCAN e true-positive FW-03 su guasto encoder reale)"
   },
-  "commit": "tag v3.4.3 (il commit esatto e il tag coincidono alla release)",
+  "commit": "tag v3.5.0 (il commit esatto e il tag coincidono alla release)",
   "gates": {
-    "npmTest": "280+ check verdi (suite software, incl. mock-seriale e round-trip profili)",
+    "npmTest": "33 suite, 464 check verdi (software; incl. mock-seriale, round-trip profili e coerenza dei documenti di release)",
     "lint": "0 errori",
     "npmAudit": "1 moderata (pkg, devDep, no fix) — REL-02",
     "exeSigned": false,

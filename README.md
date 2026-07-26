@@ -2,7 +2,7 @@
 
 Sistema completo per misurare e analizzare i profili degli alberi a camme: hardware (Arduino Uno + stepper + encoder + comparatore), server PC (Node.js, distribuito come `.exe` standalone offline) e interfaccia web.
 
-**Versione corrente: v3.4.3** (firmware Arduino **4.1**, protocollo seriale v4) — la versione in esecuzione è mostrata in basso a destra in ogni pagina; il controllo aggiornamenti è automatico (GitHub Releases).
+**Versione corrente: v3.5.0** (firmware Arduino **4.1**, protocollo seriale v4) — la versione in esecuzione è mostrata in basso a destra in ogni pagina; il controllo aggiornamenti è automatico (GitHub Releases).
 
 > Per l'uso quotidiano in officina vedi **[MANUALE_OPERATORE.md](MANUALE_OPERATORE.md)** (1 pagina).
 
@@ -120,7 +120,7 @@ Scarica `cammes.exe` dall'ultima **GitHub Release** e avvialo: **un solo file, a
 cd cammes
 npm install
 npm start          :: server su :3000 + WS :8080
-npm test           :: 13 suite di regressione/validazione (137 check)
+npm test           :: 33 suite di regressione/validazione (il totale dei check lo stampa la suite)
 npm run lint       :: eslint su server + moduli + tools
 npm run build      :: genera cammes.exe (pkg, node18-win-x64)
 ```
@@ -136,7 +136,7 @@ Il modo più semplice: **Home → Sistema & aggiornamenti → ⚡ Aggiorna firmw
 ## Qualità e test
 
 - **`lib/cammes-math.js`**: tutta la matematica (conversioni follower, baseline/eccentricità, mappatura camma→albero, compliance 1/2/3-DOF, surge, re-indicizzazione encoder) vive in un'unica libreria usata sia dal browser sia dai test node.
-- **`npm test`**: 13 suite (137 check) — versione, follower, 3-DOF, surge, baseline, encoder-reindex, misura affidabile (MAT-01/MET-01/02), fase&segni (MAT-02/03/04), confine di rete (SEC-01/02), robustezza server (SEC-05/06/07), valve float (DYN-01), validazione di PLAUSIBILITÀ su camme **Renault Clio 1.8 16V** e **VW KR 1.8 16V** reali (non un banco a motore trascinato: confronto con schede/misure di riferimento, non certificazione metrologica).
+- **`npm test`**: 33 suite — versione, follower, 3-DOF, surge, baseline, encoder-reindex, misura affidabile (MAT-01/MET-01/02), fase&segni (MAT-02/03/04), confine di rete (SEC-01/02), robustezza server (SEC-05/06/07), valve float (DYN-01), fisica dell audit v3.4.3 (P1-04/06/09), validazione numerica dei campi (P1-12), Reset completo (P2-02), coerenza dei documenti di release (P2-13), validazione di PLAUSIBILITÀ su camme **Renault Clio 1.8 16V** e **VW KR 1.8 16V** reali (non un banco a motore trascinato: confronto con schede/misure di riferimento, non certificazione metrologica).
 - Correzioni metrologiche documentate nel CHANGELOG (compensazione puntalino sferico a offset normale, alzata al PMS riferita al picco misurato, raggio base per lato, baseline 1ª armonica).
 
 ## Sincronizzazione

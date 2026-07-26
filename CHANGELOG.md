@@ -9,6 +9,466 @@ Sistema di misura profili alberi a camme per motori.
 
 ---
 
+## v3.5.0 — 2026-07-26: correttezza dei numeri di Analisi (firmware 4.1 INVARIATO)
+
+Lotto nato dall'audit esterno del 2026-07-25. Ogni voce ha un test che
+**falliva sulla v3.4.3** prima della correzione. Il firmware non è toccato.
+
+### Lo stato di convergenza esportato perdeva per strada le informazioni (P2-03)
+
+Lo snapshot conservava una sola riga:
+
+```js
+residual: Math.max(compInfo.residualIn || 0, compInfo.residualEx || 0)
+```
+
+Tre difetti in una riga. Il `|| 0` trasformava un residuo **mai misurato**
+(`null`, il caso `INVALID_INPUT`) in `0.00e+0`: il foglio esportato dichiarava
+errore zero, cioè convergenza perfetta, proprio dove non c'era stato alcun
+calcolo. Il `Math.max` schiacciava i due lati, quindi non si sapeva più quale
+non convergesse. E si teneva il solo residuo di **posizione**, mentre il criterio
+di convergenza guarda anche la **velocità**: un caso che falliva sulla sola
+velocità usciva con residuo dentro tolleranza e stato `NON_CONVERGED`, una
+contraddizione apparente che nessun dato spiegava.
+
+Ora `riassuntoConvergenza()` sta in `cammes-math.js` — quindi è testabile da
+node, cosa che prima non era — e conserva stato, cicli e residui **per lato**,
+posizione **e** velocità, dichiarando quale lato ha fallito e su quale criterio.
+Nessun confronto fra grandezze di dimensione diversa: il vecchio campo mescolava
+metri e metri al secondo sotto un'unica etichetta `[m]`.
+
+Nel CSV le righe di compliance ora escono per lato e per criterio, e un residuo
+mai misurato si scrive `non calcolato`.
+
+Aggiunte anche le colonne per grado che l'audit chiedeva — traiettoria valvola
+simulata e gap di distacco — ma **solo se il solver è convergente**. Esportare
+720 valori di gap mentre il riepilogo si rifiuta di darne uno solo sarebbe la
+stessa incoerenza già chiusa altrove. Nel dump per grado il `|| 0` è stato
+sostituito da campo vuoto: zero è una misura, vuoto è "non disponibile", e il
+foglio non deve più confonderli.
+
+---
+
+### L'ottimizzatore ordinava le molle con un punteggio senza unità (P2-04)
+
+Il costo era `kNorm + F0Norm`: la somma di due numeri normalizzati sui bordi del
+range cercato. Non è una grandezza fisica — il pulsante prometteva "la
+combinazione più leggera", che quel numero non misura — e cambia se si allarga
+il range, a parità di molle confrontate.
+
+Ora si ordina per **carico a piena alzata** in newton, `F0 + k·L`, che è la forza
+che la molla impone davvero al treno; a pari carico massimo si preferisce il
+precarico minore, cioè meno attrito ai bassi regimi. Verificato che il criterio
+non cambia allargando il range. Entrambi i carichi sono ora mostrati, e la
+schermata dichiara che la griglia è 11×8, quindi la candidata è il nodo migliore
+e non un ottimo esatto: "148,0 N/mm" non è una specifica da ordinare al
+fornitore.
+
+Il valore è dichiarato **stima**: si usa l'alzata della camma, mentre il solver
+integra la posizione reale della valvola, che per la cedevolezza del treno
+differisce. Come criterio di ordinamento va bene — l'errore è lo stesso per tutte
+le candidate — ma non è un carico misurato.
+
+La seconda griglia "fine" promessa dall'audit **non è stata fatta**: rimisurata
+in newton vale fra lo 0% e il 4,9% a fronte del +55% di simulazioni. Il commento
+bugiardo che la motivava ("usa una scansione coarse poi fine") era già stato
+tolto.
+
+---
+
+### Terminologia: una frase era proprio falsa (P2-05)
+
+Sotto il grafico delle forze c'era scritto "L'incrocio individua il regime
+critico". Non è così: quel grafico è tracciato **a regime fissato**, mostra dove
+e di quanto manca il margine *a quel* regime. Il limite in giri si ottiene
+riscalando l'inerzia col quadrato dei giri, ed è un altro numero. Riscritta.
+
+Il toast di riepilogo era **verde** su un contenuto neutro (LSA, durata, giri di
+distacco): verde e rosso vanno riservati a un giudizio esplicito. Ora è
+informativo, e si chiama "Analisi eseguita" invece di "completata", che suonava
+come un esito.
+
+Vocabolario allineato dove si vede: `Compliance treno valvole` →
+`Elasticità del comando valvola (compliance)`, `Damping ζ` → `Smorzamento ζ`,
+`Surge molla` → `Risonanza spire`, `1-DOF/2-DOF/3-DOF` →
+`1 massa / 2 masse — asta e bilanciere separati / 3 masse — include la sede`,
+`valve float` → `perdita di contatto camma–valvola`, `LSA` →
+`separazione lobi (LSA)`. I **valori** dei selettori non sono cambiati: le
+analisi salvate restano leggibili.
+
+Corretto anche il tour di benvenuto in `cammes-ui.js`, che la proposta
+dimenticava: il pannello avrebbe parlato il vocabolario nuovo e il tour quello
+vecchio.
+
+Allineate infine le soglie dei due avvisi a quelle di `rpmClass`, che usava
+disuguaglianze opposte: sparisce la zona d'ombra sui punti di uguaglianza esatta.
+
+---
+
+### Grafici creati a modulo spento (P2-08)
+
+Il rilievo diceva che la comparsa dipende dal `ResizeObserver` di Chart.js.
+Vero come meccanismo, **ma la conseguenza non si riproduce**: riaccendendo il
+modulo i grafici compaiono corretti entro ~300 ms, senza rianalizzare. Non è
+stato fatto il refactor a creazione lazy che l'audit proponeva: è grosso e
+rischioso, e `liveRetuneForces`, i pulsanti Reset Zoom e l'export PDF presumono
+che i chart esistano sempre dopo un'analisi.
+
+È stato aggiunto un risveglio esplicito, che toglie la dipendenza da un dettaglio
+interno della libreria, con un dettaglio che la proposta sbagliava: non si può
+usare "ha già una dimensione" come prova che il grafico sia a posto, perché
+l'export PDF chiama `resize(700, 380)` anche sui chart nascosti. Si confronta con
+la dimensione reale del contenitore.
+
+E soprattutto è stato colmato il buco vero: **a modulo spento l'analisi girava e
+non lo diceva nessuno**. Ora un avviso spiega che i numeri sono pronti e basta
+riaccendere il modulo, senza rianalizzare.
+
+---
+
+### Il registro messaggi dimenticava cosa avevi già letto (P2-06)
+
+Il log sopravviveva al cambio pagina, il contatore dei non letti no: si tornava
+su Analisi e la campanella diceva 0 con tre messaggi mai visti. Ora l'indice
+dell'ultimo letto è persistito accanto al log.
+
+Ogni voce porta ora un id progressivo, l'ora ISO completa, la pagina di origine
+e **l'analisi di appartenenza** — quest'ultima con una precauzione che la
+proposta iniziale sbagliava. Leggere `lastAnalysis.analysisId` dentro
+`recordMessage` sembra ovvio, ma un toast ritardato arriva lì anche 900 ms dopo,
+quando l'analisi corrente può essere già la successiva: il verdetto di distacco
+della prima analisi sarebbe finito etichettato come appartenente alla seconda.
+Non è un'attribuzione mancante, è un'attribuzione **sbagliata**, che è peggio.
+L'id viene ora fotografato da chi *programma* il messaggio e viaggia con esso.
+
+---
+
+### I documenti di release dicevano cose non vere (P2-13)
+
+Su 22 valori dichiarati e verificati, 16 non corrispondevano alla realtà. Il
+peggiore riguarda il firmware: **tre SHA256 diversi in quattro documenti**, due
+dei quali non erano l'hash dell'HEX che si distribuisce.
+
+| documento | dichiarava | |
+|---|---|---|
+| `cammes/fw/master.ino.hex` (reale) | `604c00c2cc49…` | — |
+| `RELEASE_MANIFEST.json` | `604c00c2cc49…` | corretto |
+| `cammes/fw/version.json` | `604c00c2cc49…` | corretto |
+| `THIRD_PARTY_NOTICES.md` | `21031c77cf90…` | **sbagliato** |
+| `REMAINING_RISKS.md` | `2ae84e28…` | **sbagliato, e diverso dal precedente** |
+
+Inoltre **REL-07 era dichiarato aperto e chiuso allo stesso tempo**: chiuso in
+quattro file, "ancora aperto" in `THIRD_PARTY_NOTICES.md` e nella nota di
+`fw/version.json`. È chiuso davvero — il job `reproducible-hex` di
+`firmware.yml` ricompila con il core pinnato e confronta lo SHA — quindi le due
+frasi erano rimaste indietro. E il README dichiarava 13 suite e 137 check quando
+le suite erano 31.
+
+Correggere i numeri a mano non sarebbe servito: fra due release sarebbero di
+nuovo sbagliati. Il fix vero è `tools/test_doc_release.js`, che li **ricalcola
+dalla realtà** e fallisce se un documento mente: SHA del firmware unico e uguale
+all'HEX, REL-07 non contraddittorio, conteggio suite uguale a quello di
+`package.json`, versioni allineate fra manifest e `package.json`, nessuno script
+di test dichiarato ma assente. Il README non congela più un numero di check
+destinato a invecchiare: lo stampa la suite.
+
+Prova che il gate funziona: aggiungendo il test stesso alla suite il conteggio è
+passato a 32, e il gate ha immediatamente segnalato il README rimasto a 31.
+
+---
+
+### I gate di qualità giravano solo al momento di pubblicare (P2-10)
+
+In `.github/workflows/` c'erano solo `firmware.yml` (che scatta su push, ma
+unicamente se cambia lo sketch o il descrittore del firmware) e `release.yml`
+(solo su tag `v*`). Un push che rompeva lint, suite o SBOM non veniva
+intercettato da nulla. Conseguenza reale: i gate committati il 23 luglio non
+sono mai stati esercitati fino al tag del 25, e **la prima esecuzione di v3.4.3
+è fallita** — su un difetto (SBOM non riproducibile fra Windows e Linux) che una
+CI su push avrebbe trovato due giorni prima.
+
+I gate non sono stati copiati in un secondo file: sarebbero due sorgenti di
+verità destinate a divergere. Sono stati estratti in `preflight.yml`, che è la
+loro **unica** definizione, chiamato sia da `ci.yml` (ogni push e ogni pull
+request) sia da `release.yml`. La release non può più avere gate diversi, o più
+deboli, di quelli esercitati ogni giorno.
+
+Aggiunto al preflight un controllo che mancava: la **sintassi degli script
+inline delle pagine**. I file `.js` sono circa 10.000 righe, ma altre 9.878
+vivono dentro i tag `script` degli HTML e il lint non le vede — un errore di
+sintassi in `analisi.html` si sarebbe scoperto aprendo la pagina in officina.
+
+---
+
+### Due test del server cedevano sotto carico (P2-11)
+
+`test_controller_lease.js` decideva che il server era pronto con un
+`await sleep(1500)`. Misurato quanto ci mette davvero a saper completare un
+handshake WebSocket, simulando esattamente il vecchio codice (avvio, attesa, un
+solo tentativo): **a macchina scarica la prontezza arriva a 1.373 ms nel
+campione peggiore — 127 ms di margine sui 1.500**, cioè l'8%. Basta qualunque
+altro lavoro sul PC per mangiarselo.
+
+Aspettare che la porta TCP accetti non risolve il problema: `listen()` è
+sincrona, quindi la porta risulta aperta mentre il processo sta ancora caricando
+i moduli. Misurato un divario di **quasi un secondo** fra "porta accettante" e
+"handshake che riesce". L'unico segnale valido di prontezza è un handshake che
+si apre: ora si ritenta quello, con un solo budget generoso invece di due budget
+sbilanciati.
+
+Sistemato l'avvio, sotto sovraccarico il test falliva ancora **3 volte su 5**:
+il difetto residuo erano le otto attese fisse `sleep(200)` fra un invio e la sua
+verifica. Sostituite dall'attesa dell'**arrivo** del messaggio. Con la CPU satura
+(12 processi su 12 core): **0 fallimenti su 8**.
+
+Aggiunto anche quello che mancava per diagnosticare i fallimenti: stdout e
+stderr del server vengono catturati e stampati se il test fallisce, e si
+ascoltano `error` ed `exit` del processo. Prima si otteneva un `ECONNREFUSED`
+muto, senza sapere se il server fosse morto all'avvio.
+
+---
+
+### Il diagramma di fasatura dichiarava un colore che non disegnava
+
+Segnalato dal banco: "il grafico sembra incompleto e/o errato". Lo era, in
+quattro modi — tutti di rappresentazione, i numeri erano giusti.
+
+1. **La legenda prometteva un giallo che non esisteva.** La voce
+   `Overlap: 82,4°` aveva la pastiglia gialla, ma il grafico aveva due soli
+   anelli e in tutto il disegno non c'era un pixel giallo. Era anche la
+   grandezza più interessante del diagramma, l'unica invisibile.
+   Ora l'overlap è un terzo anello, ricavato come **intersezione** dei due
+   intervalli di apertura sugli stessi eventi degli altri anelli — non da una
+   formula separata che potrebbe contraddirli. Verificato: l'arco disegnato
+   coincide con il valore in tabella alla sesta cifra decimale. Se un giorno
+   divergessero, la legenda lo scriverebbe invece di mostrare due verità.
+
+2. **Nessun riferimento angolare.** Senza PMS e PMI il settore vuoto sembra un
+   pezzo di grafico che non si è disegnato, invece di "qui entrambe le valvole
+   sono chiuse". Aggiunte quattro tacche con etichetta (PMS scoppio, PMI
+   scarico, PMS incrocio, PMI aspirazione) e la voce di legenda
+   `Vuoto = valvola chiusa`.
+
+3. **Non si capiva quale anello fosse quale.** Tre corone concentriche senza
+   indicazione. Ora la legenda dice esterno/mediano/interno.
+
+4. **Due legende sovrapposte.** Sotto il grafico c'era anche una legenda HTML
+   fissa che ripeteva aspirazione e scarico, senza valori e senza overlap.
+   Rimossa: ne resta una, quella completa.
+
+Corretto anche un commento che diceva il falso (`0 = PMI in alto`): con la
+convenzione del progetto, in alto c'è il PMS di scoppio.
+
+---
+
+### Gli strumenti Race congelavano la pagina e ignoravano la guardia (P1-11)
+
+Ogni strumento (sweep RPM, esplorazione molla, mappa k×F₀, sweep 3D, Race
+report) faceva un solo `setTimeout` e poi calcolava tutto in un colpo sul
+main thread. Un repaint prima di partire, poi la pagina restava sorda: niente
+frecce, niente input, niente scroll, nessun modo di fermarsi. Misurato con la
+stessa libreria, in node:
+
+| strumento | simulazioni | 1 massa | 3 masse |
+|---|---|---|---|
+| sweep RPM | 12 | 36 ms | — |
+| esplorazione molla | 88 | 84 ms | 1.321 ms |
+| mappa 3D | 384 | 300 ms | **5.606 ms** |
+
+L'audit citava 361 ms per la sola mappa: vero col modello a una massa,
+ma con tre masse — selezionabile dalla UI — sono 5,6 secondi, e il PC
+dell'officina è più lento.
+
+Ora il calcolo procede **a fette**: si lavora per 20 ms e si cede il controllo
+al browser, con barra di avanzamento reale (fatti/totale) e pulsante Annulla.
+Misurato in pagina sul caso peggiore, latenza p95 **59 ms** contro i 5.606 ms
+di blocco, e 190 ridisegni durante un lavoro che prima era un unico blocco
+congelato.
+
+Niente Web Worker: la UI deve poter girare anche da `file://`, dove i worker
+sono bloccati dal CORS, e un worker richiederebbe di duplicare la libreria
+matematica e serializzare le curve a ogni giro. Le fette danno lo stesso
+risultato, con in più punti di annullamento esatti.
+
+È stato provato anche `MessageChannel`, che non subisce il limite di 4 ms sui
+timer annidati. A/B controllato, 3 giri alternati per modo, stesso carico:
+
+| | durata | latenza p50 | latenza p95 |
+|---|---|---|---|
+| `setTimeout` | 5.873 ms | 39,7 ms | 91,8 ms |
+| `MessageChannel` | 5.226 ms | 94,3 ms | 121,2 ms |
+
+È l'11% più veloce ma i suoi messaggi scavalcano i task dei timer: il resto
+della pagina viene servito peggio e la latenza sfonda i 100 ms del criterio di
+accettazione. Qui conta la reattività, non il tempo totale: resta `setTimeout`.
+
+**Coerenza dei dati.** Gli strumenti leggevano una miscela: le curve
+dall'ultima analisi, ma rigidezza treno, smorzamento, modello di compliance,
+masse 2/3-DOF e parametri della molla dai campi **correnti**. Bastava cambiare
+il modello e lanciare la mappa per ottenere numeri metà nuovi e metà vecchi,
+senza un avviso. E nessuno di loro chiamava la guardia degli export: dopo aver
+cambiato follower o angolo, gli strumenti partivano lo stesso.
+
+Ora esiste una sola guardia, `requireFreshAnalysis()`, usata da export **e**
+strumenti, che restituisce un'**istantanea congelata** con `analysisId` e
+`parameterHash`. Tutti i parametri della dinamica sono entrati nello snapshot.
+Un ricalcolo immediato non può più cambiare i dati sotto i piedi di un job in
+corso.
+
+Inoltre: doppio clic = un solo job (i pulsanti si disabilitano e il secondo
+clic lo dice); Reset e una nuova analisi annullano il job in corso, che prima
+sopravviveva e scriveva i suoi risultati su una pagina appena svuotata.
+
+**Nota su P1-07**: la mappa molla non era coperta dal gate dei valori di
+esempio — colorava 224 celle su una molla mai inserita. Ora lo è, come gli
+altri cinque strumenti.
+
+---
+
+### Il rapporto di leva veniva contato due volte (P1-09)
+
+Con la **leva a dito** il convertitore restituisce già il moto lato valvola
+(amplificato di `L valvola / L camma`), e poi l'analisi applicava *anche* il
+campo Bilanciere: una camma da 7 mm con leva 1,5 usciva **15,75 mm invece di
+10,5**, e con essa durata, velocità e verdetto di distacco. Ogni convertitore
+ora dichiara il proprio dominio di uscita (`FOLLOWER_OUTPUT_DOMAIN`) e il
+rapporto si applica una volta sola.
+
+Nello stesso convertitore il parametro **inclinazione leva** è stato rimosso:
+si elide analiticamente (`sin(t+dφ) = sin(t) + L/lArm` ⇒ il termine sparisce),
+tra 0° e 30° cambiava l'alzata di 5·10⁻¹⁵ mm. Era una manopola che non
+comandava nulla.
+
+*Chi è interessato*: solo le analisi fatte con follower "leva a dito", o con
+rigidezza del perno bilanciere valorizzata. Le misure con bicchiere o
+puntalino (Clio, VW con valori di fabbrica) restano valide.
+
+### La cedevolezza del perno bilanciere veniva applicata al posto sbagliato (P1-06)
+
+La molla del perno agiva sulla coordinata di lavoro del bilanciere invece che
+sul suo appoggio: un perno *più rigido* riduceva l'alzata, che è il contrario
+di quello che fa la fisica. Il termine è stato disattivato e il solver **lo
+dichiara** (`kPivotIgnorato`) invece di far finta di modellarlo. Test: un perno
+rigidissimo deve dare la stessa alzata di un perno fermo, e un perno più rigido
+non può mai ridurla.
+
+### La curva valvola era sfasata di un grado rispetto alla camma (P1-04)
+
+Nei tre solver il sotto-ciclo integra da `deg` a `deg+1` ma lo stato veniva
+scritto all'indice `deg`. Conseguenza: la valvola risultava un grado avanti
+alla camma e, nel confronto punto-a-punto, appariva un **distacco che non
+c'era** — visibile come area colorata sul grafico anche a regime quasi statico.
+Corretto l'indice; il confronto con la deflessione statica analitica è passato
+da 65 % di errore a 0,5 % (0,1127 contro 0,1133 mm).
+
+Nota: l'oracolo del test di convergenza compensava quello sfasamento leggendo
+`cam[deg+1]`, con tanto di commento che lo dava per normale. Era il difetto
+cucito dentro il test che avrebbe dovuto scoprirlo. Ora confronta lo stesso
+indice.
+
+### Il grafico mostrava "distacco" al contrario (P1-03)
+
+L'area evidenziata si riempiva quando la **camma** stava sopra la valvola, che
+è compressione elastica del treno, non distacco. Il distacco è il caso opposto.
+Invertita la condizione, aggiunta una soglia di 0,05 mm per non colorare il
+rumore numerico, e quando il solver non converge il titolo dice
+"DIAGNOSTICO: solver non convergente" invece di presentare un verdetto.
+
+### Cambiando i giri i numeri salivano ma le curve no (P1-02)
+
+Velocità, accelerazione e jerk sono in dominio tempo: valgono per grado ×ω,
+×ω², ×ω³. Il ricalcolo immediato aggiornava i valori scritti e il grafico delle
+forze, ma **non** quelle tre curve: passando da 6.000 a 9.000 giri i numeri si
+moltiplicavano per 1,5 e i grafici restavano identici, e l'export non era
+bloccato — un PDF poteva uscire con numeri nuovi e grafici vecchi.
+
+### Il gioco valvole veniva tolto dalla parte sbagliata della leva (P1-05)
+
+Il gioco si registra **a valle** del bilanciere, fra bilanciere e stelo: è una
+quantità lato valvola. La mappatura lo sottraeva dalla curva lato camma e *poi*
+moltiplicava tutto per il rapporto, togliendo `gioco × rapporto` invece di
+`gioco`. Con bilanciere 1,5 e 0,20 mm di gioco si perdevano 0,10 mm di alzata e
+la durata risultava più corta del vero.
+
+Ora il gioco viene riportato lato camma dividendolo per il rapporto
+(`max(0, L·r − g) ≡ max(0, L − g/r)·r`). **Con il bicchiere (rapporto 1,00) il
+risultato è identico bit a bit**: nessuna misura già fatta con punteria diretta
+cambia. Verificato a banco simulato: 7,00 mm di camma con leva 1,5 e 0,20 di
+gioco davano 10,20, ora danno 10,30 (il valore giusto).
+
+### I campi accettavano valori impossibili (P1-12)
+
+`Number(campo) || default` confonde tre cose diverse: campo **vuoto** (il
+default è legittimo), **zero scritto a mano** (è una scelta) e valore **non
+ammesso** (deve fermare il calcolo). Effetti reali: `R puntalino = 0` —
+tastatore a coltello, valore lecito — diventava 1,5; un **raggio base negativo**
+arrivava fino alla curva convertita e produceva un'alzata di 31 mm.
+
+Introdotto un motore di validazione unico (`validaNumero`) e uno schema che per
+ogni campo dichiara **solo ciò che la fisica impone**. Nessun tetto di
+plausibilità: il banco è universale, 30.000 giri passano con un avviso, non con
+un blocco. Gli errori restano scritti **accanto al campo** finché non sono
+risolti (con `aria-invalid`/`aria-describedby`), non in un banner che sparisce.
+
+Con un regime non valido le celle della dinamica ora si svuotano dicendo il
+perché: prima restavano in pagina i numeri del regime *precedente*, spunta
+verde compresa.
+
+### Il gate "valori di esempio" era incompleto e valeva per entrambi i lati (P1-07)
+
+Con molla e masse ancora ai valori di esempio il distacco diceva "non
+valutabile", ma sullo schermo restavano **forza inerziale, forza molla e
+margine** in chiaro — compreso un margine negativo, che si legge come un
+allarme. Il CSV stampava le stesse sei righe numeriche e metteva l'avvertenza
+*dopo*. Ed era globale: una massa scarico non confermata rendeva non valutabile
+anche l'aspirazione, che magari era completa.
+
+Ora lo stato è **per lato** (`k + F₀ + massa di quel lato`) e vale ovunque:
+schermo, avvisi, CSV, PDF e i cinque strumenti Race, che si fermano invece di
+disegnare mappe riferite a una molla mai inserita. Le grandezze che **non**
+dipendono dalla molla — cinematica, fasatura, durate, LSA — restano visibili.
+Un campo molla vuoto non blocca più l'analisi: degrada il suo lato.
+
+### Il surge girava anche su una dinamica dichiarata inattendibile (P1-08)
+
+`simulateSpringSurge(valveLiftIn || anlIn, …)`: un array che arriva da una
+compliance `INVALID_INPUT` o `NON_CONVERGED` è comunque *truthy*, quindi veniva
+usato come traiettoria di comando e il surge restituiva frequenza e ratio
+dall'aria plausibile. Ora la traiettoria della compliance si usa **solo** se lo
+stato è `CONVERGED`; altrimenti il surge è `NON_VALUTABILE_DRIVE` e **non** si
+ripiega in silenzio sul profilo camma (darebbe un numero diverso senza dirlo).
+
+Lo snapshot porta anche stato, traiettoria usata, `preliminary`,
+`settleCycles`, `diverged` e ampiezza massima delle spire; CSV e PDF dichiarano
+sempre *STIMA PRELIMINARE — convergenza del surge non verificata* e che il
+calcolo riguarda la **sola aspirazione**.
+
+### "Velocità di appoggio" non era la velocità alla sede (P1-10)
+
+Il valore mostrato era il **minimo globale** della velocità sull'intero giro: su
+una camma di prova cade a 3,00 mm di alzata, 100° dal picco — cioè a metà
+fianco, lontano dalla sede. Il tooltip però prometteva "con che velocità la
+valvola torna sulla sede… martella la sede".
+
+Ora si calcola la velocità **interpolata nel punto di chiusura** (l'attraversamento
+della soglia di durata). Sulla stessa camma: 1.053 mm/s alla sede contro
+1.979 mm/s di massimo sul fianco; il valore coincide con la derivata analitica
+nel crossing entro l'1,1 %. Il massimo di fianco resta, col suo nome, nel
+tooltip e nell'export. Se il punto di chiusura non è determinabile (più lobi,
+profilo sempre sopra soglia) la cella dice "non valutabile" invece di ripiegare
+sul minimo globale.
+
+### Grafici ad altezza fissa (P1-01)
+
+Il rilievo segnalava una crescita incontrollata dei canvas. **Non sono riuscito
+a riprodurla** (50 ricalcoli, 6 analisi, cambi di tema e di viewport: i canvas
+restano a 201 px). È però vero che il contenitore non dichiarava un'altezza e
+il canvas era figlio diretto: con `maintainAspectRatio:false` è la condizione
+che genera il ciclo di retroazione. I cinque canvas sono stati chiusi in un
+contenitore ad altezza fissa. **Il sintomo va confermato sul PC dell'officina.**
+
+---
+
 ## v3.4.3 — 2026-07-25: usabilità della pagina Analisi (firmware 4.1 INVARIATO)
 
 Release nata dal collaudo in officina. **Il firmware non cambia**: chi ha già
