@@ -42,5 +42,12 @@ AVVIA_BANCO_REMOTO.bat
 # da ridistribuire. Il repo è pubblico: resta SOLO su Drive.
 smartcam-manual-VR3/
 
+# Documento di evoluzione che ANALIZZA quel banco concorrente (funzioni,
+# schermate, scelte di interfaccia, con nome e versione del prodotto).
+# È materiale di lavoro nostro, ma pubblicarlo significherebbe diffondere
+# l'analisi dettagliata di un prodotto altrui su un repo pubblico: resta SOLO
+# su Drive. Non è mai stato committato, nemmeno nella storia.
+HANDOFF_CLAUDE_CODE_EVOLUZIONE_SMARTCAM_2026-07-26.md
+
 # Prove di interfaccia locali, non parte del prodotto distribuito
 cammes-ui-demo/
