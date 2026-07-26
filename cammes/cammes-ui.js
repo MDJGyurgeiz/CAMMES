@@ -9,7 +9,7 @@
   // -------- VERSIONE ------------------------------------------------------
   // Unico punto di verità della versione mostrata nella UI (badge in basso a
   // destra su ogni pagina). Allineala a package.json/tag quando rilasci.
-  var CAMMES_VERSION = 'v3.4.3';
+  var CAMMES_VERSION = 'v3.5.0';
   window.CAMMES_VERSION = CAMMES_VERSION;
 
   // -------- THEME (dark/light) -------------------------------------------
@@ -113,7 +113,11 @@
       }, ttl);
     }
 
-    recordMessage(kind, title, body);
+    // P2-06: opts.analisi e' l'id dell'analisi FOTOGRAFATO da chi programma il
+    // messaggio. I toast immediati non lo passano e va bene: appartengono
+    // all'analisi corrente. Quelli ritardati devono passarlo, altrimenti
+    // finirebbero attribuiti all'analisi successiva.
+    recordMessage(kind, title, body, (opts && typeof opts.analisi === 'number') ? opts.analisi : null);
   }
   window.cammesToast = showToast;
 
@@ -129,18 +133,39 @@
   const MSG_LOG = (function () {
     try { return JSON.parse(sessionStorage.getItem(MSG_KEY)) || []; } catch (e) { return []; }
   })();
-  let msgUnread = 0;
+  // AUDIT v3.4.3 P2-06: i non letti sopravvivono al cambio pagina.
+  // Prima msgUnread ripartiva da 0 a ogni caricamento pur conservando il log:
+  // si tornava su Analisi e la campanella diceva 0 con tre messaggi mai visti.
+  const MSG_READ_KEY = MSG_KEY + '-read';
+  let msgLastRead = (function () {
+    try { return Number(sessionStorage.getItem(MSG_READ_KEY)) || 0; } catch (e) { return 0; }
+  })();
+  let msgSeq = MSG_LOG.reduce(function (m, v) { return Math.max(m, v.id || 0); }, 0);
+  let msgUnread = MSG_LOG.filter(function (v) { return (v.id || 0) > msgLastRead; }).length;
+  function persistMsgRead() {
+    try { sessionStorage.setItem(MSG_READ_KEY, String(msgLastRead)); } catch (e) {}
+  }
 
   function persistMsgLog() {
     try { sessionStorage.setItem(MSG_KEY, JSON.stringify(MSG_LOG)); } catch (e) {}
   }
 
-  function recordMessage(kind, title, body) {
+  function recordMessage(kind, title, body, analisiId) {
     const d = new Date();
     const hh = String(d.getHours()).padStart(2, '0');
     const mm = String(d.getMinutes()).padStart(2, '0');
     const ss = String(d.getSeconds()).padStart(2, '0');
-    MSG_LOG.push({ kind: kind, title: title, body: body, ora: hh + ':' + mm + ':' + ss });
+    // P2-06: l'analisi di appartenenza NON si legge qui. Un toast ritardato
+    // arriva a recordMessage anche 900 ms dopo, quando lastAnalysis puo' essere
+    // gia' la successiva (o nulla dopo un Reset): leggerla ora attribuirebbe il
+    // verdetto dell'analisi 1 all'analisi 2. Chi programma il messaggio passa
+    // l'id che aveva al momento della programmazione, via opts.analisi.
+    MSG_LOG.push({
+      id: ++msgSeq, kind: kind, title: title, body: body,
+      ora: hh + ':' + mm + ':' + ss, iso: d.toISOString(),
+      pagina: (typeof getCurrentPage === 'function' ? getCurrentPage() : null) || null,
+      analisi: (typeof analisiId === 'number' ? analisiId : null)
+    });
     if (MSG_LOG.length > MSG_MAX) MSG_LOG.shift();
     persistMsgLog();
     const panel = document.getElementById('msglog-panel');
@@ -162,11 +187,14 @@
       list.innerHTML = '<p class="msglog-empty">Nessun messaggio in questa sessione.</p>';
       return;
     }
+    const paginaCorrente = (typeof getCurrentPage === 'function' ? getCurrentPage() : null);
     let html = '';
     for (let i = MSG_LOG.length - 1; i >= 0; i--) {
       const m = MSG_LOG[i];
       html += '<div class="msglog-item ' + m.kind + '">' +
-        '<div class="msglog-meta"><span class="msglog-ora">' + m.ora + '</span>' +
+        '<div class="msglog-meta"><span class="msglog-ora"' + (m.iso ? ' title="' + m.iso + '"' : '') + '>' + m.ora + '</span>' +
+        (m.pagina && m.pagina !== paginaCorrente ? '<span class="msglog-tag">' + m.pagina + '</span>' : '') +
+        (m.analisi ? '<span class="msglog-tag">analisi #' + m.analisi + '</span>' : '') +
         (m.title ? '<span class="msglog-title">' + m.title + '</span>' : '') + '</div>' +
         '<div class="msglog-body">' + m.body + '</div></div>';
     }
@@ -190,7 +218,9 @@
     document.body.appendChild(panel);
     panel.querySelector('#msglog-close').addEventListener('click', toggleMsgLog);
     panel.querySelector('#msglog-clear').addEventListener('click', function () {
-      MSG_LOG.length = 0; persistMsgLog(); renderMsgLog();
+      MSG_LOG.length = 0; persistMsgLog();
+      msgSeq = 0; msgLastRead = 0; persistMsgRead();
+      msgUnread = 0; updateMsgBadge(); renderMsgLog();
     });
     return panel;
   }
@@ -198,7 +228,11 @@
   function toggleMsgLog() {
     const panel = ensureMsgPanel();
     const aperto = panel.classList.toggle('visible');
-    if (aperto) { msgUnread = 0; updateMsgBadge(); renderMsgLog(); }
+    if (aperto) {
+      msgLastRead = MSG_LOG.reduce(function (m, v) { return Math.max(m, v.id || 0); }, msgLastRead);
+      persistMsgRead();
+      msgUnread = 0; updateMsgBadge(); renderMsgLog();
+    }
   }
   window.cammesMsgLog = { toggle: toggleMsgLog, entries: function () { return MSG_LOG.slice(); } };
 
@@ -491,7 +525,7 @@
       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
       body: 'Sistema completo di misura, confronto e analisi di alberi a camme.<br><br>L\'hardware ' +
             '(stepper + comparatore + encoder) scansiona automaticamente il profilo a 360&deg;; ' +
-            'il software calcola durata, LSA, forze inerziali e limite di distacco valvola.<br><br>' +
+            'il software calcola durata, separazione lobi (LSA), forze inerziali e limite di distacco valvola.<br><br>' +
             'Questa guida mostra il flusso di lavoro tipico. Premi <kbd>?</kbd> in alto a destra per riaprirla.'
     },
     {
@@ -518,7 +552,7 @@
             'camme diverse).<br><br>' +
             '<b>Analisi</b>: importa la coppia <b>asp.</b> + <b>scar.</b>, inserisci parametri reali del motore ' +
             '(angolo lobo, gioco valvola, RPM, molla, massa eq.) e premi <b>Analizza</b>. ' +
-            'Ottieni durata, LSA, velocit&agrave;/accelerazione, forze, limite di distacco valvola, esportabili in CSV/PDF.'
+            'Ottieni durata, separazione lobi (LSA), velocit&agrave;/accelerazione, forze, limite di distacco valvola, esportabili in CSV/PDF.'
     },
     {
       title: 'Suggerimenti finali',
@@ -675,10 +709,10 @@
       { sel: '#replayBtn',  title: 'Replay', body: 'Ridisegna le curve da 0° a 360° per un confronto animato.' }
     ],
     analisi: [
-      { sel: '#btnModules',        title: 'Funzioni aggiuntive', body: 'Di default vedi solo il flusso essenziale. Da qui attivi i moduli extra: <b>molla</b>, <b>dinamica valvole</b>, <b>strumenti race</b>, <b>animazione</b>, <b>confronto A/B</b>. Col modulo Dinamica valvole compaiono anche <b>Compliance treno valvole</b> (valve float, modelli 1/2/3-DOF) e <b>Surge molla</b> (risonanza spire ad alto regime). La scelta viene ricordata.' },
+      { sel: '#btnModules',        title: 'Funzioni aggiuntive', body: 'Di default vedi solo il flusso essenziale. Da qui attivi i moduli extra: <b>molla</b>, <b>dinamica valvole</b>, <b>strumenti race</b>, <b>animazione</b>, <b>confronto A/B</b>. Col modulo Dinamica valvole compaiono anche <b>Elasticit&agrave; del comando valvola</b> (compliance: perdita di contatto camma&ndash;valvola, modelli a 1/2/3 masse) e <b>Risonanza delle spire</b> (surge, ad alto regime). La scelta viene ricordata.' },
       { sel: '#modeBaseBtn',       title: 'Base / Avanzato', body: 'In <b>Base</b> vedi i campi minimi; <b>Avanzato</b> aggiunge i parametri fini (anticipo, bilancieri, smoothing, baseline).' },
       { sel: '#fileIntake',        title: 'Importa la camma', body: 'Carica i file di aspirazione e scarico, poi premi Analizza.' },
-      { sel: 'button[onclick^="analyze"]', title: 'Analizza', body: 'Calcola durata, LSA, alzata, velocità/accelerazione, forze e limite di distacco valvola.' }
+      { sel: 'button[onclick^="analyze"]', title: 'Analizza', body: 'Calcola durata, separazione lobi (LSA), alzata, velocità/accelerazione, forze e limite di distacco valvola.' }
     ]
   };
 

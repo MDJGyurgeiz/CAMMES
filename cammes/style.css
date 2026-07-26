@@ -1835,6 +1835,18 @@ input.input-error {
   font-size: 10.5px;
   color: var(--text-muted);
 }
+/* AUDIT P2-06: da quale pagina e da quale analisi viene il messaggio. Senza,
+   un verdetto letto due analisi dopo sembrava riferito a quella corrente. */
+.msglog-tag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-left: 4px;
+  white-space: nowrap;
+}
 .msglog-title {
   font-family: var(--font-display);
   font-size: 10.5px;

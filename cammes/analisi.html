@@ -10,7 +10,18 @@
     canvas { -moz-user-select: none; -webkit-user-select: none; -ms-user-select: none; }
     .section-intake { border-left: 3px solid var(--accent); padding-left: 12px; margin-top: 12px; }
     .section-exhaust { border-left: 3px solid var(--danger); padding-left: 12px; margin-top: 16px; }
-    .param-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .param-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    /* AUDIT P1-12: l'errore di un campo resta SOTTO il campo finché non è
+       risolto — un toast sparisce e l'utente rianalizza con lo stesso valore.
+       flex-basis 100% lo manda a capo dentro la .param-row. */
+    .campo-errore {
+      flex: 1 0 100%; margin: 2px 0 0 120px;
+      font-size: 11px; line-height: 1.35; color: var(--danger-text, #c62828);
+    }
+    .ab-set .campo-errore { margin-left: 76px; }
+    .campo-errore.solo-avviso { color: var(--warning-text, #8a6a00); }
+    .param-row input.campo-nonvalido { border-color: var(--danger); }
+    .param-row input.campo-avviso { border-color: var(--warning); }
     /* label a larghezza FISSA: così tutti i campi partono alla stessa x
        (prima min-width:90 lasciava colonne sfalsate riga per riga) */
     .param-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; flex: 0 0 112px; min-width: 0; }
@@ -59,11 +70,27 @@
     .result-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted); margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border-card); }
     .import-status { font-family: var(--font-mono); font-size: 12px; color: var(--success); margin-top: 6px; display: block; min-height: 18px; }
     .timing-canvas-wrap { display: flex; flex-direction: column; align-items: center; }
-    .timing-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 12px; color: var(--text-secondary); }
-    .timing-legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
 
     /* Kinematic analysis styles */
     .kin-chart-wrap { margin-bottom: 24px; position: relative; }
+    /* AUDIT v3.4.3 P1-01 — altezza del grafico FISSATA dal contenitore.
+       Prima il canvas era figlio diretto di .kin-chart-wrap, che non dichiara
+       alcuna altezza: con Chart.js responsive + maintainAspectRatio:false
+       l'altezza del genitore veniva dedotta dal canvas e il ResizeObserver
+       ridimensionava il canvas sul genitore — un anello che, su alcune
+       combinazioni di scala schermo e browser, fa crescere il grafico a ogni
+       aggiornamento (l'audit ha misurato canvas oltre 2.000 px e pagina a
+       14.458 px, con la pagina che "salta" da sola).
+       Qui il canvas non puo' piu' influenzare l'altezza: la detta il box. */
+    .kin-chart-canvas {
+        position: relative;
+        width: 100%;
+        height: clamp(200px, 22vw, 300px);
+        min-height: 200px;
+        max-height: 300px;
+    }
+    .kin-chart-canvas.kin-chart-alto { height: clamp(240px, 26vw, 360px); max-height: 360px; }
+    .kin-chart-canvas > canvas { display: block; width: 100% !important; height: 100% !important; }
     .kin-chart-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px;
                        color: var(--text-muted); margin-bottom: 8px; padding-bottom: 4px;
                        border-bottom: 1px solid var(--border-card); display: flex; justify-content: space-between; align-items: center; }
@@ -240,7 +267,7 @@
                 <label><input type="checkbox" data-mod="follower" onchange="onModuleToggle(this);"> Follower simulato <span class="mod-desc">bicchiere &Oslash; / rullo / leva</span></label>
                 <label><input type="checkbox" data-mod="molla" onchange="onModuleToggle(this);"> Molla &amp; forze <span class="mod-desc">F. inerzia, limite di distacco</span></label>
                 <label><input type="checkbox" data-mod="cinematica" onchange="onModuleToggle(this);"> Cinematica <span class="mod-desc">velocit&agrave;, accelerazione, jerk</span></label>
-                <label><input type="checkbox" data-mod="dinamica" onchange="onModuleToggle(this);"> Dinamica valvole <span class="mod-desc">compliance 1/2/3-DOF, surge</span></label>
+                <label><input type="checkbox" data-mod="dinamica" onchange="onModuleToggle(this);"> Dinamica valvole <span class="mod-desc">elasticit&agrave; del comando (1/2/3 masse), risonanza spire</span></label>
                 <label><input type="checkbox" data-mod="race" onchange="onModuleToggle(this);"> Strumenti race <span class="mod-desc">sweep RPM, optimizer, mappe, report</span></label>
                 <label><input type="checkbox" data-mod="anim" onchange="onModuleToggle(this);"> Animazione meccanismo <span class="mod-desc">camma+follower in movimento</span></label>
                 <label><input type="checkbox" data-mod="confronto" onchange="onModuleToggle(this);"> Confronto A vs B <span class="mod-desc">due set di camme a confronto</span></label>
@@ -410,10 +437,18 @@
                     <input type="number" id="lValve" value="30" class="input" style="width:75px;" step="0.5" min="1">
                     <span class="param-unit">mm</span>
                 </div>
-                <div class="param-row" id="rowFingerTilt" style="display:none;">
-                    <span class="param-label">Tilt finger <span class="help-icon" data-tip="<strong>Inclinazione iniziale finger</strong>Angolo del braccio camma rispetto all'orizzontale quando la valvola &egrave; chiusa. 0&deg; = leva orizzontale (semplice rapporto L). 30-45&deg; = finger inclinato (tipico Honda VTEC, Yamaha R6). Pi&ugrave; tilt = curva non-lineare con derivate maggiori sul fianco del lobo. Lascia 0 se non conosci la geometria esatta.">?</span></span>
-                    <input type="number" id="fingerTilt" value="0" class="input" style="width:75px;" step="1" min="-45" max="45">
-                    <span class="param-unit">&deg;</span>
+                <!-- AUDIT v3.4.3 P1-09: il campo "Tilt finger" e' stato RIMOSSO.
+                     Nel modello speculare usato qui l'inclinazione si elide
+                     analiticamente (dimostrazione nel commento di
+                     convertPuntToFinger): 0 gradi e 30 gradi davano curve
+                     identiche fino al quindicesimo decimale. Era un controllo
+                     che sembrava agire e non agiva. Il modello e' un puro
+                     rapporto di leva L valvola / L camma, ora dichiarato. -->
+                <div class="param-row" id="rowFingerNota" style="display:none;">
+                    <span class="param-label" style="font-size:11px;color:var(--text-muted);flex:1;line-height:1.4;">
+                        Rapporto leva = <b>L valvola / L camma</b>; la curva risultante &egrave; gi&agrave;
+                        riferita alla valvola, quindi il campo <b>Bilanciere</b> non viene riapplicato.
+                    </span>
                 </div>
                 <!-- R cerchio base e R puntalino: comuni a bicchiere/rullo/finger -->
                 <div class="param-row" id="rowRBase" style="display:none;">
@@ -462,9 +497,9 @@
                 </div>
             </div>
 
-            <!-- NEW: Compliance treno valvole (modulo: dinamica) -->
+            <!-- Elasticita del comando valvola / compliance (modulo: dinamica) -->
             <div class="param-separator" data-module="dinamica">
-                <div class="param-group-title">Compliance treno valvole (race)
+                <div class="param-group-title">Elasticit&agrave; del comando valvola (compliance) &mdash; race
                     <span class="help-icon" data-tip="<strong>Simulazione dinamica valvola</strong>Modello massa-molla-smorzatore (RK4) per stimare la posizione REALE della valvola durante il ciclo, tenendo conto dell'elasticit&agrave; del treno (asta+bilancere+molla). Predice <b>valve float</b> dinamico, <b>ritardo</b> apertura, <b>bounce</b> alla chiusura. Per analisi race ad alto regime.">?</span>
                 </div>
                 <div class="param-row">
@@ -480,16 +515,16 @@
                     <span class="param-unit">N/mm</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Damping &zeta; <span class="help-icon" data-tip="<strong>Damping ratio</strong>Quanto velocemente le oscillazioni si smorzano. 0 = sistema undamped (oscilla per sempre). 0.05-0.1 tipico per treno valvole reale. 1 = critico (nessuna oscillazione, lento). Range usuale: 0.04-0.12.">?</span></span>
+                    <span class="param-label">Smorzamento &zeta; <span class="help-icon" data-tip="<strong>Damping ratio</strong>Quanto velocemente le oscillazioni si smorzano. 0 = sistema undamped (oscilla per sempre). 0.05-0.1 tipico per treno valvole reale. 1 = critico (nessuna oscillazione, lento). Range usuale: 0.04-0.12.">?</span></span>
                     <input type="number" id="dampingRatio" value="0.06" class="input" style="width:75px;" step="0.01" min="0" max="1">
                     <span class="param-unit">(0..1)</span>
                 </div>
                 <div class="param-row">
                     <span class="param-label">Modello <span class="help-icon" data-tip="<strong>1-DOF / 2-DOF / 3-DOF</strong><b>1-DOF</b> (default): un'unica massa = valvola+treno equivalente. Veloce, accurato per OHC con bicchiere/finger. <b>2-DOF</b>: separa bilancere/pushrod dalla valvola, due masse e due rigidezze in serie. Pi&ugrave; preciso per pushrod (V8 USA) e finger con bilancere pesante. <b>3-DOF</b>: aggiunge la <b>cedevolezza della sede valvola</b> (terza massa) e cattura il <b>valve bounce</b> alla chiusura &mdash; modo di guasto che 1/2-DOF non vedono. Per analisi race spinte. Pi&ugrave; lento.">?</span></span>
                     <select id="complianceModel" class="input" style="width:130px;" onchange="on2DofToggle();">
-                        <option value="1dof" selected>1-DOF (semplice)</option>
-                        <option value="2dof">2-DOF (catena)</option>
-                        <option value="3dof">3-DOF (sede)</option>
+                        <option value="1dof" selected>1 massa &mdash; semplice</option>
+                        <option value="2dof">2 masse &mdash; asta/bilanciere separati</option>
+                        <option value="3dof">3 masse &mdash; include la sede</option>
                     </select>
                 </div>
                 <div class="param-row" id="row2DofMass" style="display:none;">
@@ -518,7 +553,7 @@
                     <span class="param-unit">N/mm (0=libero)</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Surge molla <span class="help-icon" data-tip="<strong>Surge molla (massa distribuita)</strong>Modella la molla valvola come catena di spire (massa distribuita) invece che molla ideale. Ad alto regime le spire entrano in <b>risonanza (surge)</b>: oscillano tra loro, perdono forza, possono sbattere → modo di guasto race. Calcola la <b>frequenza di surge</b> (&frac12;&middot;&radic;(k/m)) e quanto la molla &egrave; in risonanza al regime scelto. Usa il moto valvola (compliance se attiva, altrimenti profilo cam). <em>(criterio esplorativo/euristico, non validato indipendentemente)</em>">?</span></span>
+                    <span class="param-label">Risonanza spire <span class="help-icon" data-tip="<strong>Surge molla (massa distribuita)</strong>Modella la molla valvola come catena di spire (massa distribuita) invece che molla ideale. Ad alto regime le spire entrano in <b>risonanza (surge)</b>: oscillano tra loro, perdono forza, possono sbattere → modo di guasto race. Calcola la <b>frequenza di surge</b> (&frac12;&middot;&radic;(k/m)) e quanto la molla &egrave; in risonanza al regime scelto. Usa il moto valvola (compliance se attiva, altrimenti profilo cam). <em>(criterio esplorativo/euristico, non validato indipendentemente)</em>">?</span></span>
                     <select id="surgeEnabled" class="input" style="width:120px;" onchange="onSurgeToggle();">
                         <option value="0" selected>OFF</option>
                         <option value="1">ON (massa distrib.)</option>
@@ -557,7 +592,7 @@
             <!-- RACE-GRADE: Sweep RPM + Optimizer molla + Mappa + Report -->
             <div class="flex gap-8" style="margin-top:8px;" data-module="race">
                 <button class="btn btn-secondary" id="btnSweepRpm" onclick="runRpmSweep();" style="flex:1;" disabled data-tip="<strong>Sweep RPM</strong>Esegue la simulazione compliance a 12 regimi diversi (da rpm/2 a rpm*2) e plotta come cresce il valve float al variare degli RPM. Indica un regime critico <b>stimato</b> dal modello esplorativo di compliance (non una certificazione del regime operativo). Tempo: ~5 secondi.">&#128201; Sweep RPM</button>
-                <button class="btn btn-secondary" id="btnOptimizeSpring" onclick="runSpringOptimizer();" style="flex:1;" disabled data-tip="<strong>Esplora molla</strong>Esplora una griglia di (k, F&#8320;) e per ognuna simula la compliance, cercando la combinazione pi&ugrave; leggera che tiene il valve float &lt; 0.3 mm al RPM target. &Egrave; un'ESPLORAZIONE del solo valve float: NON verifica coil bind, stress del filo, fatica n&eacute; geometria della molla &mdash; da controllare a parte prima di adottare i valori. Tempo: ~10 secondi.">&#127919; Esplora molla</button>
+                <button class="btn btn-secondary" id="btnOptimizeSpring" onclick="runSpringOptimizer();" style="flex:1;" disabled data-tip="<strong>Esplora molla</strong>Esplora una griglia di (k, F&#8320;) e per ognuna simula la compliance, cercando quella con il <b>carico a piena alzata</b> (F&#8320; + k&middot;alzata) pi&ugrave; basso fra quelle che tengono la perdita di contatto sotto 0,3 mm al regime indicato. Valuta la sola ASPIRAZIONE. &Egrave; un'ESPLORAZIONE del solo valve float: NON verifica coil bind, stress del filo, fatica n&eacute; geometria della molla &mdash; da controllare a parte prima di adottare i valori. Tempo: ~10 secondi.">&#127919; Esplora molla</button>
             </div>
             <div class="flex gap-8" style="margin-top:8px;" data-module="race">
                 <button class="btn btn-secondary" id="btnSpringMap" onclick="runSpringMap();" style="flex:1;" disabled data-tip="<strong>Mappa molla k×F&#8320;</strong>Heatmap del valve float al variare SIMULTANEO di rigidezza k e precarico F&#8320;. Verde = sicuro (&lt;0.1mm), giallo = limite (0.1-0.3), rosso = float eccessivo. Marca la tua molla attuale (&#9678;) e la zona sicura. A colpo d'occhio vedi quali combinazioni funzionano. Tempo: ~8 secondi.">&#128506; Mappa molla</button>
@@ -571,6 +606,20 @@
             <!-- Risultati Sweep / Optimizer / Mappa (modulo: race) -->
             <div id="raceResultsBox" data-module="race" style="display:none; margin-top:12px; padding:10px; background:var(--bg-input); border-radius:var(--r-md); border:1px solid var(--border);">
                 <div id="raceResultsTitle" style="font-family:var(--font-display); font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color:var(--text-muted); margin-bottom:6px;"></div>
+                <!-- AUDIT P1-11: avanzamento REALE (fatti/totale) e Annulla. Prima
+                     il calcolo bloccava la pagina senza dire a che punto era
+                     ne' offrire un modo per fermarlo. -->
+                <div id="raceProgress" style="display:none; margin-bottom:8px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <div style="flex:1 1 auto; height:6px; background:var(--bg-card); border-radius:3px; overflow:hidden;"
+                             role="progressbar" aria-labelledby="raceProgressText">
+                            <div id="raceProgressBar" style="height:100%; width:0%; background:var(--accent); transition:width .1s linear;"></div>
+                        </div>
+                        <button type="button" class="btn btn-sm" onclick="annullaJob('annullato dall\'operatore');"
+                                style="flex:0 0 auto; padding:2px 10px; font-size:11px;">Annulla</button>
+                    </div>
+                    <div id="raceProgressText" style="font-size:10px; color:var(--text-muted); margin-top:3px;"></div>
+                </div>
                 <div id="raceResultsBody" style="font-size:12px; line-height:1.5;"></div>
                 <canvas id="springMapCanvas" width="340" height="280" style="display:none; margin-top:8px; max-width:100%;"></canvas>
                 <div id="springMapLegend" style="display:none; font-size:10px; color:var(--text-muted); margin-top:4px; text-align:center;"></div>
@@ -592,10 +641,10 @@
             <!-- Left: Timing diagram (doughnut) -->
             <div class="timing-canvas-wrap">
                 <canvas id="timingChart" width="320" height="320"></canvas>
-                <div class="timing-legend">
-                    <span><span class="timing-legend-dot" style="background:#00d4ff;"></span>Aspirazione</span>
-                    <span><span class="timing-legend-dot" style="background:#ff5252;"></span>Scarico</span>
-                </div>
+                <!-- La legenda statica che stava qui duplicava quella del grafico:
+                     due legende una sotto l'altra, e la seconda diceva meno
+                     (nessun valore, nessun overlap, nessuna indicazione di quale
+                     anello fosse quale). Ora ce n'e' una sola, dentro il grafico. -->
             </div>
 
             <!-- Right: Results table -->
@@ -764,7 +813,7 @@
                 <span id="velChartTitle">Velocit&agrave; (mm/&deg;)</span>
                 <button class="btn-zoom-reset" onclick="if(velocityChart)velocityChart.resetZoom();">&circlearrowright; Reset Zoom</button>
             </div>
-            <canvas id="velocityCanvas"></canvas>
+            <div class="kin-chart-canvas"><canvas id="velocityCanvas"></canvas></div>
         </div>
 
         <!-- Acceleration chart -->
@@ -773,7 +822,7 @@
                 <span id="accChartTitle">Accelerazione (mm/&deg;&sup2;)</span>
                 <button class="btn-zoom-reset" onclick="if(accelerationChart)accelerationChart.resetZoom();">&circlearrowright; Reset Zoom</button>
             </div>
-            <canvas id="accelerationCanvas"></canvas>
+            <div class="kin-chart-canvas"><canvas id="accelerationCanvas"></canvas></div>
         </div>
 
         <!-- Jerk chart -->
@@ -782,7 +831,7 @@
                 <span id="jerkChartTitle">Jerk (mm/&deg;&sup3;)</span>
                 <button class="btn-zoom-reset" onclick="if(jerkChart)jerkChart.resetZoom();">&circlearrowright; Reset Zoom</button>
             </div>
-            <canvas id="jerkCanvas"></canvas>
+            <div class="kin-chart-canvas"><canvas id="jerkCanvas"></canvas></div>
         </div>
 
         <!-- Force chart (NEW): F_spring vs F_inertia -->
@@ -791,10 +840,10 @@
                 <span id="forceChartTitle">Forze treno valvole (N) — F. molla vs F. inerzia @ RPM</span>
                 <button class="btn-zoom-reset" onclick="if(forceChart)forceChart.resetZoom();">&circlearrowright; Reset Zoom</button>
             </div>
-            <canvas id="forceCanvas"></canvas>
+            <div class="kin-chart-canvas kin-chart-alto"><canvas id="forceCanvas"></canvas></div>
             <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.4;">
-                Quando F. inerzia (linea continua) supera F. molla (tratteggiata) la valvola perde il contatto con la camma (cam float / valve toss).
-                L'incrocio individua il regime critico.
+                Quando la forza d inerzia (linea continua) supera la forza della molla (tratteggiata) la valvola perde il contatto con la camma (distacco).
+                Il grafico e tracciato AL REGIME indicato nel titolo: mostra dove e di quanto manca il margine a quel regime, non il limite in giri. Il regime di distacco si ottiene riscalando l inerzia col quadrato dei giri ed e riportato in <b>Distacco valvola</b>.
             </div>
         </div>
 
@@ -804,11 +853,11 @@
                 <span id="complianceChartTitle">Compliance: alzata cam (imposta) vs valvola reale (RK4)</span>
                 <button class="btn-zoom-reset" onclick="if(complianceChart)complianceChart.resetZoom();">&circlearrowright; Reset Zoom</button>
             </div>
-            <canvas id="complianceCanvas"></canvas>
+            <div class="kin-chart-canvas kin-chart-alto"><canvas id="complianceCanvas"></canvas></div>
             <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.4;">
                 Linea sottile = cam imposta dal profilo (calcolo statico).
                 Linea grossa = posizione effettiva valvola simulata dal solver RK4.
-                Zona rossa = <b>valve float</b>: la valvola perde contatto con la cam (gap &gt; 0).
+                Zona rossa = <b>perdita di contatto camma&ndash;valvola</b> (valve float): la valvola non segue piu la camma (gap &gt; 0).
                 Il picco rosso indica la dinamica più sfavorevole.
             </div>
         </div>
@@ -822,7 +871,7 @@
                     <span class="result-value cyan" id="resVelOpenIn">-</span>
                 </div>
                 <div class="result-row">
-                    <span class="result-label">Vel. di appoggio in chiusura <span class="help-icon" data-tip="<strong>Velocit&agrave; di appoggio in chiusura</strong>Con che velocit&agrave; la valvola torna sulla sede. Pi&ugrave; &egrave; alta, pi&ugrave; martella la sede: &egrave; la voce che pi&ugrave; incide sulla durata di sede e valvola.">?</span></span>
+                    <span class="result-label">Vel. di appoggio sulla sede <span class="help-icon" data-tip="<strong>Velocit&agrave; di appoggio sulla sede</strong>Con che velocit&agrave; la valvola arriva sulla sede: velocit&agrave; <b>interpolata nel punto di chiusura</b> (l attraversamento della soglia di durata), non il massimo del fianco. Pi&ugrave; &egrave; alta, pi&ugrave; la valvola martella la sede: &egrave; la voce che pi&ugrave; incide sulla durata di sede e valvola. Passa il mouse sul valore per vedere anche il massimo sul fianco di chiusura, che avviene lontano dalla sede.">?</span></span>
                     <span class="result-value cyan" id="resVelCloseIn">-</span>
                 </div>
                 <div class="result-row">
@@ -845,7 +894,7 @@
                     <span class="result-value red" id="resVelOpenEx">-</span>
                 </div>
                 <div class="result-row">
-                    <span class="result-label">Vel. di appoggio in chiusura <span class="help-icon" data-tip="<strong>Velocit&agrave; di appoggio in chiusura</strong>Con che velocit&agrave; la valvola torna sulla sede. Pi&ugrave; &egrave; alta, pi&ugrave; martella la sede: &egrave; la voce che pi&ugrave; incide sulla durata di sede e valvola.">?</span></span>
+                    <span class="result-label">Vel. di appoggio sulla sede <span class="help-icon" data-tip="<strong>Velocit&agrave; di appoggio sulla sede</strong>Con che velocit&agrave; la valvola arriva sulla sede: velocit&agrave; <b>interpolata nel punto di chiusura</b> (l attraversamento della soglia di durata), non il massimo del fianco. Pi&ugrave; &egrave; alta, pi&ugrave; la valvola martella la sede: &egrave; la voce che pi&ugrave; incide sulla durata di sede e valvola. Passa il mouse sul valore per vedere anche il massimo sul fianco di chiusura, che avviene lontano dalla sede.">?</span></span>
                     <span class="result-value red" id="resVelCloseEx">-</span>
                 </div>
                 <div class="result-row">
@@ -1102,10 +1151,233 @@ function runComplianceModel(curve, rpm, params, modelVal) {
     return simulateCompliance2DOF(curve, rpm, full);
 }
 
+// =====================================================================
+// AUDIT v3.4.3 P1-11 — job cooperativo per gli strumenti Race.
+//
+// Prima: ogni strumento faceva `setTimeout(fn, 50)` e poi calcolava tutto in
+// un colpo solo sul main thread. Un solo repaint prima di partire, poi la
+// pagina restava sorda finche' non finiva: niente frecce, niente input,
+// niente scroll, niente modo di fermarlo.
+// Misurato su questa macchina (node, stessa libreria):
+//     sweep RPM 1-DOF        12 simulazioni    36 ms
+//     esplora molla 1-DOF    88 simulazioni    84 ms
+//     mappa 3D 1-DOF        384 simulazioni   300 ms
+//     esplora molla 3-DOF    88 simulazioni  1.321 ms
+//     mappa 3D 3-DOF        384 simulazioni  5.606 ms   <-- 5,6 secondi
+// Il PC dell'officina e' piu' lento. La soglia dichiarata e' 100 ms.
+//
+// Soluzione: calcolo cooperativo a fette. Il lavoro e' un ciclo su punti
+// indipendenti, quindi si esegue per un budget di millisecondi e poi si cede
+// il controllo al browser. Non un Web Worker: la UI puo' girare anche da
+// file:// (dove i worker sono bloccati dal CORS) e il worker richiederebbe di
+// duplicare la libreria matematica e serializzare le curve a ogni giro. A
+// fette si ottiene lo stesso risultato, con in piu' punti di annullamento
+// esatti e una barra di avanzamento vera.
+// =====================================================================
+var BUDGET_FETTA_MS = 20;    // sotto la soglia di percezione, con margine
+var _job = null;             // { nome, annullato, seq }
+var _jobSeq = 0;
+
+// Come si cede il controllo fra una fetta e l'altra: setTimeout(0).
+//
+// E' stato provato anche MessageChannel, che non subisce il limite di 4 ms
+// sui timer annidati e sembrava quindi la scelta migliore. Misurato con un
+// A/B controllato (3 giri alternati per modo, stesso carico, 144 punti a
+// 3 masse per giro, sonda della latenza a setTimeout):
+//                     durata      latenza p50   latenza p95
+//     setTimeout      5.873 ms      39,7 ms       91,8 ms
+//     MessageChannel  5.226 ms      94,3 ms      121,2 ms
+// MessageChannel e' l'11% piu' veloce ma i suoi messaggi scavalcano i task
+// dei timer: il resto della pagina viene servito PEGGIO, e la latenza p95
+// supera i 100 ms che sono il criterio di accettazione. Qui conta la
+// reattivita', non il tempo totale: si resta su setTimeout.
+// (La sonda misura la latenza dei timer, non quella vera degli eventi di
+// input, che il browser serve a priorita' piu' alta di entrambi: e' una
+// stima per eccesso.)
+function cediControllo(fn) {
+    return setTimeout(fn, 0);
+}
+
+function jobInCorso() { return !!_job; }
+
+// Annulla il job in corso, se c'e'. Idempotente: chiamarla senza job non fa
+// nulla. Usata dal pulsante Annulla, da Reset e da una nuova analisi.
+function annullaJob(motivo) {
+    if (!_job) return false;
+    _job.annullato = true;
+    if (_job.timer) { clearTimeout(_job.timer); _job.timer = null; }
+    var nome = _job.nome;
+    _job = null;
+    mostraAvanzamento(null);
+    abilitaStrumentiRace(true);
+    var body = document.getElementById('raceResultsBody');
+    if (body) body.innerHTML = '<i style="color:var(--text-muted);">' + nome + ': ' +
+        (motivo || 'annullato') + '. Nessun risultato prodotto.</i>';
+    return true;
+}
+window.annullaJob = annullaJob;
+
+// Barra di avanzamento REALE (fatti/totale), con pulsante Annulla.
+// Passare null la rimuove.
+function mostraAvanzamento(stato) {
+    var host = document.getElementById('raceProgress');
+    if (!stato) { if (host) host.style.display = 'none'; return; }
+    if (!host) return;
+    host.style.display = '';
+    var pct = stato.totale > 0 ? Math.round(100 * stato.fatti / stato.totale) : 0;
+    var barra = document.getElementById('raceProgressBar');
+    var testo = document.getElementById('raceProgressText');
+    if (barra) barra.style.width = pct + '%';
+    if (testo) testo.textContent = stato.nome + ' — ' + stato.fatti + ' / ' + stato.totale + ' (' + pct + '%)';
+}
+
+// Abilita/disabilita i pulsanti degli strumenti: protezione doppio clic
+// visibile, non solo un rifiuto silenzioso.
+var BOTTONI_RACE = ['btnSweepRpm', 'btnOptimizeSpring', 'btnSpringMap', 'btnSweep3D',
+                    'btnSurgeSweep', 'btnRaceReport'];
+function abilitaStrumentiRace(on) {
+    BOTTONI_RACE.forEach(function (id) {
+        var b = document.getElementById(id);
+        if (b) b.disabled = !on || !lastAnalysis;
+    });
+}
+
+// Esegue un iteratore { totale, passo(i), fine() } a fette, cedendo il
+// controllo fra una fetta e l'altra. Ritorna una Promise che si risolve col
+// valore di fine(), oppure con null se il job e' stato annullato.
+function eseguiAFette(nome, iter) {
+    if (_job) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Un calcolo e gia in corso',
+            body: '<b>' + _job.nome + '</b> sta ancora girando. Aspetta la fine o premi <b>Annulla</b>.',
+            duration: 4000 });
+        return Promise.resolve(null);
+    }
+    var seq = ++_jobSeq;
+    _job = { nome: nome, annullato: false, timer: null, seq: seq };
+    abilitaStrumentiRace(false);
+    mostraAvanzamento({ nome: nome, fatti: 0, totale: iter.totale });
+
+    return new Promise(function (risolvi, rifiuta) {
+        var i = 0;
+        function fetta() {
+            if (!_job || _job.seq !== seq || _job.annullato) { risolvi(null); return; }
+            _job.timer = null;
+            var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+            try {
+                while (i < iter.totale) {
+                    iter.passo(i);
+                    i++;
+                    var ora = (window.performance && performance.now) ? performance.now() : Date.now();
+                    if (ora - t0 >= BUDGET_FETTA_MS) break;
+                }
+            } catch (e) {
+                _job = null; mostraAvanzamento(null); abilitaStrumentiRace(true);
+                rifiuta(e); return;
+            }
+            mostraAvanzamento({ nome: nome, fatti: i, totale: iter.totale });
+            if (i < iter.totale) {
+                // setTimeout(0) e' il punto in cui il browser puo' finalmente
+                // ridisegnare e consegnare tasti, frecce e scroll.
+                _job.timer = cediControllo(fetta);
+                return;
+            }
+            var esito;
+            try { esito = iter.fine(); }
+            catch (e2) { _job = null; mostraAvanzamento(null); abilitaStrumentiRace(true); rifiuta(e2); return; }
+            _job = null;
+            mostraAvanzamento(null);
+            abilitaStrumentiRace(true);
+            risolvi(esito);
+        }
+        _job.timer = cediControllo(fetta);
+    });
+}
+
+// =====================================================================
+// AUDIT v3.4.3 P1-11 — una sola guardia per export e strumenti.
+//
+// Gli strumenti Race leggevano una miscela di lastAnalysis e DOM corrente e
+// NON chiamavano la guardia degli export: bastava cambiare follower, angolo o
+// modello di compliance e lanciare la mappa per ottenere numeri nati meta' dai
+// parametri vecchi e meta' da quelli nuovi, senza un avviso.
+//
+// requireFreshAnalysis() restituisce una ISTANTANEA CONGELATA oppure null.
+// Chi la riceve lavora solo su quella: niente letture dal DOM a meta' calcolo.
+// =====================================================================
+function requireFreshAnalysis(nomeStrumento) {
+    var che = nomeStrumento || 'Questa operazione';
+    if (!lastAnalysis) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Analisi mancante',
+            body: che + ' richiede un\'analisi: premi <b>Analizza</b>.', duration: 3500 });
+        return null;
+    }
+    if (_analysisStale) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Analisi non aggiornata',
+            body: 'Hai cambiato parametri che modificano la curva. Premi <b>Analizza</b> prima di continuare, ' +
+                  'altrimenti ' + che.toLowerCase() + ' mescolerebbe dati nuovi e vecchi.', duration: 6000 });
+        return null;
+    }
+    // Cintura oltre alle bretelle: confronto dell'hash di TUTTI gli input
+    // influenti, che intercetta anche una via non ascoltata dai listener.
+    if (lastAnalysis.parameterHash && lastAnalysis.parameterHash !== paramsHash()) {
+        markAnalysisStale();
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Parametri cambiati',
+            body: 'Gli input attuali non corrispondono a quelli dell\'ultima analisi (hash diverso). ' +
+                  'Premi <b>Analizza</b> prima di continuare.', duration: 6000 });
+        return null;
+    }
+    return istantaneaAnalisi();
+}
+
+// Copia congelata dello snapshot. Le curve vengono copiate: un retune live che
+// riscrive lastAnalysis mentre un job e' in corso non puo' cambiare i dati
+// sotto i piedi del calcolo (e il risultato resta riferito all'analisi giusta,
+// identificata da analysisId + parameterHash).
+function istantaneaAnalisi() {
+    var L = lastAnalysis;
+    var curve = {};
+    ['anlIn', 'anlEx', 'valveLiftIn', 'valveLiftEx'].forEach(function (k) {
+        var a = L.arrays && L.arrays[k];
+        curve[k] = (a && a.slice) ? a.slice() : a;
+    });
+    var ist = {
+        analysisId: L.analysisId,
+        parameterHash: L.parameterHash,
+        inputs: Object.freeze(Object.assign({}, L.inputs)),
+        results: Object.freeze(Object.assign({}, L.results)),
+        arrays: Object.freeze(curve)
+    };
+    return Object.freeze(ist);
+}
+
+// Parametri della dinamica presi dall'ISTANTANEA, non dal DOM (P1-11).
+// Includono anche i termini 2/3-DOF, che runComplianceModel altrimenti
+// rileggerebbe dai campi correnti.
+function parametriDinamica(ist, extra) {
+    var I = ist.inputs;
+    var p = {
+        massEqG:      I.massEqIntake,
+        kSpringN_mm:  I.springK,
+        F0N:          I.springPreload,
+        kTrainN_mm:   I.kTrain,
+        dampingRatio: I.dampingRatio,
+        massEqIntermediateG: I.massEqIntermediate,
+        kPushrodN_mm:        I.kPushrod,
+        massSeatG:           I.massSeat,
+        kSeatN_mm:           I.kSeat,
+        kPivotN_mm:          I.kPivot
+    };
+    return Object.assign(p, extra || {});
+}
+
 // Sweep RPM: simula compliance a N regimi diversi (1/2x..2x del target)
 // e ritorna una curva valveFloat(RPM). Identifica il punto critico
 // dove float supera la soglia di sicurezza (0.5 mm di default).
-function rpmSweep(camLift720, baseRpm, springParams, opts) {
+//
+// P1-11: forma a ITERATORE. Il corpo del ciclo esiste una volta sola; la
+// versione sincrona qui sotto lo esegue tutto d'un fiato (usata dai test in
+// node), la UI lo esegue a fette. Nessuna duplicazione della logica.
+function rpmSweepIter(camLift720, baseRpm, springParams, opts, modelVal) {
     var nPoints = (opts && opts.nPoints) || 12;
     var rpmMin  = (opts && opts.rpmMin) || baseRpm * 0.5;
     var rpmMax  = (opts && opts.rpmMax) || baseRpm * 2;
@@ -1114,86 +1386,140 @@ function rpmSweep(camLift720, baseRpm, springParams, opts) {
     var results = [];
     var criticalRpm = null;
     var nonConverged = 0;   // AUDIT DYN-01: punti non convergenti = non valutabili
-    for (var i = 0; i < nPoints; i++) {
-        var rpm = rpmMin + (rpmMax - rpmMin) * i / (nPoints - 1);
-        var valve = runComplianceModel(camLift720, rpm, springParams);   // audit APP-02: rispetta il modello scelto
-        var conv = valve.status ? valve.status === 'CONVERGED' : valve.converged !== false;
-        var fl = detectValveFloat(camLift720, valve);
-        results.push({ rpm: rpm, float: fl.maxGap, floatDeg: fl.gapIdx - 360, converged: conv });
-        if (!conv) { nonConverged++; continue; }   // MAI usare un punto non convergente come soluzione
-        if (!criticalRpm && fl.maxGap > floatThreshold) criticalRpm = rpm;
-    }
-    return { points: results, criticalRpm: criticalRpm, threshold: floatThreshold,
-             nonConvergedCount: nonConverged, evaluable: nonConverged === 0 };
+    return {
+        totale: nPoints,
+        passo: function (i) {
+            var rpm = rpmMin + (rpmMax - rpmMin) * i / (nPoints - 1);
+            var valve = runComplianceModel(camLift720, rpm, springParams, modelVal);   // audit APP-02
+            var conv = valve.status ? valve.status === 'CONVERGED' : valve.converged !== false;
+            var fl = detectValveFloat(camLift720, valve);
+            results.push({ rpm: rpm, float: fl.maxGap, floatDeg: fl.gapIdx - 360, converged: conv });
+            if (!conv) { nonConverged++; return; }   // MAI usare un punto non convergente come soluzione
+            if (!criticalRpm && fl.maxGap > floatThreshold) criticalRpm = rpm;
+        },
+        fine: function () {
+            return { points: results, criticalRpm: criticalRpm, threshold: floatThreshold,
+                     nonConvergedCount: nonConverged, evaluable: nonConverged === 0 };
+        }
+    };
 }
-
+function eseguiTutto(iter) {
+    for (var i = 0; i < iter.totale; i++) iter.passo(i);
+    return iter.fine();
+}
+function rpmSweep(camLift720, baseRpm, springParams, opts) {
+    return eseguiTutto(rpmSweepIter(camLift720, baseRpm, springParams, opts));
+}
 // Optimizer molla: griglia di ricerca (k, F0) per minimizzare k+F0 mantenendo
-// valveFloat < threshold al RPM target. Usa una scansione coarse poi fine.
-function springOptimizer(camLift720, targetRpm, baseParams, opts) {
+// valveFloat < threshold al RPM target.
+// P1-11: forma a iteratore (vedi rpmSweepIter). La griglia bidimensionale
+// nK x nF0 viene percorsa con un indice unico i = ik*nF0 + jf.
+function springOptimizerIter(camLift720, targetRpm, baseParams, opts, modelVal) {
     var threshold = (opts && opts.threshold) || 0.1;   // mm float ammesso
     var kRange    = (opts && opts.kRange)    || [20, 400];   // N/mm
     var F0Range   = (opts && opts.F0Range)   || [100, 1500]; // N
     var nK = 11, nF0 = 8;  // 88 combinazioni
 
-    var best = null;  // {k, F0, maxFloat, costScore}
+    var best = null;  // {k, F0, maxFloat, caricoMaxN, caricoChiusaN}
     var skippedNonConverged = 0;   // AUDIT DYN-01: candidate scartate perche non convergenti
-    for (var i = 0; i < nK; i++) {
-        var k = kRange[0] + (kRange[1] - kRange[0]) * i / (nK - 1);
-        for (var j = 0; j < nF0; j++) {
+    // P2-04: alzata massima del comando, per il carico molla a piena alzata.
+    // E' un'APPROSSIMAZIONE dichiarata: il solver integra la posizione reale
+    // della valvola, che per la cedevolezza del treno differisce dalla camma e
+    // in distacco puo' superarla. Come criterio di ORDINAMENTO fra molle e'
+    // adeguato (l'errore e' lo stesso per tutte le candidate); il numero
+    // mostrato all'utente e' etichettato come stima, non come carico misurato.
+    var liftMax = 0;
+    for (var _i = 1; _i <= 720; _i++) {
+        var _v = Number(camLift720[_i]);
+        if (isFinite(_v) && _v > liftMax) liftMax = _v;
+    }
+    return {
+        totale: nK * nF0,
+        passo: function (idx) {
+            var i = Math.floor(idx / nF0), j = idx % nF0;
+            var k  = kRange[0] + (kRange[1] - kRange[0]) * i / (nK - 1);
             var F0 = F0Range[0] + (F0Range[1] - F0Range[0]) * j / (nF0 - 1);
             var p = Object.assign({}, baseParams, { kSpringN_mm: k, F0N: F0 });
-            var valve = runComplianceModel(camLift720, targetRpm, p);   // audit APP-02
+            var valve = runComplianceModel(camLift720, targetRpm, p, modelVal);   // audit APP-02
             // AUDIT DYN-01: una simulazione non convergente NON e una candidata
             var _conv = valve.status ? valve.status === 'CONVERGED' : valve.converged !== false;
-            if (!_conv) { skippedNonConverged++; continue; }
+            if (!_conv) { skippedNonConverged++; return; }
             var fl = detectValveFloat(camLift720, valve);
             if (fl.maxGap < threshold) {
-                // Cost: combinazione di k (più rigida = più coppia richiesta + più
-                // attrito) e F0 (precarico). Normalizzo entrambi su 0..1.
-                var kNorm  = (k - kRange[0]) / (kRange[1] - kRange[0]);
-                var F0Norm = (F0 - F0Range[0]) / (F0Range[1] - F0Range[0]);
-                var cost = kNorm + F0Norm;  // somma pesata uguale
-                if (!best || cost < best.costScore) {
-                    best = { k: k, F0: F0, maxFloat: fl.maxGap, costScore: cost };
+                // AUDIT v3.4.3 P2-04 — costo in NEWTON, non un punteggio.
+                // Prima: cost = kNorm + F0Norm, cioe' la somma di due numeri
+                // normalizzati sui bordi del range cercato. Due difetti: non
+                // e' una grandezza fisica (il pulsante prometteva "la molla
+                // piu' leggera", che quel numero non misura) e cambia se si
+                // allarga il range, a parita' di molle confrontate.
+                // Ora si ordina per CARICO A PIENA ALZATA, che e' la forza che
+                // la molla impone davvero al treno:  F = F0 + k*L.
+                // A pari carico massimo si preferisce il precarico minore:
+                // meno forza a valvola chiusa = meno attrito ai bassi regimi.
+                var caricoMax = F0 + k * liftMax;          // N
+                if (!best || caricoMax < best.caricoMaxN - 1e-9 ||
+                    (Math.abs(caricoMax - best.caricoMaxN) <= 1e-9 && F0 < best.caricoChiusaN)) {
+                    best = { k: k, F0: F0, maxFloat: fl.maxGap,
+                             caricoMaxN: caricoMax, caricoChiusaN: F0,
+                             costScore: caricoMax };   // nome storico conservato
                 }
             }
+        },
+        // AUDIT DYN-01: il chiamante deve sapere quante candidate erano
+        // NON VALUTABILI (best === null con skipped > 0 NON significa
+        // "nessuna molla funziona": significa "non lo sappiamo per tutte").
+        fine: function () {
+            return { best: best, skippedNonConverged: skippedNonConverged, tested: nK * nF0 };
         }
-    }
-    // AUDIT DYN-01: il chiamante deve sapere quante candidate erano
-    // NON VALUTABILI (best === null con skipped > 0 NON significa
-    // "nessuna molla funziona": significa "non lo sappiamo per tutte").
-    return { best: best, skippedNonConverged: skippedNonConverged, tested: nK * nF0 };
+    };
+}
+function springOptimizer(camLift720, targetRpm, baseParams, opts) {
+    return eseguiTutto(springOptimizerIter(camLift720, targetRpm, baseParams, opts));
 }
 
-// UI handlers
+// =====================================================================
+// UI handlers degli strumenti Race.
+// AUDIT P1-11: tutti hanno la stessa impalcatura.
+//   1. requireFreshAnalysis() -> istantanea congelata, oppure stop;
+//   2. i parametri vengono TUTTI dall'istantanea, mai dal DOM a meta' calcolo;
+//   3. eseguiAFette() -> pagina reattiva, avanzamento, Annulla, un job solo.
+// Prima ogni strumento leggeva kTrain/dampingRatio/modello dai campi correnti
+// mentre le curve venivano dall'analisi precedente: bastava cambiare il
+// modello di compliance e lanciare la mappa per ottenere numeri meta' nuovi e
+// meta' vecchi, senza un avviso.
+// =====================================================================
+function preparaBoxRace(titolo, sottotitolo) {
+    var box = document.getElementById('raceResultsBox');
+    ['springMapCanvas', 'springMapLegend', 'sweep3dCanvas', 'sweep3dLegend',
+     'surgeSweepCanvas', 'surgeSweepLegend'].forEach(function (id) {
+        var el = document.getElementById(id); if (el) el.style.display = 'none';
+    });
+    document.getElementById('raceResultsTitle').textContent = titolo;
+    document.getElementById('raceResultsBody').innerHTML = '<i>' + sottotitolo + '</i>';
+    if (box) box.style.display = '';
+    return box;
+}
+function erroreRace(e) {
+    var body = document.getElementById('raceResultsBody');
+    if (body) body.innerHTML = '<span style="color:var(--danger);">Errore: ' + (e && e.message ? e.message : e) + '</span>';
+}
+
 function runRpmSweep() {
-    if (!lastAnalysis || !lastAnalysis.arrays) return;
-    var box   = document.getElementById('raceResultsBox');
+    var ist = requireFreshAnalysis('Lo sweep RPM');   // P1-11: guardia unica
+    if (!ist || !ist.arrays) return;
+    if (!guardiaStrumentiMolla('Sweep RPM')) return;   // P1-07
     var title = document.getElementById('raceResultsTitle');
     var body  = document.getElementById('raceResultsBody');
-    title.textContent = 'Sweep RPM in corso...';
-    body.innerHTML = '<i>Simulazione di 12 regimi, ~3-5 secondi.</i>';
-    var cv1 = document.getElementById('springMapCanvas'); if (cv1) cv1.style.display = 'none';
-    var c3a = document.getElementById('sweep3dCanvas'); if (c3a) c3a.style.display = 'none';
-    var ssa = document.getElementById('surgeSweepCanvas'); if (ssa) ssa.style.display = 'none';
-    var ssal = document.getElementById('surgeSweepLegend'); if (ssal) ssal.style.display = 'none';
-    var l3a = document.getElementById('sweep3dLegend'); if (l3a) l3a.style.display = 'none';
-    var lg1 = document.getElementById('springMapLegend'); if (lg1) lg1.style.display = 'none';
-    box.style.display = '';
+    preparaBoxRace('Sweep RPM in corso...', 'Simulazione di 12 regimi. La pagina resta utilizzabile; puoi annullare.');
 
-    setTimeout(function () {
+    var inp = ist.inputs;
+    var anlIn = ist.arrays.anlIn;
+    var springParams = parametriDinamica(ist);
+    var iter = rpmSweepIter(anlIn, inp.rpm, springParams, { nPoints: 12 }, inp.complianceModelVal);
+
+    eseguiAFette('Sweep RPM', iter).then(function (result) {
+        if (!result) return;   // annullato
         try {
-            var inp = lastAnalysis.inputs;
-            var anlIn = lastAnalysis.arrays.anlIn;
-            var springParams = {
-                massEqG: inp.massEqIntake,
-                kTrainN_mm: Number(document.getElementById("kTrain").value) || 5000,
-                kSpringN_mm: inp.springK,
-                F0N: inp.springPreload,
-                dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
-            };
-            var result = rpmSweep(anlIn, inp.rpm, springParams, { nPoints: 12 });
-
             // Render tabella + verdict
             var rows = result.points.map(function (p) {
                 // AUDIT DYN-01: punto non convergente = diagnostico, non un dato
@@ -1230,45 +1556,35 @@ function runRpmSweep() {
                     : (result.criticalRpm ? ('Critico ~' + Math.round(result.criticalRpm) + ' rpm') : 'Nessun valve float significativo nel range testato'),
                 duration: 4500
             });
-        } catch (e) {
-            body.innerHTML = '<span style="color:var(--danger);">Errore: ' + e.message + '</span>';
-        }
-    }, 50);
+        } catch (e) { erroreRace(e); }
+    }, erroreRace);
 }
 
 function runSpringOptimizer() {
-    if (!lastAnalysis || !lastAnalysis.arrays) return;
-    var box   = document.getElementById('raceResultsBox');
+    var ist = requireFreshAnalysis('L\'esplorazione della molla');   // P1-11
+    if (!ist || !ist.arrays) return;
+    if (!guardiaStrumentiMolla('Esplorazione molla')) return;   // P1-07
     var title = document.getElementById('raceResultsTitle');
     var body  = document.getElementById('raceResultsBody');
-    title.textContent = 'Esplorazione molla in corso...';
-    body.innerHTML = '<i>Esplora 88 combinazioni (k, F&#8320;) rispetto al valve float, ~5-10 secondi.</i>';
-    var cv2 = document.getElementById('springMapCanvas'); if (cv2) cv2.style.display = 'none';
-    var c3b = document.getElementById('sweep3dCanvas'); if (c3b) c3b.style.display = 'none';
-    var ssb = document.getElementById('surgeSweepCanvas'); if (ssb) ssb.style.display = 'none';
-    var ssbl = document.getElementById('surgeSweepLegend'); if (ssbl) ssbl.style.display = 'none';
-    var l3b = document.getElementById('sweep3dLegend'); if (l3b) l3b.style.display = 'none';
-    var lg2 = document.getElementById('springMapLegend'); if (lg2) lg2.style.display = 'none';
-    box.style.display = '';
+    preparaBoxRace('Esplorazione molla in corso...',
+        'Esplora 88 combinazioni (k, F&#8320;) rispetto al valve float. La pagina resta utilizzabile; puoi annullare.');
 
-    setTimeout(function () {
+    var inp = ist.inputs;
+    var anlIn = ist.arrays.anlIn;
+    var baseParams = parametriDinamica(ist);
+    // Range esteso per coprire camme race con accelerazioni alte.
+    // Soglia 0.3 mm = "valvola segue bene la cam senza bouncing
+    // significativo". Soglia 0.1 mm sarebbe "perfetta" ma quasi
+    // mai raggiungibile su camme race con alzata > 7 mm.
+    var iterOpt = springOptimizerIter(anlIn, inp.rpm, baseParams, {
+        threshold: 0.3,
+        kRange: [20, 400],      // fino a molle race rigide (300+ N/mm)
+        F0Range: [100, 1500]    // precarichi fino a 1500 N (race)
+    }, inp.complianceModelVal);
+
+    eseguiAFette('Esplorazione molla', iterOpt).then(function (optOut) {
+        if (!optOut) return;   // annullato
         try {
-            var inp = lastAnalysis.inputs;
-            var anlIn = lastAnalysis.arrays.anlIn;
-            var baseParams = {
-                massEqG: inp.massEqIntake,
-                kTrainN_mm: Number(document.getElementById("kTrain").value) || 5000,
-                dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
-            };
-            // Range esteso per coprire camme race con accelerazioni alte.
-            // Soglia 0.3 mm = "valvola segue bene la cam senza bouncing
-            // significativo". Soglia 0.1 mm sarebbe "perfetta" ma quasi
-            // mai raggiungibile su camme race con alzata > 7 mm.
-            var optOut = springOptimizer(anlIn, inp.rpm, baseParams, {
-                threshold: 0.3,
-                kRange: [20, 400],      // fino a molle race rigide (300+ N/mm)
-                F0Range: [100, 1500]    // precarichi fino a 1500 N (race)
-            });
             var result = optOut.best;   // AUDIT DYN-01: candidate non convergenti scartate
 
             title.textContent = 'Esplorazione molla — soglia float 0.3 mm @ ' + inp.rpm + ' rpm';
@@ -1287,7 +1603,7 @@ function runSpringOptimizer() {
                 body.innerHTML = '<b style="color:var(--danger);">Nessuna combinazione trovata</b> nel range k=20..400 N/mm, F&#8320;=100..1500 N che mantenga il valve float sotto 0.3 mm al regime ' + inp.rpm + ' rpm.<br><br>' +
                                  'Possibili soluzioni:<br>' +
                                  '&bull; Riduci la massa equivalente del treno (' + inp.massEqIntake + ' g attuali)<br>' +
-                                 '&bull; Aumenta la rigidezza treno (' + (Number(document.getElementById("kTrain").value) || 5000) + ' N/mm attuali)<br>' +
+                                 '&bull; Aumenta la rigidezza treno (' + inp.kTrain + ' N/mm attuali)<br>' +
                                  '&bull; Considera RPM target inferiori<br>' +
                                  '&bull; Allarga il range cercato (modifica kRange/F0Range nel codice)';
                 if (window.cammesToast) window.cammesToast({
@@ -1307,7 +1623,22 @@ function runSpringOptimizer() {
                       '<div style="color:var(--text-muted);">F&#8320; precarico:</div><div><b>' + result.F0.toFixed(0) + ' N</b> ' +
                       '<span style="color:' + (diffF0 >= 0 ? 'var(--warning)' : 'var(--success)') + ';">(' + (diffF0 >= 0 ? '+' : '') + diffF0.toFixed(0) + ' vs attuale)</span></div>' +
                       '<div style="color:var(--text-muted);">Float max:</div><div><b style="color:var(--success);">' + result.maxFloat.toFixed(3) + ' mm</b> <span style="color:var(--text-muted);">(margine ' + margin.toFixed(3) + ' mm alla soglia)</span></div>' +
+                      // P2-04: il criterio di scelta, in newton e in chiaro.
+                      // Prima l'ordinamento usava un punteggio adimensionale
+                      // che nessuno vedeva e che dipendeva dai bordi del range.
+                      '<div style="color:var(--text-muted);">Carico a piena alzata:</div><div><b>' +
+                        (isFinite(result.caricoMaxN) ? result.caricoMaxN.toFixed(0) : '-') + ' N</b> ' +
+                        '<span style="color:var(--text-muted);">(criterio di scelta: il pi&ugrave; basso fra le candidate valide; stima da F&#8320; + k&middot;alzata camma)</span></div>' +
+                      '<div style="color:var(--text-muted);">Carico a valvola chiusa:</div><div><b>' +
+                        (isFinite(result.caricoChiusaN) ? result.caricoChiusaN.toFixed(0) : '-') + ' N</b></div>' +
                     '</div>' +
+                    // P2-04: la griglia e' 11x8, quindi la candidata e' il nodo
+                    // piu' vicino, non l'ottimo continuo. Dichiararlo evita di
+                    // leggere "148,0 N/mm" come una specifica da ordinare.
+                    '<p style="margin-top:8px;font-size:11px;color:var(--text-muted);">' +
+                    'Griglia esplorata 11&times;8: i valori sono quantizzati a passi di circa <b>' +
+                      (((400 - 20) / 10)).toFixed(0) + ' N/mm</b> e <b>' + (((1500 - 100) / 7)).toFixed(0) +
+                      ' N</b>. La candidata &egrave; il nodo migliore della griglia, non un ottimo esatto.</p>' +
                     (optOut.skippedNonConverged > 0
                         ? '<p style="margin-top:8px;font-size:11px;color:var(--warning,orange);">&#9888; ' + optOut.skippedNonConverged +
                           ' combinazioni non convergenti sono state SCARTATE (non valutate), la candidata viene dalle sole simulazioni convergenti.</p>'
@@ -1322,14 +1653,14 @@ function runSpringOptimizer() {
                     duration: 6000
                 });
             }
-        } catch (e) {
-            body.innerHTML = '<span style="color:var(--danger);">Errore: ' + e.message + '</span>';
-        }
-    }, 50);
+        } catch (e) { erroreRace(e); }
+    }, erroreRace);
 }
 // Mappa molla: griglia 2D (k, F0) → valve float. Per ogni cella simula
 // compliance al RPM target. Ritorna {grid, kVals, F0Vals, minFloat, maxFloat}.
-function springMap(camLift720, targetRpm, baseParams, opts) {
+// P1-11: forma a iteratore (vedi rpmSweepIter). E' la piu' pesante: 16x14 =
+// 224 simulazioni, che col modello a 3 masse valgono da sole diversi secondi.
+function springMapIter(camLift720, targetRpm, baseParams, opts, modelVal) {
     var kRange  = (opts && opts.kRange)  || [20, 400];
     var F0Range = (opts && opts.F0Range) || [100, 1500];
     var nK  = (opts && opts.nK)  || 16;
@@ -1340,23 +1671,30 @@ function springMap(camLift720, targetRpm, baseParams, opts) {
     for (var iK = 0; iK < nK; iK++) kVals.push(kRange[0] + (kRange[1]-kRange[0])*iK/(nK-1));
     for (var iF = 0; iF < nF0; iF++) F0Vals.push(F0Range[0] + (F0Range[1]-F0Range[0])*iF/(nF0-1));
     var nonConverged = 0;   // AUDIT DYN-01: celle non valutabili
-    for (var jf = 0; jf < nF0; jf++) {
-        var row = [];
-        for (var jk = 0; jk < nK; jk++) {
+    return {
+        totale: nF0 * nK,
+        passo: function (idx) {
+            var jf = Math.floor(idx / nK), jk = idx % nK;
+            if (jk === 0) grid.push([]);
+            var row = grid[jf];
             var p = Object.assign({}, baseParams, { kSpringN_mm: kVals[jk], F0N: F0Vals[jf] });
-            var valve = runComplianceModel(camLift720, targetRpm, p);   // audit APP-02
+            var valve = runComplianceModel(camLift720, targetRpm, p, modelVal);   // audit APP-02
             // AUDIT DYN-01: cella non convergente = null (non un float "vero")
             var _conv = valve.status ? valve.status === 'CONVERGED' : valve.converged !== false;
-            if (!_conv) { row.push(null); nonConverged++; continue; }
+            if (!_conv) { row.push(null); nonConverged++; return; }
             var fl = detectValveFloat(camLift720, valve);
             row.push(fl.maxGap);
             if (fl.maxGap < minFloat) minFloat = fl.maxGap;
             if (fl.maxGap > maxFloat) maxFloat = fl.maxGap;
+        },
+        fine: function () {
+            return { grid: grid, kVals: kVals, F0Vals: F0Vals, minFloat: minFloat, maxFloat: maxFloat,
+                     nonConvergedCount: nonConverged };
         }
-        grid.push(row);
-    }
-    return { grid: grid, kVals: kVals, F0Vals: F0Vals, minFloat: minFloat, maxFloat: maxFloat,
-             nonConvergedCount: nonConverged };
+    };
+}
+function springMap(camLift720, targetRpm, baseParams, opts) {
+    return eseguiTutto(springMapIter(camLift720, targetRpm, baseParams, opts));
 }
 
 // Colore cella heatmap: verde (<0.1) → giallo (0.1-0.3) → rosso (>0.3)
@@ -1447,30 +1785,24 @@ function renderSpringMap(map, curK, curF0, opts) {
 }
 
 function runSpringMap() {
-    if (!lastAnalysis || !lastAnalysis.arrays) return;
-    var box   = document.getElementById('raceResultsBox');
+    var ist = requireFreshAnalysis('La mappa della molla');   // P1-11
+    if (!ist || !ist.arrays) return;
+    // P1-07: mancava. La mappa colora 224 celle in base a k, F0 e massa: con i
+    // valori di esempio sarebbe una figura riferita a una molla mai inserita.
+    if (!guardiaStrumentiMolla('Mappa molla')) return;
     var title = document.getElementById('raceResultsTitle');
     var body  = document.getElementById('raceResultsBody');
-    var canvas = document.getElementById('springMapCanvas');
-    title.textContent = 'Mappa molla k×F₀ in corso...';
-    body.innerHTML = '<i>Simulazione di 16×14 = 224 combinazioni, ~6-8 secondi.</i>';
-    if (canvas) canvas.style.display = 'none';
-    var c3c = document.getElementById('sweep3dCanvas'); if (c3c) c3c.style.display = 'none';
-    var l3c = document.getElementById('sweep3dLegend'); if (l3c) l3c.style.display = 'none';
-    var ssc = document.getElementById('surgeSweepCanvas'); if (ssc) ssc.style.display = 'none';
-    var sscl = document.getElementById('surgeSweepLegend'); if (sscl) sscl.style.display = 'none';
-    box.style.display = '';
+    preparaBoxRace('Mappa molla k×F₀ in corso...',
+        'Simulazione di 16×14 = 224 combinazioni. La pagina resta utilizzabile; puoi annullare.');
 
-    setTimeout(function () {
+    var inp = ist.inputs;
+    var anlIn = ist.arrays.anlIn;
+    var baseParams = parametriDinamica(ist);
+    var iterMap = springMapIter(anlIn, inp.rpm, baseParams, { nK: 16, nF0: 14 }, inp.complianceModelVal);
+
+    eseguiAFette('Mappa molla', iterMap).then(function (map) {
+        if (!map) return;   // annullato
         try {
-            var inp = lastAnalysis.inputs;
-            var anlIn = lastAnalysis.arrays.anlIn;
-            var baseParams = {
-                massEqG: inp.massEqIntake,
-                kTrainN_mm: Number(document.getElementById('kTrain').value) || 5000,
-                dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
-            };
-            var map = springMap(anlIn, inp.rpm, baseParams, { nK: 16, nF0: 14 });
             title.textContent = 'Mappa molla k×F₀ — valve float @ ' + inp.rpm + ' rpm (aspirazione)';
             // Conta celle sicure — AUDIT DYN-01: le celle non convergenti (null)
             // NON sono "sicure": sono non valutabili.
@@ -1489,10 +1821,8 @@ function runSpringMap() {
                       (map.nonConvergedCount > 0 ? ', ' + map.nonConvergedCount + ' non valutabili' : ''),
                 duration: 4000
             });
-        } catch (e) {
-            body.innerHTML = '<span style="color:var(--danger);">Errore: ' + e.message + '</span>';
-        }
-    }, 50);
+        } catch (e) { erroreRace(e); }
+    }, erroreRace);
 }
 
 // =============================================================
@@ -1500,19 +1830,29 @@ function runSpringMap() {
 // =============================================================
 // Spazza un range di regimi calcolando il surge ratio (ampiezza spire / corsa
 // valvola). I picchi rivelano i regimi di risonanza della molla.
-function surgeSweep(driveLift720, springParams, opts) {
+// P1-11: forma a iteratore (vedi rpmSweepIter).
+function surgeSweepIter(driveLift720, springParams, opts) {
     var rpmMin = (opts && opts.rpmMin) || 1500;
     var rpmMax = (opts && opts.rpmMax) || 12000;
     var n      = (opts && opts.n) || 36;
     var pts = [], worst = { rpm: 0, ratio: -1 };
-    for (var i = 0; i < n; i++) {
-        var rpm = rpmMin + (rpmMax - rpmMin) * i / (n - 1);
-        var r = simulateSpringSurge(driveLift720, rpm, springParams);
-        var ratio = isFinite(r.surgeRatio) ? r.surgeRatio : 5;
-        pts.push({ rpm: rpm, ratio: ratio });
-        if (ratio > worst.ratio) worst = { rpm: Math.round(rpm), ratio: ratio };
-    }
-    return { points: pts, worst: worst, freqHz: pts.length ? springSurgeFreqHz(springParams.kSpringN_mm, springParams.springMassG) : 0 };
+    return {
+        totale: n,
+        passo: function (i) {
+            var rpm = rpmMin + (rpmMax - rpmMin) * i / (n - 1);
+            var r = simulateSpringSurge(driveLift720, rpm, springParams);
+            var ratio = isFinite(r.surgeRatio) ? r.surgeRatio : 5;
+            pts.push({ rpm: rpm, ratio: ratio });
+            if (ratio > worst.ratio) worst = { rpm: Math.round(rpm), ratio: ratio };
+        },
+        fine: function () {
+            return { points: pts, worst: worst,
+                     freqHz: pts.length ? springSurgeFreqHz(springParams.kSpringN_mm, springParams.springMassG) : 0 };
+        }
+    };
+}
+function surgeSweep(driveLift720, springParams, opts) {
+    return eseguiTutto(surgeSweepIter(driveLift720, springParams, opts));
 }
 
 function renderSurgeSweep(sweep, curRpm) {
@@ -1566,35 +1906,33 @@ function renderSurgeSweep(sweep, curRpm) {
 }
 
 function runSurgeSweep() {
-    if (!lastAnalysis || !lastAnalysis.arrays) return;
-    var surgeSel = document.getElementById('surgeEnabled');
-    if (!surgeSel || surgeSel.value !== '1') {
+    var ist = requireFreshAnalysis('Lo sweep del surge');   // P1-11
+    if (!ist || !ist.arrays) return;
+    if (!guardiaStrumentiMolla('Sweep surge')) return;   // P1-07
+    // P1-11: lo stato del surge viene dall'ISTANTANEA, non dal selettore
+    // corrente: cosi' non si puo' accendere il surge dopo l'analisi e lanciare
+    // lo sweep su curve calcolate quando era spento.
+    if (!ist.results.surgeOn) {
         if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Surge OFF',
-            body: 'Attiva <b>Surge molla = ON</b> e ri-analizza prima di questo sweep.', duration: 4000 });
+            body: 'L\'ultima analisi &egrave; stata fatta con il surge spento. Attiva <b>Surge molla = ON</b> e ri-analizza prima di questo sweep.', duration: 5000 });
         return;
     }
-    var box = document.getElementById('raceResultsBox');
     var title = document.getElementById('raceResultsTitle');
     var body = document.getElementById('raceResultsBody');
-    // nascondi gli altri canvas
-    ['springMapCanvas', 'springMapLegend', 'sweep3dCanvas', 'sweep3dLegend'].forEach(function (id) {
-        var el = document.getElementById(id); if (el) el.style.display = 'none';
-    });
-    var sc = document.getElementById('surgeSweepCanvas'); if (sc) sc.style.display = 'none';
-    title.textContent = 'Surge vs RPM in corso...';
-    body.innerHTML = '<i>Simulazione del surge a 36 regimi, ~2 secondi.</i>';
-    box.style.display = '';
-    setTimeout(function () {
+    preparaBoxRace('Surge vs RPM in corso...',
+        'Simulazione del surge a 36 regimi. La pagina resta utilizzabile; puoi annullare.');
+
+    var inp = ist.inputs;
+    var anlIn = ist.arrays.anlIn;
+    var springParams = {
+        kSpringN_mm: inp.springK,
+        springMassG: inp.springMass,
+        springCoils: inp.springCoils,
+        dampingRatio: inp.dampingRatio
+    };
+    eseguiAFette('Sweep surge', surgeSweepIter(anlIn, springParams, {})).then(function (sweep) {
+        if (!sweep) return;   // annullato
         try {
-            var inp = lastAnalysis.inputs;
-            var anlIn = lastAnalysis.arrays.anlIn;
-            var springParams = {
-                kSpringN_mm: inp.springK,
-                springMassG: finiteOr(document.getElementById('springMass').value, 50),
-                springCoils: finiteOr(document.getElementById('springCoils').value, 12),
-                dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
-            };
-            var sweep = surgeSweep(anlIn, springParams, {});
             title.textContent = 'Surge vs RPM — risonanza molla (aspirazione)';
             var w = sweep.worst;
             var verdict = w.ratio > 1 ? '<b style="color:var(--danger);">surge critico</b>'
@@ -1603,14 +1941,15 @@ function runSurgeSweep() {
             body.innerHTML = 'Picco surge ratio <b>' + w.ratio.toFixed(2) + '</b> a <b>' + w.rpm +
                 ' rpm</b> (' + verdict + '). Frequenza di surge ' + Math.round(sweep.freqHz) + ' Hz.' +
                 // audit DYN-06: caveat testuale, il modello surge e' esplorativo/euristico
-                ' <em style="color:var(--text-muted);">(criterio esplorativo/euristico, non validato indipendentemente)</em>';
+                // audit P1-08: dichiarare sempre che e' preliminare, e su quale
+                // traiettoria (qui il profilo camma, non il moto valvola).
+                ' <em style="color:var(--text-muted);">STIMA PRELIMINARE — convergenza del surge non verificata; ' +
+                'pilotato dal profilo camma, sola aspirazione; criterio esplorativo/euristico, non validato indipendentemente.</em>';
             renderSurgeSweep(sweep, inp.rpm);
             if (window.cammesToast) window.cammesToast({ kind: w.ratio > 1 ? 'warn' : 'success',
                 title: 'Surge sweep completato', body: 'Picco ' + w.ratio.toFixed(2) + ' @ ' + w.rpm + ' rpm', duration: 4000 });
-        } catch (e) {
-            body.innerHTML = '<span style="color:var(--danger);">Errore: ' + e.message + '</span>';
-        }
-    }, 50);
+        } catch (e) { erroreRace(e); }
+    }, erroreRace);
 }
 window.runSurgeSweep = runSurgeSweep;
 
@@ -1624,7 +1963,10 @@ window.runSurgeSweep = runSurgeSweep;
 var _sweep3d = null;
 
 // Calcola la griglia 3D (nK×nF0×nRpm) di valve float riusando simulateCompliance.
-function sweep3D(camLift720, baseParams, opts) {
+// P1-11: forma a iteratore (vedi rpmSweepIter). La griglia tridimensionale
+// nK x nF0 x nRpm viene percorsa con un indice unico, nello stesso ordine del
+// ciclo annidato originale, cosi' l'array pts esce identico.
+function sweep3DIter(camLift720, baseParams, opts, modelVal) {
     var kRange   = (opts && opts.kRange)   || [20, 400];
     var F0Range  = (opts && opts.F0Range)  || [100, 1500];
     var rpmRange = (opts && opts.rpmRange) || [3000, 11000];
@@ -1636,29 +1978,36 @@ function sweep3D(camLift720, baseParams, opts) {
     for (var b = 0; b < nF0;  b++) F0Vals.push(F0Range[0] + (F0Range[1]-F0Range[0])   * b/(nF0-1));
     for (var c = 0; c < nRpm; c++) rpmVals.push(rpmRange[0] + (rpmRange[1]-rpmRange[0])* c/(nRpm-1));
     var pts = [], maxF = 0, nonConverged = 0;
-    for (var ik = 0; ik < nK; ik++) {
-        for (var jf = 0; jf < nF0; jf++) {
+    return {
+        totale: nK * nF0 * nRpm,
+        passo: function (idx) {
+            var ik = Math.floor(idx / (nF0 * nRpm));
+            var jf = Math.floor((idx % (nF0 * nRpm)) / nRpm);
+            var lr = idx % nRpm;
             var p = Object.assign({}, baseParams);
             p.kSpringN_mm = kVals[ik];
             p.F0N         = F0Vals[jf];
-            for (var lr = 0; lr < nRpm; lr++) {
-                var v  = runComplianceModel(camLift720, rpmVals[lr], p);   // audit APP-02
-                // AUDIT DYN-01: punto non convergente marcato, non un float "vero"
-                var _cv = v.status ? v.status === 'CONVERGED' : v.converged !== false;
-                var fl = _cv ? detectValveFloat(camLift720, v).maxGap : null;
-                if (_cv && fl > maxF) maxF = fl;
-                if (!_cv) nonConverged++;
-                pts.push({
-                    nx: (nK   > 1 ? ik/(nK-1)   : 0.5) * 2 - 1,
-                    ny: (nF0  > 1 ? jf/(nF0-1)  : 0.5) * 2 - 1,
-                    nz: (nRpm > 1 ? lr/(nRpm-1) : 0.5) * 2 - 1,
-                    k: kVals[ik], f0: F0Vals[jf], rpm: rpmVals[lr], float: fl, converged: _cv
-                });
-            }
+            var v  = runComplianceModel(camLift720, rpmVals[lr], p, modelVal);   // audit APP-02
+            // AUDIT DYN-01: punto non convergente marcato, non un float "vero"
+            var _cv = v.status ? v.status === 'CONVERGED' : v.converged !== false;
+            var fl = _cv ? detectValveFloat(camLift720, v).maxGap : null;
+            if (_cv && fl > maxF) maxF = fl;
+            if (!_cv) nonConverged++;
+            pts.push({
+                nx: (nK   > 1 ? ik/(nK-1)   : 0.5) * 2 - 1,
+                ny: (nF0  > 1 ? jf/(nF0-1)  : 0.5) * 2 - 1,
+                nz: (nRpm > 1 ? lr/(nRpm-1) : 0.5) * 2 - 1,
+                k: kVals[ik], f0: F0Vals[jf], rpm: rpmVals[lr], float: fl, converged: _cv
+            });
+        },
+        fine: function () {
+            return { pts: pts, kRange: kRange, F0Range: F0Range, rpmRange: rpmRange, maxFloat: maxF,
+                     nonConvergedCount: nonConverged };
         }
-    }
-    return { pts: pts, kRange: kRange, F0Range: F0Range, rpmRange: rpmRange, maxFloat: maxF,
-             nonConvergedCount: nonConverged };
+    };
+}
+function sweep3D(camLift720, baseParams, opts) {
+    return eseguiTutto(sweep3DIter(camLift720, baseParams, opts));
 }
 
 // Proietta un punto normalizzato (nx,ny,nz∈[-1,1]) sullo schermo dato
@@ -1764,30 +2113,23 @@ function _bindSweep3dDrag(canvas) {
 }
 
 function run3DSweep() {
-    if (!lastAnalysis || !lastAnalysis.arrays) return;
-    var box    = document.getElementById('raceResultsBox');
+    var ist = requireFreshAnalysis('Lo sweep 3D');   // P1-11
+    if (!ist || !ist.arrays) return;
+    if (!guardiaStrumentiMolla('Sweep 3D')) return;   // P1-07
     var title  = document.getElementById('raceResultsTitle');
     var body   = document.getElementById('raceResultsBody');
-    var mapC   = document.getElementById('springMapCanvas'); if (mapC) mapC.style.display = 'none';
-    var mapL   = document.getElementById('springMapLegend'); if (mapL) mapL.style.display = 'none';
     var canvas = document.getElementById('sweep3dCanvas');
     var legend = document.getElementById('sweep3dLegend');
-    title.textContent = 'Sweep 3D k×F₀×RPM in corso...';
-    body.innerHTML = '<i>Simulazione di 8×8×6 = 384 combinazioni, ~0.5 s.</i>';
-    if (canvas) canvas.style.display = 'none';
-    if (legend) legend.style.display = 'none';
-    box.style.display = '';
+    preparaBoxRace('Sweep 3D k×F₀×RPM in corso...',
+        'Simulazione di 8×8×6 = 384 combinazioni. La pagina resta utilizzabile; puoi annullare.');
 
-    setTimeout(function () {
+    var inp = ist.inputs;
+    var anlIn = ist.arrays.anlIn;
+    var baseParams = parametriDinamica(ist);
+
+    eseguiAFette('Sweep 3D', sweep3DIter(anlIn, baseParams, {}, inp.complianceModelVal)).then(function (data) {
+        if (!data) return;   // annullato
         try {
-            var inp = lastAnalysis.inputs;
-            var anlIn = lastAnalysis.arrays.anlIn;
-            var baseParams = {
-                massEqG: inp.massEqIntake,
-                kTrainN_mm: Number(document.getElementById('kTrain').value) || 5000,
-                dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
-            };
-            var data = sweep3D(anlIn, baseParams, {});
             _sweep3d = { data: data, az: 0.6, el: 0.5, curK: inp.springK, curF0: inp.springPreload,
                          dragging: false, lastX: 0, lastY: 0 };
             // AUDIT DYN-01: i punti non convergenti (float null) NON sono sicuri
@@ -1813,38 +2155,55 @@ function run3DSweep() {
                 kind: 'success', title: 'Sweep 3D pronto',
                 body: 'Trascina il grafico per ruotare la vista', duration: 3500
             });
-        } catch (e) {
-            body.innerHTML = '<span style="color:var(--danger);">Errore: ' + e.message + '</span>';
-        }
-    }, 50);
+        } catch (e) { erroreRace(e); }
+    }, erroreRace);
 }
 
 // Race report PDF dedicato: documento di analisi dinamica del treno
 // valvole. Esegue sweep RPM + optimizer + spring map e li impagina in
 // un PDF strutturato. Indipendente da exportPDF (che è la scheda completa).
 function exportRaceReport() {
-    if (exportBlockedByStale()) return;   // audit APP-01
-    if (!lastAnalysis || !lastAnalysis.arrays) return;
+    var ist = requireFreshAnalysis('Il Race report');   // P1-11: guardia unica
+    if (!ist || !ist.arrays) return;
+    if (!guardiaStrumentiMolla('Race report')) return;   // P1-07
     if (!window.jspdf || !window.jspdf.jsPDF) {
         if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'PDF non disponibile', body: 'jspdf non caricato.', duration: 4000 });
         return;
     }
-    if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Race report in elaborazione', body: 'Calcolo sweep + optimizer + mappa, ~15 secondi...', duration: 4000 });
+    var inp = ist.inputs, R = ist.results;
+    var anlIn = ist.arrays.anlIn;
+    var baseParams = parametriDinamica(ist);
+    preparaBoxRace('Race report in elaborazione...',
+        'Sweep RPM + esplorazione molla + mappa: 324 simulazioni in tre fasi. Puoi annullare.');
 
-    setTimeout(function () {
+    // AUDIT P1-11: le tre elaborazioni pesanti girano a fette, in sequenza.
+    // Prima erano concatenate dentro un unico setTimeout: 324 simulazioni di
+    // fila, fino a ~5 secondi col modello a 3 masse, con la pagina congelata e
+    // nessun modo di fermarsi.
+    eseguiAFette('Race report 1/3 — sweep RPM',
+        rpmSweepIter(anlIn, inp.rpm, Object.assign({}, baseParams,
+            { kSpringN_mm: inp.springK, F0N: inp.springPreload }), { nPoints: 12 }, inp.complianceModelVal))
+    .then(function (sweep) {
+        if (!sweep) return null;
+        return eseguiAFette('Race report 2/3 — esplorazione molla',
+            springOptimizerIter(anlIn, inp.rpm, baseParams,
+                { threshold: 0.3, kRange: [20, 400], F0Range: [100, 1500] }, inp.complianceModelVal))
+            .then(function (opt) { return opt ? { sweep: sweep, optOutR: opt } : null; });
+    })
+    .then(function (acc) {
+        if (!acc) return null;
+        return eseguiAFette('Race report 3/3 — mappa molla',
+            springMapIter(anlIn, inp.rpm, baseParams, { nK: 16, nF0: 14 }, inp.complianceModelVal))
+            .then(function (map) { return map ? { sweep: acc.sweep, optOutR: acc.optOutR, map: map } : null; });
+    })
+    .then(function (res) {
+        if (!res) return;   // annullato in una delle tre fasi
         try {
             var jsPDF = window.jspdf.jsPDF;
             var doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
             var pageW = doc.internal.pageSize.getWidth();
             var pageH = doc.internal.pageSize.getHeight();
             var margin = 14;
-            var inp = lastAnalysis.inputs, R = lastAnalysis.results;
-            var anlIn = lastAnalysis.arrays.anlIn;
-            var baseParams = {
-                massEqG: inp.massEqIntake,
-                kTrainN_mm: Number(document.getElementById('kTrain').value) || 5000,
-                dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
-            };
 
             // ===== Cover =====
             doc.setFillColor(20, 14, 28); doc.rect(0, 0, pageW, 42, 'F');
@@ -1876,7 +2235,7 @@ function exportRaceReport() {
 
             // ===== 2. Sweep RPM =====
             sect('Sweep RPM — valve float vs regime');
-            var sweep = rpmSweep(anlIn, inp.rpm, Object.assign({ kSpringN_mm: inp.springK, F0N: inp.springPreload }, baseParams), { nPoints: 12 });
+            var sweep = res.sweep;        // P1-11: gia calcolato a fette
             // Mini-tabella 2 colonne
             doc.setFontSize(8);
             var col2x = margin + 95;
@@ -1913,7 +2272,7 @@ function exportRaceReport() {
 
             // ===== 3. Esplorazione molla (AUDIT APP-03: non "ottimizzazione") =====
             sect('Esplorazione molla (solo valve float)');
-            var optOutR = springOptimizer(anlIn, inp.rpm, baseParams, { threshold: 0.3, kRange: [20,400], F0Range: [100,1500] });
+            var optOutR = res.optOutR;    // P1-11: gia calcolato a fette
             var opt = optOutR.best;   // AUDIT DYN-01
             doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60,66,80);
             if (optOutR.skippedNonConverged > 0) {
@@ -1937,7 +2296,7 @@ function exportRaceReport() {
             // ===== 4. Spring map (heatmap come immagine) =====
             if (y + 90 > pageH - 16) { doc.addPage(); y = margin; }
             sect('Mappa molla k×F0');
-            var map = springMap(anlIn, inp.rpm, baseParams, { nK: 16, nF0: 14 });
+            var map = res.map;            // P1-11: gia calcolato a fette
             var mapCanvas = document.getElementById('springMapCanvas');
             try {
                 // Render in modalità stampa (fondo bianco + etichette scure)
@@ -1979,11 +2338,14 @@ function exportRaceReport() {
 
             var fname = 'cammes_race_report_' + new Date().toISOString().substring(0,10) + '.pdf';
             doc.save(fname);
+            document.getElementById('raceResultsTitle').textContent = 'Race report esportato';
+            document.getElementById('raceResultsBody').innerHTML = fname + ' (' + tp + ' pagine).';
             if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Race report esportato', body: fname + ' (' + tp + ' pagine)', duration: 5000 });
         } catch (e) {
+            erroreRace(e);
             if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Errore race report', body: e.message, duration: 5000 });
         }
-    }, 100);
+    }, erroreRace);
 }
 
 window.runRpmSweep = runRpmSweep;
@@ -2131,6 +2493,38 @@ function applyModules() {
     }
     var btn = document.getElementById('btnModules');
     if (btn) btn.innerHTML = '&#9881; Funzioni' + (count ? ' (' + count + ')' : '');
+    risvegliaGrafici();
+}
+
+// AUDIT v3.4.3 P2-08: risveglio esplicito dei grafici creati a modulo spento.
+//
+// analyze() costruisce i Chart.js anche se la loro card e' nascosta: quei
+// canvas nascono a 0x0 e finora si riprendevano SOLO grazie al ResizeObserver
+// interno di Chart.js. Verificato: funziona, i grafici compaiono entro ~300 ms
+// senza bisogno di rianalizzare — quindi il rilievo, nella sua conseguenza
+// piu' grave, non si riproduce. Ma dipendere da un dettaglio interno della
+// libreria e' fragile, e c'e' un caso in cui non basta (vedi sotto).
+//
+// Solo i cinque grafici dentro kinematicsCard possono nascere nascosti:
+// il diagramma di fasatura e il grafico A/B stanno in contenitori che vengono
+// resi visibili PRIMA di creare il chart.
+function risvegliaGrafici() {
+    var lista = [
+        window.velocityChart, window.accelerationChart, window.jerkChart,
+        window.forceChart, window.complianceChart
+    ];
+    for (var i = 0; i < lista.length; i++) {
+        var c = lista[i];
+        if (!c || !c.canvas) continue;
+        var box = c.canvas.parentNode;
+        if (!box || !box.clientWidth || !box.clientHeight) continue;   // ancora nascosto
+        // Non si puo' usare "ha gia' una dimensione" come prova che sia a
+        // posto: l'export PDF chiama resize(700, 380) sui chart ANCHE se
+        // nascosti, quindi restano diversi da zero ma con la misura sbagliata.
+        // Si confronta con la dimensione reale del contenitore.
+        if (Math.abs(c.width - box.clientWidth) < 2 && Math.abs(c.height - box.clientHeight) < 2) continue;
+        try { c.resize(); } catch (e) {}
+    }
 }
 function onModuleToggle(cb) {
     var m = getModules();
@@ -2196,7 +2590,7 @@ function onFollowerTypeChange() {
     show('rowRRoll',     isRoller);
     show('rowLArm',       isFinger);
     show('rowLValve',     isFinger);
-    show('rowFingerTilt', isFinger);
+    show('rowFingerNota', isFinger);
     show('rowRBase',     isVirtual);
     show('rowRPunt',     isVirtual);
     var hint = document.getElementById('followerHint');
@@ -2375,23 +2769,29 @@ function applyVirtualFollower(camLift, side) {
     if (!t || t === 'punt') return camLift;
 
     // Raggio cerchio base PER LATO (aspirazione/scarico possono differire).
-    var rbEl = document.getElementById(side === 'exhaust' ? 'rBaseExhaust' : 'rBase');
-    var rBase  = (rbEl && Number(rbEl.value)) || Number(document.getElementById('rBase').value) || 14;
-    var rPunt  = Number(document.getElementById('rPunt').value)  || 1.5;
+    // AUDIT P1-12: letture validate. `Number(x) || def` trasformava rPunt = 0
+    // (tastatore a coltello, valore legittimo) in 1,5 e lasciava passare un
+    // raggio base negativo fino alla curva convertita.
+    var idRb = (side === 'exhaust' && document.getElementById('rBaseExhaust')) ? 'rBaseExhaust' : 'rBase';
+    var rBase  = numDi(idRb);
+    if (!isFinite(rBase)) rBase = numDi('rBase');
+    var rPunt  = numDi('rPunt');
 
     if (t === 'bicch') {
-        var dBicch = Number(document.getElementById('diamBicch').value) || 33.34;
+        var dBicch = numDi('diamBicch');
         return convertPuntToBicchiere(camLift, rBase, dBicch, rPunt);
     }
     if (t === 'roller') {
-        var rRoll = Number(document.getElementById('rRoll').value) || 8;
+        var rRoll = numDi('rRoll');
         return convertPuntToRoller(camLift, rBase, rRoll, rPunt);
     }
     if (t === 'finger') {
-        var lArm   = Number(document.getElementById('lArm').value)   || 25;
-        var lValve = Number(document.getElementById('lValve').value) || 30;
-        var tilt   = Number(document.getElementById('fingerTilt').value) || 0;
-        var fout = convertPuntToFinger(camLift, rBase, lArm, lValve, rPunt, tilt);
+        var lArm   = numDi('lArm');
+        var lValve = numDi('lValve');
+        // AUDIT P1-09: il parametro "inclinazione" e' stato rimosso perche'
+        // dimostrato inerte (si elide analiticamente). La curva restituita e'
+        // gia' lato VALVOLA: il rapporto Bilanciere NON va riapplicato.
+        var fout = convertPuntToFinger(camLift, rBase, lArm, lValve, rPunt);
         // Avviso se la geometria leva non regge l'alzata (asin saturato → curva
         // troncata): meglio dirlo che restituire numeri silenziosamente sbagliati.
         if (window._fingerSaturated && window.cammesToast && !window._fingerWarnShown) {
@@ -2474,7 +2874,7 @@ function importIntake() {
         var clearance = Number(document.getElementById('intakeClearance').value);
         var advIn = Number((document.getElementById('advance') || {}).value) || 0;
 
-        crankIntake = mapCamToCrank(camLift, effectiveCenters(angle, angle, advIn).intake, clearance, 'intake');
+        crankIntake = mapCamToCrank(camLift, effectiveCenters(angle, angle, advIn).intake, giocoLatoCamma(clearance, 'intake'), 'intake');
 
         var mx = findMax(crankIntake);
         intakeMaxLift = mx.lift;
@@ -2530,7 +2930,7 @@ function importExhaust() {
         var clearance = Number(document.getElementById('exhaustClearance').value);
         var advEx = Number((document.getElementById('advance') || {}).value) || 0;
 
-        crankExhaust = mapCamToCrank(camLift, effectiveCenters(angle, angle, advEx).exhaust, clearance, 'exhaust');
+        crankExhaust = mapCamToCrank(camLift, effectiveCenters(angle, angle, advEx).exhaust, giocoLatoCamma(clearance, 'exhaust'), 'exhaust');
 
         var mx = findMax(crankExhaust);
         exhaustMaxLift = mx.lift;
@@ -2615,6 +3015,25 @@ function saveProfileToArchive() {
 }
 
 // ========== KINEMATIC COMPUTATIONS ==========
+
+// Rapporto di leva EFFETTIVO di un lato: 1,00 se il follower restituisce gia'
+// il moto lato valvola (leva a dito), altrimenti il campo Bilanciere. Vedi
+// FOLLOWER_OUTPUT_DOMAIN e l'audit P1-09.
+function rockerEffettivo(side) {
+    var ft = (document.getElementById('followerType') || {}).value || 'punt';
+    if (typeof FOLLOWER_OUTPUT_DOMAIN !== 'undefined' && FOLLOWER_OUTPUT_DOMAIN[ft] === 'valve') return 1.0;
+    var el = document.getElementById(side === 'exhaust' ? 'rockerExhaust' : 'rockerIntake');
+    return (el && Number(el.value)) || 1.0;
+}
+
+// AUDIT v3.4.3 P1-05: il gioco valvole si registra a VALLE della leva, quindi
+// e' una quantita' lato VALVOLA. Le curve qui sono lato camma: il gioco va
+// riportato dividendolo per il rapporto. Con bicchiere (1,00) nulla cambia.
+function giocoLatoCamma(gioco, side) {
+    return (typeof lashLatoCamma === 'function')
+         ? lashLatoCamma(gioco, rockerEffettivo(side))
+         : gioco;
+}
 
 // Apply rocker arm ratio to a lift array
 function applyRockerRatio(crankArr, ratio) {
@@ -2726,7 +3145,31 @@ function computeDerivatives(crankArr) {
 }
 
 // Extract kinematic result values (peak velocities, accelerations, jerk)
-function extractKinematicResults(vel, acc, jerk, peakIdx, rpm) {
+// AUDIT v3.4.3 P1-10 — velocita' ALLA SEDE, interpolata nel crossing.
+// `vel` e' campionata a gradi interi 1..720; il crossing di chiusura calcolato
+// da findEvents e' frazionario. Interpolazione lineare fra i due campioni.
+function velAlGrado(vel, gradoFraz) {
+    if (!isFinite(gradoFraz)) return NaN;
+    var g = ((gradoFraz - 1) % 720 + 720) % 720 + 1;
+    var i0 = Math.floor(g), fr = g - i0;
+    var a = Number(vel[i0]);
+    var b = Number(vel[i0 >= 720 ? 1 : i0 + 1]);
+    if (!isFinite(a) || !isFinite(b)) return NaN;
+    return a + (b - a) * fr;
+}
+
+// AUDIT v3.4.3 P1-10 — due grandezze DIVERSE, tenute distinte.
+//   velClose (era "Vel. di appoggio"): minimo GLOBALE della velocita' su tutto
+//     il giro. E' la velocita' massima sul fianco di chiusura, e capita lontano
+//     dalla sede — a meta' fianco, dove la valvola e' ancora ad alzata piena.
+//     Il tooltip prometteva "con che velocita' torna sulla sede": non era quel
+//     numero.
+//   velSeat (nuova): velocita' interpolata NEL crossing di chiusura, cioe' dove
+//     la valvola arriva davvero alla soglia di appoggio. E' quella che "martella
+//     la sede".
+// Se gli eventi sono ambigui (closeIdx NaN) velSeat resta NaN: non si ripiega
+// sul minimo globale, che darebbe un numero diverso senza dirlo.
+function extractKinematicResults(vel, acc, jerk, peakIdx, rpm, closeIdx) {
     var omega = rpm > 0 ? rpm * 6 : 0; // deg/s
     var omegaSq = omega * omega;
     var omegaCu = omegaSq * omega;
@@ -2736,7 +3179,7 @@ function extractKinematicResults(vel, acc, jerk, peakIdx, rpm) {
     // Closing phase: after peak (velocity negative)
 
     var velMaxOpen = 0;  // max positive velocity (opening)
-    var velMaxClose = 0; // min velocity (most negative = seating)
+    var velMaxClose = 0; // min velocity = max sul FIANCO di chiusura (non la sede)
     var accMaxPos = 0;   // max positive acceleration
     var accMaxNeg = 0;   // max negative acceleration
     var jerkMax = 0;     // max absolute jerk
@@ -2756,6 +3199,7 @@ function extractKinematicResults(vel, acc, jerk, peakIdx, rpm) {
 
     var vOpen = velMaxOpen;
     var vClose = velMaxClose;
+    var vSeat = velAlGrado(vel, closeIdx);       // P1-10: alla sede, non sul fianco
     var aPos = accMaxPos;
     var aNeg = accMaxNeg;
     var jMax = jerkMax;
@@ -2763,6 +3207,7 @@ function extractKinematicResults(vel, acc, jerk, peakIdx, rpm) {
     if (omega > 0) {
         vOpen = velMaxOpen * omega;
         vClose = velMaxClose * omega;
+        vSeat = vSeat * omega;
         aPos = accMaxPos * omegaSq;
         aNeg = accMaxNeg * omegaSq;
         jMax = jerkMax * omegaCu;
@@ -2773,6 +3218,8 @@ function extractKinematicResults(vel, acc, jerk, peakIdx, rpm) {
 
     return {
         velOpen: vOpen, velClose: vClose,
+        velSeat: vSeat,                          // NaN se il crossing e' ambiguo
+        seatDeg: isFinite(closeIdx) ? closeIdx - 360 : NaN,
         accPos: aPos, accNeg: aNeg,
         jerkMax: jMax,
         unitVel: unitVel, unitAcc: unitAcc, unitJerk: unitJerk
@@ -2828,6 +3275,53 @@ function campoEConfermato(id) {
 }
 function mollaConfermata() { return CAMPI_MOLLA.every(campoEConfermato); }
 
+// AUDIT v3.4.3 P1-07 — il gate e' PER LATO.
+// k e precarico sono della molla (comuni ai due lati); la massa equivalente
+// e' del singolo treno. Prima bastava una massa scarico non confermata per
+// rendere "non valutabile" anche l'aspirazione, che magari era completa.
+//   aspirazione valutabile = k + F0 + massa aspirazione
+//   scarico valutabile     = k + F0 + massa scarico
+function latoValutabile(side) {
+    return campoEConfermato('springK') && campoEConfermato('springPreload') &&
+           campoEConfermato(side === 'exhaust' ? 'massEqExhaust' : 'massEqIntake');
+}
+// Motivo leggibile, uguale per schermo, CSV e PDF.
+var MOTIVO_ESEMPIO = 'Molla e/o massa di questo lato sono ancora ai valori di esempio: ' +
+    'inserisci k, F₀ e la massa equivalente del TUO motore perché il numero abbia senso.';
+
+// AUDIT P1-07: sweep, ottimizzatore, mappe e Race report lavorano TUTTI sul
+// lato aspirazione con k, F0 e massa aspirazione. Con quei valori ancora di
+// esempio producevano mappe colorate e "molla consigliata" riferite a una
+// molla che l'utente non ha mai inserito: qui ci si ferma dicendolo.
+function guardiaStrumentiMolla(nomeStrumento) {
+    if (latoValutabile('intake')) return true;
+    if (window.cammesToast) {
+        window.cammesToast({ kind: 'warn', title: (nomeStrumento || 'Strumento') + ' non eseguibile',
+            body: 'Rigidezza, precarico e massa equivalente aspirazione sono ancora ai <b>valori di esempio</b>. ' +
+                  'Il risultato sarebbe riferito a una molla che non &egrave; la tua: inseriscili e ri-analizza.',
+            duration: 8000 });
+    }
+    return false;
+}
+
+// Cella dipendente dalla molla: o il numero, o la dichiarazione che non e'
+// valutabile. Mai un numero senza qualificazione (P1-07).
+function cellaMolla(id, valutabile, testo, titolo) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (!valutabile) {
+        el.textContent = 'non valutabile';
+        el.className = 'result-value';
+        el.style.color = 'var(--text-muted)';
+        el.title = MOTIVO_ESEMPIO;
+        return;
+    }
+    el.style.color = '';
+    el.className = 'result-value';
+    el.textContent = testo;
+    el.title = titolo || '';
+}
+
 // Un preset riporta i campi allo stato "da confermare": sono valori tipici
 // della classe motore, non misurati su questo albero.
 function smarcaCampiMolla() {
@@ -2848,16 +3342,17 @@ function aggiornaMarcaturaEsempio() {
 }
 window.aggiornaMarcaturaEsempio = aggiornaMarcaturaEsempio;
 
-function setRpmCell(id, crit, rpm) {
+function setRpmCell(id, crit, rpm, valutabile) {
     var el = document.getElementById(id);
     if (!el) return;
     // Con molla/masse ancora ai valori di esempio il numero non dice nulla
     // sul motore in prova: meglio dichiararlo che stampare un falso allarme.
-    if (!mollaConfermata()) {
+    // P1-07: il gate e' del LATO, non globale.
+    if (valutabile === false) {
         el.textContent = 'non valutabile';
         el.className = 'result-value';
         el.style.color = 'var(--text-muted)';
-        el.title = 'Inserisci k, F₀ e le masse della TUA molla: con i valori di esempio questo numero non è riferito al tuo motore.';
+        el.title = MOTIVO_ESEMPIO;
         return;
     }
     el.style.color = '';
@@ -2867,32 +3362,124 @@ function setRpmCell(id, crit, rpm) {
     el.title = 'Margine: ' + (isFinite(crit) ? (margin + '%') : 'sicuro') +
                ' (regime di prova ' + rpm.toLocaleString('it-IT') + ')';
 }
+// AUDIT v3.4.3 P1-12: con un regime non ammesso (0, vuoto, negativo, testo) il
+// retune usciva subito e sullo schermo restavano i numeri del regime PRECEDENTE
+// — compreso il verdetto con la spunta verde, che risultava riferito a un
+// regime che nel campo non c'era piu'. Qui le celle dinamiche vengono svuotate
+// e dicono il perche'.
+function dinamicaNonDisponibile(motivo) {
+    ['resFInertiaIn', 'resFInertiaEx', 'resMarginIn', 'resMarginEx',
+     'resRpmCritIn', 'resRpmCritEx'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = '—';
+        el.className = 'result-value';
+        el.style.color = 'var(--text-muted)';
+        el.title = motivo || 'Regime non valido: la dinamica non e\' calcolabile.';
+    });
+}
 function applyForceResults(forcesIn, forcesEx, rpm) {
-    document.getElementById('resFInertiaIn').textContent = fmtN(forcesIn.fInertiaMax) + ' @ ' + rpm.toLocaleString('it-IT') + ' rpm';
-    document.getElementById('resFInertiaEx').textContent = fmtN(forcesEx.fInertiaMax) + ' @ ' + rpm.toLocaleString('it-IT') + ' rpm';
-    document.getElementById('resFSpringIn').textContent = fmtN(forcesIn.fSpringFullLift);
-    document.getElementById('resFSpringEx').textContent = fmtN(forcesEx.fSpringFullLift);
-    document.getElementById('resMarginIn').textContent = fmtN(forcesIn.marginMin) + ' @ ' + (forcesIn.marginMinIdx - 360) + '°';
-    document.getElementById('resMarginEx').textContent = fmtN(forcesEx.marginMin) + ' @ ' + (forcesEx.marginMinIdx - 360) + '°';
-    setRpmCell('resRpmCritIn', forcesIn.rpmCrit, rpm);
-    setRpmCell('resRpmCritEx', forcesEx.rpmCrit, rpm);
+    // AUDIT P1-07: forza molla, forza d'inerzia e margine dipendono TUTTI da
+    // k, F0 e massa. Prima solo il distacco era protetto dal gate e queste tre
+    // celle stampavano numeri calcolati sui valori di esempio — con tanto di
+    // margine negativo, che si legge come un allarme.
+    var okIn = latoValutabile('intake'), okEx = latoValutabile('exhaust');
+    var aRpm = ' @ ' + rpm.toLocaleString('it-IT') + ' rpm';
+    cellaMolla('resFInertiaIn', okIn, fmtN(forcesIn.fInertiaMax) + aRpm);
+    cellaMolla('resFInertiaEx', okEx, fmtN(forcesEx.fInertiaMax) + aRpm);
+    cellaMolla('resFSpringIn', okIn, fmtN(forcesIn.fSpringFullLift));
+    cellaMolla('resFSpringEx', okEx, fmtN(forcesEx.fSpringFullLift));
+    cellaMolla('resMarginIn', okIn, fmtN(forcesIn.marginMin) + ' @ ' + (forcesIn.marginMinIdx - 360) + '°');
+    cellaMolla('resMarginEx', okEx, fmtN(forcesEx.marginMin) + ' @ ' + (forcesEx.marginMinIdx - 360) + '°');
+    setRpmCell('resRpmCritIn', forcesIn.rpmCrit, rpm, okIn);
+    setRpmCell('resRpmCritEx', forcesEx.rpmCrit, rpm, okEx);
 }
 
 // AUDIT APP-01: display cinematica condiviso tra analyze() e retune live
 // (la cinematica in dominio tempo dipende da rpm: se il retune non la
 // riscrivesse, schermo ed export divergerebbero).
+// AUDIT P1-10: la cella "appoggio" mostra la velocita' ALLA SEDE (interpolata
+// nel crossing di chiusura). Se gli eventi sono ambigui non si ripiega sul
+// massimo del fianco: si dichiara non valutabile e si dice perche'.
+function cellaAppoggio(id, res) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (!isFinite(res.velSeat)) {
+        el.textContent = 'non valutabile';
+        el.style.color = 'var(--text-muted)';
+        el.title = 'Il punto di chiusura non è determinabile su questa curva ' +
+                   '(più lobi o profilo sempre sopra soglia): senza crossing non c\'è una velocità di appoggio. ' +
+                   'Massimo sul fianco di chiusura: ' + formatKinValue(res.velClose) + ' ' + res.unitVel + '.';
+        return;
+    }
+    el.style.color = '';
+    el.textContent = formatKinValue(Math.abs(res.velSeat)) + ' ' + res.unitVel;
+    el.title = 'Velocità interpolata nel punto di chiusura (' +
+               (isFinite(res.seatDeg) ? res.seatDeg.toFixed(1) + '° dal PMS' : '-') +
+               '). Massimo sul fianco di chiusura, che avviene lontano dalla sede: ' +
+               formatKinValue(res.velClose) + ' ' + res.unitVel + '.';
+}
 function applyKinematicResults(resIn, resEx) {
     document.getElementById('resVelOpenIn').textContent = formatKinValue(resIn.velOpen) + ' ' + resIn.unitVel;
-    document.getElementById('resVelCloseIn').textContent = formatKinValue(resIn.velClose) + ' ' + resIn.unitVel;
+    cellaAppoggio('resVelCloseIn', resIn);
     document.getElementById('resAccPosIn').textContent = formatKinValue(resIn.accPos) + ' ' + resIn.unitAcc;
     document.getElementById('resAccNegIn').textContent = formatKinValue(resIn.accNeg) + ' ' + resIn.unitAcc;
     document.getElementById('resJerkIn').textContent = formatKinValue(resIn.jerkMax) + ' ' + resIn.unitJerk;
 
     document.getElementById('resVelOpenEx').textContent = formatKinValue(resEx.velOpen) + ' ' + resEx.unitVel;
-    document.getElementById('resVelCloseEx').textContent = formatKinValue(resEx.velClose) + ' ' + resEx.unitVel;
+    cellaAppoggio('resVelCloseEx', resEx);
     document.getElementById('resAccPosEx').textContent = formatKinValue(resEx.accPos) + ' ' + resEx.unitAcc;
     document.getElementById('resAccNegEx').textContent = formatKinValue(resEx.accNeg) + ' ' + resEx.unitAcc;
     document.getElementById('resJerkEx').textContent = formatKinValue(resEx.jerkMax) + ' ' + resEx.unitJerk;
+}
+
+// AUDIT v3.4.3 P1-02 — i grafici di velocita', accelerazione e jerk sono in
+// DOMINIO TEMPO: i loro dati valgono (per grado) x omega, x omega^2, x omega^3.
+// Il ricalcolo immediato aggiornava i numeri e il grafico delle forze ma NON
+// questi tre: passando da 6.000 a 9.000 giri i valori scritti salivano di 1,5
+// mentre le tre curve restavano identiche (rapporto 1,0), e l'export non era
+// bloccato — il PDF poteva uscire con numeri nuovi e grafici vecchi.
+// Aggiornati qui in place, con gli stessi fattori usati alla creazione.
+function aggiornaGraficiCinematici(rpm) {
+    var omega = rpm > 0 ? rpm * 6 : 0;          // deg/s
+    var fV = omega > 0 ? omega : 1;
+    var fA = omega > 0 ? omega * omega : 1;
+    var fJ = omega > 0 ? omega * omega * omega : 1;
+    if (typeof velIntake === 'undefined' || !velIntake.length) return;
+
+    var vI = [], vE = [], aI = [], aE = [], nI = [], nE = [], jI = [], jE = [];
+    for (var i = 1; i <= 720; i++) {
+        vI.push(velIntake[i] * fV);   vE.push(velExhaust[i] * fV);
+        var ai = accIntake[i] * fA,   ae = accExhaust[i] * fA;
+        aI.push(ai); aE.push(ae);
+        nI.push(ai < 0 ? ai : null);  nE.push(ae < 0 ? ae : null);
+        jI.push(jerkIntake[i] * fJ);  jE.push(jerkExhaust[i] * fJ);
+    }
+    if (window.velocityChart) {
+        window.velocityChart.data.datasets[0].data = vI;
+        window.velocityChart.data.datasets[1].data = vE;
+        window.velocityChart.update('none');
+    }
+    if (window.accelerationChart) {
+        // ordine dataset: 0 zona neg. asp., 1 zona neg. scar., 2 asp., 3 scar.
+        window.accelerationChart.data.datasets[0].data = nI;
+        window.accelerationChart.data.datasets[1].data = nE;
+        window.accelerationChart.data.datasets[2].data = aI;
+        window.accelerationChart.data.datasets[3].data = aE;
+        window.accelerationChart.update('none');
+    }
+    if (window.jerkChart) {
+        window.jerkChart.data.datasets[0].data = jI;
+        window.jerkChart.data.datasets[1].data = jE;
+        window.jerkChart.update('none');
+    }
+    // I titoli dichiarano l'unita': in dominio tempo cambia con il regime
+    var tv = document.getElementById('velChartTitle');
+    var ta = document.getElementById('accChartTitle');
+    var tj = document.getElementById('jerkChartTitle');
+    if (tv) tv.textContent = 'Velocità (' + (omega > 0 ? 'mm/s' : 'mm/°') + ')';
+    if (ta) ta.textContent = 'Accelerazione (' + (omega > 0 ? 'mm/s²' : 'mm/°²') + ')';
+    if (tj) tj.textContent = 'Jerk / strappo (' + (omega > 0 ? 'mm/s³' : 'mm/°³') + ')';
 }
 
 // Live tuning: ricomputa le forze e aggiorna DOM + forceChart al volo
@@ -2908,12 +3495,22 @@ function scheduleLiveRetune() {
 function liveRetuneForces() {
     var ctx = window.lastForceContext;
     if (!ctx) return;
-    var rpm     = Number(document.getElementById('rpmInput').value) || 0;
-    if (rpm <= 0) return;
-    var springK = Number(document.getElementById('springK').value) || 0;
-    var springF0 = Number(document.getElementById('springPreload').value) || 0;
-    var mEqIn   = Number(document.getElementById('massEqIntake').value) || 0;
-    var mEqEx   = Number(document.getElementById('massEqExhaust').value) || 0;
+    // AUDIT P1-12: campi della dinamica validati a ogni digitazione. Se uno non
+    // e' ammesso l'errore compare accanto al campo e le celle vengono svuotate,
+    // invece di lasciare in pagina i numeri del regime precedente.
+    var _dyn = validaCampi('dinamica');
+    if (_dyn.errori.length) {
+        dinamicaNonDisponibile(_dyn.errori.map(function (e) {
+            return e.etichetta + ': ' + e.messaggio;
+        }).join(' · '));
+        markAnalysisStale();
+        return;
+    }
+    var rpm      = numDi('rpmInput');
+    var springK  = numDi('springK');
+    var springF0 = numDi('springPreload');
+    var mEqIn    = numDi('massEqIntake');
+    var mEqEx    = numDi('massEqExhaust');
     var fIn = computeForces(ctx.anlIn, ctx.accIntake, mEqIn, rpm, springK, springF0);
     var fEx = computeForces(ctx.anlEx, ctx.accExhaust, mEqEx, rpm, springK, springF0);
     applyForceResults(fIn, fEx, rpm);
@@ -2942,6 +3539,8 @@ function liveRetuneForces() {
         R.fSpringFullIn = fIn.fSpringFullLift; R.fSpringFullEx = fEx.fSpringFullLift;
         R.marginMinIn = fIn.marginMin; R.marginMinEx = fEx.marginMin;
         R.mollaConfermata = mollaConfermata();   // il gate segue il retune live
+        R.valutabileIn = latoValutabile('intake');    // P1-07: stato per lato
+        R.valutabileEx = latoValutabile('exhaust');
         window.lastAnalysis.inputs.rpm = rpm;
         window.lastAnalysis.inputs.springK = springK;
         window.lastAnalysis.inputs.springPreload = springF0;
@@ -2959,9 +3558,12 @@ function liveRetuneForces() {
             window.lastAnalysis.arrays.fInertiaEx = fEx.fInertia;
         }
         if (typeof velIntake !== 'undefined' && velIntake.length) {
-            R.kinIntake  = extractKinematicResults(velIntake, accIntake, jerkIntake, intakeMaxIdx, rpm);
-            R.kinExhaust = extractKinematicResults(velExhaust, accExhaust, jerkExhaust, exhaustMaxIdx, rpm);
+            R.kinIntake  = extractKinematicResults(velIntake, accIntake, jerkIntake, intakeMaxIdx, rpm, window._closeIdxIn);
+            R.kinExhaust = extractKinematicResults(velExhaust, accExhaust, jerkExhaust, exhaustMaxIdx, rpm, window._closeIdxEx);
             applyKinematicResults(R.kinIntake, R.kinExhaust);   // schermo = export
+            // AUDIT P1-02: anche le TRE curve cinematiche seguono il regime,
+            // altrimenti numeri e grafici raccontano regimi diversi.
+            aggiornaGraficiCinematici(rpm);
         }
     }
     // AUDIT APP-01: con compliance o surge ATTIVI il retune non ricalcola
@@ -2985,6 +3587,9 @@ function liveRetuneForces() {
 // mescolerebbero i nuovi input col vecchio array. Marchiamo "stale" e
 // blocchiamo l'export finché non si ri-analizza.
 var _analysisStale = false;
+// AUDIT P2-02: handle dei toast ritardati dell'analisi. Senza, restavano in
+// sospeso e comparivano dopo un Reset o sopra quelli dell'analisi successiva.
+var _toastTimers = [];
 function markAnalysisStale() {
     if (!lastAnalysis) return;   // niente da invalidare finché non c'è un'analisi
     _analysisStale = true;
@@ -3000,6 +3605,162 @@ function clearAnalysisStale() {
     var btn = document.getElementById('analyzeBtn');
     if (btn) btn.classList.remove('btn-attention');
 }
+// =====================================================================
+// AUDIT v3.4.3 P1-12 — schema unico dei campi numerici.
+//
+// Prima ogni lettura faceva `Number(el.value) || default`, che confonde il
+// campo VUOTO (default legittimo) con lo ZERO SCRITTO (una scelta) e con il
+// valore NON AMMESSO (che deve bloccare, non scivolare nel default): un
+// raggio base -17 arrivava fino alla curva convertita.
+//
+// Ogni voce dichiara solo cio' che la FISICA impone. Nessun tetto di
+// plausibilita': il banco e' universale, una camma mai vista puo' avere
+// numeri fuori dall'ordinario. Dove serve, `avvisoSopra` avvisa e basta.
+// Regole senza `def` -> campo obbligatorio: vuoto = blocco.
+// =====================================================================
+var CAMPI_NUM = {
+    // --- geometria e fasatura ---
+    rBase:            { min: 0, minEsclusivo: true, etichetta: 'Raggio base aspirazione' },
+    rBaseExhaust:     { min: 0, minEsclusivo: true, etichetta: 'Raggio base scarico' },
+    rPunt:            { min: 0, def: 1.5, etichetta: 'Raggio puntalino' },     // 0 = a coltello: ammesso
+    diamBicch:        { min: 0, minEsclusivo: true, def: 33.34, etichetta: 'Diametro bicchiere' },
+    rRoll:            { min: 0, minEsclusivo: true, def: 8, etichetta: 'Raggio rullo' },
+    lArm:             { min: 0, minEsclusivo: true, def: 25, etichetta: 'Braccio lato camma' },
+    lValve:           { min: 0, minEsclusivo: true, def: 30, etichetta: 'Braccio lato valvola' },
+    rockerIntake:     { min: 0, minEsclusivo: true, def: 1.0, etichetta: 'Bilanciere aspirazione' },
+    rockerExhaust:    { min: 0, minEsclusivo: true, def: 1.0, etichetta: 'Bilanciere scarico' },
+    intakeClearance:  { min: 0, def: 0, etichetta: 'Gioco aspirazione' },      // 0 = idraulico
+    exhaustClearance: { min: 0, def: 0, etichetta: 'Gioco scarico' },
+    intakeAngle:      { def: 106, etichetta: 'Angolo lobo aspirazione' },      // segno libero
+    exhaustAngle:     { def: 106, etichetta: 'Angolo lobo scarico' },
+    advance:          { def: 0, etichetta: 'Anticipo' },                       // negativo lecito
+    durationRef:      { min: 0, minEsclusivo: true, def: 1, etichetta: 'Riferimento durata' },
+    smoothWindow:     { min: 0, def: 0, etichetta: 'Finestra smoothing' },
+    // --- dinamica ---
+    rpmInput:         { min: 0, minEsclusivo: true, def: 6000, avvisoSopra: 15000, etichetta: 'Regime' },
+    // I quattro campi molla/massa NON bloccano l'analisi: se mancano o non
+    // sono ammissibili, il LORO lato diventa "non valutabile" (gate P1-07) e
+    // tutto il resto — cinematica, fasatura, LSA, durate — resta calcolabile.
+    // Fermare l'intera analisi per una massa scarico mancante toglierebbe
+    // all'utente anche i numeri che quella massa non tocca.
+    springK:          { min: 0, minEsclusivo: true, nonBloccante: true, etichetta: 'Rigidezza molla' },
+    springPreload:    { min: 0, nonBloccante: true, etichetta: 'Precarico molla' },
+    massEqIntake:     { min: 0, minEsclusivo: true, nonBloccante: true, etichetta: 'Massa equivalente aspirazione' },
+    massEqExhaust:    { min: 0, minEsclusivo: true, nonBloccante: true, etichetta: 'Massa equivalente scarico' },
+    kTrain:           { min: 0, minEsclusivo: true, def: 5000, etichetta: 'Rigidezza treno' },
+    dampingRatio:     { min: 0, max: 1, maxEsclusivo: true, def: 0.06, etichetta: 'Smorzamento' },
+    massEqIntermediate: { min: 0, minEsclusivo: true, def: 50, etichetta: 'Massa intermedia' },
+    kPushrod:         { min: 0, minEsclusivo: true, def: 800, etichetta: 'Rigidezza asta' },
+    massSeat:         { min: 0, minEsclusivo: true, def: 15, etichetta: 'Massa sede' },
+    kSeat:            { min: 0, minEsclusivo: true, def: 80000, etichetta: 'Rigidezza sede' },
+    kPivot:           { min: 0, def: 0, etichetta: 'Rigidezza perno bilanciere' },  // 0 = perno rigido
+    springMass:       { min: 0, minEsclusivo: true, def: 60, etichetta: 'Massa molla' },
+    springCoils:      { min: 0, minEsclusivo: true, def: 6, etichetta: 'Spire attive' },
+    // --- confronto A/B ---
+    abA_angle:        { def: 106, etichetta: 'Angolo lobo A' },
+    abA_clear:        { min: 0, def: 0, etichetta: 'Gioco A' },
+    abB_angle:        { def: 106, etichetta: 'Angolo lobo B' },
+    abB_clear:        { min: 0, def: 0, etichetta: 'Gioco B' }
+};
+
+// Campi che servono davvero, dato il follower e il modello scelti: validare
+// un campo nascosto e' rumore, non protezione.
+function campiAttivi(gruppo) {
+    var ids = [];
+    if (gruppo !== 'dinamica') {
+        ids = ['intakeAngle', 'exhaustAngle', 'advance',
+               'intakeClearance', 'exhaustClearance',
+               'rockerIntake', 'rockerExhaust', 'durationRef', 'smoothWindow'];
+        // Col puntalino la curva e' quella grezza: raggio base, raggio punta e
+        // geometrie del follower non entrano nel calcolo e le righe sono
+        // nascoste — segnalarle sarebbe un errore che l'utente non vede.
+        var ft = (document.getElementById('followerType') || {}).value || 'punt';
+        if (ft && ft !== 'punt') {
+            ids.push('rBase', 'rBaseExhaust', 'rPunt');
+            if (ft === 'bicch') ids.push('diamBicch');
+            else if (ft === 'roller') ids.push('rRoll');
+            else if (ft === 'finger') ids.push('lArm', 'lValve');
+        }
+    }
+    if (gruppo !== 'geometria') {
+        ids.push('rpmInput', 'springK', 'springPreload', 'massEqIntake', 'massEqExhaust');
+        var comp = document.getElementById('complianceEnabled');
+        if (!comp || comp.checked) {
+            ids.push('kTrain', 'dampingRatio');
+            var mod = (document.getElementById('complianceModel') || {}).value || '1dof';
+            if (mod === '2dof' || mod === '3dof') ids.push('massEqIntermediate', 'kPushrod');
+            if (mod === '3dof') ids.push('massSeat', 'kSeat', 'kPivot');
+        }
+        var surge = document.getElementById('surgeEnabled');
+        if (surge && surge.checked) ids.push('springMass', 'springCoils');
+    }
+    return ids.filter(function (id) { return document.getElementById(id); });
+}
+
+// Errore PERSISTENTE accanto al campo (non un toast che sparisce), collegato
+// all'input con aria-invalid + aria-describedby per gli screen reader.
+function segnalaCampo(el, esito) {
+    var id = 'err-' + el.id;
+    var nodo = document.getElementById(id);
+    // Campo svuotato mentre ci si sta scrivendo dentro: e' una digitazione in
+    // corso, non un errore. Le celle dipendenti restano comunque vuote (chi
+    // chiama gestisce il blocco), ma il campo non lampeggia in rosso a ogni
+    // cancellazione. Alla perdita del fuoco l'errore compare.
+    if (!esito.ok && esito.motivo === 'vuoto' && document.activeElement === el) {
+        if (nodo) nodo.remove();
+        el.removeAttribute('aria-invalid');
+        el.classList.remove('campo-nonvalido', 'campo-avviso');
+        return;
+    }
+    if (esito.ok && !esito.avviso) {
+        el.removeAttribute('aria-invalid');
+        if (nodo) nodo.remove();
+        el.classList.remove('campo-nonvalido', 'campo-avviso');
+        return;
+    }
+    if (!nodo) {
+        nodo = document.createElement('div');
+        nodo.id = id;
+        nodo.className = 'campo-errore';
+        (el.closest('.param-row') || el.parentNode).appendChild(nodo);
+    }
+    nodo.textContent = esito.messaggio || 'Valore non valido.';
+    nodo.classList.toggle('solo-avviso', !!(esito.ok && esito.avviso));
+    el.setAttribute('aria-describedby', id);
+    el.classList.toggle('campo-nonvalido', !esito.ok);
+    el.classList.toggle('campo-avviso', !!(esito.ok && esito.avviso));
+    if (esito.ok) el.removeAttribute('aria-invalid');
+    else el.setAttribute('aria-invalid', 'true');
+}
+
+// Passata di validazione. Ritorna { errori:[], avvisi:[] } e lascia sullo
+// schermo un messaggio per ogni campo problematico.
+function validaCampi(gruppo) {
+    var errori = [], avvisi = [], degrado = [];
+    campiAttivi(gruppo).forEach(function (id) {
+        var el = document.getElementById(id);
+        var regola = CAMPI_NUM[id] || {};
+        var r = validaNumero(el.value, regola);
+        segnalaCampo(el, r);
+        var voce = { id: id, etichetta: regola.etichetta || id, messaggio: r.messaggio };
+        // I campi "non bloccanti" segnalano ma non fermano: il loro effetto e'
+        // rendere non valutabile cio' che dipende da loro (vedi P1-07).
+        if (!r.ok) (regola.nonBloccante ? degrado : errori).push(voce);
+        else if (r.avviso) avvisi.push(voce);
+    });
+    return { errori: errori, avvisi: avvisi, degrado: degrado };
+}
+
+// Lettura validata di un singolo campo. Da usare DOPO validaCampi(): qui il
+// valore e' gia' noto ammissibile, quindi il default scatta solo sul vuoto.
+function numDi(id) {
+    var el = document.getElementById(id);
+    var r = validaNumero(el ? el.value : undefined, CAMPI_NUM[id] || {});
+    if (r.ok) return r.valore;
+    var def = (CAMPI_NUM[id] || {}).def;
+    return (def === undefined) ? NaN : def;
+}
+
 // AUDIT APP-01 (controrevisione): hash dei parametri influenti. I listener
 // stale coprono i casi noti, ma la garanzia FORTE è questa: al momento di
 // ogni export si ricalcola l'hash di TUTTI gli input influenti + impronta
@@ -3008,7 +3769,7 @@ function clearAnalysisStale() {
 var INFLUENTIAL_IDS = ['intakeType', 'intakeAngle', 'intakeClearance',
     'exhaustType', 'exhaustAngle', 'exhaustClearance', 'advance', 'durationRef',
     'baselineCorrect', 'rpmInput', 'rockerIntake', 'rockerExhaust', 'smoothWindow',
-    'followerType', 'diamBicch', 'rRoll', 'lArm', 'lValve', 'fingerTilt',
+    'followerType', 'diamBicch', 'rRoll', 'lArm', 'lValve',
     'rBase', 'rBaseExhaust', 'rPunt', 'springK', 'springPreload',
     'massEqIntake', 'massEqExhaust', 'complianceEnabled', 'kTrain', 'dampingRatio',
     'complianceModel', 'massEqIntermediate', 'kPushrod', 'massSeat', 'kSeat',
@@ -3040,26 +3801,12 @@ function paramsHash() { return _djb2(collectInfluentialParams()); }
 var _analysisCounter = 0;
 
 // true se l'export deve fermarsi (analisi assente o stale)
+// AUDIT P1-11: una sola implementazione della guardia. Questa resta come
+// forma booleana per gli export (che non hanno bisogno dell'istantanea), ma
+// il controllo e' esattamente lo stesso di requireFreshAnalysis(): non ci sono
+// piu' due regole diverse fra export e strumenti.
 function exportBlockedByStale() {
-    if (!lastAnalysis) {
-        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Analisi mancante', body: 'Premi <b>Analizza</b> prima di esportare.', duration: 3500 });
-        return true;
-    }
-    if (_analysisStale) {
-        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Analisi non aggiornata',
-            body: 'Hai cambiato parametri che modificano la curva. Premi <b>Analizza</b> prima di esportare, altrimenti il report mescolerebbe dati nuovi e vecchi.', duration: 6000 });
-        return true;
-    }
-    // AUDIT APP-01: verifica dell'HASH — cintura oltre alle bretelle dei
-    // listener. Se un qualsiasi input influente è cambiato dall'ultima
-    // analisi (anche per una via non ascoltata), l'export si ferma.
-    if (lastAnalysis.parameterHash && lastAnalysis.parameterHash !== paramsHash()) {
-        markAnalysisStale();
-        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Parametri cambiati',
-            body: 'Gli input attuali non corrispondono a quelli dell\'ultima analisi (hash diverso). Premi <b>Analizza</b> prima di esportare.', duration: 6000 });
-        return true;
-    }
-    return false;
+    return requireFreshAnalysis('L\'export') === null;
 }
 
 // Wire-up listener live tuning (chiamato a DOMContentLoaded)
@@ -3081,11 +3828,11 @@ function initLiveTuning() {
     aggiornaMarcaturaEsempio();
     // Input che CAMBIANO la curva → analisi stale finché non si ri-analizza.
     // AUDIT APP-01 (controrevisione): aggiunti follower (diamBicch/rRoll/
-    // lArm/lValve/fingerTilt), tipi lato e surge (surgeEnabled/springMass/
+    // lArm/lValve), tipi lato e surge (surgeEnabled/springMass/
     // springCoils) che prima non erano ascoltati. La rete di sicurezza vera
     // resta comunque il confronto di parameterHash in exportBlockedByStale().
     var curveIds = ['followerType', 'rBase', 'rBaseExhaust', 'rPunt',
-        'diamBicch', 'rRoll', 'lArm', 'lValve', 'fingerTilt',
+        'diamBicch', 'rRoll', 'lArm', 'lValve',
         'intakeType', 'exhaustType',
         'rockerIntake', 'rockerExhaust', 'intakeAngle', 'exhaustAngle', 'advance',
         'intakeClearance', 'exhaustClearance', 'smoothWindow', 'durationRef',
@@ -3096,6 +3843,16 @@ function initLiveTuning() {
     curveIds.forEach(function (id) {
         var el = document.getElementById(id);
         if (el) { el.addEventListener('input', markAnalysisStale); el.addEventListener('change', markAnalysisStale); }
+    });
+    // AUDIT P1-12: ogni campo numerico si valida da solo quando lo si lascia.
+    // Cosi' l'errore si vede subito, non alla pressione di Analizza, e sparisce
+    // appena il valore torna ammissibile.
+    Object.keys(CAMPI_NUM).forEach(function (id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var rivedi = function () { segnalaCampo(el, validaNumero(el.value, CAMPI_NUM[id])); };
+        el.addEventListener('blur', rivedi);
+        el.addEventListener('input', rivedi);
     });
 }
 if (document.readyState === 'loading') {
@@ -3270,6 +4027,32 @@ function analyze() {
         return;
     }
 
+    // AUDIT v3.4.3 P1-12: gate sui CAMPI. Prima un valore non ammesso (raggio
+    // base negativo, massa zero, smorzamento 1,5) scivolava nel default o
+    // arrivava fino alla curva: usciva un numero, e nessuno diceva che era
+    // nato da un input impossibile. Ora l'analisi si ferma, i risultati
+    // precedenti vengono marcati scaduti e ogni campo dice cosa non va.
+    // AUDIT P1-11: una nuova analisi invalida qualunque job Race in corso —
+    // stava lavorando su curve che stanno per essere sostituite.
+    annullaJob('interrotto da una nuova analisi');
+    _toastTimers.forEach(clearTimeout); _toastTimers = [];   // P2-02: niente toast della corsa precedente
+
+    var _val = validaCampi();
+    if (_val.errori.length) {
+        markAnalysisStale();
+        var _primo = document.getElementById(_val.errori[0].id);
+        if (_primo) { _primo.focus(); _primo.scrollIntoView({ block: 'center' }); }
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Valori non ammessi',
+            body: _val.errori.map(function (e) { return '<b>' + e.etichetta + '</b>: ' + e.messaggio; }).join('<br>') +
+                  '<br>Il messaggio resta accanto a ogni campo finch&eacute; non &egrave; corretto.', duration: 12000 });
+        return;
+    }
+    if (_val.avvisi.length && window.cammesToast) {
+        window.cammesToast({ kind: 'warn', title: 'Valori insoliti (analisi eseguita)',
+            body: _val.avvisi.map(function (e) { return '<b>' + e.etichetta + '</b>: ' + e.messaggio; }).join('<br>'),
+            duration: 8000 });
+    }
+
     // AUDIT MET-04: se i due file dichiarano versi di rotazione diversi il
     // confronto tra i lobi è falsato (fianchi specchiati). Avvisa PRIMA di
     // mostrare i numeri. NB: il banco misura sempre col puntalino (le altre
@@ -3291,6 +4074,31 @@ function analyze() {
     var rockerIn = Number(document.getElementById('rockerIntake').value) || 1.0;
     var rockerEx = Number(document.getElementById('rockerExhaust').value) || 1.0;
 
+    // Rapporto di leva EFFETTIVO — UNA VOLTA SOLA (audit v3.4.3 P1-09).
+    // Il convertitore "finger" restituisce gia' il moto lato VALVOLA
+    // (amplificato di lValve/lArm): riapplicare il campo Bilanciere gonfiava
+    // l'alzata del 50% (una camma da 7 mm diventava 15,75 invece di 10,5) e con
+    // essa durata, velocita' e verdetto di distacco. Il dominio di uscita di
+    // ogni follower e' dichiarato da FOLLOWER_OUTPUT_DOMAIN.
+    // Serve QUI, prima della mappatura, perche' il gioco valvole dipende dal
+    // rapporto (P1-05): vedi lashLatoCamma() poco sotto.
+    var _ft = (document.getElementById('followerType') || {}).value || 'punt';
+    var _followerGiaValvola = (typeof FOLLOWER_OUTPUT_DOMAIN !== 'undefined') &&
+                              FOLLOWER_OUTPUT_DOMAIN[_ft] === 'valve';
+    var rockerInEff = _followerGiaValvola ? 1.0 : rockerIn;
+    var rockerExEff = _followerGiaValvola ? 1.0 : rockerEx;
+
+    // AUDIT v3.4.3 P1-05: il gioco si registra a VALLE della leva (tra bilanciere
+    // e stelo), quindi va tolto dall'alzata VALVOLA, non da quella camma. La
+    // mappatura lavora sulla curva lato camma, percio' il gioco va riportato
+    // dividendolo per il rapporto:  max(0, L*r - g)  ==  max(0, L - g/r)*r.
+    // Prima il gioco veniva sottratto lato camma e POI moltiplicato per r: con
+    // un bilanciere 1,5 e 0,20 mm di gioco si toglievano 0,30 mm di troppo
+    // dall'alzata e la durata risultava piu' corta del vero.
+    // Con bicchiere (r = 1,00) il risultato e' identico bit a bit.
+    var intakeClearCam  = lashLatoCamma(intakeClear,  rockerInEff);
+    var exhaustClearCam = lashLatoCamma(exhaustClear, rockerExEff);
+
     // Ri-elabora SEMPRE dai dati grezzi memorizzati con i parametri CORRENTI
     // (follower, raggio base per lato, angolo lobo, gioco): così modificare un
     // parametro e ri-analizzare ha effetto senza dover re-importare i file.
@@ -3308,13 +4116,13 @@ function analyze() {
         folIntake   = (window._metaIn && window._metaIn.converted)
                     ? analysisRaw(rawIntake)
                     : applyVirtualFollower(analysisRaw(rawIntake), 'intake');
-        crankIntake = mapCamToCrank(folIntake, _ecA.intake, intakeClear, 'intake');
+        crankIntake = mapCamToCrank(folIntake, _ecA.intake, intakeClearCam, 'intake');
     }
     if (rawExhaust && rawExhaust.length) {
         folExhaust   = (window._metaEx && window._metaEx.converted)
                     ? analysisRaw(rawExhaust)
                     : applyVirtualFollower(analysisRaw(rawExhaust), 'exhaust');
-        crankExhaust = mapCamToCrank(folExhaust, _ecA.exhaust, exhaustClear, 'exhaust');
+        crankExhaust = mapCamToCrank(folExhaust, _ecA.exhaust, exhaustClearCam, 'exhaust');
     }
     // Avviso (una volta) se la correzione baseline ha tolto un'eccentricità reale
     if (baselineEnabled() && window._lastBaselineAmp > 0.05 && window.cammesToast && !window._baselineToastShown) {
@@ -3324,9 +4132,19 @@ function analyze() {
             duration: 6500 });
     }
 
-    // Apply rocker arm ratio for analysis
-    var anlIn = (rockerIn !== 1.0) ? applyRockerRatio(crankIntake, rockerIn) : crankIntake;
-    var anlEx = (rockerEx !== 1.0) ? applyRockerRatio(crankExhaust, rockerEx) : crankExhaust;
+    // Applicazione del rapporto di leva (calcolato sopra, insieme al gioco
+    // riportato lato camma: i due devono restare coerenti — audit P1-05/P1-09).
+    if (_followerGiaValvola && (rockerIn !== 1.0 || rockerEx !== 1.0) &&
+        window.cammesToast && !window._rockerFingerAvvisato) {
+        window._rockerFingerAvvisato = true;
+        window.cammesToast({ kind: 'info', title: 'Rapporto di leva gia incluso',
+            body: 'Con la leva a dito il rapporto &egrave; gi&agrave; dato da <b>L valvola / L camma</b> ' +
+                  '(' + (Number(document.getElementById('lValve').value) / Number(document.getElementById('lArm').value)).toFixed(2) + '). ' +
+                  'Il campo <b>Bilanciere</b> non viene riapplicato: conterebbe due volte.',
+            duration: 7000 });
+    }
+    var anlIn = (rockerInEff !== 1.0) ? applyRockerRatio(crankIntake, rockerInEff) : crankIntake;
+    var anlEx = (rockerExEff !== 1.0) ? applyRockerRatio(crankExhaust, rockerExEff) : crankExhaust;
 
     // Find max with rocker applied
     var mxIn = findMax(anlIn);
@@ -3427,8 +4245,16 @@ function analyze() {
     velIntake = kinIn.vel; accIntake = kinIn.acc; jerkIntake = kinIn.jerk;
     velExhaust = kinEx.vel; accExhaust = kinEx.acc; jerkExhaust = kinEx.jerk;
 
-    var resIn = extractKinematicResults(velIntake, accIntake, jerkIntake, mxIn.idx, rpm);
-    var resEx = extractKinematicResults(velExhaust, accExhaust, jerkExhaust, mxEx.idx, rpm);
+    // P1-10: il crossing di chiusura reale entra nel calcolo della velocita'
+    // alla sede (inEv/exEv sono gia' stati calcolati sopra da findEvents).
+    var resIn = extractKinematicResults(velIntake, accIntake, jerkIntake, mxIn.idx, rpm,
+                                        inEv.ambiguous ? NaN : inEv.closeIdx);
+    var resEx = extractKinematicResults(velExhaust, accExhaust, jerkExhaust, mxEx.idx, rpm,
+                                        exEv.ambiguous ? NaN : exEv.closeIdx);
+    // Conservati per il retune live, che ricalcola la cinematica senza
+    // ripassare da findEvents.
+    window._closeIdxIn = inEv.ambiguous ? NaN : inEv.closeIdx;
+    window._closeIdxEx = exEv.ambiguous ? NaN : exEv.closeIdx;
 
     // ====== SPRING FORCES & CAM FLOAT ======
     var springK   = Number(document.getElementById('springK').value) || 0;
@@ -3490,16 +4316,11 @@ function analyze() {
         // >3× picco). Un modello NON convergente non deve produrre verdetti di
         // float/regime affidabili.
         // AUDIT DYN-01: esito TIPIZZATO + tolleranza/residuo per lo snapshot.
-        var _stIn = valveLiftIn.status || (valveLiftIn.converged !== false ? 'CONVERGED' : 'NON_CONVERGED');
-        var _stEx = valveLiftEx.status || (valveLiftEx.converged !== false ? 'CONVERGED' : 'NON_CONVERGED');
-        compInfo = {
-            status: (_stIn === 'INVALID_INPUT' || _stEx === 'INVALID_INPUT') ? 'INVALID_INPUT'
-                  : (_stIn !== 'CONVERGED' || _stEx !== 'CONVERGED') ? 'NON_CONVERGED' : 'CONVERGED',
-            statusIn: _stIn, statusEx: _stEx,
-            cyclesIn: valveLiftIn.cyclesRun, cyclesEx: valveLiftEx.cyclesRun,
-            residualIn: valveLiftIn.residualX, residualEx: valveLiftEx.residualX,
-            tolX: valveLiftIn.tolX, tolV: valveLiftIn.tolV
-        };
+        // AUDIT P2-03: riepilogo senza perdita. Prima si schiacciavano i due
+        // lati con Math.max, si teneva il solo residuo di posizione e un
+        // residuo mai misurato diventava zero. Ora la funzione sta in
+        // cammes-math.js ed e' testabile da node.
+        compInfo = riassuntoConvergenza(valveLiftIn, valveLiftEx);
         window._complianceInfo = compInfo;
         window._complianceConverged = compInfo.status === 'CONVERGED';
         if ((!_vfin || (_cmax > 0 && _vmax > 3 * _cmax) || !window._complianceConverged) && window.cammesToast) {
@@ -3510,19 +4331,43 @@ function analyze() {
     }
 
     // ====== SPRING SURGE (massa distribuita) ======
-    // Indipendente dalla compliance: pilota la molla col moto valvola reale
-    // (se compliance ON) o col profilo cam (altrimenti).
+    // AUDIT v3.4.3 P1-08 — scelta del DRIVE, dichiarata.
+    // Prima: `simulateSpringSurge(valveLiftIn || anlIn, ...)`. Un array che
+    // arriva da una compliance INVALID_INPUT o NON_CONVERGED e' comunque
+    // truthy: veniva usato come traiettoria di comando e il surge restituiva
+    // frequenza e ratio dall'aria plausibile, nati da una dinamica che il
+    // solver stesso aveva dichiarato inattendibile.
+    // Ora: la traiettoria compliance si usa SOLO se lo stato e' CONVERGED;
+    // se la compliance e' attiva ma non convergente NON si ripiega in silenzio
+    // sulla camma — il surge diventa NON_VALUTABILE_DRIVE.
+    // Il calcolo riguarda in ogni caso la sola ASPIRAZIONE.
     var surgeOn = document.getElementById('surgeEnabled') &&
                   document.getElementById('surgeEnabled').value === '1';
-    var surgeIn = null;
+    var surgeIn = null, surgeStato = null, surgeDrive = null;
     if (surgeOn && rpm > 0) {
-        var surgeParams = {
-            kSpringN_mm: springK,
-            springMassG: finiteOr(document.getElementById('springMass').value, 50),
-            springCoils: finiteOr(document.getElementById('springCoils').value, 12),
-            dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
-        };
-        surgeIn = simulateSpringSurge(valveLiftIn || anlIn, rpm, surgeParams);
+        if (complianceOn && !(compInfo && compInfo.status === 'CONVERGED')) {
+            surgeStato = 'NON_VALUTABILE_DRIVE';
+            surgeDrive = 'compliance non convergente';
+            if (window.cammesToast) {
+                window.cammesToast({ kind: 'warn', title: 'Surge non valutabile',
+                    body: 'La molla andrebbe pilotata dal moto valvola calcolato dalla compliance, ' +
+                          'ma quel solver &egrave; <b>' + ((compInfo && compInfo.status) || 'non disponibile') +
+                          '</b>. Non si ripiega sul profilo camma (darebbe un numero diverso senza dirlo): ' +
+                          'il surge resta <b>non valutabile</b> finch&eacute; la compliance non converge.',
+                    duration: 9000 });
+            }
+        } else {
+            var surgeParams = {
+                kSpringN_mm: springK,
+                springMassG: finiteOr(document.getElementById('springMass').value, 50),
+                springCoils: finiteOr(document.getElementById('springCoils').value, 12),
+                dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
+            };
+            var driveArr = (complianceOn && valveLiftIn) ? valveLiftIn : anlIn;
+            surgeDrive = (complianceOn && valveLiftIn) ? 'moto valvola (compliance CONVERGED)' : 'profilo camma';
+            surgeIn = simulateSpringSurge(driveArr, rpm, surgeParams);
+            surgeStato = surgeIn.diverged ? 'DIVERGED' : 'PRELIMINARE';
+        }
     }
 
     // ====== DISPLAY RESULTS ======
@@ -3570,6 +4415,24 @@ function analyze() {
     // ====== KINEMATIC RESULTS ======
     document.getElementById('kinematicsCard').style.display = 'block';
 
+    // AUDIT P2-08: la card e' costruita comunque, ma se il modulo Cinematica
+    // (o Dinamica) e' spento resta nascosta dal CSS e i grafici non si vedono.
+    // Prima non lo diceva nessuno: l'analisi sembrava non aver prodotto nulla.
+    // I numeri sono gia' pronti — basta riaccendere il modulo, senza
+    // rianalizzare.
+    (function avvisaModuloSpento() {
+        var card = document.getElementById('kinematicsCard');
+        if (!card || !card.classList.contains('mod-hidden')) return;
+        if (window._cinematicaAvvisata) return;
+        window._cinematicaAvvisata = true;
+        if (window.cammesToast) window.cammesToast({
+            kind: 'info', title: 'Grafici non visibili',
+            body: 'I grafici di cinematica e forze sono stati calcolati, ma il modulo &egrave; spento: ' +
+                  'attiva <b>&#9881; Funzioni &rarr; Cinematica</b> per vederli. Non serve rianalizzare.',
+            duration: 8000
+        });
+    })();
+
     applyKinematicResults(resIn, resEx);   // AUDIT APP-01: condiviso col retune live
 
     // Chart titles with units
@@ -3615,6 +4478,22 @@ function analyze() {
             durationRef: refHeight, smoothWindow: smoothW,
             springK: springK, springPreload: springF0,
             massEqIntake: mEqIn, massEqExhaust: mEqEx,
+            // AUDIT P1-11: i parametri della dinamica ENTRANO nello snapshot.
+            // Prima sweep, ottimizzatore, mappe e Race report li rileggevano dal
+            // DOM al momento del click, mescolandoli con curve calcolate prima:
+            // cambiare modello di compliance o smorzamento e lanciare la mappa
+            // dava numeri meta' nuovi e meta' vecchi, senza un avviso.
+            complianceOnVal:   complianceOn,
+            complianceModelVal: modelVal,
+            kTrain:            numDi('kTrain'),
+            dampingRatio:      numDi('dampingRatio'),
+            massEqIntermediate: numDi('massEqIntermediate'),
+            kPushrod:          numDi('kPushrod'),
+            massSeat:          numDi('massSeat'),
+            kSeat:             numDi('kSeat'),
+            kPivot:            numDi('kPivot'),
+            springMass:        numDi('springMass'),
+            springCoils:       numDi('springCoils'),
             intakeFile: document.getElementById('intakeStatus').textContent,
             exhaustFile: document.getElementById('exhaustStatus').textContent,
             // Snapshot del metodo di presentazione: la scheda camma dichiara
@@ -3656,21 +4535,41 @@ function analyze() {
             // al cliente stampa lo stesso numero con un banner CRITICO,
             // calcolato su una molla che l'utente non ha mai inserito.
             mollaConfermata: mollaConfermata(),
+            // P1-07: lo stato e' PER LATO. Un lato completo resta valutabile
+            // anche se all'altro manca la massa.
+            valutabileIn: latoValutabile('intake'),
+            valutabileEx: latoValutabile('exhaust'),
             kinIntake: resIn, kinExhaust: resEx,
             // Compliance (race-grade dynamic simulation), null se OFF
             complianceOn:    complianceOn,
             complianceModel: complianceOn ? (modelVal === '3dof' ? '3-DOF (sede)' : modelVal === '2dof' ? '2-DOF (catena)' : '1-DOF') : null,
             // AUDIT DYN-01: esito tipizzato salvato nello snapshot (per UI/CSV/PDF)
             complianceStatus:   compInfo ? compInfo.status : null,
-            complianceCycles:   compInfo ? Math.max(compInfo.cyclesIn || 0, compInfo.cyclesEx || 0) : null,
-            complianceResidual: compInfo ? Math.max(compInfo.residualIn || 0, compInfo.residualEx || 0) : null,
+            // AUDIT P2-03: il riepilogo COMPLETO viaggia nello snapshot. I tre
+            // campi appiattiti qui sotto restano per compatibilita' con i
+            // profili gia' salvati, ma senza `|| 0`: un residuo mai misurato
+            // resta null e si scrive "non calcolato", non "0.00e+0".
+            complianceInfo:     compInfo || null,
+            complianceCycles:   compInfo ? finiteOr(compInfo.cyclesIn, finiteOr(compInfo.cyclesEx, null)) : null,
+            complianceResidual: compInfo ? compInfo.residualXIn : null,
             complianceTolX:     compInfo ? compInfo.tolX : null,
             valveFloatIn:    floatIn ? floatIn.maxGap : null,
             valveFloatInDeg: floatIn ? floatIn.gapIdx - 360 : null,
             valveFloatEx:    floatEx ? floatEx.maxGap : null,
             valveFloatExDeg: floatEx ? floatEx.gapIdx - 360 : null,
-            // Spring surge (molla a massa distribuita), null se OFF
+            // Spring surge (molla a massa distribuita), null se OFF.
+            // AUDIT P1-08: lo snapshot porta anche lo STATO e le riserve del
+            // modello. Prima si salvavano solo frequenza e ratio: il PDF li
+            // stampava come risultati, mentre il solver li dichiarava
+            // preliminari e non verificati sulla convergenza.
             surgeOn:          !!surgeOn,
+            surgeStatus:      surgeStato,                                  // PRELIMINARE | DIVERGED | NON_VALUTABILE_DRIVE
+            surgeDrive:       surgeDrive,                                  // da cosa e' pilotata la molla
+            surgeLato:        'aspirazione',                               // il calcolo riguarda solo l'aspirazione
+            surgePreliminary: surgeIn ? (surgeIn.preliminary !== false) : null,
+            surgeSettleCycles: surgeIn ? (surgeIn.settleCycles || 0) : null,
+            surgeDiverged:    surgeIn ? !!surgeIn.diverged : null,
+            surgeMaxCoilAmpMm: surgeIn ? surgeIn.maxCoilAmpMm : null,
             surgeFreqHz:      surgeIn ? surgeIn.surgeFreqHz : null,
             surgeRatio:       surgeIn ? surgeIn.surgeRatio : null,
             surgeHarmonic:    surgeIn ? surgeIn.harmonicOrder : null,
@@ -3715,37 +4614,55 @@ function analyze() {
         // Con i valori di esempio il distacco non e' riferito al motore in
         // prova: non lo si annuncia e non si emettono allarmi (sarebbe un
         // rosso calcolato su una molla che non e' quella dell'utente).
-        var _mollaOk = mollaConfermata();
+        // P1-07: il gate e' per lato. Il distacco complessivo si annuncia solo
+        // se ENTRAMBI i lati sono valutabili; se lo e' uno solo si annuncia
+        // quello, dicendo quale.
+        // P2-06: l'id dell'analisi va FOTOGRAFATO ora, non letto quando il
+        // toast ritardato comparira': a quel punto potrebbe essere gia'
+        // l'analisi successiva, e il verdetto risulterebbe attribuito a quella.
+        var _idAnalisiToast = (window.lastAnalysis && window.lastAnalysis.analysisId) || _analysisCounter || null;
+        var _okTIn = latoValutabile('intake'), _okTEx = latoValutabile('exhaust');
+        var _mollaOk = _okTIn && _okTEx;
+        var _fraseDistacco;
+        if (_mollaOk) {
+            _fraseDistacco = ' &middot; distacco valvola <b>' + rpmCritStr + '</b>';
+        } else if (_okTIn || _okTEx) {
+            var _f = _okTIn ? forcesIn.rpmCrit : forcesEx.rpmCrit;
+            _fraseDistacco = ' &middot; distacco ' + (_okTIn ? 'asp.' : 'scar.') + ' <b>' +
+                (isFinite(_f) ? Math.round(_f).toLocaleString('it-IT') + ' rpm' : '&#x221e; (sicuro)') +
+                '</b> &middot; <i>l\'altro lato &egrave; ai valori di esempio</i>';
+        } else {
+            _fraseDistacco = ' &middot; <i>molla ai valori di esempio: distacco non valutato</i>';
+        }
         window.cammesToast({
-            kind: 'success', title: 'Analisi completata',
-            body: 'LSA <b>' + LSA.toFixed(1) + '&deg;</b> &middot; durata asp. <b>' + durIntake + '&deg;</b>' +
-                  (_mollaOk ? ' &middot; distacco valvola <b>' + rpmCritStr + '</b>'
-                            : ' &middot; <i>molla ai valori di esempio: distacco non valutato</i>'),
-            duration: 5500
+            kind: 'info', title: 'Analisi eseguita',
+            body: 'separazione lobi (LSA) <b>' + LSA.toFixed(1) + '&deg;</b> &middot; durata asp. <b>' + durIntake + '&deg;</b>' +
+                  _fraseDistacco,
+            duration: 5500, analisi: _idAnalisiToast
         });
         // Avviso se il limite di distacco e' vicino al regime target. Il
         // linguaggio dice che dipende dai parametri INSERITI: non e' un tetto
         // imposto dal programma (era la lettura sbagliata piu' comune).
-        if (_mollaOk && isFinite(minRpmCrit) && minRpmCrit < rpm * 1.05) {
-            setTimeout(function () {
+        if (_mollaOk && isFinite(minRpmCrit) && !(minRpmCrit > rpm * 1.05)) {
+            _toastTimers.push(setTimeout(function () {
                 window.cammesToast({
                     kind: 'err', title: 'Margine molla insufficiente',
                     body: 'Con la molla e le masse inserite la valvola si stacca a <b>' +
                           Math.round(minRpmCrit).toLocaleString('it-IT') + ' giri</b>, sotto il regime di prova (' +
                           rpm.toLocaleString('it-IT') + '). Aumenta k molla o F&#8320; precarico, oppure riduci la massa.' +
                           '<br><i>Non &egrave; un limite del programma: puoi impostare qualsiasi regime.</i>',
-                    duration: 8000
+                    duration: 8000, analisi: _idAnalisiToast
                 });
-            }, 500);
-        } else if (_mollaOk && isFinite(minRpmCrit) && minRpmCrit < rpm * 1.5) {
-            setTimeout(function () {
+            }, 500));
+        } else if (_mollaOk && isFinite(minRpmCrit) && !(minRpmCrit > rpm * 1.5)) {
+            _toastTimers.push(setTimeout(function () {
                 window.cammesToast({
                     kind: 'warn', title: 'Margine molla stretto',
                     body: 'Il distacco valvola arriva solo +' + Math.round((minRpmCrit/rpm-1)*100) +
                           '% sopra il regime di prova. Valuta una molla pi&ugrave; rigida per uso prolungato in zona rossa.',
-                    duration: 7000
+                    duration: 7000, analisi: _idAnalisiToast
                 });
-            }, 500);
+            }, 500));
         }
 
         // Toast aggiuntivo se compliance attiva e valve float dinamico significativo.
@@ -3754,7 +4671,7 @@ function analyze() {
         // il toast 'Compliance NON convergente' sopra ha gia' avvisato.
         if (complianceOn && (floatIn || floatEx) && compInfo && compInfo.status === 'CONVERGED') {
             var maxFloatDyn = Math.max(floatIn ? floatIn.maxGap : 0, floatEx ? floatEx.maxGap : 0);
-            setTimeout(function () {
+            _toastTimers.push(setTimeout(function () {
                 var detail = '';
                 if (floatIn && floatIn.maxGap > 0.05) detail += 'Asp: ' + floatIn.maxGap.toFixed(2) + ' mm @ ' + (floatIn.gapIdx - 360) + '&deg;. ';
                 if (floatEx && floatEx.maxGap > 0.05) detail += 'Scar: ' + floatEx.maxGap.toFixed(2) + ' mm @ ' + (floatEx.gapIdx - 360) + '&deg;.';
@@ -3763,7 +4680,7 @@ function analyze() {
                         kind: 'err', title: 'VALVE FLOAT DINAMICO (compliance)',
                         body: 'Gap cam-valvola > 0.5 mm a ' + rpm + ' rpm. ' + detail +
                               ' Rifare con molla pi&ugrave; rigida o ridurre RPM.',
-                        duration: 9000
+                        duration: 9000, analisi: _idAnalisiToast
                     });
                 } else if (maxFloatDyn > 0.1) {
                     window.cammesToast({
@@ -3779,7 +4696,7 @@ function analyze() {
                         duration: 5000
                     });
                 }
-            }, 900);
+            }, 900));
         }
     }
 }
@@ -3995,6 +4912,14 @@ function createComplianceChart(camLiftIn, valveLiftIn, camLiftEx, valveLiftEx, r
     if (!valveLiftIn && !valveLiftEx) { wrap.style.display = 'none'; return; }
     wrap.style.display = '';
 
+    // Stessa soglia del verdetto numerico (badge distacco), cosi' grafico e
+    // numero non possono piu' contraddirsi.
+    var SOGLIA_DISTACCO = 0.05;   // mm
+    // Con solver non convergente il risultato e' diagnostico: niente fasce
+    // rosse "autorevoli" su una simulazione che non si e' stabilizzata.
+    var distaccoAffidabile = !window._complianceInfo ||
+                             window._complianceInfo.status === 'CONVERGED';
+
     var labels = [];
     var camIn = [], valIn = [], camEx = [], valEx = [], floatIn = [], floatEx = [];
     for (var i = 1; i <= 720; i++) {
@@ -4005,13 +4930,24 @@ function createComplianceChart(camLiftIn, valveLiftIn, camLiftEx, valveLiftEx, r
         var vE = (valveLiftEx ? valveLiftEx[i] : null);
         camIn.push(cI); valIn.push(vI);
         camEx.push(cE); valEx.push(vE);
-        // Evidenzio zona float: dove cam > valve (gap positivo)
-        floatIn.push(valveLiftIn !== null && cI - (vI || 0) > 0.02 ? cI : null);
-        floatEx.push(valveLiftEx !== null && cE - (vE || 0) > 0.02 ? cE : null);
+        // AUDIT v3.4.3 P1-03 — la condizione era ROVESCIATA.
+        // Prima: cam - valvola > 0,02 = la camma sta SOPRA la valvola, cioe' la
+        // normale compressione elastica del treno (F/k, ~0,09 mm, presente
+        // sempre): veniva dipinta di rosso come "distacco". Sulla Clio a 800
+        // giri colorava 269 gradi su 720 mentre il distacco vero era 0,02 mm; a
+        // 10.000 giri, col distacco vero a 3,14 mm, la fascia si RESTRINGEVA e
+        // nella zona critica non colorava nulla.
+        // Ora si usa la stessa definizione di detectValveFloat e la stessa
+        // soglia del verdetto (0,05 mm): valvola SOPRA la camma = contatto perso.
+        floatIn.push(distaccoAffidabile && vI !== null && (vI - cI) > SOGLIA_DISTACCO ? vI : null);
+        floatEx.push(distaccoAffidabile && vE !== null && (vE - cE) > SOGLIA_DISTACCO ? vE : null);
     }
 
     var titleEl = document.getElementById('complianceChartTitle');
-    if (titleEl) titleEl.textContent = 'Compliance — alzata cam (imposta) vs valvola reale @ ' + rpm + ' rpm';
+    if (titleEl) {
+        titleEl.textContent = 'Cedevolezza treno valvole — alzata camma (imposta) vs valvola reale @ ' + rpm + ' rpm' +
+            (distaccoAffidabile ? '' : '  —  DIAGNOSTICO: solver non convergente, zone di distacco non mostrate');
+    }
 
     var ctx = document.getElementById('complianceCanvas').getContext('2d');
     complianceChart = new Chart(ctx, {
@@ -4023,9 +4959,13 @@ function createComplianceChart(camLiftIn, valveLiftIn, camLiftEx, valveLiftEx, r
                 { label: 'valvola asp. reale',   data: valIn, borderColor: '#00d4ff', borderWidth: 2.5, pointRadius: 0, fill: false },
                 { label: 'cam scar. (imposta)', data: camEx, borderColor: '#ff5252', borderDash: [4,3], borderWidth: 1, pointRadius: 0, fill: false },
                 { label: 'valvola scar. reale',  data: valEx, borderColor: '#ff5252', borderWidth: 2.5, pointRadius: 0, fill: false },
-                // Zona float in rosso semitrasparente (riempimento sotto la cam)
-                { label: 'float asp.',  data: floatIn, borderColor: 'transparent', backgroundColor: 'rgba(255,82,82,0.18)', pointRadius: 0, fill: '-3', spanGaps: false },
-                { label: 'float scar.', data: floatEx, borderColor: 'transparent', backgroundColor: 'rgba(255,82,82,0.18)', pointRadius: 0, fill: '-2', spanGaps: false }
+                // AUDIT P1-03: la fascia rossa mostra QUANTO la valvola scavalca
+                // la camma, quindi contiene i valori VALVOLA e va riempita fino
+                // alla curva CAMMA (indice 0 per asp., 2 per scar.). Prima
+                // conteneva i valori camma e riempiva fino alla valvola: era la
+                // banda di compressione elastica, cioe' il contrario.
+                { label: 'distacco asp.',  data: floatIn, borderColor: 'transparent', backgroundColor: 'rgba(255,82,82,0.28)', pointRadius: 0, fill: '-4', spanGaps: false },
+                { label: 'distacco scar.', data: floatEx, borderColor: 'transparent', backgroundColor: 'rgba(255,82,82,0.28)', pointRadius: 0, fill: '-3', spanGaps: false }
             ]
         },
         options: kinChartOptions('Alzata (mm)')
@@ -4117,16 +5057,99 @@ function updateTimingDiagram(inEv, exEv, durIn, durEx, overlap) {
             border: sl.on.map(function (o) { return o ? solid : TR; })
         };
     }
+    // ---- OVERLAP: l'arco che mancava -------------------------------------
+    // La legenda dichiarava "Overlap" con una pastiglia GIALLA, ma nel disegno
+    // non c'era nulla di giallo: il grafico aveva due soli anelli. Una legenda
+    // che nomina un colore assente si legge come un grafico rotto — ed era la
+    // grandezza piu' interessante del diagramma, l'unica invisibile.
+    // L'overlap e' l'INTERSEZIONE dei due intervalli di apertura sulla ruota di
+    // 720 gradi: si ricava dagli stessi eventi degli altri due anelli, non da
+    // una formula a parte, cosi' non puo' contraddirli.
+    function intervalliAperti(ev) {
+        if (!ev || ev.ambiguous || !isFinite(ev.openIdx) || !isFinite(ev.closeIdx)) return [];
+        var s = wheel(ev.openIdx), e = wheel(ev.closeIdx);
+        return (e >= s) ? [[s, e]] : [[0, e], [s, 720]];   // spezzato sulla cucitura
+    }
+    function intersezione(a, b) {
+        var out = [];
+        a.forEach(function (x) {
+            b.forEach(function (y) {
+                var s = Math.max(x[0], y[0]), e = Math.min(x[1], y[1]);
+                if (e > s + 1e-9) out.push([s, e]);
+            });
+        });
+        return out.sort(function (p, q) { return p[0] - q[0]; });
+    }
+    // Da una lista di intervalli alle fette del doughnut.
+    function slicesFromIntervals(iv) {
+        if (!iv.length) return { data: [720], on: [false] };
+        var data = [], on = [], cur = 0;
+        iv.forEach(function (p) {
+            if (p[0] > cur) { data.push(p[0] - cur); on.push(false); }
+            data.push(p[1] - p[0]); on.push(true);
+            cur = p[1];
+        });
+        if (cur < 720) { data.push(720 - cur); on.push(false); }
+        return { data: data, on: on };
+    }
+
     var inSl = slicesFromEvent(inEv);
     var exSl = slicesFromEvent(exEv);
+    var ovIv = intersezione(intervalliAperti(inEv), intervalliAperti(exEv));
+    var ovSl = slicesFromIntervals(ovIv);
     var inCol = colors(inSl, 'rgba(0, 212, 255, 0.85)', '#00d4ff');
     var exCol = colors(exSl, 'rgba(255, 82, 82, 0.85)', '#ff5252');
+    var ovCol = colors(ovSl, 'rgba(255, 215, 64, 0.85)', '#ffd740');
     var ov = (overlap > 0 ? overlap : 0);
     var amb = (inEv && inEv.ambiguous) || (exEv && exEv.ambiguous);
+    // Somma degli archi disegnati: deve coincidere con l'overlap in tabella.
+    // Se non coincide, il grafico lo DICE invece di mostrare due verita'.
+    var ovDisegnato = ovIv.reduce(function (s, p) { return s + (p[1] - p[0]); }, 0);
+    var ovIncoerente = !amb && isFinite(ov) && Math.abs(ovDisegnato - ov) > 0.6;
+
+    // Riferimenti angolari: senza PMS e PMI la ruota non e' leggibile — il
+    // settore vuoto sembra un pezzo di grafico che non si e' disegnato, invece
+    // di essere "qui entrambe le valvole sono chiuse". Quattro tacche con
+    // etichetta, disegnate sopra gli anelli.
+    var RIFERIMENTI = [
+        { deg: 0,   testo: 'PMS scoppio' },
+        { deg: 180, testo: 'PMI scarico' },
+        { deg: 360, testo: 'PMS incrocio' },
+        { deg: 540, testo: 'PMI aspir.' }
+    ];
+    var pluginRiferimenti = {
+        id: 'riferimentiPms',
+        afterDatasetsDraw: function (chart) {
+            var c = chart.ctx, area = chart.chartArea;
+            if (!area) return;
+            var cx = (area.left + area.right) / 2, cy = (area.top + area.bottom) / 2;
+            var rEst = Math.min(area.right - area.left, area.bottom - area.top) / 2;
+            var col = anaColors().text;
+            c.save();
+            c.strokeStyle = col; c.fillStyle = col;
+            c.lineWidth = 1; c.font = '9px sans-serif';
+            RIFERIMENTI.forEach(function (r) {
+                // Chart.js parte da ore 12 e gira in senso orario
+                var a = (r.deg / 720) * 2 * Math.PI - Math.PI / 2;
+                var ca = Math.cos(a), sa = Math.sin(a);
+                c.globalAlpha = 0.55;
+                c.beginPath();
+                c.moveTo(cx + ca * (rEst - 2), cy + sa * (rEst - 2));
+                c.lineTo(cx + ca * (rEst + 5), cy + sa * (rEst + 5));
+                c.stroke();
+                c.globalAlpha = 0.9;
+                c.textAlign = (Math.abs(ca) < 0.2) ? 'center' : (ca > 0 ? 'left' : 'right');
+                c.textBaseline = (Math.abs(sa) < 0.2) ? 'middle' : (sa > 0 ? 'top' : 'bottom');
+                c.fillText(r.testo, cx + ca * (rEst + 8), cy + sa * (rEst + 8));
+            });
+            c.restore();
+        }
+    };
 
     if (timingChartInstance) timingChartInstance.destroy();
     var ctx = document.getElementById('timingChart').getContext('2d');
     timingChartInstance = new Chart(ctx, {
+        plugins: [pluginRiferimenti],
         type: 'doughnut',
         data: {
             labels: ['a', 'b', 'c'],
@@ -4139,20 +5162,34 @@ function updateTimingDiagram(inEv, exEv, durIn, durEx, overlap) {
                     borderWidth: 1,
                     _on: inSl.on
                 },
-                {   // anello INTERNO = scarico
+                {   // anello INTERMEDIO = scarico
                     label: 'Scarico',
                     data: exSl.data,
                     backgroundColor: exCol.bg,
                     borderColor: exCol.border,
                     borderWidth: 1,
                     _on: exSl.on
+                },
+                {   // anello INTERNO = overlap (entrambe aperte)
+                    label: 'Overlap',
+                    data: ovSl.data,
+                    backgroundColor: ovCol.bg,
+                    borderColor: ovCol.border,
+                    borderWidth: 1,
+                    _on: ovSl.on
                 }
             ]
         },
         options: {
             responsive: false,
-            cutout: '30%',
-            rotation: 0,   // 0 = PMI in alto; il PMS/overlap cade in basso
+            // spazio per le etichette PMS/PMI, che stanno FUORI dagli anelli
+            layout: { padding: { top: 14, bottom: 14, left: 40, right: 40 } },
+            cutout: '26%',
+            // rotation 0 = crank 0 in alto. Nella convenzione del progetto
+            // (PMS incrocio = 360) crank 0/720 e' il PMS di SCOPPIO, dove
+            // entrambe le valvole sono chiuse: nessun arco attraversa la
+            // cucitura. L'incrocio cade quindi in basso.
+            rotation: 0,
             plugins: {
                 legend: {
                     display: true,
@@ -4163,12 +5200,18 @@ function updateTimingDiagram(inEv, exEv, durIn, durEx, overlap) {
                         padding: 8,
                         generateLabels: function () {
                             // AUDIT MAT-01: ambiguo -> dichiarato in legenda, non nascosto
+                            // La legenda dice anche QUALE anello e' quale: erano tre
+                            // corone concentriche senza alcuna indicazione, e la voce
+                            // "Overlap" gialla non aveva un colore corrispondente nel
+                            // disegno.
                             var labels = [
-                                { text: 'Aspirazione: ' + ((inEv && !inEv.ambiguous) ? durIn + '\u00B0' : 'n.d.'), fillStyle: 'rgba(0,212,255,0.85)', strokeStyle: '#00d4ff', lineWidth: 1, index: 0 },
-                                { text: 'Scarico: ' + ((exEv && !exEv.ambiguous) ? durEx + '\u00B0' : 'n.d.'), fillStyle: 'rgba(255,82,82,0.85)', strokeStyle: '#ff5252', lineWidth: 1, index: 1 },
-                                { text: 'Overlap: ' + (isFinite(ov) && !amb ? ov.toFixed(1) + '\u00B0' : 'n.d.'), fillStyle: 'rgba(255,215,64,0.8)', strokeStyle: '#ffd740', lineWidth: 1, index: 2 }
+                                { text: 'Aspirazione (esterno): ' + ((inEv && !inEv.ambiguous) ? durIn + '\u00B0' : 'n.d.'), fillStyle: 'rgba(0,212,255,0.85)', strokeStyle: '#00d4ff', lineWidth: 1, index: 0 },
+                                { text: 'Scarico (mediano): ' + ((exEv && !exEv.ambiguous) ? durEx + '\u00B0' : 'n.d.'), fillStyle: 'rgba(255,82,82,0.85)', strokeStyle: '#ff5252', lineWidth: 1, index: 1 },
+                                { text: 'Overlap (interno): ' + (isFinite(ov) && !amb ? ov.toFixed(1) + '\u00B0' : 'n.d.'), fillStyle: 'rgba(255,215,64,0.85)', strokeStyle: '#ffd740', lineWidth: 1, index: 2 },
+                                { text: 'Vuoto = valvola chiusa', fillStyle: 'rgba(0,0,0,0)', strokeStyle: anaColors().text, lineWidth: 1, index: 3 }
                             ];
-                            if (amb) labels.push({ text: '\u26A0 eventi AMBIGUI (vedi tabella)', fillStyle: 'rgba(255,180,0,0.85)', strokeStyle: '#ffb400', lineWidth: 1, index: 3 });
+                            if (amb) labels.push({ text: '\u26A0 eventi AMBIGUI (vedi tabella)', fillStyle: 'rgba(255,180,0,0.85)', strokeStyle: '#ffb400', lineWidth: 1, index: 4 });
+                            if (ovIncoerente) labels.push({ text: '\u26A0 overlap disegnato ' + ovDisegnato.toFixed(1) + '\u00B0 \u2260 tabella', fillStyle: 'rgba(255,180,0,0.85)', strokeStyle: '#ffb400', lineWidth: 1, index: 5 });
                             return labels;
                         }
                     }
@@ -4182,6 +5225,7 @@ function updateTimingDiagram(inEv, exEv, durIn, durEx, overlap) {
                     },
                     callbacks: {
                         label: function (c) {
+                            if (c.datasetIndex === 2) return 'Entrambe aperte (overlap): ' + c.parsed.toFixed(1) + '\u00B0';
                             var v = (c.datasetIndex === 0) ? 'Aspirazione' : 'Scarico';
                             return v + ' aperta: ' + c.parsed.toFixed(1) + '\u00B0';
                         }
@@ -4282,10 +5326,12 @@ function runABComparison() {
             return;
         }
 
-        var crankA_int = mapCamToCrank(folA_int, ecA.intake, clearA, 'intake');
-        var crankA_exh = mapCamToCrank(folA_exh, ecA.exhaust, clearA, 'exhaust');
-        var crankB_int = mapCamToCrank(folB_int, ecB.intake, clearB, 'intake');
-        var crankB_exh = mapCamToCrank(folB_exh, ecB.exhaust, clearB, 'exhaust');
+        // P1-05: gioco valvola riportato lato camma (le curve A/B restano in
+        // dominio camma, come la vista principale prima del bilanciere).
+        var crankA_int = mapCamToCrank(folA_int, ecA.intake, giocoLatoCamma(clearA, 'intake'), 'intake');
+        var crankA_exh = mapCamToCrank(folA_exh, ecA.exhaust, giocoLatoCamma(clearA, 'exhaust'), 'exhaust');
+        var crankB_int = mapCamToCrank(folB_int, ecB.intake, giocoLatoCamma(clearB, 'intake'), 'intake');
+        var crankB_exh = mapCamToCrank(folB_exh, ecB.exhaust, giocoLatoCamma(clearB, 'exhaust'), 'exhaust');
 
         // Find maxes
         var maxA_int = findMax(crankA_int);
@@ -4575,22 +5621,28 @@ function exportCSV() {
     lines.push('Delta area asp/scar [%],' + R.areaDelta.toFixed(2));
     lines.push('Asimmetria lobo asp. [%],' + R.asymIn.toFixed(2));
     lines.push('Asimmetria lobo scar. [%],' + R.asymEx.toFixed(2));
-    lines.push('F. inerzia max asp. [N],' + R.fInertiaMaxIn.toFixed(2));
-    lines.push('F. inerzia max scar. [N],' + R.fInertiaMaxEx.toFixed(2));
-    lines.push('F. molla a piena alzata asp. [N],' + R.fSpringFullIn.toFixed(2));
-    lines.push('F. molla a piena alzata scar. [N],' + R.fSpringFullEx.toFixed(2));
-    lines.push('Margine min asp. [N],' + R.marginMinIn.toFixed(2));
-    lines.push('Margine min scar. [N],' + R.marginMinEx.toFixed(2));
-    // Stesso gate dello schermo: con la molla ai valori di esempio il numero
-    // non e' riferito a questo motore e non va stampato come se lo fosse.
-    if (R.mollaConfermata === false) {
-        lines.push('# ATTENZIONE: molla e masse ai valori di esempio, non inseriti dall\'utente');
-        lines.push('Distacco valvola asp.,non valutabile');
-        lines.push('Distacco valvola scar.,non valutabile');
-    } else {
-        lines.push('Distacco valvola asp. [rpm],' + (isFinite(R.rpmCritIn) ? Math.round(R.rpmCritIn) : 'inf'));
-        lines.push('Distacco valvola scar. [rpm],' + (isFinite(R.rpmCritEx) ? Math.round(R.rpmCritEx) : 'inf'));
+    // Stesso gate dello schermo, PER LATO (P1-07). Prima le sei righe di forze
+    // e margine uscivano sempre numeriche e l'avvertenza arrivava dopo: un
+    // foglio aperto in Excel mostrava "-920,1 N" di margine calcolato su una
+    // molla che l'utente non aveva mai inserito.
+    var _okIn = (R.valutabileIn !== undefined) ? R.valutabileIn : (R.mollaConfermata !== false);
+    var _okEx = (R.valutabileEx !== undefined) ? R.valutabileEx : (R.mollaConfermata !== false);
+    if (!_okIn || !_okEx) {
+        lines.push('# ATTENZIONE: ' + (!_okIn && !_okEx ? 'entrambi i lati hanno' :
+                   (!_okIn ? 'l\'aspirazione ha' : 'lo scarico ha')) +
+                   ' molla e/o massa ai valori di esempio, non inseriti dall\'utente');
     }
+    function rigaMolla(etichetta, ok, valore) {
+        lines.push(etichetta + ',' + (ok ? valore : 'non valutabile'));
+    }
+    rigaMolla('F. inerzia max asp. [N]', _okIn, R.fInertiaMaxIn.toFixed(2));
+    rigaMolla('F. inerzia max scar. [N]', _okEx, R.fInertiaMaxEx.toFixed(2));
+    rigaMolla('F. molla a piena alzata asp. [N]', _okIn, R.fSpringFullIn.toFixed(2));
+    rigaMolla('F. molla a piena alzata scar. [N]', _okEx, R.fSpringFullEx.toFixed(2));
+    rigaMolla('Margine min asp. [N]', _okIn, R.marginMinIn.toFixed(2));
+    rigaMolla('Margine min scar. [N]', _okEx, R.marginMinEx.toFixed(2));
+    rigaMolla('Distacco valvola asp. [rpm]', _okIn, isFinite(R.rpmCritIn) ? Math.round(R.rpmCritIn) : 'inf');
+    rigaMolla('Distacco valvola scar. [rpm]', _okEx, isFinite(R.rpmCritEx) ? Math.round(R.rpmCritEx) : 'inf');
     if (R.complianceOn && R.valveFloatIn !== null && R.valveFloatIn !== undefined) {
         lines.push('Modello compliance,' + (R.complianceModel || '1-DOF'));
         // AUDIT DYN-01: il CSV dichiara lo stesso stato della UI. Se il solver
@@ -4598,8 +5650,24 @@ function exportCSV() {
         if (R.complianceStatus) {
             lines.push('Compliance stato,' + R.complianceStatus);
             lines.push('Compliance cicli,' + (R.complianceCycles !== null ? R.complianceCycles : '-'));
-            if (R.complianceResidual !== null && R.complianceTolX) {
-                lines.push('Compliance residuo [m],' + R.complianceResidual.toExponential(2) + ' (tolleranza ' + R.complianceTolX.toExponential(0) + ')');
+            // AUDIT P2-03: residui PER LATO e PER CRITERIO. Prima usciva un
+            // solo numero, il massimo fra i due lati del solo residuo di
+            // posizione — e se non era mai stato calcolato usciva "0.00e+0",
+            // cioe' una convergenza perfetta al posto di un dato assente.
+            var CI = R.complianceInfo;
+            if (CI) {
+                lines.push('Compliance stato aspirazione,' + (CI.statusIn || '-'));
+                lines.push('Compliance stato scarico,' + (CI.statusEx || '-'));
+                lines.push('Compliance residuo posizione asp. [m],' + fmtResiduo(CI.residualXIn, CI.tolX));
+                lines.push('Compliance residuo velocita asp. [m/s],' + fmtResiduo(CI.residualVIn, CI.tolV));
+                lines.push('Compliance residuo posizione scar. [m],' + fmtResiduo(CI.residualXEx, CI.tolX));
+                lines.push('Compliance residuo velocita scar. [m/s],' + fmtResiduo(CI.residualVEx, CI.tolV));
+                if (CI.latoFallito) {
+                    lines.push('Compliance lato non convergente,' + CI.latoFallito);
+                    lines.push('Compliance criterio non soddisfatto,' + (CI.criterioFallito || '-'));
+                }
+            } else if (R.complianceResidual !== null && R.complianceTolX) {
+                lines.push('Compliance residuo [m],' + fmtResiduo(R.complianceResidual, R.complianceTolX));
             }
         }
         if (!R.complianceStatus || R.complianceStatus === 'CONVERGED') {
@@ -4611,42 +5679,88 @@ function exportCSV() {
             lines.push('Valve float dinamico,NON_VALUTABILE (solver ' + R.complianceStatus + ')');
         }
     }
-    if (R.surgeOn && R.surgeFreqHz) {
+    // AUDIT P1-08: il CSV dichiara stato, drive e riserve del modello surge.
+    if (R.surgeOn && R.surgeStatus === 'NON_VALUTABILE_DRIVE') {
+        lines.push('Surge molla,non valutabile');
+        lines.push('# Surge: ' + (R.surgeDrive || 'traiettoria di comando non attendibile') +
+                   ' - nessun ripiego sul profilo camma');
+    } else if (R.surgeOn && R.surgeFreqHz) {
+        lines.push('Surge lato,' + (R.surgeLato || 'aspirazione'));
+        lines.push('Surge stato,' + (R.surgeStatus || 'PRELIMINARE'));
+        lines.push('Surge pilotato da,' + (R.surgeDrive || '-'));
+        lines.push('Surge cicli di assestamento,' + (R.surgeSettleCycles !== null && R.surgeSettleCycles !== undefined ? R.surgeSettleCycles : '-'));
+        lines.push('# STIMA PRELIMINARE: convergenza del surge NON verificata');
         lines.push('Surge molla freq. [Hz],' + Math.round(R.surgeFreqHz));
         lines.push('Surge ratio @ RPM,' + (isFinite(R.surgeRatio) ? R.surgeRatio.toFixed(3) : 'inf'));
+        lines.push('Surge ampiezza max spire [mm],' + (isFinite(R.surgeMaxCoilAmpMm) ? R.surgeMaxCoilAmpMm.toFixed(3) : 'inf'));
+        if (R.surgeDiverged) lines.push('# Surge: integrazione DIVERGENTE, valori non utilizzabili');
         lines.push('Surge armonica cam,' + (R.surgeHarmonic || '-'));
         if (R.surgeCriticalRpm) lines.push('Surge regime critico [rpm],' + R.surgeCriticalRpm);
     }
+    // AUDIT P1-10: due grandezze distinte, entrambe esportate col nome giusto.
+    // "max fianco di chiusura" e' il minimo globale della velocita' (lontano
+    // dalla sede); "appoggio sulla sede" e' interpolata nel crossing.
+    function rigaAppoggio(et, k) {
+        lines.push(et + ',' + (isFinite(k.velSeat)
+            ? Math.abs(k.velSeat).toFixed(3) + ' ' + k.unitVel +
+              (isFinite(k.seatDeg) ? ' @ ' + k.seatDeg.toFixed(1) + ' deg' : '')
+            : 'non valutabile (chiusura non determinabile)'));
+    }
     lines.push('Vel. max apertura asp.,' + R.kinIntake.velOpen.toFixed(3) + ' ' + R.kinIntake.unitVel);
-    lines.push('Vel. chiusura asp.,' + R.kinIntake.velClose.toFixed(3) + ' ' + R.kinIntake.unitVel);
+    lines.push('Vel. max fianco chiusura asp.,' + R.kinIntake.velClose.toFixed(3) + ' ' + R.kinIntake.unitVel);
+    rigaAppoggio('Vel. appoggio sulla sede asp.', R.kinIntake);
     lines.push('Acc. max+ asp.,' + R.kinIntake.accPos.toFixed(3) + ' ' + R.kinIntake.unitAcc);
     lines.push('Acc. max- asp.,' + R.kinIntake.accNeg.toFixed(3) + ' ' + R.kinIntake.unitAcc);
     lines.push('Vel. max apertura scar.,' + R.kinExhaust.velOpen.toFixed(3) + ' ' + R.kinExhaust.unitVel);
-    lines.push('Vel. chiusura scar.,' + R.kinExhaust.velClose.toFixed(3) + ' ' + R.kinExhaust.unitVel);
+    lines.push('Vel. max fianco chiusura scar.,' + R.kinExhaust.velClose.toFixed(3) + ' ' + R.kinExhaust.unitVel);
+    rigaAppoggio('Vel. appoggio sulla sede scar.', R.kinExhaust);
     lines.push('Acc. max+ scar.,' + R.kinExhaust.accPos.toFixed(3) + ' ' + R.kinExhaust.unitAcc);
     lines.push('Acc. max- scar.,' + R.kinExhaust.accNeg.toFixed(3) + ' ' + R.kinExhaust.unitAcc);
     lines.push('');
 
     // Section: dump per grado
     lines.push('# === Dump per grado albero motore (1..720) ===');
-    lines.push('crank_deg,lift_in_mm,lift_ex_mm,vel_in_mmDeg,vel_ex_mmDeg,acc_in_mmDeg2,acc_ex_mmDeg2,jerk_in_mmDeg3,jerk_ex_mmDeg3,F_spring_in_N,F_inertia_in_N,F_spring_ex_N,F_inertia_ex_N');
+    // AUDIT P2-03: due aggiunte.
+    // 1) Traiettoria valvola simulata e gap di distacco per grado, che
+    //    mancavano: senza di loro dal foglio non si puo' rifare il conto del
+    //    valve float. Le colonne compaiono SOLO se il solver e' CONVERGED —
+    //    lo stesso gate dello schermo e del riepilogo. Esportare 720 valori di
+    //    gap mentre il riepilogo si rifiuta di darne uno solo sarebbe la
+    //    stessa incoerenza chiusa altrove da DYN-02 e P1-08.
+    // 2) `|| 0` sostituito da campo VUOTO: un valore non finito non e' zero.
+    //    Zero e' una misura, vuoto e' "non disponibile"; il foglio non deve
+    //    piu' confonderli (stessa regola gia' applicata al parser e alle medie).
     var A = L.arrays;
+    var gapEsportabile = !!(R.complianceOn && R.complianceStatus === 'CONVERGED' &&
+                            A.valveLiftIn && A.valveLiftEx);
+    var intest = 'crank_deg,lift_in_mm,lift_ex_mm,vel_in_mmDeg,vel_ex_mmDeg,acc_in_mmDeg2,acc_ex_mmDeg2,jerk_in_mmDeg3,jerk_ex_mmDeg3,F_spring_in_N,F_inertia_in_N,F_spring_ex_N,F_inertia_ex_N';
+    if (gapEsportabile) intest += ',valve_lift_in_mm,valve_lift_ex_mm,gap_in_mm,gap_ex_mm';
+    else if (R.complianceOn) lines.push('# traiettoria valvola e gap NON esportati: solver ' + (R.complianceStatus || 'non disponibile'));
+    lines.push(intest);
+    function num(v, dec) {
+        return (typeof v === 'number' && isFinite(v)) ? v.toFixed(dec) : '';
+    }
     for (var i = 1; i <= 720; i++) {
-        lines.push([
+        var riga = [
             i,
-            (A.anlIn[i]||0).toFixed(4),
-            (A.anlEx[i]||0).toFixed(4),
-            (A.velIn[i]||0).toFixed(6),
-            (A.velEx[i]||0).toFixed(6),
-            (A.accIn[i]||0).toFixed(6),
-            (A.accEx[i]||0).toFixed(6),
-            (A.jerkIn[i]||0).toFixed(6),
-            (A.jerkEx[i]||0).toFixed(6),
-            (A.fSpringIn[i]||0).toFixed(2),
-            (A.fInertiaIn[i]||0).toFixed(2),
-            (A.fSpringEx[i]||0).toFixed(2),
-            (A.fInertiaEx[i]||0).toFixed(2)
-        ].join(','));
+            num(A.anlIn[i], 4), num(A.anlEx[i], 4),
+            num(A.velIn[i], 6), num(A.velEx[i], 6),
+            num(A.accIn[i], 6), num(A.accEx[i], 6),
+            num(A.jerkIn[i], 6), num(A.jerkEx[i], 6),
+            num(A.fSpringIn[i], 2), num(A.fInertiaIn[i], 2),
+            num(A.fSpringEx[i], 2), num(A.fInertiaEx[i], 2)
+        ];
+        if (gapEsportabile) {
+            var vi = A.valveLiftIn[i], ve = A.valveLiftEx[i];
+            var ci = A.anlIn[i], ce = A.anlEx[i];
+            // gap = quanto la valvola sta SOPRA la camma: e' il distacco.
+            // Il verso e' lo stesso del rilevatore (P1-03): compressione e
+            // distacco non sono la stessa cosa e non vanno confusi di segno.
+            riga.push(num(vi, 4), num(ve, 4),
+                num((isFinite(vi) && isFinite(ci)) ? Math.max(0, vi - ci) : NaN, 4),
+                num((isFinite(ve) && isFinite(ce)) ? Math.max(0, ve - ce) : NaN, 4));
+        }
+        lines.push(riga.join(','));
     }
 
     var blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
@@ -5029,12 +6143,21 @@ function exportPDF() {
     // Con molla e masse ai valori di esempio il verdetto NON riguarda questo
     // motore: il referto lo dichiara invece di stampare un allarme rosso su
     // numeri che l'utente non ha mai inserito (deve dire quanto lo schermo).
-    var mollaOkPdf = (R.mollaConfermata !== false);
+    // P1-07: stato PER LATO. Il verdetto di copertina e' il piu' prudente dei
+    // due, ma la tabella dettagli distingue i lati.
+    var okPdfIn = (R.valutabileIn !== undefined) ? R.valutabileIn : (R.mollaConfermata !== false);
+    var okPdfEx = (R.valutabileEx !== undefined) ? R.valutabileEx : (R.mollaConfermata !== false);
+    var mollaOkPdf = okPdfIn && okPdfEx;
     if (!mollaOkPdf) {
         safetyClass = 'neutro';
         safetyCol   = COL.muted;
-        safetyText  = 'NON VALUTABILE · molla e masse ai valori di esempio';
+        safetyText  = 'NON VALUTABILE · ' +
+            (!okPdfIn && !okPdfEx ? 'molla e masse ai valori di esempio'
+                                  : (!okPdfIn ? 'massa aspirazione ai valori di esempio'
+                                              : 'massa scarico ai valori di esempio'));
     }
+    // Cella della tabella dettagli: numero solo se quel lato e' valutabile.
+    function celPdf(ok, testo) { return ok ? testo : 'non valutabile'; }
 
     // ============================================================
     // FOOTER + PAGE NUMBERS (chiamati alla fine, su tutte le pagine)
@@ -5229,10 +6352,13 @@ function exportPDF() {
         ['Alzata al PMS',                      R.liftInTDC.toFixed(3) + ' mm',                R.liftExTDC.toFixed(3) + ' mm'],
         ['Area sotto curva',                   R.areaIn.toFixed(1) + ' mm*deg',               R.areaEx.toFixed(1) + ' mm*deg'],
         ['Asimmetria lobo',                    R.asymIn.toFixed(1) + ' %',                    R.asymEx.toFixed(1) + ' %'],
-        ['F. inerzia max',                     R.fInertiaMaxIn.toFixed(0) + ' N',             R.fInertiaMaxEx.toFixed(0) + ' N'],
-        ['F. molla full lift',                 R.fSpringFullIn.toFixed(0) + ' N',             R.fSpringFullEx.toFixed(0) + ' N'],
-        ['Margine minimo (F. molla - F. inerzia)', R.marginMinIn.toFixed(0) + ' N',           R.marginMinEx.toFixed(0) + ' N'],
-        ['Distacco valvola',                   mollaOkPdf ? rpmCritInStr : 'non valutabile',  mollaOkPdf ? rpmCritExStr : 'non valutabile']
+        // P1-07: le quattro righe che dipendono da molla e massa seguono il
+        // gate del PROPRIO lato. Prima uscivano sempre numeriche e solo il
+        // distacco era protetto.
+        ['F. inerzia max',                     celPdf(okPdfIn, R.fInertiaMaxIn.toFixed(0) + ' N'),  celPdf(okPdfEx, R.fInertiaMaxEx.toFixed(0) + ' N')],
+        ['F. molla full lift',                 celPdf(okPdfIn, R.fSpringFullIn.toFixed(0) + ' N'),  celPdf(okPdfEx, R.fSpringFullEx.toFixed(0) + ' N')],
+        ['Margine minimo (F. molla - F. inerzia)', celPdf(okPdfIn, R.marginMinIn.toFixed(0) + ' N'), celPdf(okPdfEx, R.marginMinEx.toFixed(0) + ' N')],
+        ['Distacco valvola',                   celPdf(okPdfIn, rpmCritInStr),                 celPdf(okPdfEx, rpmCritExStr)]
     ];
     // Riga valve float dinamico (solo se compliance attiva)
     // AUDIT DYN-01: il PDF dichiara lo stesso stato di UI e CSV.
@@ -5249,13 +6375,23 @@ function exportPDF() {
         }
     }
     // Riga spring surge (solo se attivo)
-    if (R.surgeOn && R.surgeFreqHz) {
+    // AUDIT P1-08: il referto dichiara stato e riserve. Se la traiettoria di
+    // comando non e' attendibile (compliance non convergente) non si stampa
+    // alcun numero; se lo e', si stampa dicendo che e' una STIMA PRELIMINARE.
+    if (R.surgeOn && R.surgeStatus === 'NON_VALUTABILE_DRIVE') {
+        rows.push(['Surge molla (aspirazione)', 'NON VALUTABILE',
+                   R.surgeDrive || 'traiettoria non attendibile']);
+    } else if (R.surgeOn && R.surgeFreqHz) {
         var surgeTxt = 'freq ' + Math.round(R.surgeFreqHz) + ' Hz';
         if (R.surgeCriticalRpm) surgeTxt += ' · critico ~' + R.surgeCriticalRpm + ' rpm';
         var ratioTxt = isFinite(R.surgeRatio)
             ? (R.surgeRatio.toFixed(2) + (R.surgeRatio > 1 ? ' (surge!)' : R.surgeRatio > 0.4 ? ' (attenz.)' : ' (ok)'))
             : 'instabile';
-        rows.push(['Surge molla', surgeTxt, 'ratio ' + ratioTxt]);
+        rows.push(['Surge molla (' + (R.surgeLato || 'aspirazione') + ')', surgeTxt, 'ratio ' + ratioTxt]);
+        rows.push(['  STIMA PRELIMINARE — convergenza del surge non verificata',
+                   'pilotato da: ' + (R.surgeDrive || '-'),
+                   (R.surgeSettleCycles ? R.surgeSettleCycles + ' cicli' : '') +
+                   (R.surgeDiverged ? ' · INTEGRAZIONE DIVERGENTE' : '')]);
     }
 
     // Header tabella
@@ -5405,6 +6541,10 @@ function exportPDF() {
 // ========== RESET ==========
 
 function resetAll() {
+    // AUDIT P1-11: Reset deve fermare il calcolo in corso. Prima un job Race
+    // continuava a girare dopo il Reset e finiva scrivendo i suoi risultati
+    // sopra una pagina appena svuotata.
+    annullaJob('interrotto dal Reset');
     intakeLoaded = false;
     exhaustLoaded = false;
     window._metaIn = {}; window._metaEx = {};   // azzera provenienza per-lato (audit APP-07)
@@ -5456,6 +6596,28 @@ function resetAll() {
     if (forceChart) { forceChart.destroy(); forceChart = null; }
 
     lastAnalysis = null;
+    // AUDIT v3.4.3 P2-02: il Reset deve spegnere anche lo STATO DI CONTORNO
+    // dell'analisi, non solo i dati. Prima restavano accesi:
+    //  - il banner giallo "Hai cambiato parametri: premi Analizza", riferito a
+    //    un'analisi che era appena stata cancellata;
+    //  - il contesto cacheato delle forze;
+    //  - il debounce del ricalcolo immediato, che scattava 80 ms dopo sulla
+    //    camma che non c'e' piu';
+    //  - i tre toast ritardati dell'ultima analisi (500/500/900 ms), che
+    //    comparivano a pagina gia' svuotata.
+    // L'ordine conta: clearAnalysisStale() DOPO `lastAnalysis = null`, perche'
+    // la guardia di markAnalysisStale e' cio' che impedisce ai settaggi
+    // programmatici qui sotto di riaccendere il banner.
+    clearTimeout(_liveRetuneTimer); _liveRetuneTimer = null;
+    window.lastForceContext = null;
+    _toastTimers.forEach(clearTimeout); _toastTimers = [];
+    clearAnalysisStale();
+    // Igiene, non correzione del difetto: nessun consumatore le legge senza
+    // prima controllare intakeLoaded/lastAnalysis. Restano perche' il pulsante
+    // promette "cancella i dati importati", e questi lo sono.
+    rawIntake = []; rawExhaust = []; folIntake = []; folExhaust = [];
+    window._closeIdxIn = undefined; window._closeIdxEx = undefined;
+
     document.getElementById('btnExportCSV').disabled = true;
     document.getElementById('btnExportPDF').disabled = true;
     var bSvR = document.getElementById('btnSaveProfile'); if (bSvR) bSvR.disabled = true;
