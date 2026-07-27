@@ -273,18 +273,6 @@
                 <label><input type="checkbox" data-mod="confronto" onchange="onModuleToggle(this);"> Confronto A vs B <span class="mod-desc">due set di camme a confronto</span></label>
             </div>
 
-            <!-- Preset rapido -->
-            <div class="param-row" style="margin-bottom:12px;">
-                <span class="param-label">Preset motore <span class="help-icon" data-tip="<strong>Preset rapido</strong>Carica un set di valori tipici per la classe motore selezionata: tipologia treno valvole, angoli lobo, gioco valvola, RPM tipico, bilanciere, molla, masse. Puoi sempre rifinire ogni singolo campo dopo.">?</span></span>
-                <select id="enginePreset" class="input" style="flex:1;min-width:0;max-width:200px;" onchange="applyEnginePreset();">
-                    <option value="custom" selected>Personalizzato</option>
-                    <option value="moto_street">Moto stradale 600 cc</option>
-                    <option value="moto_race">Moto race 1000 cc</option>
-                    <option value="auto_4cyl">Auto 4 cilindri DOHC</option>
-                    <option value="auto_v8">Auto V8 pushrod</option>
-                    <option value="auto_race">Auto race F1/GT</option>
-                </select>
-            </div>
 
             <!-- Intake section -->
             <div class="section-intake">
@@ -2434,7 +2422,7 @@ window.mechAnimToggle = mechAnimToggle;
 
 // =============================================================
 // Modalità Base / Avanzato — progressive disclosure sulla stessa schermata.
-// In Base resta visibile solo l'essenziale (preset, import, timing, RPM,
+// In Base resta visibile solo l'essenziale (import, timing, RPM,
 // molla, analizza/export); in Avanzato compaiono follower, compliance e
 // strumenti race. I campi nascosti restano nel DOM coi default, quindi
 // l'analisi funziona identica. La scelta è ricordata in localStorage.
@@ -2602,111 +2590,6 @@ function onFollowerTypeChange() {
     }
 }
 
-// Preset rapidi: valori tipici per classe motore. L'utente può sempre
-// rifinire i singoli campi dopo aver caricato un preset. Fonti: manuali
-// di tuning camme (Crower, Erson, MoToOL Tech), schede tecniche OE.
-var ENGINE_PRESETS = {
-    moto_street: {
-        label: 'Moto stradale 600',
-        intakeType: 'bucket_mech', exhaustType: 'bucket_mech',
-        intakeAngle: 108, exhaustAngle: 110,
-        intakeClearance: 0.16, exhaustClearance: 0.22,
-        advance: 0,    rpm: 12000,
-        rockerIntake: 1.0, rockerExhaust: 1.0,
-        followerType: 'bicch', diamBicch: 24.5, rBase: 13.0, rPunt: 1.5,
-        springK: 35, springPreload: 200, massEqIntake: 60, massEqExhaust: 60,
-        durationRef: 1.0, smoothWindow: 5
-    },
-    moto_race: {
-        label: 'Moto race 1000',
-        intakeType: 'finger', exhaustType: 'finger',
-        intakeAngle: 105, exhaustAngle: 107,
-        intakeClearance: 0.18, exhaustClearance: 0.28,
-        advance: 2,    rpm: 14500,
-        rockerIntake: 1.5, rockerExhaust: 1.5,
-        followerType: 'punt', diamBicch: 0, rBase: 15.0, rPunt: 1.5,
-        springK: 75, springPreload: 380, massEqIntake: 45, massEqExhaust: 50,
-        durationRef: 1.0, smoothWindow: 5
-    },
-    auto_4cyl: {
-        label: 'Auto 4 cyl DOHC',
-        intakeType: 'bucket_hyd', exhaustType: 'bucket_hyd',
-        intakeAngle: 112, exhaustAngle: 112,
-        intakeClearance: 0.00, exhaustClearance: 0.00,
-        advance: 0,    rpm: 6500,
-        rockerIntake: 1.0, rockerExhaust: 1.0,
-        followerType: 'bicch', diamBicch: 33.0, rBase: 16.0, rPunt: 1.5,
-        springK: 28, springPreload: 220, massEqIntake: 90, massEqExhaust: 95,
-        durationRef: 1.27, smoothWindow: 5
-    },
-    auto_v8: {
-        label: 'Auto V8 pushrod',
-        intakeType: 'rocker_pushrod', exhaustType: 'rocker_pushrod',
-        intakeAngle: 110, exhaustAngle: 114,
-        intakeClearance: 0.20, exhaustClearance: 0.25,
-        advance: 4,    rpm: 6000,
-        rockerIntake: 1.5, rockerExhaust: 1.5,
-        followerType: 'punt', diamBicch: 0, rBase: 18.0, rPunt: 1.5,
-        springK: 45, springPreload: 350, massEqIntake: 130, massEqExhaust: 140,
-        durationRef: 1.27, smoothWindow: 7
-    },
-    auto_race: {
-        label: 'Auto race F1/GT',
-        intakeType: 'roller', exhaustType: 'roller',
-        intakeAngle: 100, exhaustAngle: 104,
-        intakeClearance: 0.15, exhaustClearance: 0.25,
-        advance: 3,    rpm: 16000,
-        rockerIntake: 1.6, rockerExhaust: 1.6,
-        followerType: 'punt', diamBicch: 0, rBase: 14.0, rPunt: 1.5,
-        springK: 110, springPreload: 500, massEqIntake: 38, massEqExhaust: 42,
-        durationRef: 0.5, smoothWindow: 5
-    }
-};
-
-function applyEnginePreset() {
-    var key = document.getElementById('enginePreset').value;
-    if (key === 'custom' || !ENGINE_PRESETS[key]) return;
-    var p = ENGINE_PRESETS[key];
-    function setSel(id, v) { var e = document.getElementById(id); if (e) e.value = v; }
-    function setVal(id, v) { var e = document.getElementById(id); if (e) e.value = v; }
-    setSel('intakeType',  p.intakeType);
-    setSel('exhaustType', p.exhaustType);
-    setVal('intakeAngle',     p.intakeAngle);
-    setVal('exhaustAngle',    p.exhaustAngle);
-    setVal('intakeClearance', p.intakeClearance);
-    setVal('exhaustClearance', p.exhaustClearance);
-    setVal('advance',          p.advance);
-    setVal('rpmInput',         p.rpm);
-    setVal('rockerIntake',     p.rockerIntake);
-    setVal('rockerExhaust',    p.rockerExhaust);
-    setSel('followerType',     p.followerType);
-    setVal('diamBicch',        p.diamBicch);
-    setVal('rBase',            p.rBase);
-    setVal('rBaseExhaust',     (p.rBaseExhaust != null ? p.rBaseExhaust : p.rBase));
-    setVal('rPunt',            p.rPunt);
-    setVal('springK',          p.springK);
-    setVal('springPreload',    p.springPreload);
-    setVal('massEqIntake',     p.massEqIntake);
-    setVal('massEqExhaust',    p.massEqExhaust);
-    setVal('durationRef',      p.durationRef);
-    setSel('smoothWindow',     p.smoothWindow);
-    onFollowerTypeChange();      // mostra/nasconde righe del bicchiere
-    onTypologyChange('intake');  // auto-imposta rocker se tipologia lo richiede
-    onTypologyChange('exhaust');
-    // Reapply rocker dopo onTypologyChange (che potrebbe averlo modificato)
-    setVal('rockerIntake',  p.rockerIntake);
-    setVal('rockerExhaust', p.rockerExhaust);
-    // I valori del preset sono tipici di CATEGORIA: restano "da confermare"
-    // finche' l'utente non inserisce quelli misurati sul suo motore.
-    smarcaCampiMolla();
-    if (window.cammesToast) {
-        window.cammesToast({
-            kind: 'info', title: 'Preset applicato',
-            body: '<b>' + p.label + '</b> &middot; sono valori tipici della categoria: rifinisci molla e masse col dato del tuo motore.',
-            duration: 3500
-        });
-    }
-}
 
 function onTypologyChange(side) {
     var typeSel  = document.getElementById(side + 'Type');
