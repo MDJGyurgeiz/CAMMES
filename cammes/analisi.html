@@ -657,15 +657,15 @@
                 <div class="result-section">
                     <div class="result-section-title">Angoli</div>
                     <div class="result-row">
-                        <span class="result-label">Separazione lobi (LSA)</span>
+                        <span class="result-label">Separazione lobi (LSA) <span class="help-icon" data-tip="<strong>Separazione fra i centri lobo</strong>Media dei due centri lobo che hai <b>dichiarato</b> nei campi Angolo lobo. Il banco misura la FORMA di un lobo per volta: da una scansione singola la separazione fra due lobi non e&apos; ricavabile, quindi questo numero e&apos; la tua dichiarazione, non una misura. Da essa dipendono anche incrocio e alzata al PMS.">?</span></span>
                         <span class="result-value yellow" id="resLSA">-</span>
                     </div>
                     <div class="result-row">
-                        <span class="result-label">Centro aspirazione ATDC</span>
+                        <span class="result-label">Centro asp. dichiarato <span class="help-icon" data-tip="<strong>Centro lobo aspirazione, come dichiarato</strong>E&apos; il campo <b>Angolo lobo asp.</b> corretto dall&apos;<b>Anticipo</b>: centro - anticipo. Non e&apos; misurato dal banco. Passa il mouse sul valore per vedere il conto.">?</span></span>
                         <span class="result-value cyan" id="resIntCenter">-</span>
                     </div>
                     <div class="result-row">
-                        <span class="result-label">Centro scarico BTDC</span>
+                        <span class="result-label">Centro scar. dichiarato <span class="help-icon" data-tip="<strong>Centro lobo scarico, come dichiarato</strong>E&apos; il campo <b>Angolo lobo scar.</b> corretto dall&apos;<b>Anticipo</b>: centro + anticipo. Non e&apos; misurato dal banco. Passa il mouse sul valore per vedere il conto.">?</span></span>
                         <span class="result-value red" id="resExCenter">-</span>
                     </div>
                 </div>
@@ -775,10 +775,12 @@
                         <span class="result-label" style="font-size:11px;color:var(--text-muted);flex:1;">Calcolo statico: dipende da molla e masse, non dal regime impostato.</span>
                     </div>
                     <div class="result-row" id="notaValoriEsempio" style="border-bottom:none;display:none;">
-                        <span class="result-label" style="font-size:11px;color:var(--warning-text);flex:1;line-height:1.4;">
-                            &#9888; I campi molla e masse hanno ancora i <b>valori di esempio</b> (bordo tratteggiato):
-                            inserisci k, F&#8320; e le masse del tuo motore per ottenere il limite di distacco reale.
-                        </span>
+                        <!-- Testo generato: elenca i campi ancora da confermare e cosa
+                             comporta lasciarli ai valori di partenza. Prima parlava solo
+                             di molla e masse, ma la stessa cosa vale per raggio base,
+                             diametro bicchiere, angoli lobo, massa molla e spire. -->
+                        <span class="result-label" id="notaValoriEsempioTesto"
+                              style="font-size:11px;color:var(--warning-text);flex:1;line-height:1.4;"></span>
                     </div>
                 </div>
             </div>
@@ -3159,6 +3161,69 @@ function rpmIcon(crit, rpm) {
 var CAMPI_MOLLA = ['springK', 'springPreload', 'massEqIntake', 'massEqExhaust'];
 var MIN_CAMPO_MOLLA = { springK: 0.0001, springPreload: 0, massEqIntake: 0.0001, massEqExhaust: 0.0001 };
 
+// =============================================================
+// ALTRI VALORI CHE IL PROGRAMMA NON PUO' INDOVINARE
+//
+// Il gate qui sopra copriva molla e masse. Ma dopo aver tolto il "Preset
+// motore" e' rimasta la stessa famiglia di problemi su altri campi, che
+// nascono con un numero plausibile e non dichiarano di essere un'ipotesi:
+//
+//  - RAGGIO BASE: e' una misura col calibro sulla camma in esame (lo dice il
+//    tooltip), ma nasce a 14,0. Misurato sulla VW KR: con 14,0 la durata a
+//    1 mm esce 261 gradi e l'alzata al PMS 4,426 mm; col valore vero 32,64
+//    escono 222 gradi e 2,286 mm. Scarto massimo fra le due curve 2,434 mm su
+//    un'alzata di 11. E l'alzata al PMS finisce nella scheda camma.
+//  - DIAMETRO BICCHIERE: e' l'attrezzo dell'officina, non un valore di classe.
+//  - ANGOLI LOBO: sono una DICHIARAZIONE dell'operatore, non una misura del
+//    banco (una scansione singola non li contiene). Nascono a 100/100, e
+//    LSA, centri, alzata al PMS e incrocio ne discendono direttamente.
+//  - MASSA MOLLA e SPIRE ATTIVE: da loro esce la frequenza di surge.
+//
+// Distinzione che conta, e per cui NON si trattano tutti allo stesso modo:
+// molla, masse, massa molla e spire producono un VERDETTO (distacco, surge):
+// con valori finti il verdetto e' falso e va dichiarato non valutabile.
+// Raggio base e angoli lobo invece producono numeri che restano veri rispetto
+// a cio' che hai dichiarato: non sono falsi, sono NON CONFERMATI. Lì la cura
+// e' marcare il campo e dire che il numero e' dichiarato, non misurato.
+// =============================================================
+var CAMPI_GEOMETRIA = ['rBase', 'rBaseExhaust', 'diamBicch'];   // misure su camma e attrezzo
+var CAMPI_FASATURA  = ['intakeAngle', 'exhaustAngle'];          // dichiarazioni dell'operatore
+var CAMPI_SURGE     = ['springMass', 'springCoils'];            // da cui esce la frequenza di surge
+var MIN_CAMPO_ALTRI = {
+    rBase: 0.0001, rBaseExhaust: 0.0001, diamBicch: 0.0001,
+    springMass: 0.0001, springCoils: 0.0001
+    // gli angoli lobo non hanno minimo: qualunque valore finito e' lecito
+};
+
+// La geometria conta solo se un follower virtuale la usa: col puntalino la
+// curva e' quella grezza e il raggio base non entra in nessun calcolo.
+function geometriaRilevante() {
+    var ft = (document.getElementById('followerType') || {}).value || 'punt';
+    return !!ft && ft !== 'punt';
+}
+function campiDaConfermare() {
+    var l = CAMPI_MOLLA.concat(CAMPI_FASATURA);
+    if (geometriaRilevante()) {
+        l = l.concat(['rBase', 'rBaseExhaust']);
+        if ((document.getElementById('followerType') || {}).value === 'bicch') l.push('diamBicch');
+    }
+    var s = document.getElementById('surgeEnabled');
+    if (s && s.value === '1') l = l.concat(CAMPI_SURGE);
+    return l.filter(function (id) { return document.getElementById(id); });
+}
+function fasaturaConfermata() { return CAMPI_FASATURA.every(campoEConfermato); }
+function geometriaConfermata() {
+    if (!geometriaRilevante()) return true;
+    return campiDaConfermare().filter(function (id) {
+        return CAMPI_GEOMETRIA.indexOf(id) >= 0;
+    }).every(campoEConfermato);
+}
+function surgeConfermato() {
+    var s = document.getElementById('surgeEnabled');
+    if (!s || s.value !== '1') return true;
+    return CAMPI_SURGE.every(campoEConfermato);
+}
+
 // Un campo conta come "inserito dall'utente" SOLO se lo ha toccato davvero.
 // Non basta che il valore differisca dal default dell'HTML: un preset motore
 // scrive valori tipici di CATEGORIA, non la molla di questo motore, e li
@@ -3170,7 +3235,7 @@ function campoEConfermato(id) {
     var s = String(el.value).trim();
     if (s === '') return false;                    // svuotato mentre si digita
     var v = Number(s);
-    var min = MIN_CAMPO_MOLLA[id];
+    var min = (MIN_CAMPO_MOLLA[id] !== undefined) ? MIN_CAMPO_MOLLA[id] : MIN_CAMPO_ALTRI[id];
     return isFinite(v) && v >= (min === undefined ? 0 : min);
 }
 function mollaConfermata() { return CAMPI_MOLLA.every(campoEConfermato); }
@@ -3233,12 +3298,50 @@ function smarcaCampiMolla() {
 }
 
 function aggiornaMarcaturaEsempio() {
-    CAMPI_MOLLA.forEach(function (id) {
+    // Il bordo tratteggiato ora copre TUTTI i campi che il programma non puo'
+    // indovinare, non solo molla e masse: raggio base, diametro bicchiere,
+    // angoli lobo, massa molla e spire. La marcatura dei campi non rilevanti
+    // (geometria col puntalino, surge spento) viene togliata: segnalare un
+    // campo che non entra in nessun calcolo e' rumore.
+    var daConfermare = campiDaConfermare();
+    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA, CAMPI_SURGE).forEach(function (id) {
         var el = document.getElementById(id);
-        if (el) el.classList.toggle('valore-esempio', !campoEConfermato(id));
+        if (!el) return;
+        var serve = daConfermare.indexOf(id) >= 0;
+        el.classList.toggle('valore-esempio', serve && !campoEConfermato(id));
     });
     var nota = document.getElementById('notaValoriEsempio');
-    if (nota) nota.style.display = mollaConfermata() ? 'none' : '';
+    if (nota) {
+        var mancanti = daConfermare.filter(function (id) { return !campoEConfermato(id); });
+        nota.style.display = mancanti.length ? '' : 'none';
+        var testo = document.getElementById('notaValoriEsempioTesto');
+        if (testo) testo.innerHTML = descriviCampiDaConfermare(mancanti);
+    }
+}
+
+// Testo della nota: dice QUALI campi mancano e cosa comporta, invece di
+// parlare sempre e solo di molla e masse.
+function descriviCampiDaConfermare(mancanti) {
+    var ETICHETTE = {
+        springK: 'rigidezza molla', springPreload: 'precarico F₀',
+        massEqIntake: 'massa equivalente asp.', massEqExhaust: 'massa equivalente scar.',
+        rBase: 'raggio base asp.', rBaseExhaust: 'raggio base scar.',
+        diamBicch: 'diametro bicchiere',
+        intakeAngle: 'angolo lobo asp.', exhaustAngle: 'angolo lobo scar.',
+        springMass: 'massa molla', springCoils: 'spire attive'
+    };
+    var nomi = mancanti.map(function (id) { return ETICHETTE[id] || id; });
+    var conseguenze = [];
+    if (mancanti.some(function (id) { return CAMPI_MOLLA.indexOf(id) >= 0; }))
+        conseguenze.push('il limite di distacco resta <b>non valutabile</b>');
+    if (mancanti.some(function (id) { return CAMPI_SURGE.indexOf(id) >= 0; }))
+        conseguenze.push('la frequenza di risonanza delle spire resta <b>non valutabile</b>');
+    if (mancanti.some(function (id) { return CAMPI_GEOMETRIA.indexOf(id) >= 0; }))
+        conseguenze.push('la conversione del follower usa un raggio base <b>non confermato</b>');
+    if (mancanti.some(function (id) { return CAMPI_FASATURA.indexOf(id) >= 0; }))
+        conseguenze.push('LSA, centri lobo, incrocio e alzata al PMS restano <b>dichiarati</b>, non misurati');
+    return '&#9888; Da confermare (bordo tratteggiato): <b>' + nomi.join('</b>, <b>') + '</b>. ' +
+           'Finché restano i valori di partenza, ' + conseguenze.join('; ') + '.';
 }
 window.aggiornaMarcaturaEsempio = aggiornaMarcaturaEsempio;
 
@@ -3715,14 +3818,22 @@ function initLiveTuning() {
         var el = document.getElementById(id);
         if (el) el.addEventListener('input', scheduleLiveRetune);
     });
-    // Al primo tocco il campo smette di essere "valore di esempio"
-    CAMPI_MOLLA.forEach(function (id) {
+    // Al primo tocco il campo smette di essere "valore di esempio".
+    // Vale per tutti i campi che il programma non puo' indovinare, non solo
+    // molla e masse: raggio base, diametro bicchiere, angoli lobo, massa molla
+    // e spire attive. La marcatura si aggiorna anche quando cambia il follower
+    // o il surge, perche' cambia QUALI campi servono.
+    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA, CAMPI_SURGE).forEach(function (id) {
         var el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('input', function () {
             el.dataset.confermato = '1';
             aggiornaMarcaturaEsempio();
         });
+    });
+    ['followerType', 'surgeEnabled'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('change', aggiornaMarcaturaEsempio);
     });
     aggiornaMarcaturaEsempio();
     // Input che CAMBIANO la curva → analisi stale finché non si ri-analizza.
@@ -4243,7 +4354,20 @@ function analyze() {
                   document.getElementById('surgeEnabled').value === '1';
     var surgeIn = null, surgeStato = null, surgeDrive = null;
     if (surgeOn && rpm > 0) {
-        if (complianceOn && !(compInfo && compInfo.status === 'CONVERGED')) {
+        if (!surgeConfermato()) {
+            // La frequenza di surge esce da massa molla e spire attive: sono un
+            // VERDETTO, e con i valori di partenza sarebbe la risonanza di una
+            // molla che non e' quella dell'utente. Stesso trattamento del
+            // distacco valvola (P1-07), non un numero senza qualificazione.
+            surgeStato = 'NON_VALUTABILE_INPUT';
+            surgeDrive = 'massa molla e spire attive non confermate';
+            if (window.cammesToast) {
+                window.cammesToast({ kind: 'warn', title: 'Risonanza spire non valutabile',
+                    body: 'La frequenza di risonanza dipende da <b>massa molla</b> e <b>spire attive</b>, ' +
+                          'ancora ai valori di partenza (bordo tratteggiato). Inserisci quelli della tua molla.',
+                    duration: 7000 });   // id analisi non ancora assegnato a questo punto
+            }
+        } else if (complianceOn && !(compInfo && compInfo.status === 'CONVERGED')) {
             surgeStato = 'NON_VALUTABILE_DRIVE';
             surgeDrive = 'compliance non convergente';
             if (window.cammesToast) {
@@ -4280,9 +4404,34 @@ function analyze() {
     document.getElementById('resDurRefIn').textContent = durRefIn + '\u00B0';
     document.getElementById('resDurRefEx').textContent = durRefEx + '\u00B0';
 
-    document.getElementById('resLSA').textContent = LSA.toFixed(1) + '\u00B0';
-    document.getElementById('resIntCenter').textContent = intakeCenter.toFixed(1) + '\u00B0';
-    document.getElementById('resExCenter').textContent = exhaustCenter.toFixed(1) + '\u00B0';
+    // AUDIT snellimento: questi tre numeri sono l'ECO dei campi Angolo lobo,
+    // non una misura. Il banco scansiona un lobo per volta: la separazione fra
+    // due lobi non e' contenuta in una scansione singola, quindi LSA e centri
+    // sono cio' che l'operatore ha DICHIARATO. Prima erano stampati nudi, e con
+    // i campi ai valori di partenza (100/100) si leggeva "Separazione lobi
+    // 100,0" come se il banco l'avesse misurata — e finiva nella scheda camma.
+    // Non si toglie il numero (serve, e non e' falso): si dichiara.
+    var _fasOk = fasaturaConfermata();
+    var _adv = numDi('advance');
+    function _cellaFase(id, valore, base, segno) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = valore.toFixed(1) + '\u00B0' + (_fasOk ? '' : ' (da confermare)');
+        el.style.opacity = _fasOk ? '' : '0.75';
+        var conto = (base === null || !isFinite(base)) ? ''
+            : (isFinite(_adv) && _adv !== 0
+                ? ': ' + base + ' ' + segno + ' ' + Math.abs(_adv) + ' di anticipo = ' + valore.toFixed(1) + '\u00B0'
+                : ': angolo lobo dichiarato, nessun anticipo');
+        el.title = 'Valore DICHIARATO, non misurato dal banco' + conto +
+                   (_fasOk ? '.' : '. Gli angoli lobo sono ancora ai valori di partenza: confermali.');
+    }
+    _cellaFase('resIntCenter', intakeCenter, numDi('intakeAngle'), '-');
+    _cellaFase('resExCenter', exhaustCenter, numDi('exhaustAngle'), '+');
+    _cellaFase('resLSA', LSA, null, '');
+    document.getElementById('resLSA').title =
+        'Media dei due centri DICHIARATI: (' + intakeCenter.toFixed(1) + ' + ' +
+        exhaustCenter.toFixed(1) + ') / 2. Non e\' misurata dal banco.' +
+        (_fasOk ? '' : ' Angoli lobo ancora da confermare.');
     // AUDIT MAT-01: eventi ambigui -> 'n.d.', mai numeri ricostruiti
     document.getElementById('resIntOpen').textContent = fmtDeg(intakeOpenBTC, 1);
     document.getElementById('resIntClose').textContent = fmtDeg(intakeCloseABC, 1);
@@ -4460,7 +4609,7 @@ function analyze() {
             // stampava come risultati, mentre il solver li dichiarava
             // preliminari e non verificati sulla convergenza.
             surgeOn:          !!surgeOn,
-            surgeStatus:      surgeStato,                                  // PRELIMINARE | DIVERGED | NON_VALUTABILE_DRIVE
+            surgeStatus:      surgeStato,                                  // PRELIMINARE | DIVERGED | NON_VALUTABILE_DRIVE | NON_VALUTABILE_INPUT
             surgeDrive:       surgeDrive,                                  // da cosa e' pilotata la molla
             surgeLato:        'aspirazione',                               // il calcolo riguarda solo l'aspirazione
             surgePreliminary: surgeIn ? (surgeIn.preliminary !== false) : null,
@@ -5577,7 +5726,7 @@ function exportCSV() {
         }
     }
     // AUDIT P1-08: il CSV dichiara stato, drive e riserve del modello surge.
-    if (R.surgeOn && R.surgeStatus === 'NON_VALUTABILE_DRIVE') {
+    if (R.surgeOn && /^NON_VALUTABILE/.test(R.surgeStatus || '')) {
         lines.push('Surge molla,non valutabile');
         lines.push('# Surge: ' + (R.surgeDrive || 'traiettoria di comando non attendibile') +
                    ' - nessun ripiego sul profilo camma');
@@ -6275,7 +6424,7 @@ function exportPDF() {
     // AUDIT P1-08: il referto dichiara stato e riserve. Se la traiettoria di
     // comando non e' attendibile (compliance non convergente) non si stampa
     // alcun numero; se lo e', si stampa dicendo che e' una STIMA PRELIMINARE.
-    if (R.surgeOn && R.surgeStatus === 'NON_VALUTABILE_DRIVE') {
+    if (R.surgeOn && /^NON_VALUTABILE/.test(R.surgeStatus || '')) {
         rows.push(['Surge molla (aspirazione)', 'NON VALUTABILE',
                    R.surgeDrive || 'traiettoria non attendibile']);
     } else if (R.surgeOn && R.surgeFreqHz) {
