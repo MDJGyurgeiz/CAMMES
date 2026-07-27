@@ -535,11 +535,6 @@
                     <input type="number" id="kSeat" value="80000" class="input" style="width:85px;" step="5000" min="5000">
                     <span class="param-unit">N/mm</span>
                 </div>
-                <div class="param-row" id="row3DofKPivot" style="display:none;">
-                    <span class="param-label">k pivot bilanc. <span class="help-icon" data-tip="<strong>Cedevolezza pivot bilanciere (3-DOF)</strong>Rigidezza del perno/albero del bilanciere verso la testata. <b>0 = perno libero</b> (comportamento 3-DOF base: bilanciere massa libera tra cam e valvola). Valori finiti = il perno cede sotto carico (es. 20&#8202;000-60&#8202;000 N/mm per alberi reali). Cattura la cedevolezza del lato perno, oltre a cam (k pushrod) e valvola (k treno).">?</span></span>
-                    <input type="number" id="kPivot" value="0" class="input" style="width:85px;" step="5000" min="0">
-                    <span class="param-unit">N/mm (0=libero)</span>
-                </div>
                 <div class="param-row">
                     <span class="param-label">Risonanza spire <span class="help-icon" data-tip="<strong>Surge molla (massa distribuita)</strong>Modella la molla valvola come catena di spire (massa distribuita) invece che molla ideale. Ad alto regime le spire entrano in <b>risonanza (surge)</b>: oscillano tra loro, perdono forza, possono sbattere → modo di guasto race. Calcola la <b>frequenza di surge</b> (&frac12;&middot;&radic;(k/m)) e quanto la molla &egrave; in risonanza al regime scelto. Usa il moto valvola (compliance se attiva, altrimenti profilo cam). <em>(criterio esplorativo/euristico, non validato indipendentemente)</em>">?</span></span>
                     <select id="surgeEnabled" class="input" style="width:120px;" onchange="onSurgeToggle();">
@@ -1131,8 +1126,7 @@ function runComplianceModel(curve, rpm, params, modelVal) {
     if (m === '3dof') {
         full = Object.assign({
             massSeatG: num('massSeat', 15),
-            kSeatN_mm: num('kSeat', 80000),
-            kPivotN_mm: num('kPivot', 0)
+            kSeatN_mm: num('kSeat', 80000)
         }, full);
         return simulateCompliance3DOF(curve, rpm, full);
     }
@@ -1352,8 +1346,7 @@ function parametriDinamica(ist, extra) {
         massEqIntermediateG: I.massEqIntermediate,
         kPushrodN_mm:        I.kPushrod,
         massSeatG:           I.massSeat,
-        kSeatN_mm:           I.kSeat,
-        kPivotN_mm:          I.kPivot
+        kSeatN_mm:           I.kSeat
     };
     return Object.assign(p, extra || {});
 }
@@ -2591,16 +2584,40 @@ function onFollowerTypeChange() {
 }
 
 
+// La Tipologia NON riscrive piu' bilanciere e gioco.
+//
+// Faceva la stessa cosa del "Preset motore" appena rimosso, in piccolo e in
+// modo piu' subdolo. Misurato sulla camma VW reale: passando da "Bicchiere
+// meccanico" (leva 1,00) ad "Aste + bilanciere" (leva 1,60) l'alzata saltava
+// da 10,840 a 17,524 mm, il 62% in piu', per una tendina che nel calcolo e'
+// solo un'etichetta (intakeType/exhaustType finiscono unicamente in CSV e PDF).
+//
+// Aggravante: le due righe Bilanciere hanno class="adv-only" e la modalita' di
+// partenza e' Base, che le nasconde. Il moltiplicatore 1,60 veniva scritto in
+// un campo che l'operatore non vede.
+// E sovrascriveva un dato digitato: gioco misurato 0,22 -> 0,20, senza avvisare.
+//
+// Resta l'unica riscrittura difendibile, perche' e' una definizione e si VEDE:
+// con la punteria idraulica il gioco e' zero e il campo si disabilita. Uscendo
+// dall'idraulico si ripristina il valore che c'era prima, invece di lasciare
+// uno zero che per una punteria meccanica sarebbe sbagliato.
 function onTypologyChange(side) {
-    var typeSel  = document.getElementById(side + 'Type');
-    var rockerEl = document.getElementById('rocker' + (side === 'intake' ? 'Intake' : 'Exhaust'));
-    var clearEl  = document.getElementById(side + 'Clearance');
+    var typeSel = document.getElementById(side + 'Type');
+    var clearEl = document.getElementById(side + 'Clearance');
     var t = TYPOLOGY[typeSel.value];
-    if (!t) return;
-    rockerEl.value = t.rocker.toFixed(2);
-    clearEl.value  = t.clearance.toFixed(2);
-    clearEl.disabled = !!t.lockClearance;
-    if (t.lockClearance) clearEl.value = '0.00';
+    if (!t || !clearEl) return;
+    if (t.lockClearance) {
+        if (!clearEl.disabled) clearEl.dataset.primaDelBlocco = clearEl.value;
+        clearEl.value = '0.00';
+        clearEl.disabled = true;
+    } else {
+        if (clearEl.disabled && clearEl.dataset.primaDelBlocco !== undefined) {
+            clearEl.value = clearEl.dataset.primaDelBlocco;
+            delete clearEl.dataset.primaDelBlocco;
+        }
+        clearEl.disabled = false;
+    }
+    if (typeof markAnalysisStale === 'function') markAnalysisStale();
 }
 
 // Initialize arrays to zero
@@ -3536,7 +3553,6 @@ var CAMPI_NUM = {
     kPushrod:         { min: 0, minEsclusivo: true, def: 800, etichetta: 'Rigidezza asta' },
     massSeat:         { min: 0, minEsclusivo: true, def: 15, etichetta: 'Massa sede' },
     kSeat:            { min: 0, minEsclusivo: true, def: 80000, etichetta: 'Rigidezza sede' },
-    kPivot:           { min: 0, def: 0, etichetta: 'Rigidezza perno bilanciere' },  // 0 = perno rigido
     springMass:       { min: 0, minEsclusivo: true, def: 60, etichetta: 'Massa molla' },
     springCoils:      { min: 0, minEsclusivo: true, def: 6, etichetta: 'Spire attive' },
     // --- confronto A/B ---
@@ -3572,7 +3588,7 @@ function campiAttivi(gruppo) {
             ids.push('kTrain', 'dampingRatio');
             var mod = (document.getElementById('complianceModel') || {}).value || '1dof';
             if (mod === '2dof' || mod === '3dof') ids.push('massEqIntermediate', 'kPushrod');
-            if (mod === '3dof') ids.push('massSeat', 'kSeat', 'kPivot');
+            if (mod === '3dof') ids.push('massSeat', 'kSeat');
         }
         var surge = document.getElementById('surgeEnabled');
         if (surge && surge.checked) ids.push('springMass', 'springCoils');
@@ -3656,7 +3672,7 @@ var INFLUENTIAL_IDS = ['intakeType', 'intakeAngle', 'intakeClearance',
     'rBase', 'rBaseExhaust', 'rPunt', 'springK', 'springPreload',
     'massEqIntake', 'massEqExhaust', 'complianceEnabled', 'kTrain', 'dampingRatio',
     'complianceModel', 'massEqIntermediate', 'kPushrod', 'massSeat', 'kSeat',
-    'kPivot', 'surgeEnabled', 'springMass', 'springCoils'];
+    'surgeEnabled', 'springMass', 'springCoils'];
 function collectInfluentialParams() {
     var parts = [];
     for (var i = 0; i < INFLUENTIAL_IDS.length; i++) {
@@ -3720,7 +3736,7 @@ function initLiveTuning() {
         'rockerIntake', 'rockerExhaust', 'intakeAngle', 'exhaustAngle', 'advance',
         'intakeClearance', 'exhaustClearance', 'smoothWindow', 'durationRef',
         'complianceEnabled', 'complianceModel', 'kTrain', 'dampingRatio',
-        'massEqIntermediate', 'kPushrod', 'massSeat', 'kSeat', 'kPivot',
+        'massEqIntermediate', 'kPushrod', 'massSeat', 'kSeat',
         'surgeEnabled', 'springMass', 'springCoils',
         'baselineCorrect'];
     curveIds.forEach(function (id) {
@@ -4171,7 +4187,6 @@ function analyze() {
         if (modelVal === '3dof') {
             baseParams.massSeatG = Number(document.getElementById('massSeat').value) || 15;
             baseParams.kSeatN_mm = Number(document.getElementById('kSeat').value) || 80000;
-            baseParams.kPivotN_mm = Number(document.getElementById('kPivot').value) || 0;
             valveLiftIn = simulateCompliance3DOF(anlIn, rpm, baseParams);
             baseParams.massEqG = mEqEx;
             valveLiftEx = simulateCompliance3DOF(anlEx, rpm, baseParams);
@@ -4374,7 +4389,6 @@ function analyze() {
             kPushrod:          numDi('kPushrod'),
             massSeat:          numDi('massSeat'),
             kSeat:             numDi('kSeat'),
-            kPivot:            numDi('kPivot'),
             springMass:        numDi('springMass'),
             springCoils:       numDi('springCoils'),
             intakeFile: document.getElementById('intakeStatus').textContent,
