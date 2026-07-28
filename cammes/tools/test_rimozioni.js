@@ -126,6 +126,28 @@ check('la garanzia DYN-02 (smorzamento 0 resta 0) esiste ancora', !!dyn02);
 check('e non passa piu dal surge',
     !!dyn02 && occorrenzeVive(dyn02, 'simulateSpringSurge') === 0);
 
+// ---------------------------------------------------------------
+// 5. Auto-tag — indovinava la marca dai numeri nel nome file
+// ---------------------------------------------------------------
+//  Misurato: `r19_16v_alz.scr` (Renault 19 16V, motore comunissimo) veniva
+//  etichettato `yamaha`, perche' il pattern delle moto `\br[1-9]` pesca "r1"
+//  dentro "r19". E i tag vengono STAMPATI sul PDF della singola misura, quindi
+//  una marca indovinata arriva al cliente.
+//  Non si perde nulla: il tag veniva al 100% dal nome file, che e' gia'
+//  ricercabile a testo libero. Il tagging manuale resta.
+console.log('--- auto-tag (indovinava la marca dai numeri del nome) ---');
+['AUTO_TAG_PATTERNS', 'autoTagFile', 'applyAutoTagAll'].forEach(function (nome) {
+    check('nessun ' + nome + ' in home.html', occorrenzeVive(home, nome) === 0);
+});
+// Anche il comando in pagina, non solo il codice dietro: un pulsante che chiama
+// una funzione inesistente non fa danni ai dati, ma promette una funzione che
+// non c'e'.
+check('nessun pulsante Auto-tag in pagina', home.indexOf('Auto-tag</button>') < 0);
+// Il tagging MANUALE non e' stato toccato: si toglie l'indovino, non la funzione.
+['getTagsForFile', 'addTagsToFile', 'promptAddTags'].forEach(function (nome) {
+    check('il tagging manuale (' + nome + ') resta', occorrenzeVive(home, nome) > 0);
+});
+
 console.log('');
 if (fails) { console.log('RISULTATO: ' + fails + ' FALLITI\n'); process.exit(1); }
 console.log('VALIDATO: nessuna delle funzioni che indovinavano un dato di');
