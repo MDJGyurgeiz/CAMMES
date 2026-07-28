@@ -127,7 +127,24 @@ Quindi: lo scanner non sottostimava il medio-fianco di un terzo. Restava un erro
 di unità nel parametro che noi gli davamo. Il residuo dell'aspirazione (+10%, e in
 eccesso, non in difetto) è dell'ordine della dispersione che questo stesso report
 dichiara fra i due rilievi al motore (±0,15 mm) più il centraggio dell'acquisizione:
-per attribuirlo serve la ri-scansione, ma non è più l'anomalia che era.
+per attribuirlo serve la ri-scansione, ma non è più l'anomalia che era. E ha
+cambiato **verso**: le ipotesi costruite su "lo scanner sotto-misura il fianco" non
+servono più a spiegarlo.
+
+**Quanto è sensibile il risultato a questo parametro** (misurato sulla Clio):
+passare da rBase 16,5 a 19 sposta la curva convertita di **0,122 mm RMS**, cioè 2,7
+volte l'accordo che la validazione fisica del 2026-07-11 aveva ottenuto col
+piattello Ø33 (0,046 mm). Il cerchio base non è un parametro che si possa sbagliare
+senza conseguenze.
+
+*Nota su un argomento che NON va usato:* si era scritto qui che un cerchio base di
+raggio 32,64 (Ø65,3) sarebbe "impossibile" sotto un bicchiere Ø35. È vero che per un
+1.8 16V un albero con lobi da Ø65 non entra in testa — ma è un argomento di
+**plausibilità sulla classe di motore, non una legge geometrica**: un follower piatto
+non richiede di essere più grande del cerchio base, gli basta contenere l'escursione
+del punto di contatto (max |dL/dφ|; sulla Clio 13,18 mm, per cui un Ø33 basta
+qualunque sia il cerchio base). La prova del diametro sono la conferma diretta del
+proprietario e l'accordo con le tre fonti indipendenti qui sopra.
 
 Il programma ora chiede il **diametro** nel campo del cerchio base, e un test
 (`test_rimozioni.js`) impedisce che torni a chiedere un raggio.

@@ -7,9 +7,17 @@
 // ATTENZIONE — QUESTO TEST E' STATO RISCRITTO. Prima passava alla libreria
 // 32,64 e 34,25 come RAGGIO del cerchio base, mentre sono i DIAMETRI misurati
 // al calibro (confermato dal proprietario il 2026-07-26). Il raggio vero e'
-// 16,32 / 17,13. Controprova geometrica che l'errore era grossolano: un cerchio
-// base di raggio 32,64 avrebbe diametro 65,3 mm, quasi il doppio del bicchiere
-// Ø35 che gli scorre sopra — impossibile.
+// 16,32 / 17,13.
+//
+// Presi per raggi darebbero un cerchio base di Ø65,3 / Ø68,5: per un 1.8 16V un
+// albero con lobi cosi' non entra in testa. E' un argomento di PLAUSIBILITA'
+// sulla classe di motore, non una legge geometrica — attenzione a non usarne
+// una piu' forte di quel che vale: un follower PIATTO non impone che il cerchio
+// base sia piu' piccolo di lui, gli basta contenere l'escursione del punto di
+// contatto (max |dL/dphi|). Sulla Clio, per esempio, l'offset massimo e' 13,18
+// mm e un piattello Ø33 basta qualunque sia il cerchio base.
+// La prova vera del diametro e' doppia: la conferma del proprietario e
+// l'accordo con tre fonti indipendenti su due camme e due grandezze (sotto).
 //
 // La correzione non e' cosmetica: rBase entra nella conversione a bicchiere
 // (r(θ) = rBase + alzata, piu' l'angolo della normale nella compensazione del
@@ -33,7 +41,15 @@
 // essere il setup di acquisizione originale, oppure la dispersione del metodo
 // goniometro+comparatore, che il report stesso dichiara a ±0,15 mm su questa
 // grandezza. Serve la ri-scansione per dirlo — ma non e' piu' un'anomalia da
-// un terzo, e' un residuo.
+// un terzo, e' un residuo. E ha cambiato VERSO: adesso la scansione legge in
+// ECCESSO, quindi le ipotesi costruite su "lo scanner sotto-misura il fianco"
+// non valgono piu' per spiegarlo.
+//
+// Nota sulla sensibilita' a rBase, misurata sulla Clio: passare da 16,5 a 19
+// sposta la curva convertita di 0,122 mm RMS, cioe' 2,7 volte l'accordo che la
+// validazione fisica del 2026-07-11 aveva ottenuto (0,046 mm). Quindi il
+// parametro conta davvero e un fit su di esso e' significativo — non e' un
+// numero che si puo' sbagliare senza conseguenze.
 //
 // Uso:  node cammes/tools/validate_vw.js     (exit 0 = tutto ok)
 
@@ -98,11 +114,13 @@ CASI.forEach(function (c) {
                 '), gioco ' + c.gioco.toFixed(2) + ', picco grezzo ' + rawPk.v.toFixed(2) + ' @cam' + rawPk.idx);
     console.log('  riferimenti indipendenti: ' + c.fonti);
 
-    // Controllo geometrico che avrebbe intercettato l'errore di unita' da solo:
-    // il cerchio base non puo' essere piu' grande del bicchiere che gli scorre
-    // sopra. Con 32,64 preso per raggio, questo cade.
-    check('il cerchio base sta sotto il bicchiere (geometria possibile)',
-        c.diamBase < DBICCH + 2, 'Ø base ' + c.diamBase + ' vs bicchiere Ø' + DBICCH);
+    // Controllo di PLAUSIBILITA' (non di geometria: vedi l'intestazione) che
+    // avrebbe intercettato l'errore di unita' da solo. Su un albero a camme
+    // automobilistico il cerchio base sta fra ~20 e ~45 mm di diametro: il
+    // doppio o la meta' di un valore in quella finestra ne esce sempre.
+    check('il Ø del cerchio base e plausibile per un albero automobilistico',
+        c.diamBase > 20 && c.diamBase < 45,
+        'Ø ' + c.diamBase + ' mm (preso per raggio darebbe Ø' + (2 * c.diamBase).toFixed(1) + ')');
 
     var fol = convertPuntToBicchiere(raw, rBase, DBICCH, RPUNT);
     var folPk = peakOf(fol);
