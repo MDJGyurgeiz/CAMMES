@@ -2309,7 +2309,56 @@ var MODULES_KEY = 'cammes-modules-v1';
 function getModules() {
     try { return JSON.parse(localStorage.getItem(MODULES_KEY)) || {}; } catch (e) { return {}; }
 }
-function applyModules() {
+
+// Un modulo che si spegne deve spegnere il CALCOLO che governa, non soltanto
+// nascondere i suoi campi.
+//
+// Prima: togliendo la spunta a "Follower simulato" il blocco si nascondeva ma
+// #followerType restava su 'bicch', e ogni consumatore lo legge direttamente.
+// Misurato al browser sulla camma VW KR reale (bicchiere 35, cerchio base
+// 32,6): a modulo spento l'alzata al PMS restava 4,023 mm invece dei 1,033 mm
+// del puntalino grezzo — 2,99 mm su un lobo da 10,64, e l'alzata al PMS finisce
+// stampata sulla scheda camma. L'operatore vedeva sparire i controlli e
+// concludeva di aver disattivato la funzione.
+//
+// La scelta non si butta: si parcheggia in dataset.moduloSpento e si ritrova
+// riaccendendo il modulo. Stesso schema del blocco idraulico in
+// onTypologyChange (dataset.primaDelBlocco).
+var INTERRUTTORI_MODULO = [
+    { modulo: 'follower', id: 'followerType', neutro: 'punt',
+      nome: 'Follower simulato',
+      conseguenza: 'la curva torna quella <b>grezza del puntalino</b>' },
+    { modulo: 'dinamica', id: 'complianceEnabled', neutro: '0',
+      nome: 'Dinamica valvole',
+      conseguenza: 'l\'elasticit&agrave; del comando valvola <b>non viene pi&ugrave; simulata</b>' }
+];
+
+// Allinea gli interruttori allo stato dei moduli. Ritorna l'elenco di quelli
+// che ha spento, per poterlo dire a chi ha premuto.
+function allineaInterruttoriModulo(m) {
+    var spenti = [];
+    INTERRUTTORI_MODULO.forEach(function (it) {
+        var el = document.getElementById(it.id);
+        if (!el) return;
+        if (m[it.modulo]) {
+            if (el.dataset.moduloSpento) {           // riaccensione: si ritrova la scelta
+                el.value = el.dataset.moduloSpento;
+                delete el.dataset.moduloSpento;
+                if (it.id === 'followerType' && typeof onFollowerTypeChange === 'function') onFollowerTypeChange();
+                markAnalysisStale();
+            }
+        } else if (el.value !== it.neutro) {
+            el.dataset.moduloSpento = el.value;      // spegnimento: si mette da parte
+            el.value = it.neutro;
+            if (it.id === 'followerType' && typeof onFollowerTypeChange === 'function') onFollowerTypeChange();
+            markAnalysisStale();
+            spenti.push(it);
+        }
+    });
+    return spenti;
+}
+
+function applyModules(opts) {
     var m = getModules();
     var els = document.querySelectorAll('[data-module]');
     for (var i = 0; i < els.length; i++) {
@@ -2327,6 +2376,17 @@ function applyModules() {
     }
     var btn = document.getElementById('btnModules');
     if (btn) btn.innerHTML = '&#9881; Funzioni' + (count ? ' (' + count + ')' : '');
+    var spenti = allineaInterruttoriModulo(m);
+    // L'avviso solo quando e' stato l'operatore a togliere la spunta: al
+    // caricamento della pagina gli interruttori sono gia' sul valore neutro,
+    // quindi non c'e' niente da spegnere e niente da dire.
+    if (opts && opts.avvisa && spenti.length && window.cammesToast) {
+        spenti.forEach(function (it) {
+            window.cammesToast({ kind: 'info', title: it.nome + ': funzione disattivata',
+                body: 'Non erano solo i campi a sparire: ' + it.conseguenza +
+                      '. Riaccendendo il modulo ritrovi la scelta di prima.', duration: 6000 });
+        });
+    }
     risvegliaGrafici();
 }
 
@@ -2364,7 +2424,7 @@ function onModuleToggle(cb) {
     var m = getModules();
     m[cb.getAttribute('data-mod')] = cb.checked;
     try { localStorage.setItem(MODULES_KEY, JSON.stringify(m)); } catch (e) {}
-    applyModules();
+    applyModules({ avvisa: true });
 }
 function toggleModulesPanel() {
     var p = document.getElementById('modulesPanel');

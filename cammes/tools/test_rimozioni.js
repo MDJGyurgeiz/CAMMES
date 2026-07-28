@@ -106,6 +106,15 @@ console.log('--- surge molla (modello non valido sulle molle reali) ---');
         occorrenzeVive(p[1], 'surge') === 0,
         occorrenzeVive(p[1], 'surge') + ' occorrenze fuori dai commenti');
 });
+// Il README descrive il prodotto di ADESSO: non deve promettere una funzione
+// che non c'e' piu'. Il CHANGELOG invece deve poterne parlare — e' il suo
+// mestiere raccontare che e' stata rimossa.
+var readme = (function () {
+    try { return fs.readFileSync(path.join(CAMMES, '..', 'README.md'), 'utf8'); } catch (e) { return null; }
+})();
+check('il README non promette piu il surge',
+    !!readme && !/surge/i.test(readme),
+    readme ? ((readme.match(/surge/gi) || []).length + ' menzioni') : 'README non leggibile');
 ['springMass', 'springCoils'].forEach(function (nome) {
     check('nessun campo ' + nome + ' in analisi.html', occorrenzeVive(analisi, nome) === 0);
 });

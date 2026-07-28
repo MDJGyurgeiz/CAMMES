@@ -103,6 +103,17 @@ var mSuite = /(\d+)\s+suite di regressione/i.exec(readme);
 check('il README dichiara il numero giusto di suite',
     !!mSuite && Number(mSuite[1]) === nSuite,
     mSuite ? ('dichiarate ' + mSuite[1] + ', reali ' + nSuite) : 'nessun conteggio trovato nel README');
+// Il conteggio era scritto in DUE punti del README con due frasi diverse: uno
+// veniva aggiornato e l'altro restava indietro (trovato a 33 quando le suite
+// erano 35). Qualunque "N suite" deve dire il vero, non solo quella frase.
+var conteggiSbagliati = [];
+var reTutti = /(\d+)\s+suite/gi, mTutti;
+while ((mTutti = reTutti.exec(readme)) !== null) {
+    if (Number(mTutti[1]) !== nSuite) conteggiSbagliati.push(mTutti[0]);
+}
+check('nessun altro conteggio di suite nel README contraddice quello vero',
+    conteggiSbagliati.length === 0,
+    conteggiSbagliati.length ? (conteggiSbagliati.join(', ') + ' contro ' + nSuite + ' reali') : 'coerenti');
 // Il numero di CHECK cambia a ogni test aggiunto: il README non deve
 // congelarlo, altrimenti mente entro una settimana. Lo stampa la suite.
 var mCheck = /\((\d+)\s+check\)/i.exec(readme);
