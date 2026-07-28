@@ -535,23 +535,6 @@
                     <input type="number" id="kSeat" value="80000" class="input" style="width:85px;" step="5000" min="5000">
                     <span class="param-unit">N/mm</span>
                 </div>
-                <div class="param-row">
-                    <span class="param-label">Risonanza spire <span class="help-icon" data-tip="<strong>Surge molla (massa distribuita)</strong>Modella la molla valvola come catena di spire (massa distribuita) invece che molla ideale. Ad alto regime le spire entrano in <b>risonanza (surge)</b>: oscillano tra loro, perdono forza, possono sbattere → modo di guasto race. Calcola la <b>frequenza di surge</b> (&frac12;&middot;&radic;(k/m)) e quanto la molla &egrave; in risonanza al regime scelto. Usa il moto valvola (compliance se attiva, altrimenti profilo cam). <em>(criterio esplorativo/euristico, non validato indipendentemente)</em>">?</span></span>
-                    <select id="surgeEnabled" class="input" style="width:120px;" onchange="onSurgeToggle();">
-                        <option value="0" selected>OFF</option>
-                        <option value="1">ON (massa distrib.)</option>
-                    </select>
-                </div>
-                <div class="param-row" id="rowSurgeMass" style="display:none;">
-                    <span class="param-label">Massa molla <span class="help-icon" data-tip="<strong>Massa della molla valvola</strong>Massa totale della/e molla/e. Tipico: 30-70 g. Pi&ugrave; pesante = frequenza di surge pi&ugrave; bassa = surge a regimi pi&ugrave; bassi (peggio). La frequenza di surge fondamentale &egrave; &frac12;&middot;&radic;(k/m).">?</span></span>
-                    <input type="number" id="springMass" value="50" class="input" style="width:75px;" step="5" min="1">
-                    <span class="param-unit">g</span>
-                </div>
-                <div class="param-row" id="rowSurgeCoils" style="display:none;">
-                    <span class="param-label">Spire attive <span class="help-icon" data-tip="<strong>Numero di spire attive</strong>Usato per discretizzare la molla nel modello a massa distribuita (numero di nodi della catena). Tipico 8-16. Non cambia la frequenza fondamentale, solo la finezza del modello.">?</span></span>
-                    <input type="number" id="springCoils" value="12" class="input" style="width:75px;" step="1" min="4" max="24">
-                    <span class="param-unit">spire</span>
-                </div>
             </div>
 
             <!-- Action buttons -->
@@ -583,7 +566,6 @@
             </div>
             <div class="flex gap-8" style="margin-top:8px;" data-module="race">
                 <button class="btn btn-secondary" id="btnSweep3D" onclick="run3DSweep();" style="flex:1;" disabled data-tip="<strong>Sweep 3D k×F&#8320;×RPM</strong>Nuvola ruotabile del valve float sui TRE assi insieme: rigidezza k, precarico F&#8320; e regime. Ogni punto colorato (verde sicuro &rarr; rosso float) &egrave; una combinazione simulata. Trascina per ruotare la vista ed esplorare il volume sicuro nello spazio molla-regime. Tempo: ~0.5 s.">&#127922; Sweep 3D</button>
-                <button class="btn btn-secondary" id="btnSurgeSweep" onclick="runSurgeSweep();" style="flex:1;" disabled data-tip="<strong>Surge vs RPM</strong>Plotta il <b>surge ratio</b> della molla (ampiezza oscillazione spire / corsa valvola) al variare del regime. I picchi mostrano i <b>regimi di risonanza</b> dove le spire vanno in surge. Richiede <b>Surge molla = ON</b>. La linea rossa a 1.0 &egrave; la soglia di surge serio. Tempo: ~2 s. <em>(criterio esplorativo/euristico, non validato indipendentemente)</em>">&#127926; Surge vs RPM</button>
             </div>
 
             <!-- Risultati Sweep / Optimizer / Mappa (modulo: race) -->
@@ -608,8 +590,6 @@
                 <div id="springMapLegend" style="display:none; font-size:10px; color:var(--text-muted); margin-top:4px; text-align:center;"></div>
                 <canvas id="sweep3dCanvas" width="340" height="300" style="display:none; margin-top:8px; max-width:100%; cursor:grab; touch-action:none;"></canvas>
                 <div id="sweep3dLegend" style="display:none; font-size:10px; color:var(--text-muted); margin-top:4px; text-align:center;"></div>
-                <canvas id="surgeSweepCanvas" width="340" height="240" style="display:none; margin-top:8px; max-width:100%;"></canvas>
-                <div id="surgeSweepLegend" style="display:none; font-size:10px; color:var(--text-muted); margin-top:4px; text-align:center;"></div>
             </div>
         </div>
 
@@ -1218,7 +1198,7 @@ function mostraAvanzamento(stato) {
 // Abilita/disabilita i pulsanti degli strumenti: protezione doppio clic
 // visibile, non solo un rifiuto silenzioso.
 var BOTTONI_RACE = ['btnSweepRpm', 'btnOptimizeSpring', 'btnSpringMap', 'btnSweep3D',
-                    'btnSurgeSweep', 'btnRaceReport'];
+                    'btnRaceReport'];
 function abilitaStrumentiRace(on) {
     BOTTONI_RACE.forEach(function (id) {
         var b = document.getElementById(id);
@@ -1473,8 +1453,7 @@ function springOptimizer(camLift720, targetRpm, baseParams, opts) {
 // =====================================================================
 function preparaBoxRace(titolo, sottotitolo) {
     var box = document.getElementById('raceResultsBox');
-    ['springMapCanvas', 'springMapLegend', 'sweep3dCanvas', 'sweep3dLegend',
-     'surgeSweepCanvas', 'surgeSweepLegend'].forEach(function (id) {
+    ['springMapCanvas', 'springMapLegend', 'sweep3dCanvas', 'sweep3dLegend'].forEach(function (id) {
         var el = document.getElementById(id); if (el) el.style.display = 'none';
     });
     document.getElementById('raceResultsTitle').textContent = titolo;
@@ -1807,134 +1786,6 @@ function runSpringMap() {
         } catch (e) { erroreRace(e); }
     }, erroreRace);
 }
-
-// =============================================================
-// SURGE vs RPM — surgeRatio della molla al variare del regime
-// =============================================================
-// Spazza un range di regimi calcolando il surge ratio (ampiezza spire / corsa
-// valvola). I picchi rivelano i regimi di risonanza della molla.
-// P1-11: forma a iteratore (vedi rpmSweepIter).
-function surgeSweepIter(driveLift720, springParams, opts) {
-    var rpmMin = (opts && opts.rpmMin) || 1500;
-    var rpmMax = (opts && opts.rpmMax) || 12000;
-    var n      = (opts && opts.n) || 36;
-    var pts = [], worst = { rpm: 0, ratio: -1 };
-    return {
-        totale: n,
-        passo: function (i) {
-            var rpm = rpmMin + (rpmMax - rpmMin) * i / (n - 1);
-            var r = simulateSpringSurge(driveLift720, rpm, springParams);
-            var ratio = isFinite(r.surgeRatio) ? r.surgeRatio : 5;
-            pts.push({ rpm: rpm, ratio: ratio });
-            if (ratio > worst.ratio) worst = { rpm: Math.round(rpm), ratio: ratio };
-        },
-        fine: function () {
-            return { points: pts, worst: worst,
-                     freqHz: pts.length ? springSurgeFreqHz(springParams.kSpringN_mm, springParams.springMassG) : 0 };
-        }
-    };
-}
-function surgeSweep(driveLift720, springParams, opts) {
-    return eseguiTutto(surgeSweepIter(driveLift720, springParams, opts));
-}
-
-function renderSurgeSweep(sweep, curRpm) {
-    var canvas = document.getElementById('surgeSweepCanvas');
-    var legend = document.getElementById('surgeSweepLegend');
-    if (!canvas) return;
-    canvas.style.display = ''; if (legend) legend.style.display = '';
-    var ctx = canvas.getContext('2d');
-    var W = canvas.width, H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
-    var padL = 44, padR = 10, padT = 12, padB = 28;
-    var plotW = W - padL - padR, plotH = H - padT - padB;
-    var pts = sweep.points;
-    var rpmMin = pts[0].rpm, rpmMax = pts[pts.length - 1].rpm;
-    var maxRatio = 0; pts.forEach(function (p) { if (p.ratio > maxRatio) maxRatio = p.ratio; });
-    var yMax = Math.max(1.2, maxRatio * 1.1);
-    function px(rpm) { return padL + (rpm - rpmMin) / (rpmMax - rpmMin) * plotW; }
-    function py(ratio) { return padT + plotH - Math.min(ratio, yMax) / yMax * plotH; }
-    var txt = (window.cammesGetCssVar && window.cammesGetCssVar('--text-muted')) || '#8888aa';
-    var grid = (window.cammesGetCssVar && window.cammesGetCssVar('--grid')) || '#2a2a4a';
-    // assi + griglia
-    ctx.strokeStyle = grid; ctx.lineWidth = 1; ctx.fillStyle = txt; ctx.font = '9px monospace';
-    ctx.textAlign = 'right';
-    for (var gy = 0; gy <= yMax; gy += (yMax > 3 ? 1 : 0.5)) {
-        var yy = py(gy);
-        ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(W - padR, yy); ctx.globalAlpha = 0.4; ctx.stroke(); ctx.globalAlpha = 1;
-        ctx.fillText(gy.toFixed(1), padL - 4, yy + 3);
-    }
-    ctx.textAlign = 'center';
-    for (var gr = 0; gr <= 5; gr++) {
-        var rr = rpmMin + (rpmMax - rpmMin) * gr / 5;
-        ctx.fillText(Math.round(rr / 1000) + 'k', px(rr), H - padB + 12);
-    }
-    // soglia surge serio (ratio = 1.0) in rosso
-    ctx.strokeStyle = 'rgba(220,50,50,0.8)'; ctx.setLineDash([4, 3]);
-    ctx.beginPath(); ctx.moveTo(padL, py(1)); ctx.lineTo(W - padR, py(1)); ctx.stroke(); ctx.setLineDash([]);
-    // curva surge ratio
-    ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 2; ctx.beginPath();
-    pts.forEach(function (p, i) { var x = px(p.rpm), y = py(p.ratio); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
-    ctx.stroke();
-    // marcatore regime corrente
-    if (curRpm >= rpmMin && curRpm <= rpmMax) {
-        ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 1.5; ctx.setLineDash([2, 2]);
-        ctx.beginPath(); ctx.moveTo(px(curRpm), padT); ctx.lineTo(px(curRpm), padT + plotH); ctx.stroke(); ctx.setLineDash([]);
-    }
-    ctx.fillStyle = txt; ctx.textAlign = 'center';
-    ctx.fillText('regime (rpm) →', padL + plotW / 2, H - 2);
-    if (legend) legend.innerHTML = '<span style="color:#00d4ff;">—</span> surge ratio &middot; ' +
-        '<span style="color:rgb(220,50,50);">- -</span> soglia 1.0 &middot; ' +
-        '<span style="color:#ffd23f;">|</span> regime attuale &middot; freq surge ' + Math.round(sweep.freqHz) + ' Hz';
-}
-
-function runSurgeSweep() {
-    var ist = requireFreshAnalysis('Lo sweep del surge');   // P1-11
-    if (!ist || !ist.arrays) return;
-    if (!guardiaStrumentiMolla('Sweep surge')) return;   // P1-07
-    // P1-11: lo stato del surge viene dall'ISTANTANEA, non dal selettore
-    // corrente: cosi' non si puo' accendere il surge dopo l'analisi e lanciare
-    // lo sweep su curve calcolate quando era spento.
-    if (!ist.results.surgeOn) {
-        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Surge OFF',
-            body: 'L\'ultima analisi &egrave; stata fatta con il surge spento. Attiva <b>Surge molla = ON</b> e ri-analizza prima di questo sweep.', duration: 5000 });
-        return;
-    }
-    var title = document.getElementById('raceResultsTitle');
-    var body = document.getElementById('raceResultsBody');
-    preparaBoxRace('Surge vs RPM in corso...',
-        'Simulazione del surge a 36 regimi. La pagina resta utilizzabile; puoi annullare.');
-
-    var inp = ist.inputs;
-    var anlIn = ist.arrays.anlIn;
-    var springParams = {
-        kSpringN_mm: inp.springK,
-        springMassG: inp.springMass,
-        springCoils: inp.springCoils,
-        dampingRatio: inp.dampingRatio
-    };
-    eseguiAFette('Sweep surge', surgeSweepIter(anlIn, springParams, {})).then(function (sweep) {
-        if (!sweep) return;   // annullato
-        try {
-            title.textContent = 'Surge vs RPM — risonanza molla (aspirazione)';
-            var w = sweep.worst;
-            var verdict = w.ratio > 1 ? '<b style="color:var(--danger);">surge critico</b>'
-                        : w.ratio > 0.4 ? '<b style="color:var(--warning);">attenzione</b>'
-                        : '<b style="color:var(--success);">margine ampio</b>';
-            body.innerHTML = 'Picco surge ratio <b>' + w.ratio.toFixed(2) + '</b> a <b>' + w.rpm +
-                ' rpm</b> (' + verdict + '). Frequenza di surge ' + Math.round(sweep.freqHz) + ' Hz.' +
-                // audit DYN-06: caveat testuale, il modello surge e' esplorativo/euristico
-                // audit P1-08: dichiarare sempre che e' preliminare, e su quale
-                // traiettoria (qui il profilo camma, non il moto valvola).
-                ' <em style="color:var(--text-muted);">STIMA PRELIMINARE — convergenza del surge non verificata; ' +
-                'pilotato dal profilo camma, sola aspirazione; criterio esplorativo/euristico, non validato indipendentemente.</em>';
-            renderSurgeSweep(sweep, inp.rpm);
-            if (window.cammesToast) window.cammesToast({ kind: w.ratio > 1 ? 'warn' : 'success',
-                title: 'Surge sweep completato', body: 'Picco ' + w.ratio.toFixed(2) + ' @ ' + w.rpm + ' rpm', duration: 4000 });
-        } catch (e) { erroreRace(e); }
-    }, erroreRace);
-}
-window.runSurgeSweep = runSurgeSweep;
 
 // =============================================================
 // SWEEP 3D INTERATTIVO — valve float su (k, F0, RPM)
@@ -2546,17 +2397,8 @@ function on2DofToggle() {
     var k = document.getElementById('row2DofKPush');  if (k) k.style.display = isChain ? 'flex' : 'none';
     var ms = document.getElementById('row3DofSeatMass'); if (ms) ms.style.display = is3 ? 'flex' : 'none';
     var ks = document.getElementById('row3DofKSeat');    if (ks) ks.style.display = is3 ? 'flex' : 'none';
-    var kp = document.getElementById('row3DofKPivot');   if (kp) kp.style.display = is3 ? 'flex' : 'none';
 }
 window.on2DofToggle = on2DofToggle;
-
-function onSurgeToggle() {
-    var sel = document.getElementById('surgeEnabled');
-    var on = sel && sel.value === '1';
-    var rm = document.getElementById('rowSurgeMass');  if (rm) rm.style.display = on ? 'flex' : 'none';
-    var rc = document.getElementById('rowSurgeCoils'); if (rc) rc.style.display = on ? 'flex' : 'none';
-}
-window.onSurgeToggle = onSurgeToggle;
 
 function onFollowerTypeChange() {
     var t = document.getElementById('followerType').value;
@@ -3181,21 +3023,18 @@ var MIN_CAMPO_MOLLA = { springK: 0.0001, springPreload: 0, massEqIntake: 0.0001,
 //  - ANGOLI LOBO: sono una DICHIARAZIONE dell'operatore, non una misura del
 //    banco (una scansione singola non li contiene). Nascono a 100/100, e
 //    LSA, centri, alzata al PMS e incrocio ne discendono direttamente.
-//  - MASSA MOLLA e SPIRE ATTIVE: da loro esce la frequenza di surge.
 //
 // Distinzione che conta, e per cui NON si trattano tutti allo stesso modo:
-// molla, masse, massa molla e spire producono un VERDETTO (distacco, surge):
-// con valori finti il verdetto e' falso e va dichiarato non valutabile.
+// molla e masse producono un VERDETTO (il distacco della valvola): con valori
+// finti il verdetto e' falso e va dichiarato non valutabile.
 // Raggio base e angoli lobo invece producono numeri che restano veri rispetto
 // a cio' che hai dichiarato: non sono falsi, sono NON CONFERMATI. Lì la cura
 // e' marcare il campo e dire che il numero e' dichiarato, non misurato.
 // =============================================================
 var CAMPI_GEOMETRIA = ['diamBase', 'diamBaseExhaust', 'diamBicch'];   // misure su camma e attrezzo
 var CAMPI_FASATURA  = ['intakeAngle', 'exhaustAngle'];          // dichiarazioni dell'operatore
-var CAMPI_SURGE     = ['springMass', 'springCoils'];            // da cui esce la frequenza di surge
 var MIN_CAMPO_ALTRI = {
-    diamBase: 0.0001, diamBaseExhaust: 0.0001, diamBicch: 0.0001,
-    springMass: 0.0001, springCoils: 0.0001
+    diamBase: 0.0001, diamBaseExhaust: 0.0001, diamBicch: 0.0001
     // gli angoli lobo non hanno minimo: qualunque valore finito e' lecito
 };
 
@@ -3211,8 +3050,6 @@ function campiDaConfermare() {
         l = l.concat(['diamBase', 'diamBaseExhaust']);
         if ((document.getElementById('followerType') || {}).value === 'bicch') l.push('diamBicch');
     }
-    var s = document.getElementById('surgeEnabled');
-    if (s && s.value === '1') l = l.concat(CAMPI_SURGE);
     return l.filter(function (id) { return document.getElementById(id); });
 }
 function fasaturaConfermata() { return CAMPI_FASATURA.every(campoEConfermato); }
@@ -3221,11 +3058,6 @@ function geometriaConfermata() {
     return campiDaConfermare().filter(function (id) {
         return CAMPI_GEOMETRIA.indexOf(id) >= 0;
     }).every(campoEConfermato);
-}
-function surgeConfermato() {
-    var s = document.getElementById('surgeEnabled');
-    if (!s || s.value !== '1') return true;
-    return CAMPI_SURGE.every(campoEConfermato);
 }
 
 // Un campo conta come "inserito dall'utente" SOLO se lo ha toccato davvero.
@@ -3302,13 +3134,13 @@ function smarcaCampiMolla() {
 }
 
 function aggiornaMarcaturaEsempio() {
-    // Il bordo tratteggiato ora copre TUTTI i campi che il programma non puo'
-    // indovinare, non solo molla e masse: raggio base, diametro bicchiere,
-    // angoli lobo, massa molla e spire. La marcatura dei campi non rilevanti
-    // (geometria col puntalino, surge spento) viene togliata: segnalare un
-    // campo che non entra in nessun calcolo e' rumore.
+    // Il bordo tratteggiato copre TUTTI i campi che il programma non puo'
+    // indovinare, non solo molla e masse: cerchio base, diametro bicchiere,
+    // angoli lobo. La marcatura dei campi non rilevanti (geometria col
+    // puntalino) viene togliata: segnalare un campo che non entra in nessun
+    // calcolo e' rumore.
     var daConfermare = campiDaConfermare();
-    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA, CAMPI_SURGE).forEach(function (id) {
+    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA).forEach(function (id) {
         var el = document.getElementById(id);
         if (!el) return;
         var serve = daConfermare.indexOf(id) >= 0;
@@ -3331,15 +3163,12 @@ function descriviCampiDaConfermare(mancanti) {
         massEqIntake: 'massa equivalente asp.', massEqExhaust: 'massa equivalente scar.',
         diamBase: '\u00d8 cerchio base asp.', diamBaseExhaust: '\u00d8 cerchio base scar.',
         diamBicch: 'diametro bicchiere',
-        intakeAngle: 'angolo lobo asp.', exhaustAngle: 'angolo lobo scar.',
-        springMass: 'massa molla', springCoils: 'spire attive'
+        intakeAngle: 'angolo lobo asp.', exhaustAngle: 'angolo lobo scar.'
     };
     var nomi = mancanti.map(function (id) { return ETICHETTE[id] || id; });
     var conseguenze = [];
     if (mancanti.some(function (id) { return CAMPI_MOLLA.indexOf(id) >= 0; }))
         conseguenze.push('il limite di distacco resta <b>non valutabile</b>');
-    if (mancanti.some(function (id) { return CAMPI_SURGE.indexOf(id) >= 0; }))
-        conseguenze.push('la frequenza di risonanza delle spire resta <b>non valutabile</b>');
     if (mancanti.some(function (id) { return CAMPI_GEOMETRIA.indexOf(id) >= 0; }))
         conseguenze.push('la conversione del follower usa un raggio base <b>non confermato</b>');
     if (mancanti.some(function (id) { return CAMPI_FASATURA.indexOf(id) >= 0; }))
@@ -3573,13 +3402,12 @@ function liveRetuneForces() {
             aggiornaGraficiCinematici(rpm);
         }
     }
-    // AUDIT APP-01: con compliance o surge ATTIVI il retune non ricalcola
-    // float/surge (restano al regime dell'ultima analisi) → stale, export
-    // bloccato fino a un nuovo Analizza. Con entrambi OFF il ricalcolo qui
-    // sopra è completo → l'hash viene ri-fotografato e l'export resta valido.
+    // AUDIT APP-01: con la compliance ATTIVA il retune non ricalcola il
+    // float (resta al regime dell'ultima analisi) → stale, export bloccato
+    // fino a un nuovo Analizza. Con la compliance OFF il ricalcolo qui sopra
+    // è completo → l'hash viene ri-fotografato e l'export resta valido.
     var cEn = document.getElementById('complianceEnabled');
-    var sEn = document.getElementById('surgeEnabled');
-    if ((cEn && cEn.value === '1') || (sEn && sEn.value === '1')) {
+    if (cEn && cEn.value === '1') {
         markAnalysisStale();
     } else if (window.lastAnalysis && window.lastAnalysis.parameterHash) {
         window.lastAnalysis.parameterHash = paramsHash();
@@ -3660,8 +3488,6 @@ var CAMPI_NUM = {
     kPushrod:         { min: 0, minEsclusivo: true, def: 800, etichetta: 'Rigidezza asta' },
     massSeat:         { min: 0, minEsclusivo: true, def: 15, etichetta: 'Massa sede' },
     kSeat:            { min: 0, minEsclusivo: true, def: 80000, etichetta: 'Rigidezza sede' },
-    springMass:       { min: 0, minEsclusivo: true, def: 60, etichetta: 'Massa molla' },
-    springCoils:      { min: 0, minEsclusivo: true, def: 6, etichetta: 'Spire attive' },
     // --- confronto A/B ---
     abA_angle:        { def: 106, etichetta: 'Angolo lobo A' },
     abA_clear:        { min: 0, def: 0, etichetta: 'Gioco A' },
@@ -3697,8 +3523,6 @@ function campiAttivi(gruppo) {
             if (mod === '2dof' || mod === '3dof') ids.push('massEqIntermediate', 'kPushrod');
             if (mod === '3dof') ids.push('massSeat', 'kSeat');
         }
-        var surge = document.getElementById('surgeEnabled');
-        if (surge && surge.checked) ids.push('springMass', 'springCoils');
     }
     return ids.filter(function (id) { return document.getElementById(id); });
 }
@@ -3778,8 +3602,7 @@ var INFLUENTIAL_IDS = ['intakeType', 'intakeAngle', 'intakeClearance',
     'followerType', 'diamBicch', 'rRoll', 'lArm', 'lValve',
     'diamBase', 'diamBaseExhaust', 'rPunt', 'springK', 'springPreload',
     'massEqIntake', 'massEqExhaust', 'complianceEnabled', 'kTrain', 'dampingRatio',
-    'complianceModel', 'massEqIntermediate', 'kPushrod', 'massSeat', 'kSeat',
-    'surgeEnabled', 'springMass', 'springCoils'];
+    'complianceModel', 'massEqIntermediate', 'kPushrod', 'massSeat', 'kSeat'];
 function collectInfluentialParams() {
     var parts = [];
     for (var i = 0; i < INFLUENTIAL_IDS.length; i++) {
@@ -3824,10 +3647,10 @@ function initLiveTuning() {
     });
     // Al primo tocco il campo smette di essere "valore di esempio".
     // Vale per tutti i campi che il programma non puo' indovinare, non solo
-    // molla e masse: raggio base, diametro bicchiere, angoli lobo, massa molla
-    // e spire attive. La marcatura si aggiorna anche quando cambia il follower
-    // o il surge, perche' cambia QUALI campi servono.
-    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA, CAMPI_SURGE).forEach(function (id) {
+    // molla e masse: cerchio base, diametro bicchiere, angoli lobo. La
+    // marcatura si aggiorna anche quando cambia il follower, perche' cambia
+    // QUALI campi servono.
+    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA).forEach(function (id) {
         var el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('input', function () {
@@ -3835,16 +3658,14 @@ function initLiveTuning() {
             aggiornaMarcaturaEsempio();
         });
     });
-    ['followerType', 'surgeEnabled'].forEach(function (id) {
-        var el = document.getElementById(id);
-        if (el) el.addEventListener('change', aggiornaMarcaturaEsempio);
-    });
+    var elFollower = document.getElementById('followerType');
+    if (elFollower) elFollower.addEventListener('change', aggiornaMarcaturaEsempio);
     aggiornaMarcaturaEsempio();
     // Input che CAMBIANO la curva → analisi stale finché non si ri-analizza.
     // AUDIT APP-01 (controrevisione): aggiunti follower (diamBicch/rRoll/
-    // lArm/lValve), tipi lato e surge (surgeEnabled/springMass/
-    // springCoils) che prima non erano ascoltati. La rete di sicurezza vera
-    // resta comunque il confronto di parameterHash in exportBlockedByStale().
+    // lArm/lValve) e tipi lato, che prima non erano ascoltati. La rete di
+    // sicurezza vera resta comunque il confronto di parameterHash in
+    // exportBlockedByStale().
     var curveIds = ['followerType', 'diamBase', 'diamBaseExhaust', 'rPunt',
         'diamBicch', 'rRoll', 'lArm', 'lValve',
         'intakeType', 'exhaustType',
@@ -3852,7 +3673,6 @@ function initLiveTuning() {
         'intakeClearance', 'exhaustClearance', 'smoothWindow', 'durationRef',
         'complianceEnabled', 'complianceModel', 'kTrain', 'dampingRatio',
         'massEqIntermediate', 'kPushrod', 'massSeat', 'kSeat',
-        'surgeEnabled', 'springMass', 'springCoils',
         'baselineCorrect'];
     curveIds.forEach(function (id) {
         var el = document.getElementById(id);
@@ -4343,59 +4163,6 @@ function analyze() {
         }
     }
 
-    // ====== SPRING SURGE (massa distribuita) ======
-    // AUDIT v3.4.3 P1-08 — scelta del DRIVE, dichiarata.
-    // Prima: `simulateSpringSurge(valveLiftIn || anlIn, ...)`. Un array che
-    // arriva da una compliance INVALID_INPUT o NON_CONVERGED e' comunque
-    // truthy: veniva usato come traiettoria di comando e il surge restituiva
-    // frequenza e ratio dall'aria plausibile, nati da una dinamica che il
-    // solver stesso aveva dichiarato inattendibile.
-    // Ora: la traiettoria compliance si usa SOLO se lo stato e' CONVERGED;
-    // se la compliance e' attiva ma non convergente NON si ripiega in silenzio
-    // sulla camma — il surge diventa NON_VALUTABILE_DRIVE.
-    // Il calcolo riguarda in ogni caso la sola ASPIRAZIONE.
-    var surgeOn = document.getElementById('surgeEnabled') &&
-                  document.getElementById('surgeEnabled').value === '1';
-    var surgeIn = null, surgeStato = null, surgeDrive = null;
-    if (surgeOn && rpm > 0) {
-        if (!surgeConfermato()) {
-            // La frequenza di surge esce da massa molla e spire attive: sono un
-            // VERDETTO, e con i valori di partenza sarebbe la risonanza di una
-            // molla che non e' quella dell'utente. Stesso trattamento del
-            // distacco valvola (P1-07), non un numero senza qualificazione.
-            surgeStato = 'NON_VALUTABILE_INPUT';
-            surgeDrive = 'massa molla e spire attive non confermate';
-            if (window.cammesToast) {
-                window.cammesToast({ kind: 'warn', title: 'Risonanza spire non valutabile',
-                    body: 'La frequenza di risonanza dipende da <b>massa molla</b> e <b>spire attive</b>, ' +
-                          'ancora ai valori di partenza (bordo tratteggiato). Inserisci quelli della tua molla.',
-                    duration: 7000 });   // id analisi non ancora assegnato a questo punto
-            }
-        } else if (complianceOn && !(compInfo && compInfo.status === 'CONVERGED')) {
-            surgeStato = 'NON_VALUTABILE_DRIVE';
-            surgeDrive = 'compliance non convergente';
-            if (window.cammesToast) {
-                window.cammesToast({ kind: 'warn', title: 'Surge non valutabile',
-                    body: 'La molla andrebbe pilotata dal moto valvola calcolato dalla compliance, ' +
-                          'ma quel solver &egrave; <b>' + ((compInfo && compInfo.status) || 'non disponibile') +
-                          '</b>. Non si ripiega sul profilo camma (darebbe un numero diverso senza dirlo): ' +
-                          'il surge resta <b>non valutabile</b> finch&eacute; la compliance non converge.',
-                    duration: 9000 });
-            }
-        } else {
-            var surgeParams = {
-                kSpringN_mm: springK,
-                springMassG: finiteOr(document.getElementById('springMass').value, 50),
-                springCoils: finiteOr(document.getElementById('springCoils').value, 12),
-                dampingRatio: finiteOr(document.getElementById('dampingRatio').value, 0.06)
-            };
-            var driveArr = (complianceOn && valveLiftIn) ? valveLiftIn : anlIn;
-            surgeDrive = (complianceOn && valveLiftIn) ? 'moto valvola (compliance CONVERGED)' : 'profilo camma';
-            surgeIn = simulateSpringSurge(driveArr, rpm, surgeParams);
-            surgeStato = surgeIn.diverged ? 'DIVERGED' : 'PRELIMINARE';
-        }
-    }
-
     // ====== DISPLAY RESULTS ======
     document.getElementById('resultsCard').style.display = 'block';
 
@@ -4542,8 +4309,6 @@ function analyze() {
             kPushrod:          numDi('kPushrod'),
             massSeat:          numDi('massSeat'),
             kSeat:             numDi('kSeat'),
-            springMass:        numDi('springMass'),
-            springCoils:       numDi('springCoils'),
             intakeFile: document.getElementById('intakeStatus').textContent,
             exhaustFile: document.getElementById('exhaustStatus').textContent,
             // Snapshot del metodo di presentazione: la scheda camma dichiara
@@ -4606,24 +4371,7 @@ function analyze() {
             valveFloatIn:    floatIn ? floatIn.maxGap : null,
             valveFloatInDeg: floatIn ? floatIn.gapIdx - 360 : null,
             valveFloatEx:    floatEx ? floatEx.maxGap : null,
-            valveFloatExDeg: floatEx ? floatEx.gapIdx - 360 : null,
-            // Spring surge (molla a massa distribuita), null se OFF.
-            // AUDIT P1-08: lo snapshot porta anche lo STATO e le riserve del
-            // modello. Prima si salvavano solo frequenza e ratio: il PDF li
-            // stampava come risultati, mentre il solver li dichiarava
-            // preliminari e non verificati sulla convergenza.
-            surgeOn:          !!surgeOn,
-            surgeStatus:      surgeStato,                                  // PRELIMINARE | DIVERGED | NON_VALUTABILE_DRIVE | NON_VALUTABILE_INPUT
-            surgeDrive:       surgeDrive,                                  // da cosa e' pilotata la molla
-            surgeLato:        'aspirazione',                               // il calcolo riguarda solo l'aspirazione
-            surgePreliminary: surgeIn ? (surgeIn.preliminary !== false) : null,
-            surgeSettleCycles: surgeIn ? (surgeIn.settleCycles || 0) : null,
-            surgeDiverged:    surgeIn ? !!surgeIn.diverged : null,
-            surgeMaxCoilAmpMm: surgeIn ? surgeIn.maxCoilAmpMm : null,
-            surgeFreqHz:      surgeIn ? surgeIn.surgeFreqHz : null,
-            surgeRatio:       surgeIn ? surgeIn.surgeRatio : null,
-            surgeHarmonic:    surgeIn ? surgeIn.harmonicOrder : null,
-            surgeCriticalRpm: (surgeIn && surgeIn.criticalRpm) ? surgeIn.criticalRpm : null
+            valveFloatExDeg: floatEx ? floatEx.gapIdx - 360 : null
         },
         arrays: {
             anlIn: anlIn, anlEx: anlEx,
@@ -4654,7 +4402,6 @@ function analyze() {
     var bOp = document.getElementById('btnOptimizeSpring'); if (bOp) bOp.disabled = false;
     var bMap = document.getElementById('btnSpringMap'); if (bMap) bMap.disabled = false;
     var b3D = document.getElementById('btnSweep3D'); if (b3D) b3D.disabled = false;
-    var bSS = document.getElementById('btnSurgeSweep'); if (bSS) bSS.disabled = false;
     var bRR = document.getElementById('btnRaceReport'); if (bRR) bRR.disabled = false;
     if (window.cammesToast) {
         var minRpmCrit = Math.min(forcesIn.rpmCrit, forcesEx.rpmCrit);
@@ -5736,24 +5483,6 @@ function exportCSV() {
             lines.push('Valve float dinamico,NON_VALUTABILE (solver ' + R.complianceStatus + ')');
         }
     }
-    // AUDIT P1-08: il CSV dichiara stato, drive e riserve del modello surge.
-    if (R.surgeOn && /^NON_VALUTABILE/.test(R.surgeStatus || '')) {
-        lines.push('Surge molla,non valutabile');
-        lines.push('# Surge: ' + (R.surgeDrive || 'traiettoria di comando non attendibile') +
-                   ' - nessun ripiego sul profilo camma');
-    } else if (R.surgeOn && R.surgeFreqHz) {
-        lines.push('Surge lato,' + (R.surgeLato || 'aspirazione'));
-        lines.push('Surge stato,' + (R.surgeStatus || 'PRELIMINARE'));
-        lines.push('Surge pilotato da,' + (R.surgeDrive || '-'));
-        lines.push('Surge cicli di assestamento,' + (R.surgeSettleCycles !== null && R.surgeSettleCycles !== undefined ? R.surgeSettleCycles : '-'));
-        lines.push('# STIMA PRELIMINARE: convergenza del surge NON verificata');
-        lines.push('Surge molla freq. [Hz],' + Math.round(R.surgeFreqHz));
-        lines.push('Surge ratio @ RPM,' + (isFinite(R.surgeRatio) ? R.surgeRatio.toFixed(3) : 'inf'));
-        lines.push('Surge ampiezza max spire [mm],' + (isFinite(R.surgeMaxCoilAmpMm) ? R.surgeMaxCoilAmpMm.toFixed(3) : 'inf'));
-        if (R.surgeDiverged) lines.push('# Surge: integrazione DIVERGENTE, valori non utilizzabili');
-        lines.push('Surge armonica cam,' + (R.surgeHarmonic || '-'));
-        if (R.surgeCriticalRpm) lines.push('Surge regime critico [rpm],' + R.surgeCriticalRpm);
-    }
     // AUDIT P1-10: due grandezze distinte, entrambe esportate col nome giusto.
     // "max fianco di chiusura" e' il minimo globale della velocita' (lontano
     // dalla sede); "appoggio sulla sede" e' interpolata nel crossing.
@@ -6431,25 +6160,6 @@ function exportPDF() {
             rows.push(['Valve float dinamico', 'NON VALUTABILE', 'NON VALUTABILE']);
         }
     }
-    // Riga spring surge (solo se attivo)
-    // AUDIT P1-08: il referto dichiara stato e riserve. Se la traiettoria di
-    // comando non e' attendibile (compliance non convergente) non si stampa
-    // alcun numero; se lo e', si stampa dicendo che e' una STIMA PRELIMINARE.
-    if (R.surgeOn && /^NON_VALUTABILE/.test(R.surgeStatus || '')) {
-        rows.push(['Surge molla (aspirazione)', 'NON VALUTABILE',
-                   R.surgeDrive || 'traiettoria non attendibile']);
-    } else if (R.surgeOn && R.surgeFreqHz) {
-        var surgeTxt = 'freq ' + Math.round(R.surgeFreqHz) + ' Hz';
-        if (R.surgeCriticalRpm) surgeTxt += ' · critico ~' + R.surgeCriticalRpm + ' rpm';
-        var ratioTxt = isFinite(R.surgeRatio)
-            ? (R.surgeRatio.toFixed(2) + (R.surgeRatio > 1 ? ' (surge!)' : R.surgeRatio > 0.4 ? ' (attenz.)' : ' (ok)'))
-            : 'instabile';
-        rows.push(['Surge molla (' + (R.surgeLato || 'aspirazione') + ')', surgeTxt, 'ratio ' + ratioTxt]);
-        rows.push(['  STIMA PRELIMINARE — convergenza del surge non verificata',
-                   'pilotato da: ' + (R.surgeDrive || '-'),
-                   (R.surgeSettleCycles ? R.surgeSettleCycles + ' cicli' : '') +
-                   (R.surgeDiverged ? ' · INTEGRAZIONE DIVERGENTE' : '')]);
-    }
 
     // Header tabella
     var c1 = margin, c2 = margin + 70, c3 = margin + 130;
@@ -6683,7 +6393,6 @@ function resetAll() {
     var bOpR = document.getElementById('btnOptimizeSpring'); if (bOpR) bOpR.disabled = true;
     var bMapR = document.getElementById('btnSpringMap'); if (bMapR) bMapR.disabled = true;
     var b3DR = document.getElementById('btnSweep3D'); if (b3DR) b3DR.disabled = true;
-    var bSSR = document.getElementById('btnSurgeSweep'); if (bSSR) bSSR.disabled = true;
     var bRRR = document.getElementById('btnRaceReport'); if (bRRR) bRRR.disabled = true;
     var rb = document.getElementById('raceResultsBox'); if (rb) rb.style.display = 'none';
     if (complianceChart) { try { complianceChart.destroy(); } catch (e) {} complianceChart = null; }

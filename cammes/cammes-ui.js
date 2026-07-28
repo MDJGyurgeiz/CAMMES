@@ -709,7 +709,7 @@
       { sel: '#replayBtn',  title: 'Replay', body: 'Ridisegna le curve da 0° a 360° per un confronto animato.' }
     ],
     analisi: [
-      { sel: '#btnModules',        title: 'Funzioni aggiuntive', body: 'Di default vedi solo il flusso essenziale. Da qui attivi i moduli extra: <b>molla</b>, <b>dinamica valvole</b>, <b>strumenti race</b>, <b>animazione</b>, <b>confronto A/B</b>. Col modulo Dinamica valvole compaiono anche <b>Elasticit&agrave; del comando valvola</b> (compliance: perdita di contatto camma&ndash;valvola, modelli a 1/2/3 masse) e <b>Risonanza delle spire</b> (surge, ad alto regime). La scelta viene ricordata.' },
+      { sel: '#btnModules',        title: 'Funzioni aggiuntive', body: 'Di default vedi solo il flusso essenziale. Da qui attivi i moduli extra: <b>molla</b>, <b>dinamica valvole</b>, <b>strumenti race</b>, <b>animazione</b>, <b>confronto A/B</b>. Col modulo Dinamica valvole compare anche <b>Elasticit&agrave; del comando valvola</b> (compliance: perdita di contatto camma&ndash;valvola, modelli a 1/2/3 masse). La scelta viene ricordata.' },
       { sel: '#modeBaseBtn',       title: 'Base / Avanzato', body: 'In <b>Base</b> vedi i campi minimi; <b>Avanzato</b> aggiunge i parametri fini (anticipo, bilancieri, smoothing, baseline).' },
       { sel: '#fileIntake',        title: 'Importa la camma', body: 'Carica i file di aspirazione e scarico, poi premi Analizza.' },
       { sel: 'button[onclick^="analyze"]', title: 'Analizza', body: 'Calcola durata, separazione lobi (LSA), alzata, velocità/accelerazione, forze e limite di distacco valvola.' }

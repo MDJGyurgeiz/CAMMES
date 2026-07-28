@@ -3,7 +3,7 @@
 // =============================================================
 //  Contiene le funzioni di CALCOLO PURO estratte da analisi.html e
 //  alzata.html (conversioni follower, baseline, mappatura camma→albero,
-//  compliance 1/2/3-DOF, surge molla, re-indicizzazione encoder).
+//  compliance 1/2/3-DOF, re-indicizzazione encoder).
 //
 //  Doppio consumo:
 //   - BROWSER: <script src="lib/cammes-math.js"> — le funzioni vengono
@@ -814,153 +814,6 @@ function detectValveFloat(camLift720, valveLift720) {
     return { maxGap: maxGap, gapIdx: gapIdx, separation: false };
 }
 
-// =============================================================
-// SPRING SURGE — molla valvola a MASSA DISTRIBUITA (modi delle spire)
-// =============================================================
-// I solver compliance trattano la molla come F = F0 + k·x (massa concentrata):
-// non vedono il SURGE, cioè la risonanza longitudinale delle spire ad alto
-// regime (le spire oscillano tra loro, possono sbattere o staccarsi → perdita
-// di forza, rotture). Qui modelliamo la molla come catena di N masse
-// (m_spring/N) collegate da N+1 segmenti in serie di rigidezza (N+1)·k (la
-// serie ridà k), base fissa alla testata, capo superiore GUIDATO dal moto
-// della valvola. Analisi disaccoppiata (standard): il surge è valutato DATO
-// il moto valvola, non retroagisce sul valve float.
-//
-// Frequenza propria fondamentale (estremi fissi): f1 = ½·√(k/m_spring).
-// surgeRatio = ampiezza di oscillazione interna / corsa valvola: >~1 = surge.
-// audit DYN-06: CAVEAT — modello ESPLORATIVO. Il criterio surgeRatio>1 e'
-// euristico (soglia indicativa, non una condizione fisica esatta) e la
-// simulazione usa nCycles=3 per assestare il transitorio SENZA verifica di
-// convergenza. Il modello NON e' stato validato indipendentemente: usare i
-// risultati come indicazione qualitativa, non come dato metrologico.
-function springSurgeFreqHz(kSpringN_mm, springMassG) {
-    // AUDIT DYN-02: default SOLO se assente/invalido; uno 0 esplicito
-    // finisce nella guardia (risultato nullo), non nel default.
-    var k = finiteOr(kSpringN_mm, 30) * 1000; // N/m
-    var m = finiteOr(springMassG, 50) / 1000; // kg
-    if (m <= 0 || k <= 0) return 0;
-    return 0.5 * Math.sqrt(k / m);            // Hz (fondamentale estremi fissi)
-}
-
-function simulateSpringSurge(valveLift720, rpm, params) {
-    var p = params || {};
-    var k_spring = finiteOr(p.kSpringN_mm, 30) * 1000;  // N/m (totale)
-    var m_spring = finiteOr(p.springMassG, 50) / 1000;  // kg (massa molla)
-    var N = Math.max(4, Math.min(24, Math.round(finiteOr(p.springCoils, 12))));
-    // AUDIT DYN-02: damping 0 esplicito è VALIDO (non smorzato); prima
-    // `p.dampingRatio || 0.06` lo sostituiva col default, e un testo invalido
-    // propagava NaN in tutta la simulazione. Range [0,1] applicato a parte.
-    var zeta = Math.max(0, Math.min(1, finiteOr(p.dampingRatio, 0.06)));
-    if (m_spring <= 0 || k_spring <= 0 || rpm <= 0) {
-        return { surgeFreqHz: 0, surgeRatio: 0, maxCoilAmpMm: 0, harmonicOrder: 0, preliminary: true, settleCycles: 0 };
-    }
-
-    var m_i   = m_spring / N;                  // massa per nodo interno
-    var k_seg = (N + 1) * k_spring;            // serie di N+1 segmenti = k_spring
-    var c_seg = 2 * zeta * Math.sqrt(k_seg * m_i);
-
-    // Tempo: 720° albero motore = 1 ciclo cam = 2 giri = 120/rpm secondi.
-    var T_cycle = 120 / rpm;                    // s per 720°
-    var degPerSec = 720 / T_cycle;
-
-    // Profilo lift in metri + pendenza (per la velocità del drive).
-    var lift = new Array(721), slope = new Array(721);
-    for (var d = 1; d <= 720; d++) lift[d] = (valveLift720[d] || 0) * 1e-3;
-    lift[0] = lift[720];
-    for (var d2 = 1; d2 <= 720; d2++) {
-        var dn = d2 + 1 > 720 ? 1 : d2 + 1, dp = d2 - 1 < 1 ? 720 : d2 - 1;
-        slope[d2] = (lift[dn] - lift[dp]) / 2;  // m per grado
-    }
-    var maxLift = 0; for (var dm = 1; dm <= 720; dm++) if (lift[dm] > maxLift) maxLift = lift[dm];
-    if (maxLift <= 0) return { surgeFreqHz: springSurgeFreqHz(p.kSpringN_mm, p.springMassG), surgeRatio: 0, maxCoilAmpMm: 0, harmonicOrder: 0, preliminary: true, settleCycles: 0 };
-
-    function driveAt(crankDeg) {
-        var dd = ((crankDeg - 1) % 720 + 720) % 720 + 1;
-        var i0 = Math.floor(dd), frac = dd - i0;
-        var a = lift[i0] || 0, b = lift[(i0 % 720) + 1] || 0;
-        var s = a + (b - a) * frac;
-        var sdot = (slope[i0] || 0) * degPerSec;   // m/s
-        return { s: s, sdot: sdot };
-    }
-
-    // Passo: risolve il modo più rapido della catena (ω_max ≈ 2√(k_seg/m_i)).
-    var omegaMax = 2 * Math.sqrt(k_seg / m_i);
-    var dtFast = (2 * Math.PI / omegaMax) / 12;
-    var dtDeg  = 1 / degPerSec;
-    var dt = Math.min(dtFast, dtDeg / 2);
-    var nCycles = 3;                            // lascia assestare il transitorio
-    var totalT = nCycles * T_cycle;
-    var nSteps = Math.ceil(totalT / dt);
-    if (nSteps > 80000) { nSteps = 80000; dt = totalT / nSteps; }
-
-    // Stato: y[0..N-1] (posizioni nodi interni), v[0..N-1] (velocità).
-    var y = new Array(N), v = new Array(N);
-    for (var ii = 0; ii < N; ii++) { y[ii] = 0; v[ii] = 0; }
-
-    function accel(yy, vv, drv, out) {
-        for (var i = 0; i < N; i++) {
-            var yl = (i === 0) ? 0      : yy[i - 1];
-            var vl = (i === 0) ? 0      : vv[i - 1];
-            var yr = (i === N - 1) ? drv.s    : yy[i + 1];
-            var vr = (i === N - 1) ? drv.sdot : vv[i + 1];
-            out[i] = (k_seg * (yl - yy[i]) + k_seg * (yr - yy[i])
-                    + c_seg * (vl - vv[i]) + c_seg * (vr - vv[i])) / m_i;
-        }
-    }
-
-    var a1 = new Array(N), a2 = new Array(N), a3 = new Array(N), a4 = new Array(N);
-    var yt = new Array(N), vt = new Array(N);
-    var t = 0, maxDev = 0;
-    var lastCycleStart = (nCycles - 1) * T_cycle;   // misura il surge a regime
-
-    for (var step = 0; step < nSteps; step++) {
-        var crank = ((t / T_cycle) % 1) * 720;
-        var d0 = driveAt(crank);
-        var dHalf = driveAt(((t + dt / 2) / T_cycle % 1) * 720);
-        var dFull = driveAt(((t + dt) / T_cycle % 1) * 720);
-
-        accel(y, v, d0, a1);
-        for (var b1 = 0; b1 < N; b1++) { yt[b1] = y[b1] + v[b1] * dt / 2; vt[b1] = v[b1] + a1[b1] * dt / 2; }
-        accel(yt, vt, dHalf, a2);
-        for (var b2 = 0; b2 < N; b2++) { yt[b2] = y[b2] + (v[b2] + a1[b2] * dt / 2) * dt / 2; vt[b2] = v[b2] + a2[b2] * dt / 2; }
-        accel(yt, vt, dHalf, a3);
-        for (var b3 = 0; b3 < N; b3++) { yt[b3] = y[b3] + (v[b3] + a2[b3] * dt / 2) * dt; vt[b3] = v[b3] + a3[b3] * dt; }
-        accel(yt, vt, dFull, a4);
-        for (var b4 = 0; b4 < N; b4++) {
-            y[b4] += (v[b4] + 2 * (v[b4] + a1[b4] * dt / 2) + 2 * (v[b4] + a2[b4] * dt / 2) + (v[b4] + a3[b4] * dt)) * dt / 6;
-            v[b4] += (a1[b4] + 2 * a2[b4] + 2 * a3[b4] + a4[b4]) * dt / 6;
-        }
-        t += dt;
-
-        // Surge = scostamento dalla distribuzione quasi-statica lineare
-        // y_i,statico = s·(i+1)/(N+1). Misurato solo nell'ultimo ciclo.
-        if (t >= lastCycleStart) {
-            var sNow = d0.s;
-            for (var c = 0; c < N; c++) {
-                var yStatic = sNow * (c + 1) / (N + 1);
-                var dev = Math.abs(y[c] - yStatic);
-                if (dev > maxDev) maxDev = dev;
-                if (!isFinite(y[c])) return { surgeFreqHz: springSurgeFreqHz(p.kSpringN_mm, p.springMassG), surgeRatio: Infinity, maxCoilAmpMm: Infinity, harmonicOrder: 0, diverged: true, preliminary: true, settleCycles: nCycles };
-            }
-        }
-    }
-
-    var fSurge = springSurgeFreqHz(p.kSpringN_mm, p.springMassG);
-    var fCam = rpm / 120;                        // Hz evento cam (1 ogni 720°)
-    var nHarm = fCam > 0 ? Math.round(fSurge / fCam) : 0;
-    return {
-        surgeFreqHz: fSurge,
-        surgeRatio: maxDev / maxLift,            // ampiezza interna / corsa valvola
-        maxCoilAmpMm: maxDev * 1000,
-        harmonicOrder: nHarm,                    // armonica cam ~ surge a questo rpm
-        criticalRpm: nHarm > 0 ? Math.round(fSurge * 120 / nHarm) : null,
-        // AUDIT DYN-02: cicli FISSI senza verifica di convergenza — il
-        // risultato è dichiaratamente preliminare (modello esplorativo).
-        preliminary: true,
-        settleCycles: nCycles
-    };
-}
-
 // AUDIT v3.4.3 P1-09 — il parametro "inclinazione finger" e' stato RIMOSSO
 // perche' matematicamente inerte, non per semplificazione. Dimostrazione:
 // col modello speculare theta_val0 = -theta_cam0 si ha
@@ -1319,8 +1172,8 @@ function riassuntoConvergenza(vIn, vEx) {
         tolX: tolX, tolV: tolV,
         latoFallito: lato,
         criterioFallito: crit,
-        // compatibilita' con i consumatori esistenti (grafico, gate float,
-        // gate surge): il campo storico continua a esistere, ma senza `|| 0`.
+        // compatibilita' con i consumatori esistenti (grafico, gate float):
+        // il campo storico continua a esistere, ma senza `|| 0`.
         residualIn: rXIn, residualEx: rXEx
     };
 }
@@ -1721,9 +1574,7 @@ var api = {
     simulateCompliance: simulateCompliance,
     simulateCompliance2DOF: simulateCompliance2DOF,
     simulateCompliance3DOF: simulateCompliance3DOF,
-    detectValveFloat: detectValveFloat,
-    springSurgeFreqHz: springSurgeFreqHz,
-    simulateSpringSurge: simulateSpringSurge
+    detectValveFloat: detectValveFloat
 };
 for (var k in api) root[k] = api[k];   // browser: stessi nomi globali di prima
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
