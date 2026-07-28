@@ -98,16 +98,39 @@ function convertPuntToBicchiere(camLiftRaw, rBase, dBicch, rPunt) {
         if (r[t] > rMax) rMax = r[t];
     }
 
-    // Warning runtime se bicchiere troppo grande rispetto al lobo
-    // (l'impronta del piattello copre più di metà della cam).
-    if (dBicch > rBase * 0.95 && window.cammesToast && !window._suppressBicchWarn) {
-        window._suppressBicchWarn = true;  // mostra una volta per sessione
+    // Avviso: il piattello e' TROPPO PICCOLO per questo lobo.
+    //
+    // Prima la condizione era `dBicch > rBase * 0.95`, che confronta un
+    // DIAMETRO con un RAGGIO: dimensionalmente sbagliata, e scattava sempre.
+    // Con qualunque combinazione realistica (rBase 14/16/32, bicchiere 33) il
+    // test e' vero, quindi l'avviso compariva a ogni analisi col bicchiere e
+    // non segnalava piu' niente.
+    //
+    // Il vincolo geometrico vero di un follower piatto e' un altro, e non
+    // dipende dal cerchio base: il punto di contatto si sposta lateralmente di
+    // dL/dphi (mm per radiante), quindi il piattello deve avere RAGGIO almeno
+    // pari all'offset massimo, altrimenti il contatto esce dal bordo e la
+    // conversione non e' piu' valida.
+    // Verificato sulla VW KR asp: offset massimo 17,19 mm -> serve Ø >= 34,4 mm,
+    // e il bicchiere reale di quel motore e' Ø35. Combacia con 0,3 mm di
+    // margine, che e' quanto ci si aspetta da un accoppiamento progettato.
+    var offsetMax = 0;
+    for (var q = 1; q <= 360; q++) {
+        var pr = lt[q === 1 ? 360 : q - 1], su = lt[q === 360 ? 1 : q + 1];
+        if (!isFinite(pr) || !isFinite(su)) continue;
+        var off = Math.abs((su - pr) / (2 * DEG));   // mm per radiante
+        if (off > offsetMax) offsetMax = off;
+    }
+    if (offsetMax > R && typeof window !== 'undefined' && window.cammesToast && !window._suppressBicchWarn) {
+        window._suppressBicchWarn = true;  // una volta per sessione
         setTimeout(function () {
             window.cammesToast({
-                kind: 'warn', title: 'Bicchiere grande',
-                body: '&Oslash; ' + dBicch.toFixed(1) + ' mm su cerchio base ' + rBase.toFixed(1) +
-                      ' mm: l\'impronta &egrave; pi&ugrave; larga del lobo, alzata simulata pu&ograve; essere irrealistica.',
-                duration: 6000
+                kind: 'warn', title: 'Bicchiere troppo piccolo per questo lobo',
+                body: 'Il contatto si sposta fino a <b>' + offsetMax.toFixed(2) + ' mm</b> dall\'asse, ' +
+                      'ma il bicchiere &Oslash; ' + dBicch.toFixed(1) + ' mm ha raggio ' + R.toFixed(2) + ' mm: ' +
+                      'il punto di contatto esce dal bordo e l\'alzata simulata non &egrave; valida. ' +
+                      'Serve almeno &Oslash; ' + (2 * offsetMax).toFixed(1) + ' mm.',
+                duration: 9000
             });
         }, 400);
     }

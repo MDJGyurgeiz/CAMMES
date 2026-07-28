@@ -440,7 +440,7 @@
                 </div>
                 <!-- R cerchio base e R puntalino: comuni a bicchiere/rullo/finger -->
                 <div class="param-row" id="rowRBase" style="display:none;">
-                    <span class="param-label">R base asp/scar <span class="help-icon" data-tip="<strong>Raggio cerchio base camma (per lato)</strong>Parte non sollevata della cam ('fondo'), dove la valvola &egrave; chiusa. <b>Aspirazione e scarico possono differire</b> (es. VW KR 16V: 32.64 / 34.25 mm): per questo sono due campi separati. Misurabile col calibro. Tipici: 12-18 mm moto, 14-35 mm auto. Usato per la geometria di contatto del follower simulato.">?</span></span>
+                    <span class="param-label">R base <b>raggio</b> <span class="help-icon" data-tip="<strong>RAGGIO del cerchio base, non il diametro</strong>Il cerchio base &egrave; la parte non sollevata della camma, dove la valvola &egrave; chiusa. Qui va il <b>raggio</b>: col calibro misuri il <b>diametro</b> attraverso il fondo della camma, quindi <b>dividi per due</b>. Ordine di grandezza del raggio: 12-18 mm. Se stai per scrivere un numero sopra 20, probabilmente hai in mano un diametro. Aspirazione e scarico possono differire: per questo sono due campi. Serve solo con follower simulato (bicchiere, rullo, leva): col puntalino la curva &egrave; quella grezza e questo campo non entra in nessun calcolo.">?</span></span>
                     <input type="number" id="rBase" value="14.0" class="input" style="width:60px;" step="0.01" min="1" title="Raggio base ASPIRAZIONE">
                     <input type="number" id="rBaseExhaust" value="14.0" class="input" style="width:60px;" step="0.01" min="1" title="Raggio base SCARICO">
                     <span class="param-unit">mm (asp/sca)</span>
@@ -5157,6 +5157,9 @@ function updateTimingDiagram(inEv, exEv, durIn, durEx, overlap) {
     // settore vuoto sembra un pezzo di grafico che non si e' disegnato, invece
     // di essere "qui entrambe le valvole sono chiuse". Quattro tacche con
     // etichetta, disegnate sopra gli anelli.
+    // Il diagramma si legge come una scheda camma: incrocio (PMS) in alto.
+    var ROTAZIONE_GRADI = 180;
+    var ROTAZIONE_RAD = ROTAZIONE_GRADI * Math.PI / 180;
     var RIFERIMENTI = [
         { deg: 0,   testo: 'PMS scoppio' },
         { deg: 180, testo: 'PMI scarico' },
@@ -5176,7 +5179,7 @@ function updateTimingDiagram(inEv, exEv, durIn, durEx, overlap) {
             c.lineWidth = 1; c.font = '9px sans-serif';
             RIFERIMENTI.forEach(function (r) {
                 // Chart.js parte da ore 12 e gira in senso orario
-                var a = (r.deg / 720) * 2 * Math.PI - Math.PI / 2;
+                var a = (r.deg / 720) * 2 * Math.PI + ROTAZIONE_RAD - Math.PI / 2;
                 var ca = Math.cos(a), sa = Math.sin(a);
                 c.globalAlpha = 0.55;
                 c.beginPath();
@@ -5231,11 +5234,15 @@ function updateTimingDiagram(inEv, exEv, durIn, durEx, overlap) {
             // spazio per le etichette PMS/PMI, che stanno FUORI dagli anelli
             layout: { padding: { top: 14, bottom: 14, left: 40, right: 40 } },
             cutout: '26%',
-            // rotation 0 = crank 0 in alto. Nella convenzione del progetto
-            // (PMS incrocio = 360) crank 0/720 e' il PMS di SCOPPIO, dove
-            // entrambe le valvole sono chiuse: nessun arco attraversa la
-            // cucitura. L'incrocio cade quindi in basso.
-            rotation: 0,
+            // L'INCROCIO IN ALTO. Segnalato dal banco: il diagramma sembrava
+            // sottosopra. Con rotation 0 in alto c'era crank 0, cioe' il PMS di
+            // SCOPPIO, e l'incrocio finiva in basso, fra le due etichette PMI:
+            // si leggeva come se l'incrocio avvenisse al punto morto inferiore.
+            // Ruotando di 180 gradi il PMS di incrocio va a ore 12, che e' come
+            // si legge una scheda camma. La cucitura del doughnut si sposta al
+            // PMS di scoppio (in basso), dove entrambe le valvole sono chiuse:
+            // nessun arco viene tagliato, che era il motivo della scelta di prima.
+            rotation: ROTAZIONE_GRADI,
             plugins: {
                 legend: {
                     display: true,
