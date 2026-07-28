@@ -1155,6 +1155,108 @@ function lashLatoCamma(clearanceValvola, rocker) {
 }
 
 // -------------------------------------------------------------------------
+// CARICO MOLLA RICHIESTO DALLA CAMMA
+//
+// Il problema al contrario. Il resto del programma chiede "che molla hai?" e
+// risponde con un verdetto: utile solo se la molla ce l'hai gia' e ne conosci
+// k e F0. Qui si parte da cio' che l'officina possiede davvero — la camma
+// misurata, la massa alterna pesata, il regime deciso — e si dice QUALE CARICO
+// SERVE. Niente da indovinare.
+//
+// Fisica. Dove la valvola decelera, la camma non puo' tirarla: sa solo
+// spingere. La forza che la tiene a contatto la deve dare la molla.
+//     a_tempo(theta) = a_deg(theta) * (6*rpm)^2 * 1e-3        [m/s^2]
+//     carico richiesto(theta) = S * m * |a_tempo|   dove a_tempo < 0   [N]
+// A una stessa alzata corrispondono DUE punti del ciclo, il fianco di apertura
+// e quello di chiusura, con accelerazioni diverse: si prende il peggiore. Su un
+// lobo asimmetrico e' quasi sempre il fianco di chiusura.
+//
+// COSA QUESTO NUMERO NON E'. E' il requisito CINEMATICO su treno RIGIDO:
+//  - ignora la cedevolezza del treno, che alza il requisito (per quello c'e' il
+//    solver di compliance);
+//  - non e' il carico a valvola chiusa necessario a tenere la tenuta contro la
+//    pressione in camera, che e' un'altra verifica;
+//  - non dice niente su coil bind, tensione del filo, fatica, risonanza delle
+//    spire.
+// Va letto come "sotto questo carico la valvola stacca", non come "la molla
+// giusta e' questa".
+//
+// Il margine di sicurezza e' una SCELTA di chi progetta, non una misura: entra
+// come moltiplicatore esplicito e va dichiarato accanto al risultato.
+// -------------------------------------------------------------------------
+function caricoMollaRichiesto(valveLift720, accValveDeg720, massEqG, rpm, opts) {
+    var o = opts || {};
+    var S = (typeof o.sicurezza === 'number' && isFinite(o.sicurezza) && o.sicurezza > 0) ? o.sicurezza : 1;
+    var IPOTESI = 'Requisito cinematico su treno RIGIDO: non include la cedevolezza del ' +
+                  'comando (che lo alza), il carico di tenuta a valvola chiusa, coil bind, ' +
+                  'tensione del filo, fatica ne\' risonanza delle spire.';
+    var vuoto = { valutabile: false, punti: [], vincolante: null, alzataMaxMm: 0,
+                  sicurezza: S, rpm: rpm, massaG: massEqG, ipotesi: IPOTESI, motivo: null };
+
+    var m = Number(massEqG);
+    if (!isFinite(m) || m <= 0) { vuoto.motivo = 'massa equivalente non valida'; return vuoto; }
+    var n = Number(rpm);
+    if (!isFinite(n) || n <= 0) { vuoto.motivo = 'regime non valido'; return vuoto; }
+    if (!valveLift720 || !accValveDeg720) { vuoto.motivo = 'curve assenti'; return vuoto; }
+
+    var mKg = m / 1000;
+    var omega = 6 * n;                 // gradi/s
+    var fatt = mKg * omega * omega * 1e-3;   // da mm/grado^2 a newton
+
+    // Requisito grado per grado, solo dove la valvola DECELERA.
+    var req = new Array(721), alzMax = 0;
+    for (var i = 1; i <= 720; i++) {
+        var L = Number(valveLift720[i]);
+        var a = Number(accValveDeg720[i]);
+        if (!isFinite(L)) L = 0;
+        if (L > alzMax) alzMax = L;
+        req[i] = (isFinite(a) && a < 0) ? S * (-a) * fatt : 0;
+    }
+    if (!(alzMax > 0)) { vuoto.motivo = 'alzata nulla'; return vuoto; }
+
+    // Per una data alzata: il punto peggiore fra tutti gli angoli che la
+    // raggiungono. Si accetta una fascia di mezzo grado di alzata attorno al
+    // valore chiesto, cosi' si trova sempre un campione su entrambi i fianchi.
+    function peggioreAllAlzata(target) {
+        var tol = Math.max(0.05, alzMax * 0.02);
+        var best = null;
+        for (var k = 1; k <= 720; k++) {
+            var L = Number(valveLift720[k]);
+            if (!isFinite(L) || Math.abs(L - target) > tol) continue;
+            if (!best || req[k] > best.forzaN) best = { alzataMm: L, forzaN: req[k], gradi: k - 360 };
+        }
+        return best;
+    }
+
+    var alzate = Array.isArray(o.alzate) ? o.alzate.slice() : [0, 1, 2, 3, 5, 7, 9];
+    var punti = [];
+    alzate.forEach(function (t) {
+        if (!isFinite(t) || t < 0 || t > alzMax + 1e-9) return;   // niente alzate inventate
+        var p = peggioreAllAlzata(t);
+        if (p) punti.push({ alzataMm: t, forzaN: p.forzaN, gradi: p.gradi, alzataTrovataMm: p.alzataMm });
+    });
+    // L'alzata massima e' sempre inclusa: e' quasi sempre il punto vincolante.
+    var pMax = peggioreAllAlzata(alzMax);
+    if (pMax) punti.push({ alzataMm: alzMax, forzaN: pMax.forzaN, gradi: pMax.gradi, alzataTrovataMm: pMax.alzataMm });
+    punti.sort(function (x, y) { return x.alzataMm - y.alzataMm; });
+
+    // Il punto vincolante vero: il massimo del requisito su tutto il ciclo,
+    // che non e' necessariamente una delle alzate tabellate.
+    var vinc = null;
+    for (var j = 1; j <= 720; j++) {
+        if (!vinc || req[j] > vinc.forzaN) {
+            vinc = { forzaN: req[j], gradi: j - 360, alzataMm: Number(valveLift720[j]) || 0 };
+        }
+    }
+
+    return {
+        valutabile: true, motivo: null,
+        punti: punti, vincolante: vinc, alzataMaxMm: alzMax,
+        sicurezza: S, rpm: n, massaG: m, ipotesi: IPOTESI
+    };
+}
+
+// -------------------------------------------------------------------------
 // AUDIT v3.4.3 P2-03 — riepilogo di convergenza SENZA perdita di informazione.
 //
 // Prima lo snapshot conservava:
@@ -1608,6 +1710,7 @@ var api = {
     FOLLOWER_OUTPUT_DOMAIN: FOLLOWER_OUTPUT_DOMAIN,
     FINGER_TILT_RIMOSSO: true,   // AUDIT P1-09: parametro inerte, tolto
     lashLatoCamma: lashLatoCamma,
+    caricoMollaRichiesto: caricoMollaRichiesto,
     riassuntoConvergenza: riassuntoConvergenza,
     fmtResiduo: fmtResiduo,
     serializeDiagnosticProfile: serializeDiagnosticProfile,
