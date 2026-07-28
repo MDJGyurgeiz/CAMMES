@@ -440,9 +440,9 @@
                 </div>
                 <!-- R cerchio base e R puntalino: comuni a bicchiere/rullo/finger -->
                 <div class="param-row" id="rowRBase" style="display:none;">
-                    <span class="param-label">R base <b>raggio</b> <span class="help-icon" data-tip="<strong>RAGGIO del cerchio base, non il diametro</strong>Il cerchio base &egrave; la parte non sollevata della camma, dove la valvola &egrave; chiusa. Qui va il <b>raggio</b>: col calibro misuri il <b>diametro</b> attraverso il fondo della camma, quindi <b>dividi per due</b>. Ordine di grandezza del raggio: 12-18 mm. Se stai per scrivere un numero sopra 20, probabilmente hai in mano un diametro. Aspirazione e scarico possono differire: per questo sono due campi. Serve solo con follower simulato (bicchiere, rullo, leva): col puntalino la curva &egrave; quella grezza e questo campo non entra in nessun calcolo.">?</span></span>
-                    <input type="number" id="rBase" value="14.0" class="input" style="width:60px;" step="0.01" min="1" title="Raggio base ASPIRAZIONE">
-                    <input type="number" id="rBaseExhaust" value="14.0" class="input" style="width:60px;" step="0.01" min="1" title="Raggio base SCARICO">
+                    <span class="param-label">&#216; cerchio base <span class="help-icon" data-tip="<strong>DIAMETRO del cerchio base (per lato)</strong>Il cerchio base &egrave; la parte non sollevata della camma, dove la valvola &egrave; chiusa. Misuralo col <b>calibro</b> attraverso il fondo della camma e scrivilo cos&igrave; com&apos;&egrave;: il programma lo dimezza da solo. Prima questo campo chiedeva il raggio, e bisognava dividere a mente. Ordine di grandezza: 25-36 mm (es. VW KR 1.8 16V: circa 32,6 mm). Aspirazione e scarico possono differire: per questo sono due campi. Serve solo con follower simulato (bicchiere, rullo, leva): col puntalino la curva &egrave; quella grezza e questo campo non entra in nessun calcolo.">?</span></span>
+                    <input type="number" id="diamBase" class="input" style="width:60px;" step="0.01" min="1" placeholder="Ø asp" title="Diametro del cerchio base ASPIRAZIONE, misurato col calibro">
+                    <input type="number" id="diamBaseExhaust" class="input" style="width:60px;" step="0.01" min="1" placeholder="Ø sca" title="Diametro del cerchio base SCARICO, misurato col calibro">
                     <span class="param-unit">mm (asp/sca)</span>
                 </div>
                 <div class="param-row" id="rowRPunt" style="display:none;">
@@ -2374,7 +2374,7 @@ function _mechFrame() {
         camAngleDeg: _mechAngle,
         camLift: _mechCamLift,
         followerLift: _mechCamLift[idx] || 0,
-        rBase: Number((document.getElementById('rBase') || {}).value) || 14,
+        rBase: (numDi('diamBase') / 2) || 14,   // il campo e' un diametro
         maxLift: _mechMaxLift,
         followerType: (document.getElementById('followerType') || {}).value || 'punt',
         rocker: Number((document.getElementById(rockerId) || {}).value) || 1,
@@ -2674,9 +2674,13 @@ function applyVirtualFollower(camLift, side) {
     // AUDIT P1-12: letture validate. `Number(x) || def` trasformava rPunt = 0
     // (tastatore a coltello, valore legittimo) in 1,5 e lasciava passare un
     // raggio base negativo fino alla curva convertita.
-    var idRb = (side === 'exhaust' && document.getElementById('rBaseExhaust')) ? 'rBaseExhaust' : 'rBase';
-    var rBase  = numDi(idRb);
-    if (!isFinite(rBase)) rBase = numDi('rBase');
+    // Il campo chiede il DIAMETRO (quello che leggi sul calibro); la libreria
+    // matematica lavora in RAGGIO, perche' r(theta) = rBase + alzata. La
+    // divisione per due sta QUI, in un punto solo.
+    var idRb = (side === 'exhaust' && document.getElementById('diamBaseExhaust')) ? 'diamBaseExhaust' : 'diamBase';
+    var diamBase = numDi(idRb);
+    if (!isFinite(diamBase)) diamBase = numDi('diamBase');
+    var rBase = diamBase / 2;
     var rPunt  = numDi('rPunt');
 
     if (t === 'bicch') {
@@ -3186,11 +3190,11 @@ var MIN_CAMPO_MOLLA = { springK: 0.0001, springPreload: 0, massEqIntake: 0.0001,
 // a cio' che hai dichiarato: non sono falsi, sono NON CONFERMATI. Lì la cura
 // e' marcare il campo e dire che il numero e' dichiarato, non misurato.
 // =============================================================
-var CAMPI_GEOMETRIA = ['rBase', 'rBaseExhaust', 'diamBicch'];   // misure su camma e attrezzo
+var CAMPI_GEOMETRIA = ['diamBase', 'diamBaseExhaust', 'diamBicch'];   // misure su camma e attrezzo
 var CAMPI_FASATURA  = ['intakeAngle', 'exhaustAngle'];          // dichiarazioni dell'operatore
 var CAMPI_SURGE     = ['springMass', 'springCoils'];            // da cui esce la frequenza di surge
 var MIN_CAMPO_ALTRI = {
-    rBase: 0.0001, rBaseExhaust: 0.0001, diamBicch: 0.0001,
+    diamBase: 0.0001, diamBaseExhaust: 0.0001, diamBicch: 0.0001,
     springMass: 0.0001, springCoils: 0.0001
     // gli angoli lobo non hanno minimo: qualunque valore finito e' lecito
 };
@@ -3204,7 +3208,7 @@ function geometriaRilevante() {
 function campiDaConfermare() {
     var l = CAMPI_MOLLA.concat(CAMPI_FASATURA);
     if (geometriaRilevante()) {
-        l = l.concat(['rBase', 'rBaseExhaust']);
+        l = l.concat(['diamBase', 'diamBaseExhaust']);
         if ((document.getElementById('followerType') || {}).value === 'bicch') l.push('diamBicch');
     }
     var s = document.getElementById('surgeEnabled');
@@ -3325,7 +3329,7 @@ function descriviCampiDaConfermare(mancanti) {
     var ETICHETTE = {
         springK: 'rigidezza molla', springPreload: 'precarico F₀',
         massEqIntake: 'massa equivalente asp.', massEqExhaust: 'massa equivalente scar.',
-        rBase: 'raggio base asp.', rBaseExhaust: 'raggio base scar.',
+        diamBase: '\u00d8 cerchio base asp.', diamBaseExhaust: '\u00d8 cerchio base scar.',
         diamBicch: 'diametro bicchiere',
         intakeAngle: 'angolo lobo asp.', exhaustAngle: 'angolo lobo scar.',
         springMass: 'massa molla', springCoils: 'spire attive'
@@ -3623,8 +3627,8 @@ function clearAnalysisStale() {
 // =====================================================================
 var CAMPI_NUM = {
     // --- geometria e fasatura ---
-    rBase:            { min: 0, minEsclusivo: true, etichetta: 'Raggio base aspirazione' },
-    rBaseExhaust:     { min: 0, minEsclusivo: true, etichetta: 'Raggio base scarico' },
+    diamBase:         { min: 0, minEsclusivo: true, etichetta: '\u00d8 cerchio base aspirazione' },
+    diamBaseExhaust:  { min: 0, minEsclusivo: true, etichetta: '\u00d8 cerchio base scarico' },
     rPunt:            { min: 0, def: 1.5, etichetta: 'Raggio puntalino' },     // 0 = a coltello: ammesso
     diamBicch:        { min: 0, minEsclusivo: true, def: 33.34, etichetta: 'Diametro bicchiere' },
     rRoll:            { min: 0, minEsclusivo: true, def: 8, etichetta: 'Raggio rullo' },
@@ -3678,7 +3682,7 @@ function campiAttivi(gruppo) {
         // nascoste — segnalarle sarebbe un errore che l'utente non vede.
         var ft = (document.getElementById('followerType') || {}).value || 'punt';
         if (ft && ft !== 'punt') {
-            ids.push('rBase', 'rBaseExhaust', 'rPunt');
+            ids.push('diamBase', 'diamBaseExhaust', 'rPunt');
             if (ft === 'bicch') ids.push('diamBicch');
             else if (ft === 'roller') ids.push('rRoll');
             else if (ft === 'finger') ids.push('lArm', 'lValve');
@@ -3772,7 +3776,7 @@ var INFLUENTIAL_IDS = ['intakeType', 'intakeAngle', 'intakeClearance',
     'exhaustType', 'exhaustAngle', 'exhaustClearance', 'advance', 'durationRef',
     'baselineCorrect', 'rpmInput', 'rockerIntake', 'rockerExhaust', 'smoothWindow',
     'followerType', 'diamBicch', 'rRoll', 'lArm', 'lValve',
-    'rBase', 'rBaseExhaust', 'rPunt', 'springK', 'springPreload',
+    'diamBase', 'diamBaseExhaust', 'rPunt', 'springK', 'springPreload',
     'massEqIntake', 'massEqExhaust', 'complianceEnabled', 'kTrain', 'dampingRatio',
     'complianceModel', 'massEqIntermediate', 'kPushrod', 'massSeat', 'kSeat',
     'surgeEnabled', 'springMass', 'springCoils'];
@@ -3841,7 +3845,7 @@ function initLiveTuning() {
     // lArm/lValve), tipi lato e surge (surgeEnabled/springMass/
     // springCoils) che prima non erano ascoltati. La rete di sicurezza vera
     // resta comunque il confronto di parameterHash in exportBlockedByStale().
-    var curveIds = ['followerType', 'rBase', 'rBaseExhaust', 'rPunt',
+    var curveIds = ['followerType', 'diamBase', 'diamBaseExhaust', 'rPunt',
         'diamBicch', 'rRoll', 'lArm', 'lValve',
         'intakeType', 'exhaustType',
         'rockerIntake', 'rockerExhaust', 'intakeAngle', 'exhaustAngle', 'advance',

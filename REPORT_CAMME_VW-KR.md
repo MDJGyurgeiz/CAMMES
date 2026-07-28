@@ -6,7 +6,7 @@
 
 ## 1. Oggetto e fonti dei dati
 
-Coppia di alberi a camme per VW 1.8 16V KR (rettifica Motor Rettifica, mod. **257a** aspirazione / **257s** scarico). Follower reale: **bicchiere meccanico Ø35 mm**. Raggio base: **32,64 mm** (asp) / **34,25 mm** (sca).
+Coppia di alberi a camme per VW 1.8 16V KR (rettifica Motor Rettifica, mod. **257a** aspirazione / **257s** scarico). Follower reale: **bicchiere meccanico Ø35 mm**. Cerchio base, **diametro** misurato al calibro: **32,64 mm** (asp) / **34,25 mm** (sca) — quindi raggio 16,32 / 17,13. Confermato dal proprietario il 2026-07-26: la versione precedente di questa riga li dichiarava come RAGGI, ed è da lì che l'errore si è propagato al tooltip del campo. Controprova geometrica: un cerchio base di raggio 32,64 avrebbe diametro 65,3 mm, quasi il doppio del bicchiere Ø35 che ci scorre sopra.
 
 | # | Fonte | Metodo | Data |
 |---|-------|--------|------|
