@@ -1,0 +1,149 @@
+// =============================================================
+//  test_etichette.js — l'etichetta deve descrivere il calcolo che si fa
+// =============================================================
+//  Una classe di difetti a se': il numero e' giusto, il testo che lo spiega
+//  descrive un altro calcolo. Non se ne accorge nessuno guardando i risultati,
+//  perche' i risultati sono corretti — sbagliata e' la lettura che ne induce.
+//
+//  Dove si puo', il test NON confronta stringhe fra loro: ESEGUE la funzione
+//  vera della pagina e verifica che il testo dica quel che la funzione fa.
+//
+//  Scritto PRIMA delle correzioni: fallisce sulla versione precedente.
+//
+//  Uso: node tools/test_etichette.js   (exit 0 = ok)
+var fs = require('fs');
+var path = require('path');
+var vm = require('vm');
+
+var HTML = fs.readFileSync(path.join(__dirname, '..', 'analisi.html'), 'utf8').replace(/\r\n/g, '\n');
+var fails = 0;
+function check(label, cond, detail) {
+    console.log((cond ? '  PASS  ' : '  FAIL  ') + label + (detail ? '  [' + detail + ']' : ''));
+    if (!cond) fails++;
+}
+function estrai(nome) {
+    var re = new RegExp('^function ' + nome + '\\s*\\([^)]*\\)\\s*\\{', 'm');
+    var m = re.exec(HTML);
+    if (!m) throw new Error('funzione non trovata in analisi.html: ' + nome);
+    var fine = HTML.indexOf('\n}\n', m.index);
+    if (fine < 0) throw new Error('fine funzione non trovata: ' + nome);
+    return HTML.substring(m.index, fine + 3);
+}
+// Il testo del data-tip che segue una certa etichetta visibile.
+function tooltipDopo(ancora) {
+    var i = HTML.indexOf(ancora);
+    if (i < 0) return null;
+    var j = HTML.indexOf('data-tip="', i);
+    if (j < 0) return null;
+    var k = HTML.indexOf('">', j + 10);
+    return HTML.substring(j + 10, k);
+}
+
+console.log('=============================================================');
+console.log(' ETICHETTE: il testo descrive il calcolo che si fa davvero');
+console.log('=============================================================');
+
+// ---------------------------------------------------------------
+// 1. Asimmetria lobo — il SEGNO, verificato eseguendo la funzione
+// ---------------------------------------------------------------
+//  openArea e' l'integrale start->picco: un fianco RIPIDO copre MENO gradi,
+//  quindi MENO area, quindi (openArea - closeArea) e' NEGATIVO. Il tooltip
+//  diceva l'opposto ("Positivo = apre piu' in fretta").
+console.log('--- asimmetria lobo: il segno lo decide la funzione, non il testo ---');
+var ctx = { Math: Math, isFinite: isFinite, Number: Number, Array: Array };
+vm.createContext(ctx);
+vm.runInContext(estrai('computeLobeAsymmetry'), ctx);
+function lobo(salita, discesa) {
+    var a = new Array(721);
+    for (var d = 0; d <= 720; d++) a[d] = 0;
+    var p = 360;
+    for (var k = 1; k <= salita; k++) a[p - salita + k] = 10 * (k / salita);
+    for (var k2 = 1; k2 <= discesa; k2++) a[p + k2] = 10 * (1 - k2 / discesa);
+    a[p] = 10;
+    return a;
+}
+var apreInFretta = ctx.computeLobeAsymmetry(lobo(100, 200), 360);
+var chiudeInFretta = ctx.computeLobeAsymmetry(lobo(200, 100), 360);
+var simmetrico = ctx.computeLobeAsymmetry(lobo(150, 150), 360);
+console.log('        apre in fretta: ' + apreInFretta.toFixed(2) + ' %   chiude in fretta: ' +
+            chiudeInFretta.toFixed(2) + ' %   simmetrico: ' + simmetrico.toFixed(2) + ' %');
+check('un lobo che apre in fretta da un valore NEGATIVO', apreInFretta < -1, apreInFretta.toFixed(2) + ' %');
+check('un lobo simmetrico da zero', Math.abs(simmetrico) < 0.01, simmetrico.toFixed(4) + ' %');
+
+var tipAsym = tooltipDopo('Asimmetria lobo asp.');
+check('il tooltip dell asimmetria esiste', !!tipAsym);
+if (tipAsym) {
+    // Il testo NON deve associare "positivo" all'apertura rapida: e' il caso
+    // in cui la funzione restituisce un numero negativo.
+    var diceApreInFrettaPositivo =
+        /Positivo<\/b>\s*=\s*apre\s+pi&ugrave;\s+in\s+fretta/i.test(tipAsym) ||
+        /Positivo\s*=\s*apre\s+pi&ugrave;\s+in\s+fretta/i.test(tipAsym);
+    check('il tooltip NON dice che positivo = apre piu in fretta', !diceApreInFrettaPositivo,
+        tipAsym.substring(0, 110));
+    check('e nomina il caso negativo, che prima non compariva',
+        /negativo/i.test(tipAsym), tipAsym.substring(0, 110));
+}
+// Anche lo scarico, che aveva la stessa frase
+var tipAsymEx = tooltipDopo('Asimmetria lobo scar.');
+check('anche il tooltip dello scarico e allineato',
+    !!tipAsymEx && !/Positivo\s*=\s*apre\s+pi&ugrave;\s+in\s+fretta/i.test(tipAsymEx),
+    (tipAsymEx || '').substring(0, 90));
+
+// ---------------------------------------------------------------
+// 2. Quanti file servono: lo dice la guardia, non il tooltip
+// ---------------------------------------------------------------
+console.log('--- quanti file servono: lo decide la guardia ---');
+var corpoAnalyze = estrai('analyze');
+var pretendeEntrambi = /!intakeLoaded\s*\|\|\s*!exhaustLoaded/.test(corpoAnalyze);
+console.log('        analyze() pretende entrambi i file: ' + pretendeEntrambi);
+var tipAnalizza = tooltipDopo('id="analyzeBtn"');
+check('il tooltip di Analizza esiste', !!tipAnalizza);
+if (pretendeEntrambi && tipAnalizza) {
+    check('il tooltip NON promette che basta una sola camma',
+        !/almeno una delle due/i.test(tipAnalizza), tipAnalizza.substring(0, 120));
+    check('e dice che servono entrambe', /entrambi|entrambe/i.test(tipAnalizza));
+}
+var corpoAB = estrai('runABComparison');
+var pretendeQuattro = /!fileAInt\s*\|\|\s*!fileAExh\s*\|\|\s*!fileBInt\s*\|\|\s*!fileBExh/.test(corpoAB);
+console.log('        runABComparison() pretende tutti e 4 i file: ' + pretendeQuattro);
+var tipAB = tooltipDopo('runABComparison();');
+if (pretendeQuattro && tipAB) {
+    check('il tooltip di A vs B NON dice "anche solo aspirazione"',
+        !/anche solo aspirazione/i.test(tipAB), tipAB.substring(0, 120));
+    check('e dichiara che servono tutti e quattro',
+        /quattro|tutti e 4/i.test(tipAB), tipAB.substring(0, 120));
+}
+
+// ---------------------------------------------------------------
+// 3. Unita di misura: una soglia in mm non si scrive in gradi
+// ---------------------------------------------------------------
+//  "Durata @ 0°" metteva il simbolo dei gradi su una soglia di ALZATA: la
+//  durata e' l'intervallo in cui l'alzata supera 0 mm, non "a 0 gradi".
+console.log('--- unita di misura nelle etichette ---');
+check('nessuna etichetta "Durata @ 0 gradi"',
+    HTML.indexOf('Durata @ 0&deg;') < 0 && HTML.indexOf('Durata @ 0°') < 0);
+check('la durata a soglia nulla e etichettata su un ALZATA',
+    (HTML.match(/Durata \(alzata &gt; 0\)/g) || []).length >= 2,
+    (HTML.match(/Durata \(alzata &gt; 0\)/g) || []).length + ' occorrenze (asp. e scar.)');
+
+// ---------------------------------------------------------------
+// 4. Il cursore dell'animazione non e' un regime motore
+// ---------------------------------------------------------------
+//  Il valore del cursore non e' un numero di giri: a 180 la camma gira a ~18
+//  giri/min e il ritmo dipende dal frame rate. Chiamarlo "giri/min" invita a
+//  confonderlo col campo RPM, che invece entra in tutti i calcoli.
+console.log('--- il cursore dell animazione non e il regime ---');
+var tipVel = tooltipDopo('id="mechAnimSpeed"');
+check('il tooltip del cursore esiste', !!tipVel);
+if (tipVel) {
+    check('non chiama "giri/min" il valore del cursore',
+        !/giri\/min/i.test(tipVel), tipVel.substring(0, 110));
+    check('e rimanda al campo RPM per il regime vero',
+        /RPM/.test(tipVel), tipVel.substring(0, 110));
+}
+
+console.log('');
+if (fails) { console.log('RISULTATO: ' + fails + ' FALLITI\n'); process.exit(1); }
+console.log('VALIDATO: le etichette verificate descrivono il calcolo che il');
+console.log('programma esegue davvero, e il segno dell asimmetria e stato');
+console.log('controllato eseguendo la funzione, non leggendola.\n');

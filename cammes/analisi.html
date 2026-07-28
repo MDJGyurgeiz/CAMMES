@@ -485,8 +485,13 @@
                 </div>
             </div>
 
-            <!-- Elasticita del comando valvola / compliance (modulo: dinamica) -->
-            <div class="param-separator" data-module="dinamica">
+            <!-- Elasticita del comando valvola / compliance (moduli: dinamica E race)
+                 Marcato anche "race" perche' rigidezza treno, smorzamento e modello
+                 governano TUTTI gli strumenti Race, che li usano a prescindere da
+                 complianceEnabled: con la sola marca "dinamica" i valori che
+                 comandano quegli strumenti si potevano nascondere lasciandoli
+                 accesi, e non c'era modo di sapere con cosa stavano calcolando. -->
+            <div class="param-separator" data-module="dinamica race">
                 <div class="param-group-title">Elasticit&agrave; del comando valvola (compliance) &mdash; race
                     <span class="help-icon" data-tip="<strong>Simulazione dinamica valvola</strong>Modello massa-molla-smorzatore (RK4) per stimare la posizione REALE della valvola durante il ciclo, tenendo conto dell'elasticit&agrave; del treno (asta+bilancere+molla). Predice <b>valve float</b> dinamico, <b>ritardo</b> apertura, <b>bounce</b> alla chiusura. Per analisi race ad alto regime.">?</span>
                 </div>
@@ -539,7 +544,7 @@
 
             <!-- Action buttons -->
             <div class="flex gap-8" style="margin-top:16px;">
-                <button class="btn btn-success" id="analyzeBtn" onclick="analyze();" style="flex:1;" data-tip="<strong>Esegui analisi</strong>Calcola durata, LSA, centri lobi, velocit&agrave; e accelerazione, forze inerziali, limite di distacco valvola. Risultati nella sezione 'Risultati Analisi' sotto. Necessario aver importato almeno una delle due camme (asp. o scar.).">&#9654; Analizza</button>
+                <button class="btn btn-success" id="analyzeBtn" onclick="analyze();" style="flex:1;" data-tip="<strong>Esegui analisi</strong>Calcola durata, LSA, centri lobi, velocit&agrave; e accelerazione, forze inerziali, limite di distacco valvola. Risultati nella sezione 'Risultati Analisi' sotto. Servono <b>entrambi</b> i file, aspirazione E scarico: l'analisi correla i due lobi (LSA, centri, incrocio), quindi con uno solo si ferma.">&#9654; Analizza</button>
                 <button class="btn btn-secondary" onclick="resetAll();" data-tip="<strong>Reset analisi</strong>Cancella i dati importati e i risultati. I parametri di configurazione restano.">&#8634; Reset</button>
             </div>
             <!-- AUDIT APP-01: avviso analisi non aggiornata (parametri di curva cambiati) -->
@@ -704,11 +709,11 @@
                         <span class="result-value yellow" id="resAreaDelta">-</span>
                     </div>
                     <div class="result-row">
-                        <span class="result-label">Asimmetria lobo asp. <span class="help-icon" data-tip="<strong>Asimmetria del lobo (aspirazione)</strong>Confronto fra il fianco di apertura e quello di chiusura.<br><b>Positivo</b> = apre pi&ugrave; in fretta di quanto chiude. <b>Zero</b> = lobo simmetrico.">?</span></span>
+                        <span class="result-label">Asimmetria lobo asp. <span class="help-icon" data-tip="<strong>Asimmetria del lobo (aspirazione)</strong>Confronta l&apos;area sotto il fianco di apertura con quella sotto il fianco di chiusura, in percentuale del totale.<br><b>Positivo</b> = il fianco di <b>apertura</b> &egrave; pi&ugrave; dolce (dura pi&ugrave; gradi) di quello di chiusura.<br><b>Negativo</b> = apre pi&ugrave; in fretta di quanto chiude.<br><b>Zero</b> = lobo simmetrico.">?</span></span>
                         <span class="result-value cyan" id="resAsymIn">-</span>
                     </div>
                     <div class="result-row">
-                        <span class="result-label">Asimmetria lobo scar. <span class="help-icon" data-tip="<strong>Asimmetria del lobo (scarico)</strong>Confronto fra il fianco di apertura e quello di chiusura. Positivo = apre pi&ugrave; in fretta di quanto chiude.">?</span></span>
+                        <span class="result-label">Asimmetria lobo scar. <span class="help-icon" data-tip="<strong>Asimmetria del lobo (scarico)</strong>Come sopra, per lo scarico. <b>Positivo</b> = il fianco di <b>apertura</b> &egrave; pi&ugrave; dolce (dura pi&ugrave; gradi) di quello di chiusura; <b>negativo</b> = apre pi&ugrave; in fretta.">?</span></span>
                         <span class="result-value red" id="resAsymEx">-</span>
                     </div>
                 </div>
@@ -890,7 +895,7 @@
                 </select>
                 <button class="btn btn-secondary btn-sm" id="mechAnimPlay" onclick="mechAnimToggle();" data-tip="<strong>Play/Pausa</strong>Avvia o ferma la rotazione della camma.">&#9654; Play</button>
                 <span style="font-size:11px;color:var(--text-muted);">vel.</span>
-                <input type="range" id="mechAnimSpeed" min="20" max="600" value="180" style="width:90px;" data-tip="<strong>Velocità</strong>Giri/min simulati dell'animazione (solo estetico).">
+                <input type="range" id="mechAnimSpeed" min="20" max="600" value="180" style="width:90px;" data-tip="<strong>Velocit&agrave; dell'animazione</strong>Quanto veloce gira il disegno. <b>Non &egrave; il regime motore</b> e non entra in nessun calcolo: il regime &egrave; il campo <b>RPM</b> sopra.">
             </span>
         </div>
         <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px;line-height:1.45;">
@@ -958,7 +963,7 @@
                 </div>
             </div>
             <div class="flex gap-8" style="margin-top:12px;">
-                <button class="btn btn-success" onclick="runABComparison();" style="flex:1;" data-tip="<strong>Confronta A vs B</strong>Analizza i due set (anche solo aspirazione) e mostra KPI affiancati, curve sovrapposte e differenze: utile per prima/dopo rettifica o due alberi diversi.">&#9654; Confronta A vs B</button>
+                <button class="btn btn-success" onclick="runABComparison();" style="flex:1;" data-tip="<strong>Confronta A vs B</strong>Servono <b>tutti e quattro</b> i file (A asp+scar, B asp+scar). Mostra KPI affiancati, curve sovrapposte e differenze: utile per prima/dopo rettifica o due alberi diversi.">&#9654; Confronta A vs B</button>
                 <button class="btn btn-secondary" onclick="resetAB();" data-tip="<strong>Reset A/B</strong>Svuota i file e i risultati del confronto A vs B. Non tocca l'analisi principale n&eacute; i file su disco.">&#8634; Reset</button>
             </div>
 
@@ -983,7 +988,7 @@
                         <span class="result-value" id="abMaxIn">-</span>
                     </div>
                     <div class="result-row">
-                        <span class="result-label">Durata @ 0&deg;</span>
+                        <span class="result-label">Durata (alzata &gt; 0)</span>
                         <span class="result-value" id="abDurIn">-</span>
                     </div>
                     <div class="result-row">
@@ -1009,7 +1014,7 @@
                         <span class="result-value" id="abMaxEx">-</span>
                     </div>
                     <div class="result-row">
-                        <span class="result-label">Durata @ 0&deg;</span>
+                        <span class="result-label">Durata (alzata &gt; 0)</span>
                         <span class="result-value" id="abDurEx">-</span>
                     </div>
                     <div class="result-row">
@@ -2329,9 +2334,17 @@ var INTERRUTTORI_MODULO = [
     { modulo: 'follower', id: 'followerType', neutro: 'punt',
       nome: 'Follower simulato',
       conseguenza: 'la curva torna quella <b>grezza del puntalino</b>' },
+    // Attenzione alla portata di questa frase. Spegnere il modulo rende
+    // l'ANALISI statica, ma gli strumenti Race simulano la compliance per loro
+    // natura, a prescindere dal modulo e da complianceEnabled (quattro chiamate
+    // a runComplianceModel dentro i loro iteratori). Un avviso che dicesse
+    // "l'elasticita' non viene piu' simulata" creerebbe da solo la due-verita'
+    // che tutto questo lavoro sta togliendo. Un test lo verifica.
     { modulo: 'dinamica', id: 'complianceEnabled', neutro: '0',
       nome: 'Dinamica valvole',
-      conseguenza: 'l\'elasticit&agrave; del comando valvola <b>non viene pi&ugrave; simulata</b>' }
+      conseguenza: 'l\'<b>analisi</b> torna statica (valvola = profilo camma). ' +
+                   'Gli <b>strumenti Race</b> continuano a simulare l\'elasticit&agrave; ' +
+                   'con la rigidezza treno e lo smorzamento correnti' }
 ];
 
 // Allinea gli interruttori allo stato dei moduli. Ritorna l'elenco di quelli

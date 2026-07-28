@@ -168,6 +168,32 @@ vm.runInContext('onModuleToggle(document.getElementById("cb_dinamica"));', ctx);
 check('riaccendendo si ritrova la compliance attiva', ce.value === '1',
     'complianceEnabled="' + ce.value + '"');
 
+// ---------- il testo dell'avviso non deve promettere piu' del vero ----------
+//  Il primo avviso scritto per "Dinamica valvole" diceva che l'elasticita' del
+//  comando valvola "non viene piu' simulata". Falso: quattro strumenti Race piu'
+//  il Race report chiamano runComplianceModel senza guardare ne' il modulo ne'
+//  complianceEnabled. Era una due-verita' creata dall'avviso stesso.
+console.log('--- l avviso non promette piu di quel che accade ---');
+var IT = ctx.INTERRUTTORI_MODULO;
+var dinamica = IT.filter(function (x) { return x.modulo === 'dinamica'; })[0];
+check('esiste la voce per il modulo dinamica', !!dinamica);
+// Quanti punti simulano la compliance FUORI dall'analisi (dentro gli iteratori
+// degli strumenti Race). Se ce n'e' almeno uno, l'avviso deve dirlo.
+var chiamateRace = (HTML.match(/runComplianceModel\(camLift720/g) || []).length;
+console.log('        strumenti che simulano la compliance a prescindere: ' + chiamateRace);
+if (dinamica && chiamateRace > 0) {
+    check('l avviso NON dichiara che l elasticita non viene piu simulata',
+        !/non\s+viene\s+pi&ugrave;\s+simulata|non viene più simulata/i.test(dinamica.conseguenza),
+        dinamica.conseguenza);
+    check('e nomina gli strumenti che continuano a simularla',
+        /race|strument/i.test(dinamica.conseguenza), dinamica.conseguenza);
+}
+// I due valori che governano gli strumenti Race non devono stare in un blocco
+// che si nasconde quando gli strumenti restano accesi.
+check('il blocco di rigidezza treno e smorzamento appartiene anche al modulo race',
+    /data-module="[^"]*\brace\b[^"]*"[\s\S]{0,2000}?id="kTrain"/.test(HTML),
+    'kTrain deve stare in un blocco marcato anche "race"');
+
 // ---------- non regressione ----------
 console.log('--- non regressione ---');
 // Un blocco che appartiene a piu' moduli resta visibile se almeno uno e' acceso:
