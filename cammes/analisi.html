@@ -806,6 +806,7 @@
                 <button class="btn-zoom-reset" onclick="if(forceChart)forceChart.resetZoom();">&circlearrowright; Reset Zoom</button>
             </div>
             <div class="kin-chart-canvas kin-chart-alto"><canvas id="forceCanvas"></canvas></div>
+            <div id="forceChartNota" style="display:none;font-size:11px;margin-top:6px;line-height:1.4;padding:6px 8px;border-radius:4px;background:rgba(255,170,0,0.10);border:1px solid var(--warning);color:var(--warning-text);"></div>
             <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.4;">
                 Quando la forza d inerzia (linea continua) supera la forza della molla (tratteggiata) la valvola perde il contatto con la camma (distacco).
                 Il grafico e tracciato AL REGIME indicato nel titolo: mostra dove e di quanto manca il margine a quel regime, non il limite in giri. Il regime di distacco si ottiene riscalando l inerzia col quadrato dei giri ed e riportato in <b>Distacco valvola</b>.
@@ -3419,13 +3420,23 @@ function liveRetuneForces() {
             iIn.push(fIn.fInertia[i] > 0 ? fIn.fInertia[i] : null);
             iEx.push(fEx.fInertia[i] > 0 ? fEx.fInertia[i] : null);
         }
-        window.forceChart.data.datasets[0].data = sIn;
-        window.forceChart.data.datasets[1].data = iIn;
-        window.forceChart.data.datasets[2].data = sEx;
-        window.forceChart.data.datasets[3].data = iEx;
-        var tEl = document.getElementById('forceChartTitle');
-        if (tEl) tEl.textContent = 'Forze treno valvole (N) — F. molla vs F. inerzia @ ' + rpm.toLocaleString('it-IT') + ' rpm';
-        window.forceChart.update('none');
+        // Toccare k, F0 o una massa rende quel campo "confermato": il retune
+        // puo' quindi CAMBIARE quali lati sono valutabili, e con essi le curve
+        // che spettano al grafico. Se l'insieme e' cambiato si ricostruisce;
+        // altrimenti si aggiorna per ETICHETTA, non per indice.
+        var attese = curveGraficoForze().join('|');
+        var presenti = window.forceChart.data.datasets.map(function (d) { return d.label; }).join('|');
+        if (attese !== presenti) {
+            createForceChart(fIn, fEx, rpm);
+        } else {
+            var perEtichetta = { 'F. molla asp.': sIn, 'F. inerzia asp.': iIn,
+                                 'F. molla scar.': sEx, 'F. inerzia scar.': iEx };
+            window.forceChart.data.datasets.forEach(function (d) {
+                if (perEtichetta[d.label]) d.data = perEtichetta[d.label];
+            });
+            scriviTestiGraficoForze(rpm);
+            window.forceChart.update('none');
+        }
     }
     // Aggiorna lastAnalysis.results.rpmCritIn/Ex/Margin/Inertia per coerenza export
     if (window.lastAnalysis && window.lastAnalysis.results) {
@@ -4830,9 +4841,48 @@ function createComplianceChart(camLiftIn, valveLiftIn, camLiftEx, valveLiftEx, r
     window.complianceChart = complianceChart;
 }
 
+// AUDIT P1-07, seconda meta'. Le celle "Margine minimo" e "Distacco valvola"
+// dicevano "non valutabile" quando k, F0 o la massa equivalente erano ancora ai
+// valori di esempio — e il grafico accanto disegnava comunque le quattro curve,
+// incrocio compreso. Un incrocio fra forza di molla e forza d'inerzia SI LEGGE
+// COME UN VERDETTO ("qui la valvola si stacca"), costruito su una molla che
+// l'operatore non ha mai inserito: due verita' sulla stessa schermata, a venti
+// pixel di distanza.
+// Ora il grafico si astiene dove si astengono le celle, e usa la LORO regola:
+// `latoValutabile(side)`, una sola fonte per celle, grafico, CSV e PDF.
+
+// Quali curve spettano al grafico, per etichetta e in ordine. Sia la creazione
+// sia il ricalcolo immediato passano da qui: prima il retune ricomponeva il
+// titolo per conto suo (e perdeva il "non valutabile", oltre a scrivere il
+// regime in un formato diverso) e riscriveva i dataset PER INDICE, che con un
+// numero variabile di curve avrebbe puntato al dataset sbagliato.
+function curveGraficoForze() {
+    var l = [];
+    if (latoValutabile('intake'))  l.push('F. molla asp.', 'F. inerzia asp.');
+    if (latoValutabile('exhaust')) l.push('F. molla scar.', 'F. inerzia scar.');
+    return l;
+}
+function scriviTestiGraficoForze(rpm) {
+    var fuori = [];
+    if (!latoValutabile('intake'))  fuori.push('aspirazione');
+    if (!latoValutabile('exhaust')) fuori.push('scarico');
+    var t = document.getElementById('forceChartTitle');
+    if (t) t.textContent = 'Forze treno valvole (N) — F. molla vs F. inerzia @ ' +
+        (isFinite(rpm) ? rpm.toLocaleString('it-IT') : String(rpm)) + ' rpm' +
+        (fuori.length ? ' — ' + fuori.join(' e ') + ': non valutabile' : '');
+    var nota = document.getElementById('forceChartNota');
+    if (nota) {
+        nota.style.display = fuori.length ? '' : 'none';
+        nota.textContent = fuori.length
+            ? ('Curve non tracciate per ' + fuori.join(' e ') + '. ' + MOTIVO_ESEMPIO)
+            : '';
+    }
+}
+
 function createForceChart(forcesIn, forcesEx, rpm) {
     if (forceChart) forceChart.destroy();
 
+    var okIn = latoValutabile('intake'), okEx = latoValutabile('exhaust');
     var labels = [];
     var sIn = [], sEx = [], iIn = [], iEx = [];
     for (var i = 1; i <= 720; i++) {
@@ -4844,21 +4894,22 @@ function createForceChart(forcesIn, forcesEx, rpm) {
         iEx.push(forcesEx.fInertia[i] > 0 ? forcesEx.fInertia[i] : null);
     }
 
-    document.getElementById('forceChartTitle').textContent =
-        'Forze treno valvole (N) — F. molla vs F. inerzia @ ' + rpm + ' rpm';
+    var datasets = [];
+    if (okIn) {
+        datasets.push({ label: 'F. molla asp.',  data: sIn, borderColor: '#00d4ff', borderDash: [6,3], borderWidth: 1.5, pointRadius: 0, fill: false });
+        datasets.push({ label: 'F. inerzia asp.', data: iIn, borderColor: '#00d4ff', borderWidth: 2,    pointRadius: 0, fill: false, spanGaps: false });
+    }
+    if (okEx) {
+        datasets.push({ label: 'F. molla scar.', data: sEx, borderColor: '#ff5252', borderDash: [6,3], borderWidth: 1.5, pointRadius: 0, fill: false });
+        datasets.push({ label: 'F. inerzia scar.', data: iEx, borderColor: '#ff5252', borderWidth: 2,   pointRadius: 0, fill: false, spanGaps: false });
+    }
+
+    scriviTestiGraficoForze(rpm);
 
     var ctx = document.getElementById('forceCanvas').getContext('2d');
     forceChart = window.forceChart = new Chart(ctx, {
         type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                { label: 'F. molla asp.',  data: sIn, borderColor: '#00d4ff', borderDash: [6,3], borderWidth: 1.5, pointRadius: 0, fill: false },
-                { label: 'F. inerzia asp.', data: iIn, borderColor: '#00d4ff', borderWidth: 2,    pointRadius: 0, fill: false, spanGaps: false },
-                { label: 'F. molla scar.', data: sEx, borderColor: '#ff5252', borderDash: [6,3], borderWidth: 1.5, pointRadius: 0, fill: false },
-                { label: 'F. inerzia scar.', data: iEx, borderColor: '#ff5252', borderWidth: 2,   pointRadius: 0, fill: false, spanGaps: false }
-            ]
-        },
+        data: { labels: labels, datasets: datasets },
         options: kinChartOptions('Forza (N)')
     });
 }
