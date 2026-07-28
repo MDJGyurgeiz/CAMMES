@@ -1350,7 +1350,7 @@ function rpmSweepIter(camLift720, baseRpm, springParams, opts, modelVal) {
     var nPoints = (opts && opts.nPoints) || 12;
     var rpmMin  = (opts && opts.rpmMin) || baseRpm * 0.5;
     var rpmMax  = (opts && opts.rpmMax) || baseRpm * 2;
-    var floatThreshold = (opts && opts.threshold) || 0.5;  // mm
+    var floatThreshold = (opts && opts.threshold) || SOGLIE_FLOAT.critico;  // mm
 
     var results = [];
     var criticalRpm = null;
@@ -1495,8 +1495,8 @@ function runRpmSweep() {
                     return '<tr><td style="padding:2px 8px;color:var(--text-secondary);">' + Math.round(p.rpm) + ' rpm</td>' +
                            '<td style="padding:2px 8px;text-align:right;color:var(--text-muted);font-family:var(--font-mono);">non conv.</td></tr>';
                 }
-                var cls = p.float > 0.5 ? 'red' : (p.float > 0.1 ? 'yellow' : 'green');
-                var col = cls === 'red' ? 'var(--danger)' : (cls === 'yellow' ? 'var(--warning)' : 'var(--success)');
+                var cls = classeFloat(p.float);
+                var col = cls === 'grave' ? 'var(--danger)' : (cls === 'attenzione' ? 'var(--warning)' : 'var(--success)');
                 return '<tr><td style="padding:2px 8px;color:var(--text-secondary);">' + Math.round(p.rpm) + ' rpm</td>' +
                        '<td style="padding:2px 8px;text-align:right;color:' + col + ';font-family:var(--font-mono);font-weight:600;">' +
                        p.float.toFixed(3) + ' mm</td></tr>';
@@ -1666,17 +1666,62 @@ function springMap(camLift720, targetRpm, baseParams, opts) {
 }
 
 // Colore cella heatmap: verde (<0.1) → giallo (0.1-0.3) → rosso (>0.3)
+// UNA SOLA SCALA per il valve float, usata da schermo, PDF, heatmap e legende.
+//
+// Prima ce n'erano DUE per la stessa grandezza: la tabella Sweep RPM a schermo
+// coloriava di giallo oltre 0,1 mm, quella del Race report oltre 0,3. Sulla
+// stessa riga, con lo stesso numero, il verdetto cromatico cambiava secondo il
+// foglio che guardavi — e il PDF era il PERMISSIVO. Misurato su fixture reale:
+// 2 righe su 12 cambiavano colore (0,120 e 0,124 mm: gialle a schermo, verdi
+// sul foglio consegnato al cliente).
+//
+// La scala scelta e' la piu' PRUDENTE delle due in ogni punto: attenzione dalla
+// soglia piu' bassa delle due (0,1) e grave dalla soglia piu' bassa delle due
+// (0,3, che e' anche il limite che usano l'ottimizzatore molla e il conteggio
+// della zona sicura). Unificare non deve mai rendere un verdetto di sicurezza
+// piu' permissivo.
+var SOGLIE_FLOAT = {
+    attenzione: 0.1,   // sotto: la perdita di contatto e' trascurabile
+    grave: 0.3,        // oltre: fuori dal limite che il progetto dichiara
+    // Soglia del "regime critico" dello sweep. Resta 0,5 e NON e' allineata a
+    // `grave` di proposito: e' un numero che finisce in un verdetto scritto
+    // ("il distacco supera 0,5 mm da ~N giri") e che l'officina puo' avere
+    // annotato. Portarlo qui serve a togliere il magic number, non a cambiarlo:
+    // spostarlo cambierebbe di nascosto un regime gia' consegnato.
+    critico: 0.5
+};
+function classeFloat(f) {
+    if (!isFinite(f)) return 'sicuro';
+    if (f >= SOGLIE_FLOAT.grave) return 'grave';
+    if (f >= SOGLIE_FLOAT.attenzione) return 'attenzione';
+    return 'sicuro';
+}
+
+// Gradiente della heatmap. Verde fino ad `attenzione`, sfumatura fino a
+// `grave`, rosso pieno oltre.
+//
+// Prima il rosso pieno arrivava solo a 0,8 mm mentre le legende annunciavano
+// "rosso > 0,3": una cella a 0,45 mm — il 50% oltre il limite dichiarato —
+// usciva AMBRA, e nella heatmap il colore e' l'unico dato (il numero non c'e').
+// Ora il rosso comincia dove la scala dice, e le legende si generano da qui
+// (vedi legendaFloat) invece di ricopiare i numeri a mano.
 function _floatToColor(f) {
-    if (f < 0.1)  return 'rgb(0,200,90)';
-    if (f < 0.3)  {
-        var t = (f - 0.1) / 0.2;  // 0..1
-        return 'rgb(' + Math.round(255*t) + ',200,' + Math.round(90*(1-t)) + ')';
-    }
-    if (f < 0.8) {
-        var t2 = (f - 0.3) / 0.5;
-        return 'rgb(255,' + Math.round(200*(1-t2)) + ',30)';
+    var a = SOGLIE_FLOAT.attenzione, g = SOGLIE_FLOAT.grave;
+    if (f < a) return 'rgb(0,200,90)';
+    if (f < g) {
+        var t = (f - a) / (g - a);   // 0..1
+        return 'rgb(' + Math.round(255 * t) + ',200,' + Math.round(90 * (1 - t)) + ')';
     }
     return 'rgb(220,50,50)';
+}
+// Legenda generata dalla stessa funzione che colora: i campioni sono i colori
+// veri, e le soglie sono quelle vere. Se la scala cambia, la legenda la segue.
+function legendaFloat() {
+    var a = SOGLIE_FLOAT.attenzione, g = SOGLIE_FLOAT.grave;
+    function q(v) { return v.toString().replace('.', ','); }
+    return '<span style="color:' + _floatToColor(0) + ';">&#9679;</span> fino a ' + q(a) + ' mm &middot; ' +
+           '<span style="color:' + _floatToColor((a + g) / 2) + ';">&#9679;</span> da ' + q(a) + ' a ' + q(g) + ' &middot; ' +
+           '<span style="color:' + _floatToColor(g) + ';">&#9679;</span> da ' + q(g) + ' mm (fuori limite)';
 }
 
 function renderSpringMap(map, curK, curF0, opts) {
@@ -1743,10 +1788,7 @@ function renderSpringMap(map, curK, curF0, opts) {
     ctx.textAlign = 'center'; ctx.fillText('F₀ precarico (N) →', 0, 0);
     ctx.restore();
 
-    if (legend) legend.innerHTML = '&#9678; = molla attuale &middot; ' +
-        '<span style="color:rgb(0,200,90);">verde</span> float&lt;0.1 &middot; ' +
-        '<span style="color:rgb(255,200,30);">giallo</span> 0.1-0.3 &middot; ' +
-        '<span style="color:rgb(220,50,50);">rosso</span> &gt;0.3 mm' +
+    if (legend) legend.innerHTML = '&#9678; = molla attuale &middot; ' + legendaFloat() +
         (map.nonConvergedCount > 0
             ? ' &middot; <span style="color:#8888aa;">grigio</span> non convergente (' + map.nonConvergedCount + ' celle, NON valutabili)'
             : '');
@@ -1775,8 +1817,8 @@ function runSpringMap() {
             // Conta celle sicure — AUDIT DYN-01: le celle non convergenti (null)
             // NON sono "sicure": sono non valutabili.
             var safeCells = 0, total = 0;
-            map.grid.forEach(function (row) { row.forEach(function (f) { total++; if (f !== null && f !== undefined && f < 0.3) safeCells++; }); });
-            body.innerHTML = '<b>' + safeCells + '/' + total + '</b> combinazioni mantengono float &lt; 0.3 mm. ' +
+            map.grid.forEach(function (row) { row.forEach(function (f) { total++; if (f !== null && f !== undefined && f < SOGLIE_FLOAT.grave) safeCells++; }); });
+            body.innerHTML = '<b>' + safeCells + '/' + total + '</b> combinazioni mantengono float &lt; ' + SOGLIE_FLOAT.grave + ' mm. ' +
                 (map.nonConvergedCount > 0
                     ? '<b style="color:var(--warning);">' + map.nonConvergedCount + ' celle NON convergenti (grigie, non valutabili).</b> '
                     : '') +
@@ -1785,7 +1827,7 @@ function runSpringMap() {
             if (window.cammesToast) window.cammesToast({
                 kind: map.nonConvergedCount > 0 ? 'warn' : 'success',
                 title: map.nonConvergedCount > 0 ? 'Mappa molla parziale' : 'Mappa molla completata',
-                body: safeCells + '/' + total + ' combinazioni nella zona sicura' +
+                body: safeCells + '/' + total + ' combinazioni sotto ' + SOGLIE_FLOAT.grave + ' mm di distacco' +
                       (map.nonConvergedCount > 0 ? ', ' + map.nonConvergedCount + ' non valutabili' : ''),
                 duration: 4000
             });
@@ -1983,9 +2025,7 @@ function run3DSweep() {
             if (canvas) canvas.style.display = '';
             if (legend) {
                 legend.style.display = '';
-                legend.innerHTML = '<span style="color:#22c55e;">&#9679;</span> &lt;0.1mm &nbsp; ' +
-                                   '<span style="color:#eab308;">&#9679;</span> 0.1-0.3 &nbsp; ' +
-                                   '<span style="color:#ef4444;">&#9679;</span> &gt;0.3 &nbsp; ' +
+                legend.innerHTML = legendaFloat() + ' &nbsp; ' +
                                    (data.nonConvergedCount > 0 ? '<span style="color:#8888aa;">&#9679;</span> non conv. &nbsp;' : '') +
                                    '|&nbsp; RPM ' + data.rpmRange[0] + '-' + data.rpmRange[1];
             }
@@ -2084,7 +2124,8 @@ function exportRaceReport() {
                 var pt = sweep.points[si];
                 var col = si < half ? margin : col2x;
                 var ry  = y + (si % half) * 5;
-                var fcol = pt.float > 0.5 ? [220,50,50] : (pt.float > 0.3 ? [200,150,30] : [0,160,90]);
+                var _cf = classeFloat(pt.float);
+                var fcol = _cf === 'grave' ? [220,50,50] : (_cf === 'attenzione' ? [200,150,30] : [0,160,90]);
                 doc.setTextColor(90,90,110);
                 doc.text(Math.round(pt.rpm) + ' rpm:', col, ry);
                 doc.setTextColor(fcol[0],fcol[1],fcol[2]);
