@@ -142,6 +142,49 @@ if (tipVel) {
         /RPM/.test(tipVel), tipVel.substring(0, 110));
 }
 
+// ---------------------------------------------------------------
+// 5. Lo stato accanto a Importa non deve dare un secondo "Max"
+// ---------------------------------------------------------------
+//  Diceva "nomefile | Max: 10.74mm @ 100°" con un numero uscito da
+//  findMax(crankIntake): dopo conversione follower e gioco, ma PRIMA della
+//  correzione baseline e del rapporto bilanciere. La scheda risultati mostra
+//  "Max alzata" con entrambi applicati: due numeri con lo stesso nome sulla
+//  stessa pagina, diversi per la stessa camma. E la stringa viaggiava nello
+//  snapshot fino a essere STAMPATA nell'intestazione della scheda camma,
+//  accanto alla cifra buona.
+console.log('--- lo stato dell import non da un secondo "Max alzata" ---');
+var testoStato = estrai('testoStatoImport');
+check('esiste una funzione unica per il testo dello stato', !!testoStato);
+check('lo stato non usa piu l etichetta "Max:"',
+    HTML.indexOf("' | Max: '") < 0, 'trovata la vecchia etichetta');
+if (testoStato) {
+    check('dichiara che il picco e GREZZO', /picco grezzo/i.test(testoStato));
+    check('e che l angolo e in gradi CAMMA, non manovella',
+        /camma/i.test(testoStato), 'il dominio va detto: la scheda risultati parla di gradi motore');
+    // Deve leggere la curva che le viene passata, non variabili globali di
+    // comodo: cosi' il numero non puo' dipendere da conversioni successive.
+    check('calcola il picco dalla curva che riceve',
+        /curvaGrezza\[i\]/.test(testoStato) || /curvaGrezza\[/.test(testoStato));
+    // E deve cercarlo sul dominio GIUSTO. findMax() gira su 1..720 e ritorna
+    // `idx - 360` perche' e' scritta per i gradi MANOVELLA con lo zero al PMS:
+    // usata su una curva in gradi camma dava l'alzata giusta e un angolo
+    // negativo senza senso (-171° "camma"), cioe' una seconda mislabel.
+    // Solo il CODICE: il commento che spiega perche' findMax non va usata
+    // contiene la parola, e non deve far fallire il controllo.
+    var soloCodice = testoStato.split('\n').filter(function (r) {
+        return !/^\s*\/\//.test(r);
+    }).join('\n');
+    check('cerca il picco su 1..360 gradi camma, non con findMax (dominio manovella)',
+        /<=\s*360/.test(soloCodice) && !/findMax/.test(soloCodice),
+        /findMax/.test(soloCodice) ? 'usa ancora findMax' : 'dominio 1..360');
+}
+// Lo snapshot porta il nome del file, non il testo dello stato.
+var corpoSnap = HTML.substring(HTML.indexOf('intakeFile:') - 400, HTML.indexOf('intakeFile:') + 300);
+check('lo snapshot NON salva il testo dello stato',
+    !/intakeFile:\s*document\.getElementById\('intakeStatus'\)/.test(HTML));
+check('lo snapshot salva il nome file',
+    /intakeFile:\s*intakeFileBase/.test(HTML), corpoSnap.substring(corpoSnap.indexOf('intakeFile:'), corpoSnap.indexOf('intakeFile:') + 60));
+
 console.log('');
 if (fails) { console.log('RISULTATO: ' + fails + ' FALLITI\n'); process.exit(1); }
 console.log('VALIDATO: le etichette verificate descrivono il calcolo che il');

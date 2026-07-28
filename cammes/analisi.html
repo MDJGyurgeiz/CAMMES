@@ -2689,6 +2689,34 @@ function detectConvertedFile(text) {
     return info;
 }
 
+// Testo dello stato accanto a Importa.
+//
+// Prima diceva "nomefile | Max: 10.74mm @ 100 gradi", e quel numero usciva da
+// findMax(crankIntake): dopo la conversione follower e il gioco, ma PRIMA della
+// correzione baseline e del rapporto bilanciere. La scheda risultati mostra
+// "Max alzata" con entrambi applicati. Due numeri con lo stesso nome sulla
+// stessa pagina, e per la stessa camma non coincidevano.
+// Peggio: questa stringa veniva salvata nello snapshot e STAMPATA
+// nell'intestazione della scheda camma, accanto alla cifra buona.
+//
+// Ora dichiara il PICCO GREZZO in gradi CAMMA: e' una grandezza diversa, con
+// nome e dominio diversi, quindi non si confonde con l'alzata valvola. E non
+// dipende da nessun parametro: si legge dal file e non cambia piu'.
+function testoStatoImport(nomeFile, curvaGrezza, meta) {
+    // Il picco si cerca sul dominio della curva GREZZA: 1..360 gradi CAMMA.
+    // Non si usa findMax(), che gira su 1..720 e restituisce `pos = idx - 360`
+    // perche' e' scritta per l'array in gradi MANOVELLA con lo zero al PMS:
+    // applicata qui dava l'alzata giusta e un angolo senza senso (-171°).
+    var lift = 0, grado = 0;
+    for (var i = 1; i <= 360; i++) {
+        if ((curvaGrezza[i] || 0) > lift) { lift = curvaGrezza[i]; grado = i; }
+    }
+    var s = nomeFile + ' | picco grezzo ' + lift.toFixed(2) + ' mm @ ' + grado + '° camma';
+    if (meta && meta.validCount) s += ' | ' + meta.validCount + ' punti';
+    if (meta && meta.stato === 'INCOMPLETO') s += ' | INCOMPLETA';
+    return s;
+}
+
 function importIntake() {
     var input = document.getElementById('fileIntake');
     if (!input.files || !input.files[0]) { alert('Selezionare un file'); return; }
@@ -2746,7 +2774,7 @@ function importIntake() {
 
         intakeLoaded = true;
         document.getElementById('intakeStatus').textContent =
-            nom[0] + ' | Max: ' + intakeMaxLift.toFixed(2) + 'mm @ ' + intakeMaxPos + '\u00B0';
+            testoStatoImport(nom[0], rawIntake, window._metaIn);
         updateChart();
         markAnalysisStale();   // AUDIT APP-01: nuovo profilo -> risultati vecchi non esportabili
     };
@@ -2802,7 +2830,7 @@ function importExhaust() {
 
         exhaustLoaded = true;
         document.getElementById('exhaustStatus').textContent =
-            nom[0] + ' | Max: ' + exhaustMaxLift.toFixed(2) + 'mm @ ' + exhaustMaxPos + '\u00B0';
+            testoStatoImport(nom[0], rawExhaust, window._metaEx);
         updateChart();
         markAnalysisStale();   // AUDIT APP-01: nuovo profilo -> risultati vecchi non esportabili
     };
@@ -4434,8 +4462,10 @@ function analyze() {
             kPushrod:          numDi('kPushrod'),
             massSeat:          numDi('massSeat'),
             kSeat:             numDi('kSeat'),
-            intakeFile: document.getElementById('intakeStatus').textContent,
-            exhaustFile: document.getElementById('exhaustStatus').textContent,
+            // Il nome del file, non il testo dello stato: quella stringa contiene
+            // un numero, e finiva stampata sui documenti accanto a quello buono.
+            intakeFile: intakeFileBase || '-',
+            exhaustFile: exhaustFileBase || '-',
             // Snapshot del metodo di presentazione: la scheda camma dichiara
             // QUESTI valori (quelli usati dai calcoli), non il DOM al momento
             // dell'export, che l'utente può aver cambiato senza rianalizzare.
