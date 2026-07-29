@@ -2608,16 +2608,42 @@ function readFileAsText(file) {
 }
 
 // Find max lift and its index in a crank array
-function findMax(crankArr) {
-    var maxLift = 0, maxIdx = 0, maxPos = 0;
-    for (var m = 1; m <= 720; m++) {
-        if (crankArr[m] > maxLift) {
-            maxLift = crankArr[m];
-            maxIdx = m;
-            maxPos = m - 360;
-        }
+// Tolleranza entro cui due letture sono lo STESSO valore per lo strumento: il
+// comparatore Neoteck ha divisione 0,01 mm, quindi sotto mezza divisione non
+// c'e' informazione. Serve a riconoscere il naso PIATTO.
+var TOLL_PICCO_MM = 0.005;
+
+// Posizione del picco su una curva, tenendo conto del naso piatto.
+//
+// Prima si prendeva l'argmax con un confronto STRETTO (`>`), che su un plateau
+// restituisce il PRIMO slot. Misurato su test_v31_fw_alz: sette slot in
+// pareggio esatto (8,020000 mm da 96° a 102°). La curva corretta in baseline ha
+// invece una pendenza residua di SEI NANOMETRI sullo stesso tratto, che sposta
+// l'argmax sull'ULTIMO slot. Risultato: la stessa camma dichiarava il picco a
+// 96° da una parte e a 102° dall'altra — 6 gradi di scarto nati da una
+// differenza mille volte piu' piccola della risoluzione dello strumento.
+// Anche su clio1_8 (2°) e VW-SC (1°), con plateau da 3 slot.
+//
+// Ora si prende il CENTRO del plateau: tutti gli slot contigui che stanno entro
+// mezza divisione dal massimo. Su un naso piatto e' anche la risposta giusta —
+// il picco di un lobo con plateau non e' il suo primo grado.
+function piccoConPlateau(arr, da, a) {
+    var maxLift = 0, argmax = da;
+    var i;
+    for (i = da; i <= a; i++) {
+        if ((arr[i] || 0) > maxLift) { maxLift = arr[i]; argmax = i; }
     }
-    return { lift: maxLift, idx: maxIdx, pos: maxPos };
+    if (maxLift <= 0) return { lift: 0, idx: da };
+    // si allarga a sinistra e a destra finche' si resta entro la tolleranza
+    var sx = argmax, dx = argmax;
+    while (sx - 1 >= da && (maxLift - (arr[sx - 1] || 0)) <= TOLL_PICCO_MM) sx--;
+    while (dx + 1 <= a && (maxLift - (arr[dx + 1] || 0)) <= TOLL_PICCO_MM) dx++;
+    return { lift: maxLift, idx: Math.round((sx + dx) / 2), ampiezzaPlateau: dx - sx + 1 };
+}
+
+function findMax(crankArr) {
+    var p = piccoConPlateau(crankArr, 1, 720);
+    return { lift: p.lift, idx: p.idx, pos: p.idx - 360, ampiezzaPlateau: p.ampiezzaPlateau };
 }
 
 // Vero se la correzione baseline è attiva (default ON).
@@ -2720,11 +2746,11 @@ function testoStatoImport(nomeFile, curvaGrezza, meta) {
     // Non si usa findMax(), che gira su 1..720 e restituisce `pos = idx - 360`
     // perche' e' scritta per l'array in gradi MANOVELLA con lo zero al PMS:
     // applicata qui dava l'alzata giusta e un angolo senza senso (-171°).
-    var lift = 0, grado = 0;
-    for (var i = 1; i <= 360; i++) {
-        if ((curvaGrezza[i] || 0) > lift) { lift = curvaGrezza[i]; grado = i; }
-    }
-    var s = nomeFile + ' | picco grezzo ' + lift.toFixed(2) + ' mm @ ' + grado + '° camma';
+    // Stessa regola del plateau: su un naso piatto il picco e' il CENTRO, non
+    // il primo grado in cui la curva tocca il massimo.
+    var p = piccoConPlateau(curvaGrezza, 1, 360);
+    var s = nomeFile + ' | picco grezzo ' + p.lift.toFixed(2) + ' mm @ ' + p.idx + '° camma';
+    if (p.ampiezzaPlateau > 1) s += ' (naso piatto ' + p.ampiezzaPlateau + '°)';
     if (meta && meta.validCount) s += ' | ' + meta.validCount + ' punti';
     if (meta && meta.stato === 'INCOMPLETO') s += ' | INCOMPLETA';
     return s;

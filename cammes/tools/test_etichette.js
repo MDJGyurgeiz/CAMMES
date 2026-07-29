@@ -163,8 +163,9 @@ if (testoStato) {
         /camma/i.test(testoStato), 'il dominio va detto: la scheda risultati parla di gradi motore');
     // Deve leggere la curva che le viene passata, non variabili globali di
     // comodo: cosi' il numero non puo' dipendere da conversioni successive.
-    check('calcola il picco dalla curva che riceve',
-        /curvaGrezza\[i\]/.test(testoStato) || /curvaGrezza\[/.test(testoStato));
+    check('calcola il picco dalla curva che riceve, non da un globale',
+        /piccoConPlateau\(curvaGrezza/.test(testoStato) || /curvaGrezza\[/.test(testoStato),
+        'il numero non deve dipendere da conversioni successive');
     // E deve cercarlo sul dominio GIUSTO. findMax() gira su 1..720 e ritorna
     // `idx - 360` perche' e' scritta per i gradi MANOVELLA con lo zero al PMS:
     // usata su una curva in gradi camma dava l'alzata giusta e un angolo
@@ -174,9 +175,9 @@ if (testoStato) {
     var soloCodice = testoStato.split('\n').filter(function (r) {
         return !/^\s*\/\//.test(r);
     }).join('\n');
-    check('cerca il picco su 1..360 gradi camma, non con findMax (dominio manovella)',
-        /<=\s*360/.test(soloCodice) && !/findMax/.test(soloCodice),
-        /findMax/.test(soloCodice) ? 'usa ancora findMax' : 'dominio 1..360');
+    check('cerca il picco sul dominio CAMMA 1..360, non con findMax (dominio manovella)',
+        /piccoConPlateau\(curvaGrezza,\s*1,\s*360\)/.test(soloCodice) && !/findMax/.test(soloCodice),
+        /findMax/.test(soloCodice) ? 'usa ancora findMax' : 'estremi dichiarati nella chiamata');
 }
 // Lo snapshot porta il nome del file, non il testo dello stato.
 var corpoSnap = HTML.substring(HTML.indexOf('intakeFile:') - 400, HTML.indexOf('intakeFile:') + 300);
@@ -184,6 +185,57 @@ check('lo snapshot NON salva il testo dello stato',
     !/intakeFile:\s*document\.getElementById\('intakeStatus'\)/.test(HTML));
 check('lo snapshot salva il nome file',
     /intakeFile:\s*intakeFileBase/.test(HTML), corpoSnap.substring(corpoSnap.indexOf('intakeFile:'), corpoSnap.indexOf('intakeFile:') + 60));
+
+// ---------------------------------------------------------------
+// 6. "Ripetizioni": il verdetto nasce da una grandezza che il testo taceva
+// ---------------------------------------------------------------
+//  Le soglie (<1% <3% <7%) sono sul coefficiente di variazione, ma il tooltip
+//  le affiancava all'unica dispersione che nominava, la sigma, che e' in mm. E
+//  il CV si calcola SOLO dove l'alzata supera 0,3 mm: cerchio base e rampe
+//  basse restano fuori dal verdetto. Prova della ricognizione con la funzione
+//  vera: 2 run col cerchio base che balla di 1 mm danno sigma 0,707 mm,
+//  CV 0,00 % e verdetto "eccellente".
+console.log('--- "Ripetizioni": il testo nomina la grandezza del verdetto ---');
+var ALZATA = fs.readFileSync(path.join(__dirname, '..', 'alzata.html'), 'utf8').replace(/\r\n/g, '\n');
+var iRip = ALZATA.indexOf('id="scanRepeat"');
+check('il campo Ripetizioni esiste', iRip > 0);
+if (iRip > 0) {
+    var j = ALZATA.indexOf('data-tip="', iRip);
+    var tipRip = ALZATA.substring(j + 10, ALZATA.indexOf('">', j + 10));
+    check('il tooltip nomina il coefficiente di variazione',
+        /coefficiente di variazione|\bCV\b/.test(tipRip));
+    check('e dichiara che il CV guarda solo sopra 0,3 mm',
+        /0,3 mm/.test(tipRip), 'cerchio base e rampe restano fuori dal verdetto');
+    check('e dice che la sigma e in millimetri',
+        /millimetri|in <b>mm<\/b>/.test(tipRip));
+    // La soglia citata nel testo dev'essere quella vera del codice.
+    var soglia = /avgLift\[d\] > ([\d.]+)/.exec(ALZATA);
+    check('la soglia scritta nel testo e quella del codice',
+        !!soglia && tipRip.indexOf(String(soglia[1]).replace('.', ',')) >= 0,
+        soglia ? ('codice: ' + soglia[1]) : 'soglia non trovata nel codice');
+}
+check('le opzioni non promettono piu "statistiche" contro "medie"',
+    !/run \+ medie|run \+ statistiche/.test(ALZATA),
+    'il calcolo e lo stesso per 2, 3 e 5 run');
+
+// ---------------------------------------------------------------
+// 7. La posizione del picco su un naso piatto
+// ---------------------------------------------------------------
+//  findMax usava un confronto STRETTO: su un plateau restituiva il PRIMO slot.
+//  Misurato su test_v31_fw_alz: sette slot in pareggio esatto (8,020000 mm da
+//  96° a 102°), mentre la stessa curva corretta in baseline ha una pendenza
+//  residua di sei NANOMETRI che sposta l'argmax sull'ultimo. Sei gradi di
+//  scarto da una differenza mille volte piu' piccola della risoluzione.
+console.log('--- il picco di un naso piatto e il suo centro ---');
+check('esiste piccoConPlateau()', /function piccoConPlateau/.test(HTML));
+check('la tolleranza e legata alla divisione dello strumento',
+    /var TOLL_PICCO_MM = 0\.005/.test(HTML), 'mezza divisione del comparatore');
+var corpoFindMax = estrai('findMax');
+check('findMax non usa piu il confronto stretto sull argmax',
+    !/if \(crankArr\[m\] > maxLift\)/.test(corpoFindMax));
+check('e delega a piccoConPlateau', /piccoConPlateau/.test(corpoFindMax));
+check('anche lo stato dell import usa la stessa regola',
+    /piccoConPlateau\(curvaGrezza/.test(HTML));
 
 console.log('');
 if (fails) { console.log('RISULTATO: ' + fails + ' FALLITI\n'); process.exit(1); }
