@@ -3756,8 +3756,16 @@ function campiAttivi(gruppo) {
     }
     if (gruppo !== 'geometria') {
         ids.push('rpmInput', 'springK', 'springPreload', 'massEqIntake', 'massEqExhaust');
+        // `complianceEnabled` e' un <select>: `comp.checked` e' undefined, quindi
+        // questo ramo non e' MAI scattato e rigidezza treno, smorzamento e i
+        // quattro parametri 2/3-DOF non sono mai passati dalla validazione.
+        // Stesso difetto trovato sul surge, stessa causa: una guardia da
+        // checkbox su un menu a tendina.
+        // Il ramo vale anche col modulo Race acceso, perche' quegli strumenti
+        // usano rigidezza e smorzamento a prescindere da complianceEnabled.
         var comp = document.getElementById('complianceEnabled');
-        if (!comp || comp.checked) {
+        var _moduli = (function () { try { return JSON.parse(localStorage.getItem(MODULES_KEY)) || {}; } catch (e) { return {}; } })();
+        if (!comp || comp.value === '1' || _moduli.race) {
             ids.push('kTrain', 'dampingRatio');
             var mod = (document.getElementById('complianceModel') || {}).value || '1dof';
             if (mod === '2dof' || mod === '3dof') ids.push('massEqIntermediate', 'kPushrod');

@@ -110,6 +110,44 @@ var vSenza = M.validaNumero('', { min: 0, minEsclusivo: true });
 check('validaNumero("") su un campo SENZA default non inventa un numero',
     vSenza.ok === false, JSON.stringify(vSenza));
 
+// ---------------------------------------------------------------
+// 5. Nessuna guardia da checkbox su un menu a tendina
+// ---------------------------------------------------------------
+//  `complianceEnabled` e `surgeEnabled` erano <select>, ma due rami li
+//  interrogavano con `.checked`: undefined, quindi il ramo non scattava MAI.
+//  Effetto: rigidezza treno, smorzamento e i quattro parametri 2/3-DOF non
+//  passavano dalla validazione, e nessuno se ne accorgeva perche' un ramo che
+//  non scatta non produce errori — produce silenzio.
+console.log('--- nessuna guardia da checkbox su un <select> ---');
+var selects = {};
+(HTML.match(/<select[^>]*id="(\w+)"/g) || []).forEach(function (s) {
+    selects[/id="(\w+)"/.exec(s)[1]] = true;
+});
+console.log('        <select> in pagina: ' + Object.keys(selects).length);
+var guardieSbagliate = [];
+HTML.split('\n').forEach(function (riga, i) {
+    if (/^\s*(\/\/|\*|<!--)/.test(riga)) return;   // i commenti possono citarlo
+    var m = /var (\w+) = document\.getElementById\('(\w+)'\)/.exec(riga);
+    if (m && selects[m[2]]) {
+        // la variabile e' un <select>: cerco un `.checked` su di essa nelle
+        // righe vicine, dove sta la guardia
+        var vicino = HTML.split('\n').slice(i, i + 4).join('\n');
+        if (new RegExp('\\b' + m[1] + '\\.checked\\b').test(vicino)) {
+            guardieSbagliate.push(m[2] + ' (riga ' + (i + 1) + ')');
+        }
+    }
+});
+check('nessun <select> viene interrogato con .checked',
+    guardieSbagliate.length === 0,
+    guardieSbagliate.length ? guardieSbagliate.join(', ') : 'nessuna');
+// e i campi che quel ramo doveva validare ci arrivano davvero
+var iAttivi = HTML.indexOf('function campiAttivi');
+var corpoAttivi = HTML.substring(iAttivi, HTML.indexOf('\n}\n', iAttivi) + 3);
+check('rigidezza treno e smorzamento entrano fra i campi da validare',
+    /'kTrain', 'dampingRatio'/.test(corpoAttivi));
+check('e la guardia usa il valore del selettore, non .checked',
+    /comp\.value === '1'/.test(corpoAttivi), 'deve leggere .value');
+
 console.log('');
 if (fails) { console.log('RISULTATO: ' + fails + ' FALLITI\n'); process.exit(1); }
 console.log('VALIDATO: ogni campo ha una sola strada di lettura; i campi senza');
