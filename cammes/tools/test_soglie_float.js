@@ -132,6 +132,58 @@ check('il toast della mappa non dice "zona sicura" senza il numero',
     !/nella zona sicura/.test(pezzoMap) || /SOGLIE_FLOAT/.test(pezzoMap),
     'il testo deve nominare la soglia, non un aggettivo');
 
+// ---------------------------------------------------------------
+// 6. La durata: una soglia sola, e lo stesso dominio
+// ---------------------------------------------------------------
+//  L'analisi principale contava la durata con soglia 0,05 su curve LATO
+//  VALVOLA (rapporto bilanciere applicato); il confronto A vs B usava 0,001 su
+//  curve lasciate LATO CAMMA. Misurato sullo stesso file (Clio, angolo 110,
+//  gioco 0,20): bilanciere 1,0 -> 236 gradi contro 239; bilanciere 1,5 -> 242
+//  gradi e picco 12,58 mm contro 247 gradi e 8,39 mm. Il gioco veniva diviso
+//  per il rapporto ma il rapporto non veniva mai riapplicato alla curva.
+console.log('--- la durata: una soglia sola e lo stesso dominio ---');
+check('DUR_EPS e una costante condivisa, non una locale',
+    /^var DUR_EPS = /m.test(HTML), 'deve stare fuori da analyze()');
+var iAB = HTML.indexOf('function runABComparison');
+var pezzoAB = HTML.substring(iAB, iAB + 9000);
+check('il confronto A/B non usa una soglia di durata propria',
+    !/computeDurationAtRef\([^,]+,\s*0\.\d+\)/.test(pezzoAB),
+    (pezzoAB.match(/computeDurationAtRef\([^)]*\)/g) || []).slice(0, 2).join(', '));
+// Non bastava la stessa soglia: erano due METODI. La scheda prendeva la durata
+// dagli eventi interpolati (250°), il confronto contava i bin sopra soglia
+// (249°). Ora entrambi passano da durataMotore().
+check('esiste una funzione unica per la durata', /^function durataMotore/m.test(HTML));
+check('il confronto A/B usa lo stesso metodo della scheda',
+    /durataMotore\(/.test(pezzoAB), 'deve passare da durataMotore, non contare i bin');
+var pezzoAnalyze = HTML.substring(HTML.indexOf('var durThreshIn'), HTML.indexOf('var durThreshIn') + 3000);
+check('e la scheda non tiene piu un conteggio che poi sovrascrive',
+    !/if \(anlIn\[i\] > durThreshIn\) durIntake\+\+/.test(pezzoAnalyze),
+    'il conteggio girava e veniva buttato via');
+check('le curve A/B passano dal rapporto bilanciere, come la scheda principale',
+    /applyRockerRatio/.test(pezzoAB) || /_perBilanciere/.test(pezzoAB),
+    'altrimenti i KPI affiancati non sono confrontabili con la scheda');
+check('e il rapporto viene dallo stesso posto dell analisi (rockerEffettivo)',
+    /rockerEffettivo\('intake'\)/.test(pezzoAB));
+
+// ---------------------------------------------------------------
+// 7. L'avviso sulla geometria della leva non promette un troncamento
+// ---------------------------------------------------------------
+//  `_fingerSaturated` segnala che ltrue/lArm > 1 ma NON tronca: nella libreria
+//  la riga dopo il flag e' sempre `out[t] = ltrue * rapporto`. Con lArm 25 e
+//  lArm 5 (stesso rapporto 1,2) la curva e' identica bit a bit.
+console.log('--- l avviso della leva non annuncia una correzione che non avviene ---');
+var iLeva = HTML.indexOf('Geometria leva insufficiente');
+check('l avviso esiste', iLeva > 0);
+if (iLeva > 0) {
+    var blocco = HTML.substring(iLeva - 900, iLeva + 900);
+    check('non dice piu che la curva e troncata',
+        !/curva finger (&egrave;|è) troncata/i.test(blocco), 'il flag non tronca nulla');
+    check('dice che la curva NON viene corretta',
+        /NON viene corretta/i.test(blocco));
+    check('e avverte che cambiare L rimoltiplica tutte le alzate',
+        /TUTTE le alzate/i.test(blocco));
+}
+
 console.log('');
 if (fails) { console.log('RISULTATO: ' + fails + ' FALLITI\n'); process.exit(1); }
 console.log('VALIDATO: una sola scala per il valve float, usata da schermo, PDF,');

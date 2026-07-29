@@ -2659,12 +2659,18 @@ function applyVirtualFollower(camLift, side) {
         // dimostrato inerte (si elide analiticamente). La curva restituita e'
         // gia' lato VALVOLA: il rapporto Bilanciere NON va riapplicato.
         var fout = convertPuntToFinger(camLift, rBase, lArm, lValve, rPunt);
-        // Avviso se la geometria leva non regge l'alzata (asin saturato → curva
-        // troncata): meglio dirlo che restituire numeri silenziosamente sbagliati.
+        // Avviso se la geometria leva non regge l'alzata.
+        //
+        // La bandiera _fingerSaturated segnala che ltrue/lArm > 1, ma NON produce
+        // alcun troncamento: in lib/cammes-math.js la riga dopo il flag e' sempre
+        // `out[t] = ltrue * rapporto`, senza ramo alternativo. Misurato: con lArm 25
+        // e con lArm 5 (stesso rapporto 1,2) la curva e' identica bit a bit, e solo
+        // la seconda alza la bandiera. Il testo diceva "la curva finger e' troncata":
+        // annunciava una correzione che non avviene.
         if (window._fingerSaturated && window.cammesToast && !window._fingerWarnShown) {
             window._fingerWarnShown = true;
             window.cammesToast({ kind: 'warn', title: 'Geometria leva insufficiente',
-                body: 'L\'alzata supera la corsa del braccio camma (L=' + lArm + ' mm): la curva finger è troncata. Aumenta <b>L braccio camma</b> o verifica i parametri.',
+                body: 'L\'alzata supera la corsa del braccio camma (L=' + lArm + ' mm): la geometria del finger &egrave; <b>incoerente</b> con questa camma. La curva <b>NON viene corretta</b>: i numeri che vedi sono quelli del calcolo normale, non una versione troncata. Controlla <b>L braccio camma</b> e <b>L braccio valvola</b> sulla testata. <i>Attenzione: cambiare L cambia il rapporto, e con esso TUTTE le alzate mostrate.</i>',
                 duration: 6500 });
         }
         return fout;
@@ -2940,6 +2946,30 @@ function applyRockerRatio(crankArr, ratio) {
 }
 
 // Duration at reference height (count degrees where lift > refHeight)
+// Soglia unica per la durata, condivisa dall'analisi principale e dal confronto
+// A/B. Prima era una `var` locale dentro analyze() e il ramo A/B ne usava una
+// propria, 0,001: sullo stesso file uscivano 236 gradi da una parte e 239
+// dall'altra.
+//
+// Non e' una soglia di alzata: e' una guardia contro l'offset residuo del
+// comparatore. Il gioco valvola e' gia' dentro la curva.
+var DUR_EPS = 0.05;   // mm
+
+// Durata in gradi motore, con UN metodo solo.
+//
+// La scheda principale la prendeva dagli EVENTI (apertura e chiusura
+// interpolate da findEvents), il confronto A/B contando i bin sopra soglia:
+// sullo stesso file 250 gradi contro 249. E il conteggio nella scheda veniva
+// eseguito e poi sovrascritto dagli eventi, quindi girava per niente — tranne
+// quando gli eventi sono AMBIGUI (due lobi, plateau equivalenti, curva sotto
+// soglia), dove resta l'unico ripiego possibile ed e' dichiarato tale.
+function durataMotore(ev, curva, soglia) {
+    if (ev && !ev.ambiguous && isFinite(ev.durationDeg)) return Math.round(ev.durationDeg);
+    var n = 0;
+    for (var i = 1; i <= 720; i++) if ((curva[i] || 0) > soglia) n++;
+    return n;
+}
+
 function computeDurationAtRef(crankArr, refHeight) {
     var count = 0;
     for (var i = 1; i <= 720; i++) {
@@ -4201,13 +4231,10 @@ function analyze() {
     // SCALAVA col picco (su un lobo da 11 mm tagliava 0,11 mm di fianco) e non
     // era riportato da nessuna parte. Ora è una guardia FISSA e dichiarata,
     // solo contro l'offset residuo del comparatore — il gioco è già nella curva.
-    var DUR_EPS = 0.05;   // mm: guardia anti-offset comparatore, NON una soglia di alzata
-    var durThreshIn = DUR_EPS, durThreshEx = DUR_EPS;
+    var durThreshIn = DUR_EPS, durThreshEx = DUR_EPS;   // la costante condivisa, vedi sopra
+    // La durata si calcola piu' sotto, con durataMotore(), dopo findEvents:
+    // qui c'era un conteggio dei bin che veniva poi sovrascritto dagli eventi.
     var durIntake = 0, durExhaust = 0;
-    for (var i = 1; i <= 720; i++) {
-        if (anlIn[i] > durThreshIn) durIntake++;
-        if (anlEx[i] > durThreshEx) durExhaust++;
-    }
 
     // Duration at reference height
     var durRefIn = computeDurationAtRef(anlIn, refHeight);
@@ -4255,18 +4282,20 @@ function analyze() {
     if (!inEv.ambiguous) {
         intakeOpenBTC  = 360 - inEv.openIdx;    // gradi prima del TDC
         intakeCloseABC = inEv.closeIdx - 540;   // gradi dopo il BDC
-        durIntake = Math.round(inEv.durationDeg);
+        durIntake = durataMotore(inEv, anlIn, durThreshIn);
     } else {
         // AUDIT MAT-01: NIENTE ricostruzione centro±durata/2 — eventi ambigui
         // (due lobi, plateau equivalenti, sotto soglia) restano NON valutabili.
         intakeOpenBTC = NaN; intakeCloseABC = NaN;
+        durIntake = durataMotore(inEv, anlIn, durThreshIn);   // ripiego: conteggio dei bin
     }
     if (!exEv.ambiguous) {
         exOpenBBC   = 180 - exEv.openIdx;       // gradi prima del BDC
         exCloseATC  = exEv.closeIdx - 360;      // gradi dopo il TDC
-        durExhaust = Math.round(exEv.durationDeg);
+        durExhaust = durataMotore(exEv, anlEx, durThreshEx);
     } else {
         exOpenBBC = NaN; exCloseATC = NaN;      // AUDIT MAT-01: mai centro±dur/2
+        durExhaust = durataMotore(exEv, anlEx, durThreshEx);   // ripiego: conteggio dei bin
     }
     if ((inEv.ambiguous || exEv.ambiguous) && window.cammesToast) {
         window.cammesToast({ kind: 'warn', title: 'Eventi di fasatura AMBIGUI',
@@ -5382,12 +5411,22 @@ function runABComparison() {
             return;
         }
 
-        // P1-05: gioco valvola riportato lato camma (le curve A/B restano in
-        // dominio camma, come la vista principale prima del bilanciere).
-        var crankA_int = mapCamToCrank(folA_int, ecA.intake, giocoLatoCamma(clearA, 'intake'), 'intake');
-        var crankA_exh = mapCamToCrank(folA_exh, ecA.exhaust, giocoLatoCamma(clearA, 'exhaust'), 'exhaust');
-        var crankB_int = mapCamToCrank(folB_int, ecB.intake, giocoLatoCamma(clearB, 'intake'), 'intake');
-        var crankB_exh = mapCamToCrank(folB_exh, ecB.exhaust, giocoLatoCamma(clearB, 'exhaust'), 'exhaust');
+        // P1-05: gioco valvola riportato lato camma.
+        //
+        // Poi si applica il rapporto BILANCIERE, come fa la scheda principale.
+        // Prima le curve A/B restavano lato camma: il gioco veniva diviso per il
+        // rapporto (giocoLatoCamma) ma il rapporto non veniva mai riapplicato alla
+        // curva, quindi con bilanciere 1,5 sullo stesso file la scheda principale
+        // diceva 242 gradi e picco 12,58 mm mentre il confronto diceva 247 gradi e
+        // 8,39 mm. Il bilanciere e' una proprieta' del MOTORE, non della camma:
+        // vale per il set A come per il set B, e va applicato a entrambi perche'
+        // i KPI affiancati siano confrontabili con la scheda.
+        var rkIn = rockerEffettivo('intake'), rkEx = rockerEffettivo('exhaust');
+        function _perBilanciere(c, r) { return (r !== 1.0) ? applyRockerRatio(c, r) : c; }
+        var crankA_int = _perBilanciere(mapCamToCrank(folA_int, ecA.intake, giocoLatoCamma(clearA, 'intake'), 'intake'), rkIn);
+        var crankA_exh = _perBilanciere(mapCamToCrank(folA_exh, ecA.exhaust, giocoLatoCamma(clearA, 'exhaust'), 'exhaust'), rkEx);
+        var crankB_int = _perBilanciere(mapCamToCrank(folB_int, ecB.intake, giocoLatoCamma(clearB, 'intake'), 'intake'), rkIn);
+        var crankB_exh = _perBilanciere(mapCamToCrank(folB_exh, ecB.exhaust, giocoLatoCamma(clearB, 'exhaust'), 'exhaust'), rkEx);
 
         // Find maxes
         var maxA_int = findMax(crankA_int);
@@ -5402,10 +5441,12 @@ function runABComparison() {
         var areaB_exh = computeTimeArea(crankB_exh);
 
         // Durations
-        var durA_int = computeDurationAtRef(crankA_int, 0.001);
-        var durA_exh = computeDurationAtRef(crankA_exh, 0.001);
-        var durB_int = computeDurationAtRef(crankB_int, 0.001);
-        var durB_exh = computeDurationAtRef(crankB_exh, 0.001);
+        // Stessa soglia E stesso metodo della scheda principale: prima erano
+        // 0,001 e il conteggio dei bin, contro 0,05 e gli eventi interpolati.
+        var durA_int = durataMotore(findEvents(crankA_int, DUR_EPS), crankA_int, DUR_EPS);
+        var durA_exh = durataMotore(findEvents(crankA_exh, DUR_EPS), crankA_exh, DUR_EPS);
+        var durB_int = durataMotore(findEvents(crankB_int, DUR_EPS), crankB_int, DUR_EPS);
+        var durB_exh = durataMotore(findEvents(crankB_exh, DUR_EPS), crankB_exh, DUR_EPS);
 
         // Derivate (vel, acc) e asimmetria
         var kinA_int = computeDerivatives(crankA_int);
