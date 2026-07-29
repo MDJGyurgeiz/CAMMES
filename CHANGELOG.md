@@ -9,6 +9,203 @@ Sistema di misura profili alberi a camme per motori.
 
 ---
 
+## v3.6.0 — 2026-07-29: un numero, una fonte (firmware 4.1 INVARIATO)
+
+Ventiquattro commit, ognuno con un test che **falliva sulla v3.5.0**. Il firmware
+non è toccato: chi ha la 4.1 non riflasha.
+
+Il filo è uno solo, e vale la pena dirlo prima dell'elenco: **il programma
+smetteva di essere affidabile dove indovinava, e dove diceva la stessa cosa due
+volte in due modi diversi**. Le due malattie sono la stessa: un numero senza una
+fonte sola.
+
+### ⚠ Cosa cambia nei numeri già visti
+
+Tre valori esportati si spostano. Nessuno era "giusto" prima — erano ambigui:
+
+| Cosa | Prima | Adesso | Perché |
+|---|---|---|---|
+| **Confronto A/B**, alzata massima e durata | lato camma, soglia 0,001 | lato **valvola**, soglia 0,05, metodo degli eventi | con bilanciere 1,5 sullo stesso file la scheda diceva 250° e 16,21 mm, il confronto 249° e 8,39 mm |
+| **Pos. max alzata** | primo grado del plateau | **centro** del plateau | su un naso piatto sette gradi erano in pareggio esatto; sei nanometri di pendenza residua spostavano la risposta di 6° |
+| **Alzata al PMS** con follower simulato | invariata | invariata | ma spegnere "Follower simulato" adesso **spegne davvero** la conversione: 1,033 mm invece di 4,023 |
+
+Chi ha un PDF di confronto A/B fatto con un bilanciere diverso da 1,0 vedrà
+numeri diversi: quelli nuovi sono lato valvola, come la scheda accanto.
+
+### Funzioni rimosse
+
+**Risonanza spire (surge).** Il modello assumeva molla singola cilindrica a passo
+costante: molla doppia, conica, a passo variabile e materiale non ci entravano — e
+il passo variabile si progetta *proprio* per sopprimere il surge, quindi il
+verdetto era sbagliato dove serviva di più. Il codice lo dichiarava da sé
+(«modello ESPLORATIVO … non validato indipendentemente»), e la risonanza si
+verifica comunque in laboratorio. Via 585 righe.
+
+**Auto-tag (Home).** Indovinava la marca dai *numeri* nel nome file. Misurato:
+`r19_16v_alz.scr` — una Renault 19 16V — veniva etichettata **`yamaha`**, perché
+il pattern delle moto `\br[1-9]` pesca "r1" dentro "r19". E i tag si **stampano
+sul PDF** della singola misura. Il tagging manuale resta.
+
+**Preset motore** e **k pivot bilanciere** (già nella 3.5.0 su `main`): il primo
+cambiava l'alzata del 59% con una tendina etichettata per numero di cilindri, il
+secondo era un campo che l'operatore compilava e il solver ignorava.
+
+### Un numero, una fonte
+
+**La validazione e il calcolo leggevano numeri diversi.** Ogni campo con un
+default dichiarato aveva due letture: la validazione applicava il default, il
+calcolo rileggeva il campo grezzo, e `Number('')` fa **0**. Con l'angolo lobo
+vuoto la cella LSA scriveva `50,0°` e il suo stesso tooltip mostrava il conto
+`(-3,0 + 103,0) / 2`. Col regime vuoto la scheda diceva `0 N @ 0 rpm` e distacco
+**`✓ ∞` «Margine: sicuro»**; bastava toccare `k` perché le stesse celle
+diventassero `1515,8 N @ 6000 rpm` e **`✗ 3805 rpm, margine −37%`** — a campo
+ancora vuoto. Ora la lettura è una sola, e i default dichiarati vengono **scritti
+nel campo** prima di calcolare: una casella vuota non può più significare un
+numero.
+
+**Tre valori di partenza per lo stesso campo** (pagina 100, schema 106, Reset
+100; gioco 0,50/0/0,50; lisciatura 5/0/5) → uno solo, dallo schema. E il Reset
+non lascia più i campi marcati "confermati" quando li riporta a un valore che
+nessuno ha dichiarato.
+
+**Una sola scala per il valve float.** La stessa riga era **gialla a schermo e
+verde nel PDF**: il confine verde/giallo era 0,1 mm da una parte e 0,3
+dall'altra, e il PDF era il permissivo. Le legende della mappa molla
+annunciavano «rosso oltre 0,3 mm» mentre il rosso pieno arrivava a 0,8: una cella
+a 0,45 mm — il 50% oltre il limite dichiarato — usciva ambra, e nella heatmap il
+colore è l'unico dato. Ora la scala è una, la più prudente delle due, e le
+legende si **generano** dalla funzione che colora.
+
+**La durata della scansione** era ricopiata a mano in cinque punti: tendina ~45s,
+barra ~50s, toast ~1m, confirm ~45 s. Quattro numeri per la stessa attesa. Ora
+uno solo, `SCAN_MODES.timeSec`, con un formattatore solo.
+
+### Verdetti che si astenevano a metà
+
+**Il grafico delle forze** disegnava l'incrocio molla/inerzia — che si legge come
+«qui la valvola si stacca» — mentre le celle a venti pixel di distanza dicevano
+«non valutabile». Ora si astiene dove si astengono le celle, e dice quali lati e
+perché, usando la loro stessa regola.
+
+**Lo stato accanto a Importa** dichiarava `Max: 11,24 mm` calcolato senza
+correzione baseline e senza rapporto bilanciere, mentre la scheda diceva
+`Max alzata 16,21` per la stessa camma — e quella stringa finiva **stampata**
+sull'intestazione della scheda camma. Ora dichiara il *picco grezzo in gradi
+camma*: grandezza diversa, nome diverso, non confondibile.
+
+**Spegnere un modulo** nascondeva i campi ma lasciava attivo il calcolo:
+togliendo la spunta a "Follower simulato" l'alzata al PMS restava 4,023 mm invece
+di 1,033. Ora spegne davvero, mette da parte la scelta e la restituisce quando lo
+riaccendi.
+
+### Etichette che descrivevano un altro calcolo
+
+- **Asimmetria lobo**: il tooltip aveva il **segno rovesciato**. Verificato
+  eseguendo la funzione: un lobo che apre in fretta dà **−33,34%**, non positivo.
+- **Analizza** prometteva «almeno una delle due camme»; il codice pretende
+  entrambe e si ferma subito.
+- **Confronta A vs B** diceva «anche solo aspirazione»; ne servono quattro.
+- **Durata @ 0°** metteva il simbolo dei gradi su una soglia in millimetri.
+- Il cursore dell'animazione era chiamato «giri/min»: a 180 la camma gira a ~18
+  giri/min e il ritmo dipende dal frame rate.
+- **«Geometria leva insufficiente»** annunciava una curva «troncata» che non viene
+  troncata: misurato, identica bit a bit.
+- **Ripetizioni**: il verdetto nasce dal coefficiente di variazione, che il testo
+  non nominava mai, e che guarda **solo** dove l'alzata supera 0,3 mm — cerchio
+  base escluso. Ora è scritto.
+
+### Valori che il programma non può conoscere
+
+Entrano nel meccanismo dei campi da confermare (bordo tratteggiato + conseguenze
+dichiarate): **L braccio camma / L braccio valvola** (contano solo come rapporto,
+e nascevano a 1,20) e **rigidezza treno / smorzamento**, che governano tutti gli
+strumenti Race. Il blocco che li contiene resta visibile anche col solo modulo
+Race acceso: prima si poteva nascondere lasciando accesi gli strumenti che li
+usano.
+
+Il **gioco valvola** nasceva a 0,50 mm, fuori da tutti gli intervalli che il suo
+stesso tooltip dichiarava tipici. Il valore non è stato cambiato — su un banco
+universale non si sceglie il gioco di un motore — ma ora il testo dice che è un
+**segnaposto**, e quanto pesa: fra 0 e 0,50 la durata misurata cambia di ~38°.
+
+### Due difetti gemelli, stessa causa
+
+`complianceEnabled` e `surgeEnabled` sono `<select>`, ma due rami li
+interrogavano con **`.checked`** — su un select è `undefined`, quindi i rami non
+sono **mai** scattati. Effetto: rigidezza treno, smorzamento e i quattro
+parametri 2/3-DOF non sono **mai** passati dalla validazione. Ora uno smorzamento
+di 5, fuori dal massimo dichiarato, viene intercettato; prima finiva nei solver.
+Il test non presidia il singolo punto: cerca qualunque `<select>` letto con
+`.checked`.
+
+### Il modello di compliance non si ripesca dal selettore
+
+A dinamica spenta lo snapshot registrava `undefined`, e gli strumenti Race — che
+girano lo stesso — ricadevano sul `<select>` nascosto: un 3-DOF lasciato lì
+continuava a comandare, rileggendo masse e rigidezze dal DOM. Ora il modello si
+fotografa sempre.
+
+### La discrepanza VW: causa trovata
+
+`validate_vw.js` passava 32,64 e 34,25 alla conversione **come raggio** del
+cerchio base, mentre sono i **diametri** misurati al calibro. Ricalcolando col
+raggio vero, sulle stesse scansioni e senza toccare un dato:
+
+| | raggio sbagliato | raggio corretto | riferimenti indipendenti |
+|---|---|---|---|
+| ASP alzata al PMS @105° | 2,18 mm | **3,86** | 3,20 / 3,50 / scheda 3,5 |
+| ASP durata | 272° | **286°** | 290 / 292 / scheda 295 |
+| SCA alzata al PMS @105° | 1,61 mm | **3,25** | 2,90 / 3,00 / scheda 3,3 |
+| SCA durata | 272° | **282°** | 281 / 291 / scheda 285 |
+
+Lo **scarico rientra dentro la banda di tutte le fonti** su entrambe le
+grandezze; all'aspirazione resta **0,36 mm e 4°**, contro 1,3 mm e 18° di prima.
+La «sottostima ~35% del medio-fianco», aperta da giugno, era in larga parte un
+errore di unità nel dato che davamo noi allo scanner. Il residuo
+dell'aspirazione è ora **in eccesso**, non in difetto: le ipotesi costruite su
+«lo scanner sotto-misura il fianco» non servono più a spiegarlo. Dettaglio in
+`REPORT_CAMME_VW-KR.md` §5.1.
+
+### Funzione nuova: quale carico serve alla molla
+
+Invece di chiedere quale molla hai e dare un verdetto, `caricoMollaRichiesto()`
+dice **quale carico serve** a ogni alzata, dati camma, massa alterna e giri
+massimi — cioè solo dati che l'officina possiede. Validata contro un oracolo
+**analitico** (su un lobo cosinusoidale la derivata seconda si conosce in forma
+chiusa: coincide entro il 2% al picco), con lo scaling `rpm²` e lineare in massa,
+e il fianco peggiore a pari alzata. Il test ha rivelato un fatto da dire a chi
+legge: **sotto metà alzata il requisito è nullo**, perché lì la camma accelera la
+valvola — per questo una specifica molla vera aggiunge un requisito separato di
+carico a valvola chiusa, che questo conto non dà. La funzione è in libreria; la
+presentazione in pagina arriva nella prossima.
+
+### Gate
+
+Suite da 33 a **41 file, 667 check**. Otto suite nuove, tutte scritte *prima*
+della correzione: rimozioni, moduli spenti, grafico forze, etichette, soglie
+float, una-lettura, valori di partenza, tempi scansione. Diverse non confrontano
+stringhe ma **eseguono** la funzione e verificano che il testo dica quel che la
+funzione fa — il segno dell'asimmetria è controllato così.
+
+Il gate dei documenti ora verifica **qualunque** conteggio di suite nel README:
+lo stesso numero era scritto in due frasi e una era rimasta indietro.
+
+### Aperto, e dichiarato
+
+- L'**accelerazione** ricavata dalle scansioni non è convergente: 1,4× fra
+  finestra di lisciatura 5 e 11 punti, 2,4× senza lisciatura. Da lì dipendono
+  `Acc. max`, `Jerk max`, `Distacco valvola` e `Margine`. Cause individuate
+  (liscia-poi-deriva, mancano i coefficienti SG di *derivata*, il clamp dei
+  negativi in `smoothArray`), correzione non ancora fatta.
+- Il **verdetto di ripetibilità** esclude la dispersione sul cerchio base: un
+  banco che balla sul fondo può prendere «eccellente». È una scelta di calcolo,
+  non un'etichetta: va decisa.
+- P2-01 (contrasti tema chiaro), P2-07 (nomi accessibili), P2-09 (SBOM
+  CycloneDX), P2-12 (copertura): aperti, con il dettaglio in
+  `REMAINING_RISKS.md`.
+
+---
+
 ## v3.5.0 — 2026-07-26: correttezza dei numeri di Analisi (firmware 4.1 INVARIATO)
 
 Lotto nato dall'audit esterno del 2026-07-25. Ogni voce ha un test che

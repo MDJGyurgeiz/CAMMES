@@ -6,7 +6,7 @@
     "component": {
       "type": "application",
       "name": "cammes",
-      "version": "3.5.0",
+      "version": "3.6.0",
       "description": "CAMMES - Sistema di misura profili alberi a camme",
       "licenses": [
         {

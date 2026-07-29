@@ -4,7 +4,7 @@ Generato da `tools/gen_sbom.js` a partire da `package-lock.json` (albero
 reale). Formato macchina: [`SBOM.json`](SBOM.json) (CycloneDX 1.5).
 Rigenerare dopo ogni cambio di dipendenze: `node tools/gen_sbom.js`.
 
-- Applicazione: **cammes v3.5.0** (UNLICENSED)
+- Applicazione: **cammes v3.6.0** (UNLICENSED)
 - Componenti totali: **222** — runtime (spediti nell'exe): **26**, dev/build (non spediti): **196**
 
 ## Runtime — finiscono nell'eseguibile
