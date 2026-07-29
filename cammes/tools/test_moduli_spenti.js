@@ -194,6 +194,32 @@ check('il blocco di rigidezza treno e smorzamento appartiene anche al modulo rac
     /data-module="[^"]*\brace\b[^"]*"[\s\S]{0,2000}?id="kTrain"/.test(HTML),
     'kTrain deve stare in un blocco marcato anche "race"');
 
+// ---------- il modello di compliance si fotografa sempre ----------
+//  `var modelVal` stava DENTRO `if (complianceOn && rpm > 0)`: a dinamica spenta
+//  lo snapshot registrava undefined, e gli strumenti Race — che girano lo stesso
+//  — lo passavano a runComplianceModel, che ricadeva sul <select> nascosto. Un
+//  3dof lasciato li' continuava a comandare, e in quel ramo il solver rilegge
+//  anche massa intermedia, asta, massa sede e k sede dal DOM: proprio cio' che
+//  l'istantanea dell'analisi esiste per impedire.
+console.log('--- il modello di compliance non viene ripescato dal DOM ---');
+var corpoAnalyze = (function () {
+    var m = /^function analyze\s*\(\)\s*\{/m.exec(HTML);
+    return HTML.substring(m.index, HTML.indexOf('\n}\n', m.index) + 3);
+})();
+var iIf = corpoAnalyze.indexOf('if (complianceOn && rpm > 0)');
+var iModel = corpoAnalyze.indexOf('var modelVal');
+check('il modello si legge PRIMA del ramo compliance',
+    iModel > 0 && iIf > 0 && iModel < iIf,
+    iModel < 0 ? 'modelVal non trovato' : ('modelVal a ' + iModel + ', if a ' + iIf));
+check('e non resta indefinito a dinamica spenta',
+    /var modelVal = \(_modelSel && _modelSel\.value\) \|\| '1dof'/.test(corpoAnalyze));
+var iRun = HTML.indexOf('function runComplianceModel');
+var corpoRun = HTML.substring(iRun, HTML.indexOf('\n}\n', iRun) + 3);
+check('runComplianceModel non ripesca il modello dal selettore',
+    !/currentComplianceModel\(\)/.test(corpoRun), 'deve fidarsi solo di chi lo chiama');
+check('e la funzione che lo ripescava non esiste piu',
+    !/^function currentComplianceModel/m.test(HTML));
+
 // ---------- non regressione ----------
 console.log('--- non regressione ---');
 // Un blocco che appartiene a piu' moduli resta visibile se almeno uno e' acceso:

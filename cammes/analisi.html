@@ -1101,24 +1101,27 @@ var TYPOLOGY = {
 // (1-DOF) anche quando l'utente aveva scelto 2-DOF/3-DOF nel selettore: lo
 // Sweep RPM e il "suggerisci molla" ottimizzavano su un modello DIVERSO da
 // quello mostrato in analisi. Ora tutti passano di qui e rispettano la scelta.
-function currentComplianceModel() {
-    var sel = document.getElementById('complianceModel');
-    return sel ? sel.value : '1dof';
-}
+// (currentComplianceModel() e' stata rimossa: serviva solo a ripescare il
+//  modello dal <select> quando il chiamante non lo dichiarava, ed e' proprio
+//  quel ripiego che faceva girare gli strumenti Race su una scelta nascosta.)
 function runComplianceModel(curve, rpm, params, modelVal) {
-    var m = modelVal || currentComplianceModel();
-    if (m !== '2dof' && m !== '3dof') return simulateCompliance(curve, rpm, params);
-    // 2/3-DOF: arricchisci coi parametri del bilancere/sede dal DOM SENZA
-    // sovrascrivere quelli già passati dal chiamante (mass/k/F0 dello sweep).
-    var num = function (id, d) { var el = document.getElementById(id); var v = el ? Number(el.value) : NaN; return isFinite(v) ? v : d; };
+    // Il modello lo dice CHI CHIAMA, prendendolo dall'istantanea dell'analisi.
+    // Prima, se il chiamante non lo specificava, questa riga lo ripescava dal
+    // <select> corrente: uno strumento Race lanciato con la dinamica spenta
+    // finiva per girare col modello lasciato in un selettore nascosto.
+    var m = (modelVal === '2dof' || modelVal === '3dof') ? modelVal : '1dof';
+    if (m === '1dof') return simulateCompliance(curve, rpm, params);
+    // 2/3-DOF: arricchisci coi parametri del bilancere/sede SENZA sovrascrivere
+    // quelli già passati dal chiamante (mass/k/F0 dello sweep). Restano letti
+    // dal DOM, ma con la stessa strada di lettura di tutto il resto (numDi).
     var full = Object.assign({
-        massEqIntermediateG: num('massEqIntermediate', 50),
-        kPushrodN_mm: num('kPushrod', 800)
+        massEqIntermediateG: numDi('massEqIntermediate'),
+        kPushrodN_mm: numDi('kPushrod')
     }, params);
     if (m === '3dof') {
         full = Object.assign({
-            massSeatG: num('massSeat', 15),
-            kSeatN_mm: num('kSeat', 80000)
+            massSeatG: numDi('massSeat'),
+            kSeatN_mm: numDi('kSeat')
         }, full);
         return simulateCompliance3DOF(curve, rpm, full);
     }
@@ -4366,11 +4369,20 @@ function analyze() {
     var valveLiftIn = null, valveLiftEx = null;
     var floatIn = null, floatEx = null;
     var compInfo = null;   // AUDIT DYN-01: esito tipizzato della compliance
+    // Il modello si fotografa SEMPRE, anche a compliance spenta.
+    //
+    // Prima era dichiarato dentro l'if: con la dinamica spenta lo snapshot
+    // registrava `complianceModelVal: undefined`, e gli strumenti Race — che
+    // girano lo stesso — lo passavano a runComplianceModel, che ricadeva sul
+    // <select> nascosto. Un 3dof lasciato li' continuava a comandare, e in quel
+    // ramo il solver rilegge anche massa intermedia, asta, massa sede e k sede
+    // direttamente dal DOM: esattamente il comportamento che l'istantanea
+    // dell'analisi (P1-11) esiste per impedire.
+    var _modelSel = document.getElementById('complianceModel');
+    var modelVal = (_modelSel && _modelSel.value) || '1dof';
     if (complianceOn && rpm > 0) {
-        var kTrain  = Number(document.getElementById("kTrain").value) || 5000;
-        var damping = finiteOr(document.getElementById('dampingRatio').value, 0.06);
-        var modelSel = document.getElementById('complianceModel');
-        var modelVal = modelSel ? modelSel.value : '1dof';
+        var kTrain  = numDi('kTrain');
+        var damping = numDi('dampingRatio');
         var baseParams = {
             massEqG: mEqIn, kTrainN_mm: kTrain, kSpringN_mm: springK,
             F0N: springF0, dampingRatio: damping
