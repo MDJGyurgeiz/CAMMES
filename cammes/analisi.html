@@ -2761,8 +2761,8 @@ function importIntake() {
         rawIntake = camLift.slice();                       // curva sorgente gradi-camma
         camLift = applyVirtualFollower(camLift, 'intake');
         folIntake = camLift.slice();
-        var angle = Number(document.getElementById('intakeAngle').value);
-        var clearance = Number(document.getElementById('intakeClearance').value);
+        var angle = numDi('intakeAngle');
+        var clearance = numDi('intakeClearance');
         var advIn = Number((document.getElementById('advance') || {}).value) || 0;
 
         crankIntake = mapCamToCrank(camLift, effectiveCenters(angle, angle, advIn).intake, giocoLatoCamma(clearance, 'intake'), 'intake');
@@ -2817,8 +2817,8 @@ function importExhaust() {
         rawExhaust = camLift.slice();                      // curva sorgente gradi-camma
         camLift = applyVirtualFollower(camLift, 'exhaust');
         folExhaust = camLift.slice();
-        var angle = Number(document.getElementById('exhaustAngle').value);
-        var clearance = Number(document.getElementById('exhaustClearance').value);
+        var angle = numDi('exhaustAngle');
+        var clearance = numDi('exhaustClearance');
         var advEx = Number((document.getElementById('advance') || {}).value) || 0;
 
         crankExhaust = mapCamToCrank(camLift, effectiveCenters(angle, angle, advEx).exhaust, giocoLatoCamma(clearance, 'exhaust'), 'exhaust');
@@ -2849,9 +2849,9 @@ function saveProfileToArchive() {
     var conv = ft !== 'punt';
     var hdr = '_pline', tag = '', desc = 'grezzo (puntalino)';
     if (conv) {
-        if (ft === 'bicch') { var d = Number(document.getElementById('diamBicch').value) || 0; tag = 'bicch' + d; hdr = '_pline_conv:bicch:' + d; desc = 'bicchiere \u00D8' + d; }
-        else if (ft === 'roller') { var rr = Number(document.getElementById('rRoll').value) || 0; tag = 'roll' + rr; hdr = '_pline_conv:roll:' + rr; desc = 'rullo R' + rr; }
-        else if (ft === 'finger') { var la = Number(document.getElementById('lArm').value) || 0, lv = Number(document.getElementById('lValve').value) || 0; tag = 'finger'; hdr = '_pline_conv:finger:' + la + 'x' + lv; desc = 'finger ' + la + '/' + lv; }
+        if (ft === 'bicch') { var d = numDi('diamBicch'); tag = 'bicch' + d; hdr = '_pline_conv:bicch:' + d; desc = 'bicchiere \u00D8' + d; }
+        else if (ft === 'roller') { var rr = numDi('rRoll'); tag = 'roll' + rr; hdr = '_pline_conv:roll:' + rr; desc = 'rullo R' + rr; }
+        else if (ft === 'finger') { var la = numDi('lArm'), lv = numDi('lValve'); tag = 'finger'; hdr = '_pline_conv:finger:' + la + 'x' + lv; desc = 'finger ' + la + '/' + lv; }
     }
     function nameFor(base) {
         var b = String(base || 'profilo').replace(/[^A-Za-z0-9._-]/g, '-');   // safe per il server
@@ -3736,6 +3736,27 @@ function validaCampi(gruppo) {
 
 // Lettura validata di un singolo campo. Da usare DOPO validaCampi(): qui il
 // valore e' gia' noto ammissibile, quindi il default scatta solo sul vuoto.
+// Prima di calcolare, i default DICHIARATI vengono scritti nei campi vuoti.
+//
+// Una casella vuota non deve poter significare un numero: con il regime vuoto
+// la scheda mostrava "0 N @ 0 rpm" e distacco "OK infinito / Margine: sicuro",
+// e bastava toccare k perche' il ricalcolo immediato leggesse 6000 e riscrivesse
+// le stesse celle con "1515,8 N" e "distacco 3805 rpm, margine -37%" — a campo
+// ancora vuoto. Ora il numero usato si legge nella casella.
+//
+// Tocca SOLO i campi che dichiarano un `def`. Quelli senza (rigidezza molla,
+// precarico, masse equivalenti) restano vuoti apposta: li' il vuoto significa
+// "non valutabile", ed e' un'informazione, non una mancanza.
+function applicaDefaultVisibili() {
+    Object.keys(CAMPI_NUM).forEach(function (id) {
+        var regola = CAMPI_NUM[id];
+        if (!regola || regola.def === undefined) return;
+        var el = document.getElementById(id);
+        if (!el || String(el.value).trim() !== '') return;
+        el.value = String(regola.def);
+    });
+}
+
 function numDi(id) {
     var el = document.getElementById(id);
     var r = validaNumero(el ? el.value : undefined, CAMPI_NUM[id] || {});
@@ -3999,6 +4020,10 @@ function analyze() {
         return;
     }
 
+    // I default dichiarati diventano visibili PRIMA di calcolare: cosi' il
+    // numero che il programma usa e' quello che l'operatore legge nel campo.
+    applicaDefaultVisibili();
+
     // AUDIT DATA-04 (controrevisione v3.4.1): gate UNICO di valutabilità.
     // L'analisi UFFICIALE (da cui derivano risultati, cam card, PDF, CSV) è
     // ammessa solo su profili COMPLETI e puliti — l'import diagnostico resta
@@ -4051,15 +4076,15 @@ function analyze() {
             body: 'Aspirazione misurata in senso <b>' + _mIn.verso + '</b>, scarico in senso <b>' + _mEx.verso + '</b>: i fianchi risultano specchiati tra i due lobi. Rimisura uno dei due nello stesso verso per un confronto corretto.', duration: 10000 });
     }
 
-    var intakeClear = Number(document.getElementById('intakeClearance').value);
-    var exhaustClear = Number(document.getElementById('exhaustClearance').value);
-    var intakeAng = Number(document.getElementById('intakeAngle').value);
-    var exhaustAng = Number(document.getElementById('exhaustAngle').value);
-    var adv = Number(document.getElementById('advance').value);
-    var refHeight = Number(document.getElementById('durationRef').value);
-    var rpm = Number(document.getElementById('rpmInput').value);
-    var rockerIn = Number(document.getElementById('rockerIntake').value) || 1.0;
-    var rockerEx = Number(document.getElementById('rockerExhaust').value) || 1.0;
+    var intakeClear = numDi('intakeClearance');
+    var exhaustClear = numDi('exhaustClearance');
+    var intakeAng = numDi('intakeAngle');
+    var exhaustAng = numDi('exhaustAngle');
+    var adv = numDi('advance');
+    var refHeight = numDi('durationRef');
+    var rpm = numDi('rpmInput');
+    var rockerIn = numDi('rockerIntake');
+    var rockerEx = numDi('rockerExhaust');
 
     // Rapporto di leva EFFETTIVO — UNA VOLTA SOLA (audit v3.4.3 P1-09).
     // Il convertitore "finger" restituisce gia' il moto lato VALVOLA
@@ -4126,7 +4151,7 @@ function analyze() {
         window._rockerFingerAvvisato = true;
         window.cammesToast({ kind: 'info', title: 'Rapporto di leva gia incluso',
             body: 'Con la leva a dito il rapporto &egrave; gi&agrave; dato da <b>L valvola / L camma</b> ' +
-                  '(' + (Number(document.getElementById('lValve').value) / Number(document.getElementById('lArm').value)).toFixed(2) + '). ' +
+                  '(' + (numDi('lValve') / numDi('lArm')).toFixed(2) + '). ' +
                   'Il campo <b>Bilanciere</b> non viene riapplicato: conterebbe due volte.',
             duration: 7000 });
     }
@@ -4223,7 +4248,7 @@ function analyze() {
     var overlap = intakeOpenBTC + exCloseATC;
 
     // ====== KINEMATIC ANALYSIS ======
-    var smoothW = Number(document.getElementById('smoothWindow').value) || 0;
+    var smoothW = numDi('smoothWindow');
     var sIn = smoothW > 0 ? smoothArray(anlIn, smoothW) : anlIn;
     var sEx = smoothW > 0 ? smoothArray(anlEx, smoothW) : anlEx;
     var kinIn = computeDerivatives(sIn);
@@ -4269,12 +4294,12 @@ function analyze() {
         };
         // 2-DOF e 3-DOF condividono i parametri del bilancere
         if (modelVal === '2dof' || modelVal === '3dof') {
-            baseParams.massEqIntermediateG = Number(document.getElementById('massEqIntermediate').value) || 50;
-            baseParams.kPushrodN_mm        = Number(document.getElementById('kPushrod').value) || 800;
+            baseParams.massEqIntermediateG = numDi('massEqIntermediate');
+            baseParams.kPushrodN_mm        = numDi('kPushrod');
         }
         if (modelVal === '3dof') {
-            baseParams.massSeatG = Number(document.getElementById('massSeat').value) || 15;
-            baseParams.kSeatN_mm = Number(document.getElementById('kSeat').value) || 80000;
+            baseParams.massSeatG = numDi('massSeat');
+            baseParams.kSeatN_mm = numDi('kSeat');
             valveLiftIn = simulateCompliance3DOF(anlIn, rpm, baseParams);
             baseParams.massEqG = mEqEx;
             valveLiftEx = simulateCompliance3DOF(anlEx, rpm, baseParams);
@@ -5289,10 +5314,10 @@ function runABComparison() {
         return;
     }
 
-    var angleA = Number(document.getElementById('abA_angle').value);
-    var clearA = Number(document.getElementById('abA_clear').value);
-    var angleB = Number(document.getElementById('abB_angle').value);
-    var clearB = Number(document.getElementById('abB_clear').value);
+    var angleA = numDi('abA_angle');
+    var clearA = numDi('abA_clear');
+    var angleB = numDi('abB_angle');
+    var clearB = numDi('abB_clear');
     // AUDIT APP-06: A/B usa la STESSA pipeline dell'analisi principale
     // (baseline + follower virtuale + anticipo per lobo), non più il solo
     // mapCamToCrank sul grezzo puntalino — prima confrontava curve incoerenti
