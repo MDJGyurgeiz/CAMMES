@@ -296,7 +296,7 @@
                     <span class="param-unit">&deg;</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Gioco valvola <span class="help-icon" data-tip="<strong>Gioco (lash) valvola</strong>Spazio meccanico tra fine corsa camma e valvola, a freddo. Tipicamente 0.10-0.30 mm aspirazione, 0.15-0.40 mm scarico. <b>Bicchiere idraulico</b>: 0.00 (auto-recupero). Influenza durata effettiva: pi&ugrave; gioco = durata pi&ugrave; corta.">?</span></span>
+                    <span class="param-label">Gioco valvola <span class="help-icon" data-tip="<strong>Gioco (lash) valvola</strong>Spazio meccanico tra fine corsa camma e valvola, a freddo. Il campo parte da <b>0,50 mm</b>, che &egrave; un <b>segnaposto</b>, non un valore tipico: sostituiscilo con quello della scheda del tuo motore. Valori tipici a freddo: 0,10-0,30 mm aspirazione, 0,15-0,40 mm scarico. Pesa: fra gioco 0 e 0,50 la durata misurata cambia di circa 38&deg; motore. <b>Bicchiere idraulico</b>: 0.00 (auto-recupero). Influenza durata effettiva: pi&ugrave; gioco = durata pi&ugrave; corta.">?</span></span>
                     <input type="number" id="intakeClearance" value="0.50" class="input" style="width:75px;" step="0.01">
                     <span class="param-unit">mm</span>
                 </div>
@@ -328,7 +328,7 @@
                     <span class="param-unit">&deg;</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Gioco valvola <span class="help-icon" data-tip="<strong>Gioco valvola scarico</strong>Solitamente maggiore di aspirazione (espansione termica). 0.15-0.40 mm a freddo per motori meccanici.">?</span></span>
+                    <span class="param-label">Gioco valvola <span class="help-icon" data-tip="<strong>Gioco valvola scarico</strong>Solitamente maggiore di aspirazione (espansione termica). segnaposto 0,50 mm come per l&apos;aspirazione: sostituiscilo con il valore della scheda. Tipici a freddo 0,15-0,40 mm per motori meccanici.">?</span></span>
                     <input type="number" id="exhaustClearance" value="0.50" class="input" style="width:75px;" step="0.01">
                     <span class="param-unit">mm</span>
                 </div>
@@ -1079,13 +1079,17 @@ var forceChart = null;
 // Last analysis snapshot — for CSV/PDF export
 var lastAnalysis = null;
 
-// Typology defaults (rocker ratio, default clearance, lock clearance to 0?)
+// Tipologie di punteria. Restano solo i due campi che qualcuno legge davvero:
+// `label` (schermo e PDF) e `lockClearance` (blocca il gioco a 0 sull'idraulica).
+// `rocker` e `clearance` erano i numeri che la Tipologia scriveva nei campi:
+// quel comportamento e' stato tolto, e i numeri con lui — lasciarli faceva
+// credere che governassero ancora rapporto leva e gioco.
 var TYPOLOGY = {
-    bucket_mech:    { label: 'Bicchiere meccanico', rocker: 1.00, clearance: 0.30, lockClearance: false },
-    bucket_hyd:     { label: 'Bicchiere idraulico', rocker: 1.00, clearance: 0.00, lockClearance: true  },
-    rocker_pushrod: { label: 'Aste + bilancere',    rocker: 1.60, clearance: 0.30, lockClearance: false },
-    finger:         { label: 'Finger follower',     rocker: 1.50, clearance: 0.20, lockClearance: false },
-    roller:         { label: 'Bilancere a rullo',   rocker: 1.50, clearance: 0.15, lockClearance: false }
+    bucket_mech:    { label: 'Bicchiere meccanico', lockClearance: false },
+    bucket_hyd:     { label: 'Bicchiere idraulico', lockClearance: true  },
+    rocker_pushrod: { label: 'Aste + bilancere', lockClearance: false },
+    finger:         { label: 'Finger follower', lockClearance: false },
+    roller:         { label: 'Bilancere a rullo', lockClearance: false }
 };
 
 // =============================================================
@@ -3276,6 +3280,34 @@ function smarcaCampiMolla() {
     aggiornaMarcaturaEsempio();
 }
 
+// Smarca TUTTI i campi che il programma non puo' indovinare, non solo la
+// molla. Serve al Reset: riportare un campo al valore di partenza e lasciarlo
+// "confermato" significa presentare come dichiarazione dell'operatore un
+// numero che l'operatore non ha mai dichiarato. Il flag lo mette solo il
+// listener sull'input, e assegnare .value non emette eventi: senza questa
+// funzione il Reset lasciava gli angoli lobo senza bordo tratteggiato e senza
+// nota, mentre LSA, centri lobo, incrocio e alzata al PMS ne discendono.
+function smarcaCampiDichiarati() {
+    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA).forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) delete el.dataset.confermato;
+    });
+    aggiornaMarcaturaEsempio();
+}
+
+// Riporta ogni campo numerico al valore dichiarato nello schema. Il Reset
+// teneva una terza copia dei valori scritta a mano, ed e' cosi' che i numeri
+// hanno potuto divergere: angolo lobo 100 nella pagina e nel Reset, 106 nello
+// schema; gioco 0,50 nei primi due e 0 nel terzo.
+function ripristinaDefaultDichiarati() {
+    Object.keys(CAMPI_NUM).forEach(function (id) {
+        var regola = CAMPI_NUM[id];
+        if (!regola || regola.def === undefined) return;
+        var el = document.getElementById(id);
+        if (el) el.value = String(regola.def);
+    });
+}
+
 function aggiornaMarcaturaEsempio() {
     // Il bordo tratteggiato copre TUTTI i campi che il programma non puo'
     // indovinare, non solo molla e masse: cerchio base, diametro bicchiere,
@@ -3617,13 +3649,13 @@ var CAMPI_NUM = {
     lValve:           { min: 0, minEsclusivo: true, def: 30, etichetta: 'Braccio lato valvola' },
     rockerIntake:     { min: 0, minEsclusivo: true, def: 1.0, etichetta: 'Bilanciere aspirazione' },
     rockerExhaust:    { min: 0, minEsclusivo: true, def: 1.0, etichetta: 'Bilanciere scarico' },
-    intakeClearance:  { min: 0, def: 0, etichetta: 'Gioco aspirazione' },      // 0 = idraulico
-    exhaustClearance: { min: 0, def: 0, etichetta: 'Gioco scarico' },
-    intakeAngle:      { def: 106, etichetta: 'Angolo lobo aspirazione' },      // segno libero
-    exhaustAngle:     { def: 106, etichetta: 'Angolo lobo scarico' },
+    intakeClearance:  { min: 0, def: 0.50, etichetta: 'Gioco aspirazione' },      // 0 = idraulico
+    exhaustClearance: { min: 0, def: 0.50, etichetta: 'Gioco scarico' },
+    intakeAngle:      { def: 100, etichetta: 'Angolo lobo aspirazione' },      // segno libero
+    exhaustAngle:     { def: 100, etichetta: 'Angolo lobo scarico' },
     advance:          { def: 0, etichetta: 'Anticipo' },                       // negativo lecito
     durationRef:      { min: 0, minEsclusivo: true, def: 1, etichetta: 'Riferimento durata' },
-    smoothWindow:     { min: 0, def: 0, etichetta: 'Finestra smoothing' },
+    smoothWindow:     { min: 0, def: 5, etichetta: 'Finestra smoothing' },
     // --- dinamica ---
     rpmInput:         { min: 0, minEsclusivo: true, def: 6000, avvisoSopra: 15000, etichetta: 'Regime' },
     // I quattro campi molla/massa NON bloccano l'analisi: se mancano o non
@@ -3642,10 +3674,10 @@ var CAMPI_NUM = {
     massSeat:         { min: 0, minEsclusivo: true, def: 15, etichetta: 'Massa sede' },
     kSeat:            { min: 0, minEsclusivo: true, def: 80000, etichetta: 'Rigidezza sede' },
     // --- confronto A/B ---
-    abA_angle:        { def: 106, etichetta: 'Angolo lobo A' },
-    abA_clear:        { min: 0, def: 0, etichetta: 'Gioco A' },
-    abB_angle:        { def: 106, etichetta: 'Angolo lobo B' },
-    abB_clear:        { min: 0, def: 0, etichetta: 'Gioco B' }
+    abA_angle:        { def: 100, etichetta: 'Angolo lobo A' },
+    abA_clear:        { min: 0, def: 0.50, etichetta: 'Gioco A' },
+    abB_angle:        { def: 100, etichetta: 'Angolo lobo B' },
+    abB_clear:        { min: 0, def: 0.50, etichetta: 'Gioco B' }
 };
 
 // Campi che servono davvero, dato il follower e il modello scelti: validare
@@ -6556,16 +6588,7 @@ function resetAll() {
     var mc = document.getElementById('mechAnimCard'); if (mc) mc.style.display = 'none';
     document.getElementById('fileIntake').value = '';
     document.getElementById('fileExhaust').value = '';
-    document.getElementById('intakeAngle').value = '100';
-    document.getElementById('exhaustAngle').value = '100';
-    document.getElementById('intakeClearance').value = '0.50';
-    document.getElementById('exhaustClearance').value = '0.50';
-    document.getElementById('advance').value = '0';
-    document.getElementById('durationRef').value = '1.0';
-    document.getElementById('rpmInput').value = '6000';
-    document.getElementById('rockerIntake').value = '1.00';
-    document.getElementById('rockerExhaust').value = '1.00';
-    document.getElementById('smoothWindow').value = '5';
+    ripristinaDefaultDichiarati();   // dallo schema, non da una terza copia
     document.getElementById('intakeType').value = 'bucket_mech';
     document.getElementById('exhaustType').value = 'bucket_mech';
     document.getElementById('intakeClearance').disabled = false;
@@ -6574,7 +6597,9 @@ function resetAll() {
     document.getElementById('springPreload').value = '200';
     document.getElementById('massEqIntake').value = '100';
     document.getElementById('massEqExhaust').value = '100';
-    smarcaCampiMolla();   // tornati ai valori di esempio: vanno ri-confermati
+    smarcaCampiDichiarati();   // tornati ai valori di partenza: vanno ri-confermati
+    // (anche angoli lobo e geometria, non solo la molla: erano gli unici a
+    //  restare "confermati" pur essendo tornati a un numero non dichiarato)
 
     if (timingChartInstance) { timingChartInstance.destroy(); timingChartInstance = null; }
     if (velocityChart) { velocityChart.destroy(); velocityChart = null; }

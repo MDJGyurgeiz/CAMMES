@@ -108,7 +108,14 @@ var ctx = {
     abChart: { distrutto: false, destroy: function () { this.distrutto = true; } },
     _mechAnimator: null, _sweep3d: null, _job: null,
     initArrays: function () {}, updateChart: function () {},
-    smarcaCampiMolla: function () {}, annullaJob: function () { return false; },
+    smarcaCampiMolla: function () {},
+    // Il Reset ora riporta i campi ai valori dello SCHEMA e smarca tutti i
+    // campi dichiarati (non solo la molla): qui si registra che li chiami,
+    // cosi' se un domani sparissero dal Reset questo test lo direbbe.
+    smarcaCampiDichiarati: function () { ctx._smarcati = true; },
+    ripristinaDefaultDichiarati: function () { ctx._ripristinati = true; },
+    _smarcati: false, _ripristinati: false,
+    annullaJob: function () { return false; },
     mostraAvanzamento: function () {}, abilitaStrumentiRace: function () {},
     liveRetuneForces: function () {}
 };
@@ -146,6 +153,11 @@ check('il contesto forze cacheato viene scartato', ctx.window.lastForceContext =
     String(ctx.window.lastForceContext));
 check('nessun debounce sopravvive al Reset', armati().length === 0, armati().length + ' timer ancora armati');
 check('lastAnalysis azzerato (non regressione)', ctx.lastAnalysis === null);
+// Il Reset riportava i campi ai valori di partenza tenendone una copia scritta
+// a mano, e smarcava solo la molla: gli angoli lobo tornavano a un numero che
+// nessuno aveva dichiarato restando "confermati".
+check('il Reset ripristina i campi dallo schema', ctx._ripristinati === true);
+check('e smarca TUTTI i campi dichiarati, non solo la molla', ctx._smarcati === true);
 
 console.log('--- non regressione ---');
 // L'audit suggeriva di azzerare "ogni riferimento chart globale": il grafico

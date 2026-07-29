@@ -120,7 +120,7 @@ Scarica `cammes.exe` dall'ultima **GitHub Release** e avvialo: **un solo file, a
 cd cammes
 npm install
 npm start          :: server su :3000 + WS :8080
-npm test           :: 39 suite di regressione/validazione (il totale dei check lo stampa la suite)
+npm test           :: 40 suite di regressione/validazione (il totale dei check lo stampa la suite)
 npm run lint       :: eslint su server + moduli + tools
 npm run build      :: genera cammes.exe (pkg, node18-win-x64)
 ```
