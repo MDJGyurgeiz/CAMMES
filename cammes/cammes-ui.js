@@ -256,6 +256,17 @@
   }
 
   // -------- SCAN PROGRESS BAR --------------------------------------------
+  // Formattazione UNICA di una durata stimata. Prima ogni punto la scriveva
+  // a modo suo: la stessa scansione risultava '~45s' nella tendina, '~50s'
+  // sulla barra e '~1m' nel toast.
+  function formattaDurata(sec) {
+    if (sec == null || !isFinite(sec)) return '';
+    if (sec < 60) return '~' + Math.ceil(sec) + 's';
+    var m = Math.floor(sec / 60), s = Math.round(sec % 60);
+    return '~' + m + 'm' + (s ? ' ' + s + 's' : '');
+  }
+  window.cammesDurata = formattaDurata;
+
   function setScanProgress(current, total, etaSec) {
     const fill = document.getElementById('scan-progress-fill');
     const pct  = document.getElementById('scan-progress-pct');
@@ -266,11 +277,7 @@
     const p = Math.max(0, Math.min(100, total > 0 ? (current / total) * 100 : 0));
     fill.style.width = p.toFixed(1) + '%';
     pct.textContent = p.toFixed(0) + '%';
-    if (eta) {
-      if (etaSec == null || !isFinite(etaSec)) eta.textContent = '';
-      else if (etaSec < 60) eta.textContent = '~' + Math.ceil(etaSec) + 's';
-      else eta.textContent = '~' + Math.floor(etaSec / 60) + 'm ' + Math.round(etaSec % 60) + 's';
-    }
+    if (eta) eta.textContent = formattaDurata(etaSec);
   }
   function resetScanProgress() {
     setScanProgress(0, 1, null);
@@ -694,7 +701,7 @@
       { sel: '#concert-toggle', title: 'Concerto col motore', body: 'Un extra: fai &ldquo;suonare&rdquo; lo stepper con brani famosi. 🎵' }
     ],
     alzata: [
-      { sel: '#scanMode',  title: 'Modalità scansione', body: 'Scegli tra <b>Veloce</b> (~45 s, uso normale), <b>Precisione</b> (media 3 letture) e <b>Race</b> (risoluzione 0,5°). Il tempo stimato è indicato.' },
+      { sel: '#scanMode',  title: 'Modalità scansione', body: 'Scegli tra <b>Veloce</b> (uso normale), <b>Precisione</b> (media 3 letture) e <b>Race</b> (risoluzione 0,5°). Il tempo stimato lo scrive la tendina stessa, accanto a ogni modalità.' },
       { sel: '#scanAdvBtn', title: 'Impostazioni avanzate', body: 'Apre gli strumenti di controllo qualità: <b>Ripetizioni</b> (misura la ripetibilità del banco con N scansioni di fila) e <b>Verifica banco</b> (test periodico con un cilindro rettificato). Per l\'uso normale non servono.' },
       { sel: 'button[onclick^="start"]', title: 'Avvia', body: 'START esegue una scansione completa 360° del profilo di alzata.' },
       { sel: '#msBtn',     title: 'Zero virtuale', body: 'Porta in automatico il picco di alzata a un riferimento fisso (+180°), così alberi montati diversamente restano confrontabili.' },

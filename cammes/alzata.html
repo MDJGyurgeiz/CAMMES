@@ -85,9 +85,11 @@
             <div class="controls-group">
                 <span class="toggle-label">Modalit&agrave;</span>
                 <select id="scanMode" class="input" style="width:230px;" onchange="onScanModeChange();" data-tip="<strong>Modalit&agrave; di scansione</strong>Definisce densit&agrave; di campionamento, settle delay e numero di campioni per ogni grado camma. Al banco (07-11) le tre modalit&agrave; danno la stessa curva entro 0,05 mm RMS: Veloce basta quasi sempre.">
-                    <option value="fast" selected>Veloce &middot; ~45s &middot; 1&deg;</option>
-                    <option value="std">Precisione &middot; ~2m15s &middot; 1&deg;, media 3 letture</option>
-                    <option value="race">Race &middot; ~4m40s &middot; 0.5&deg;, media 3 letture</option>
+                    <!-- Le etichette le scrive popolaModalita() da SCAN_MODES: qui
+                         restano solo i valori, cosi' la durata non si puo' ricopiare -->
+                    <option value="fast" selected>Veloce</option>
+                    <option value="std">Precisione</option>
+                    <option value="race">Race</option>
                 </select>
                 <span class="help-icon" data-tip="<strong>Quale scegliere?</strong><b>Veloce</b>: uso normale, validata al banco (identica alle altre entro 0,05 mm RMS). <b>Precisione</b>: media 3 letture per grado, per ambienti con vibrazioni. <b>Race</b>: risoluzione 0,5&deg; per fianchi molto ripidi di camme spinte. Le vecchie Ultra/Hyper/Atomic sono state ritirate: al banco non miglioravano nulla (Ultra) o non erano supportate dal passo minimo del firmware (Hyper/Atomic, r4/r1 rifiutati)." tabindex="0">?</span>
             </div>
@@ -355,12 +357,42 @@ var SCAN_MODES = {
     // fast/std/race/ultra identiche entro 0,05 mm RMS (= ripetibilità run-to-run),
     // quindi Ultra non aggiungeva nulla; Hyper (r4) e Atomic (r1) chiedevano passi
     // che il firmware rifiuta (minimo r8) → giravano con il passo precedente
-    // percorrendo più giri per scansione. Tempi misurati: 44s / 135s / 276s.
+    // percorrendo più giri per scansione.
+    // Tempi MISURATI al banco: 44s / 135s / 276s. `timeSec` e' quel tempo
+    // arrotondato per eccesso (50 / 140 / 280): il margine copre settle delay e
+    // latenza seriale, che variano. E' l'unico numero mostrato all'operatore —
+    // tendina, barra, toast e confirm lo prendono tutti da qui.
     fast:   { samples: 1, microsteps: 32, totalSteps: 360,   subStepsPerDeg: 1,  settleMs: 30,  label: 'Veloce',     timeSec: 50   },
     std:    { samples: 3, microsteps: 32, totalSteps: 360,   subStepsPerDeg: 1,  settleMs: 50,  label: 'Precisione', timeSec: 140  },
     race:   { samples: 3, microsteps: 16, totalSteps: 720,   subStepsPerDeg: 2,  settleMs: 80,  label: 'Race',       timeSec: 280  }
 };
 var currentMode = SCAN_MODES.fast;
+
+// Un solo numero per modalita' (timeSec) e un solo formattatore
+// (window.cammesDurata). Prima la stessa stima era ricopiata a mano in cinque
+// punti con tre formattazioni diverse: per la Veloce l'operatore leggeva ~45s
+// nella tendina, ~50s sulla barra di avanzamento, ~1m nel toast dopo START e
+// ~45 s nel confirm della verifica banco.
+function etaModalita(m) {
+    return window.cammesDurata ? window.cammesDurata(m.timeSec) : ("~" + m.timeSec + "s");
+}
+// Anche la densita' si descrive dai parametri veri, invece di ripeterli:
+// il passo e' 1/subStepsPerDeg gradi, la media c'e' se samples > 1.
+function descriviModalita(m) {
+    var passo = 1 / m.subStepsPerDeg;
+    var s = m.label + " \u00b7 " + etaModalita(m) + " \u00b7 " +
+            String(passo).replace(".", ",") + "\u00b0";
+    if (m.samples > 1) s += ", media " + m.samples + " letture";
+    return s;
+}
+function popolaModalita() {
+    var sel = document.getElementById("scanMode");
+    if (!sel) return;
+    Array.prototype.forEach.call(sel.options, function (o) {
+        var m = SCAN_MODES[o.value];
+        if (m) o.textContent = descriviModalita(m);
+    });
+}
 // Buffer di accumulo per modalità ad alta densità (chiave = grado camma 1..360)
 var subBuffer = {};
 // ETA tracker condiviso fra start() / ms() / stop()
@@ -1277,7 +1309,7 @@ function _startSingleRun(firstRun) {
     if (window.cammesToast) {
         var runLabel = repeatRunsTarget > 1
             ? 'Run ' + (repeatRunsDone + 1) + '/' + repeatRunsTarget + ' &middot; ' + currentMode.label
-            : 'Modalit&agrave; ' + currentMode.label + ' &middot; ~' + Math.round(currentMode.timeSec/60) + 'm';
+            : 'Modalit&agrave; ' + currentMode.label + ' &middot; ' + etaModalita(currentMode);
         window.cammesToast({
             kind: 'info',
             title: firstRun ? 'Scansione avviata' : 'Prossimo run avviato',
@@ -1297,7 +1329,7 @@ function benchVerifyStart() {
         if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Scansione in corso', body: 'Aspetta la fine (o premi STOP) prima della verifica banco.', duration: 4000 });
         return;
     }
-    if (!confirm('VERIFICA BANCO\n\n1. Monta un pezzo CILINDRICO rettificato (no camma)\n2. Porta il tastatore a contatto e AZZERA il comparatore\n\nParte una scansione Veloce (~45 s). Procedere?')) return;
+    if (!confirm('VERIFICA BANCO\n\n1. Monta un pezzo CILINDRICO rettificato (no camma)\n2. Porta il tastatore a contatto e AZZERA il comparatore\n\nParte una scansione ' + SCAN_MODES.fast.label + ' (' + etaModalita(SCAN_MODES.fast) + '). Procedere?')) return;
     var sm = document.getElementById('scanMode');
     if (sm) { sm.value = 'fast'; if (typeof onScanModeChange === 'function') onScanModeChange(); }
     window._benchVerify = true;
@@ -1440,6 +1472,9 @@ document.addEventListener('cammes:theme:change', refreshAlzColors);
 window.onload = function() {
     var ctx = document.getElementById('grafico').getContext('2d');
     window.myLine = new Chart(ctx, config);
+    // Le etichette della tendina si scrivono da SCAN_MODES: erano l'unico punto
+    // in cui la durata restava un testo fisso nell'HTML.
+    if (typeof popolaModalita === 'function') popolaModalita();
 };
 </script>
 
