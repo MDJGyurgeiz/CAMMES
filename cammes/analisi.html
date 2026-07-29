@@ -3210,6 +3210,14 @@ var MIN_CAMPO_MOLLA = { springK: 0.0001, springPreload: 0, massEqIntake: 0.0001,
 // =============================================================
 var CAMPI_GEOMETRIA = ['diamBase', 'diamBaseExhaust', 'diamBicch'];   // misure su camma e attrezzo
 var CAMPI_FASATURA  = ['intakeAngle', 'exhaustAngle'];          // dichiarazioni dell'operatore
+// Col follower a LEVA i due bracci contano solo come RAPPORTO (verificato:
+// 25/30, 50/60, 10/12 e 5/6 danno la stessa identica curva). Nascono a 25 e 30,
+// cioe' un rapporto 1,20 che nessuno ha dichiarato e che moltiplica TUTTE le
+// alzate mostrate: va confermato come il diametro del bicchiere.
+var CAMPI_LEVA      = ['lArm', 'lValve'];
+// Rigidezza del treno e smorzamento governano la compliance e TUTTI gli
+// strumenti Race. Sono valori di classe, non misure di questo motore.
+var CAMPI_TRENO     = ['kTrain', 'dampingRatio'];
 var MIN_CAMPO_ALTRI = {
     diamBase: 0.0001, diamBaseExhaust: 0.0001, diamBicch: 0.0001
     // gli angoli lobo non hanno minimo: qualunque valore finito e' lecito
@@ -3225,8 +3233,16 @@ function campiDaConfermare() {
     var l = CAMPI_MOLLA.concat(CAMPI_FASATURA);
     if (geometriaRilevante()) {
         l = l.concat(['diamBase', 'diamBaseExhaust']);
-        if ((document.getElementById('followerType') || {}).value === 'bicch') l.push('diamBicch');
+        var ft = (document.getElementById('followerType') || {}).value;
+        if (ft === 'bicch') l.push('diamBicch');
+        if (ft === 'finger') l = l.concat(CAMPI_LEVA);   // contano come rapporto
     }
+    // Rigidezza treno e smorzamento entrano quando qualcuno li usa davvero:
+    // la compliance dell'analisi, oppure gli strumenti Race, che li leggono a
+    // prescindere da complianceEnabled.
+    var cEn = document.getElementById('complianceEnabled');
+    var moduli = (function () { try { return JSON.parse(localStorage.getItem(MODULES_KEY)) || {}; } catch (e) { return {}; } })();
+    if ((cEn && cEn.value === '1') || moduli.race) l = l.concat(CAMPI_TRENO);
     return l.filter(function (id) { return document.getElementById(id); });
 }
 function fasaturaConfermata() { return CAMPI_FASATURA.every(campoEConfermato); }
@@ -3318,7 +3334,7 @@ function smarcaCampiMolla() {
 // funzione il Reset lasciava gli angoli lobo senza bordo tratteggiato e senza
 // nota, mentre LSA, centri lobo, incrocio e alzata al PMS ne discendono.
 function smarcaCampiDichiarati() {
-    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA).forEach(function (id) {
+    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA, CAMPI_LEVA, CAMPI_TRENO).forEach(function (id) {
         var el = document.getElementById(id);
         if (el) delete el.dataset.confermato;
     });
@@ -3345,7 +3361,7 @@ function aggiornaMarcaturaEsempio() {
     // puntalino) viene togliata: segnalare un campo che non entra in nessun
     // calcolo e' rumore.
     var daConfermare = campiDaConfermare();
-    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA).forEach(function (id) {
+    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA, CAMPI_LEVA, CAMPI_TRENO).forEach(function (id) {
         var el = document.getElementById(id);
         if (!el) return;
         var serve = daConfermare.indexOf(id) >= 0;
@@ -3368,7 +3384,9 @@ function descriviCampiDaConfermare(mancanti) {
         massEqIntake: 'massa equivalente asp.', massEqExhaust: 'massa equivalente scar.',
         diamBase: '\u00d8 cerchio base asp.', diamBaseExhaust: '\u00d8 cerchio base scar.',
         diamBicch: 'diametro bicchiere',
-        intakeAngle: 'angolo lobo asp.', exhaustAngle: 'angolo lobo scar.'
+        intakeAngle: 'angolo lobo asp.', exhaustAngle: 'angolo lobo scar.',
+        lArm: 'L braccio camma', lValve: 'L braccio valvola',
+        kTrain: 'rigidezza treno', dampingRatio: 'smorzamento'
     };
     var nomi = mancanti.map(function (id) { return ETICHETTE[id] || id; });
     var conseguenze = [];
@@ -3376,6 +3394,10 @@ function descriviCampiDaConfermare(mancanti) {
         conseguenze.push('il limite di distacco resta <b>non valutabile</b>');
     if (mancanti.some(function (id) { return CAMPI_GEOMETRIA.indexOf(id) >= 0; }))
         conseguenze.push('la conversione del follower usa un raggio base <b>non confermato</b>');
+    if (mancanti.some(function (id) { return CAMPI_LEVA.indexOf(id) >= 0; }))
+        conseguenze.push('il rapporto della leva moltiplica <b>tutte le alzate</b>');
+    if (mancanti.some(function (id) { return CAMPI_TRENO.indexOf(id) >= 0; }))
+        conseguenze.push('compliance e strumenti Race girano su valori <b>di classe</b>, non del tuo motore');
     if (mancanti.some(function (id) { return CAMPI_FASATURA.indexOf(id) >= 0; }))
         conseguenze.push('LSA, centri lobo, incrocio e alzata al PMS restano <b>dichiarati</b>, non misurati');
     return '&#9888; Da confermare (bordo tratteggiato): <b>' + nomi.join('</b>, <b>') + '</b>. ' +
@@ -3886,7 +3908,7 @@ function initLiveTuning() {
     // molla e masse: cerchio base, diametro bicchiere, angoli lobo. La
     // marcatura si aggiorna anche quando cambia il follower, perche' cambia
     // QUALI campi servono.
-    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA).forEach(function (id) {
+    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA, CAMPI_LEVA, CAMPI_TRENO).forEach(function (id) {
         var el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('input', function () {
