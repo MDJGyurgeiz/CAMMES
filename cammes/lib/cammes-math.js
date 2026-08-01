@@ -1187,6 +1187,69 @@ function fmtResiduo(v, tol) {
     return s;
 }
 
+// =============================================================
+// DERIVATE NEL DOMINIO CAMMA — perche' non si deriva un interpolato
+// =============================================================
+// L'accelerazione mostrata dal programma non era convergente: cambiava di 1,4
+// volte fra finestra di lisciatura 5 e 11 punti, e di 2,4 volte senza
+// lisciatura. Da lei dipendono "Acc. max", "Jerk max", la forza d'inerzia, il
+// "Margine" e il "Distacco valvola".
+//
+// LA CAUSA NON SONO I DATI. Prova: un lobo SINTETICO perfettamente liscio (una
+// cosinusoide, di cui la derivata seconda si conosce in forma chiusa), senza
+// rumore e senza quantizzazione, fatto passare dalla sola mapCamToCrank e poi
+// derivato con differenze centrali da':
+//     slot PARI    -> esattamente 2 volte il valore analitico
+//     slot DISPARI -> esattamente ZERO
+// Un dente di sega perfetto. E' l'INTERPOLAZIONE LINEARE: un interpolante
+// lineare a tratti ha curvatura nulla dentro ogni segmento e tutta la curvatura
+// concentrata nei nodi. Poiche' la mappatura campiona a mezzo grado camma, un
+// campione su due cade su un nodo e uno su un punto medio.
+//
+// Non e' un problema che si risolve con un filtro di derivazione migliore (i
+// coefficienti Savitzky-Golay di derivata mediano il dente di sega, non lo
+// tolgono): misurato sullo stesso lobo, non lisciato, il picco resta 2,000
+// volte l'analitico col lineare, 1,125 con un'interpolazione cubica
+// Catmull-Rom, e 0,9999 derivando nel DOMINIO CAMMA.
+//
+// Quindi si deriva dove i campioni sono VERI — un grado camma — e si converte:
+// un grado camma vale due gradi manovella, quindi la derivata di ordine n si
+// divide per 2^n. Nessun interpolante viene mai derivato.
+function derivateDominioCamma(camValve) {
+    var vel = new Array(361), acc = new Array(361), jerk = new Array(361);
+    function a(i) { return camValve[((i - 1) % 360 + 360) % 360 + 1] || 0; }
+    for (var d = 1; d <= 360; d++) {
+        // differenze centrali sul passo di 1 grado CAMMA, poi /2^n per passare
+        // ai gradi MANOVELLA (2 gradi motore per grado camma)
+        vel[d]  = (a(d + 1) - a(d - 1)) / 2 / 2;
+        acc[d]  = (a(d + 1) - 2 * a(d) + a(d - 1)) / 4;
+        jerk[d] = ((a(d + 2) - 2 * a(d + 1) + 2 * a(d - 1) - a(d - 2)) / 2) / 8;
+    }
+    return { vel: vel, acc: acc, jerk: jerk };
+}
+
+// Riporta un array in gradi CAMMA sull'asse manovella 1..720, con la STESSA
+// geometria di mapCamToCrank (stesso ancoraggio al picco, stesso centro).
+// Serve per le derivate: si calcolano dove i campioni sono veri e si
+// RICAMPIONANO qui. Ricampionare una derivata gia' calcolata non introduce il
+// dente di sega — quello nasce solo se si DERIVA l'interpolato.
+function mapDerivataCamToCrank(camArr, camLift, centerDeg, type) {
+    var out = new Array(722);
+    for (var j = 0; j <= 721; j++) out[j] = 0;
+    var dPk = camPeakPos(camLift);
+    var pCenter = (type === 'intake') ? 360 + Number(centerDeg) : 360 - Number(centerDeg);
+    for (var p = 1; p <= 720; p++) {
+        var d = dPk + (p - pCenter) / 2;
+        d = ((d - 1) % 360 + 360) % 360 + 1;
+        var d0 = Math.floor(d), fr = d - d0;
+        var v0 = camArr[d0] || 0;
+        if (fr < 1e-9) { out[p] = v0; continue; }
+        var d1 = (d0 % 360) + 1;
+        out[p] = v0 * (1 - fr) + (camArr[d1] || 0) * fr;
+    }
+    return out;
+}
+
 function mapCamToCrank(camLift, centerDeg, clearance, type) {
     var crank = new Array(722);
     for (var j = 0; j <= 721; j++) crank[j] = 0;
@@ -1244,6 +1307,32 @@ function parseCamFile(text) {
     for (var r = 0; r < righe.length; r++) {
         var line = righe[r].trim();
         if (!line) continue;
+        // Excel duplica la colonna quando si salva un CSV da un foglio con piu'
+        // colonne: le righe escono come "1,0;;;;;;1,0" e i metadati come
+        // "#fw=4.1;;;;;;#fw=4.1". Con la vecchia lettura ogni riga finiva
+        // invalida (grado "1.0", alzata "") e un file di 360 punti veniva
+        // rifiutato per intero — capitato sul primo scarico della Peugeot 106.
+        // Si collassa SOLO quando i campi non vuoti sono tutti IDENTICI: e' la
+        // firma della duplicazione, e non tocca il CSV italiano "1;0,5", dove i
+        // campi sono diversi ed e' il ';' a separare grado e alzata.
+        if (line.indexOf(';') !== -1) {
+            var campi = line.split(';').filter(function (s) { return s.trim() !== ''; });
+            var collassa = false;
+            if (campi.length > 1) {
+                // stessa cosa ripetuta N volte = duplicazione di colonna
+                collassa = true;
+                for (var cu = 1; cu < campi.length; cu++) {
+                    if (campi[cu].trim() !== campi[0].trim()) { collassa = false; break; }
+                }
+            } else if (campi.length === 1 && campi[0].indexOf(',') !== -1) {
+                // un solo campo, e contiene gia' la coppia "grado,alzata": i ';'
+                // sono riempimento. NON vale per "42;", dove il campo unico non
+                // e' una coppia: quella riga deve restare INVALIDA (audit
+                // DATA-02, un token vuoto non e' uno zero).
+                collassa = true;
+            }
+            if (collassa) line = campi[0].trim();
+        }
         if (line.charAt(0) === '#') {                       // metadato "#chiave=valore"
             var eq = line.indexOf('=');
             if (eq > 1) meta[line.substring(1, eq).trim()] = line.substring(eq + 1).trim();
@@ -1553,6 +1642,8 @@ var api = {
     convertPuntToRoller: convertPuntToRoller,
     convertPuntToFinger: convertPuntToFinger,
     mapCamToCrank: mapCamToCrank,
+    derivateDominioCamma: derivateDominioCamma,
+    mapDerivataCamToCrank: mapDerivataCamToCrank,
     camPeakPos: camPeakPos,
     findEvents: findEvents,
     effectiveCenters: effectiveCenters,

@@ -35,6 +35,29 @@ check('"43,1.5" nello stesso file resta valido', p1.covered[43] === true && Numb
 var p2 = M.parseCamFile('_pline\r\n42;\r\n');
 check('"42;" -> riga invalida, non zero', p2.covered[42] === false && p2.invalidRows >= 1);
 
+// --- CSV salvato da Excel: colonne duplicate con ';' di riempimento ---
+//  Capitato sul primo scarico della Peugeot 106 (2026-07-29): salvando da un
+//  foglio con piu' colonne, Excel scrive "1,0;;;;;;1,0" e "#fw=4.1;;;;;;#fw=4.1".
+//  Il parser spezzava sui ';', leggeva grado "1.0" e alzata "", e dichiarava
+//  invalide TUTTE le 360 righe: un file buono veniva rifiutato per intero.
+var pEx = M.parseCamFile('scar 106;;;;;;scar 106\r\n_pline;;;;;;_pline\r\n' +
+    '1,0;;;;;;1,0\r\n2,0.01;;;;;;2,0.01\r\n179,10.67;;;;;;179,10.67\r\n' +
+    '#fw=4.1;;;;;;#fw=4.1\r\n');
+check('CSV con colonne duplicate da Excel: le righe si leggono',
+    pEx.covered[1] === true && pEx.covered[2] === true && pEx.covered[179] === true,
+    'validCount=' + pEx.validCount);
+check('e i valori sono quelli giusti, non la colonna ripetuta',
+    Number(pEx[2]) === 0.01 && Number(pEx[179]) === 10.67,
+    'grado2=' + pEx[2] + ' grado179=' + pEx[179]);
+check('anche i metadati si leggono senza la coda duplicata',
+    pEx.meta && pEx.meta.fw === '4.1', 'fw=' + (pEx.meta && pEx.meta.fw));
+// ...senza rompere il CSV italiano, dove il ';' separa DAVVERO grado e alzata
+var pIt = M.parseCamFile('_pline\r\n42;0,5\r\n43;1,25\r\n');
+check('CSV italiano "42;0,5" resta letto come grado 42 alzata 0,5',
+    pIt.covered[42] === true && Number(pIt[42]) === 0.5, 'valore=' + pIt[42]);
+check('e "43;1,25" come grado 43 alzata 1,25',
+    Number(pIt[43]) === 1.25, 'valore=' + pIt[43]);
+
 // --- whitespace e testo ---
 var p3 = M.parseCamFile('_pline\r\n42,   \r\n50,abc\r\n51,1.0\r\n');
 check('"42,   " (spazi) -> invalida', p3.covered[42] === false);

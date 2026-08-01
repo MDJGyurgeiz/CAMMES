@@ -2763,7 +2763,13 @@ function importIntake() {
     var nom = input.files[0].name.split('.');
     var nomes = nom[0].split('_');
     var tfile = nomes[nomes.length - 1];
-    if (tfile != "alz") { alert('Tipologia file non valida - richiesto file _alz'); return; }
+    // Il nome e' un INDIZIO, non la misura. Prima un file senza suffisso _alz
+    // veniva respinto qui, senza nemmeno aprirlo: i due file della Peugeot 106
+    // uscivano dal banco corretti e non erano importabili. A decidere e' il
+    // contenuto, che il parser sa gia' giudicare (sotto 30 righe valide
+    // rifiuta, poco piu' avanti). Se il nome non segue la convenzione lo si
+    // dice, e si va avanti.
+    var nomeFuoriConvenzione = (tfile != "alz");
 
     var file = input.files[0];
     var fr = new FileReader();
@@ -2793,6 +2799,12 @@ function importIntake() {
         // così "Salva profilo" può scrivere un incompleto in modo onesto.
         window._metaIn.covered = camLift.covered;
         window._metaIn.validCount = camLift.validCount;
+        if (nomeFuoriConvenzione && window.cammesToast) {
+            window.cammesToast({ kind: 'info', title: 'Nome fuori convenzione',
+                body: 'Il file non finisce con <b>_alz</b>, ma il contenuto &egrave; una misura valida (' +
+                      camLift.validCount + ' punti) ed &egrave; stato caricato come <b>aspirazione</b>.',
+                duration: 6000 });
+        }
         window._metaIn.missingCount = camLift.missingCount || 0;
         window._metaIn.incomplete = (camLift.missingCount || 0) > 0;
         window._metaIn.parseOk = camLift.ok;                       // DATA-04: per il gate
@@ -2827,7 +2839,13 @@ function importExhaust() {
     var nom = input.files[0].name.split('.');
     var nomes = nom[0].split('_');
     var tfile = nomes[nomes.length - 1];
-    if (tfile != "alz") { alert('Tipologia file non valida - richiesto file _alz'); return; }
+    // Il nome e' un INDIZIO, non la misura. Prima un file senza suffisso _alz
+    // veniva respinto qui, senza nemmeno aprirlo: i due file della Peugeot 106
+    // uscivano dal banco corretti e non erano importabili. A decidere e' il
+    // contenuto, che il parser sa gia' giudicare (sotto 30 righe valide
+    // rifiuta, poco piu' avanti). Se il nome non segue la convenzione lo si
+    // dice, e si va avanti.
+    var nomeFuoriConvenzione = (tfile != "alz");
 
     var file = input.files[0];
     var fr = new FileReader();
@@ -2849,6 +2867,12 @@ function importExhaust() {
         window._metaEx.converted = _convEx || false;       // provenienza PER-LATO (audit APP-07)
         window._metaEx.covered = camLift.covered;          // AUDIT DATA-01: maschera per il salvataggio onesto
         window._metaEx.validCount = camLift.validCount;
+        if (nomeFuoriConvenzione && window.cammesToast) {
+            window.cammesToast({ kind: 'info', title: 'Nome fuori convenzione',
+                body: 'Il file non finisce con <b>_alz</b>, ma il contenuto &egrave; una misura valida (' +
+                      camLift.validCount + ' punti) ed &egrave; stato caricato come <b>scarico</b>.',
+                duration: 6000 });
+        }
         window._metaEx.missingCount = camLift.missingCount || 0;
         window._metaEx.incomplete = (camLift.missingCount || 0) > 0;
         window._metaEx.parseOk = camLift.ok;               // DATA-04: per il gate
