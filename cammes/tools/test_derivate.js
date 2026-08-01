@@ -18,6 +18,7 @@
 //      lineare (vecchia strada) 2,000  ·  cubica 1,125  ·  dominio camma 0,9999
 //
 //  Uso: node tools/test_derivate.js   (exit 0 = ok)
+var fs = require('fs');
 var path = require('path');
 var M = require(path.join(__dirname, '..', 'lib', 'cammes-math.js'));
 var fails = 0;
@@ -161,6 +162,40 @@ check('e il picco resta quello giusto',
         for (var i = 1; i <= 720; i++) if (Math.abs(accCrank[i]) > m) m = Math.abs(accCrank[i]);
         return Math.abs(m / accAtteso - 1) < 0.01;
     })());
+
+// ---------------------------------------------------------------
+//  La pagina deve USARLE, non solo averle in libreria
+// ---------------------------------------------------------------
+//  Una cura che sta in repo e non e' cablata non cura niente.
+console.log('--- la pagina deriva nel dominio camma, non sull interpolato ---');
+var HTML = fs.readFileSync(path.join(__dirname, '..', 'analisi.html'), 'utf8').replace(/\r\n/g, '\n');
+function corpo(nome) {
+    var re = new RegExp('^function ' + nome + '\\s*\\([^)]*\\)\\s*\\{', 'm');
+    var m = re.exec(HTML);
+    return m ? HTML.substring(m.index, HTML.indexOf('\n}\n', m.index) + 3) : null;
+}
+check('esiste derivateLato() in pagina', /^function derivateLato/m.test(HTML));
+var dl = corpo('derivateLato');
+if (dl) {
+    check('passa dal dominio camma', /derivateDominioCamma/.test(dl));
+    check('e riporta il risultato sull asse manovella', /mapDerivataCamToCrank/.test(dl));
+    // La lisciatura per DERIVARE non deve schiacciare i negativi: il clamp
+    // agisce a un solo verso e alza la linea di fondo.
+    check('liscia senza schiacciare i negativi',
+        /smoothArray\(camValvola, finestra, 360, false\)/.test(dl),
+        'il clamp e a un solo verso: sposta la media');
+}
+var an = corpo('analyze');
+check('l analisi principale usa derivateLato',
+    !!an && /derivateLato\(folIntake/.test(an) && /derivateLato\(folExhaust/.test(an));
+check('e non deriva piu l array interpolato',
+    !!an && !/computeDerivatives\(s(In|Ex)\)/.test(an));
+var ab = corpo('runABComparison');
+check('anche il confronto A/B usa derivateLato',
+    !!ab && (ab.match(/derivateLato\(/g) || []).length === 4,
+    ab ? ((ab.match(/derivateLato\(/g) || []).length + ' chiamate') : 'funzione non trovata');
+check('e nemmeno lui deriva piu l interpolato',
+    !!ab && !/computeDerivatives\(crank[AB]_/.test(ab));
 
 console.log('');
 if (fails) { console.log('RISULTATO: ' + fails + ' FALLITI\n'); process.exit(1); }

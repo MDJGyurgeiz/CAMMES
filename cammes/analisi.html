@@ -3095,6 +3095,38 @@ function computeLobeAsymmetry(crankArr, peakIdx) {
 }
 
 // Compute derivatives (velocity, acceleration, jerk) using finite differences
+// Derivate di un lato, calcolate DOVE I CAMPIONI SONO VERI.
+//
+// computeDerivatives (qui sotto) deriva l'array in gradi MANOVELLA, che pero'
+// e' INTERPOLATO: mapCamToCrank campiona a mezzo grado camma, e un interpolante
+// lineare a tratti ha curvatura nulla dentro i segmenti e tutta concentrata nei
+// nodi. Misurato su un lobo sintetico perfettamente liscio, senza rumore: la
+// derivata seconda usciva ESATTAMENTE 2 volte il valore analitico sugli slot
+// pari e ZERO sui dispari. Un dente di sega.
+// Conseguenza pratica, misurata su tutte e tre le camme in archivio: bastava
+// digitare mezzo grado in "Angolo lobo" (il campo accetta passi di 0,5) perche'
+// l'accelerazione grezza DIMEZZASSE, esattamente x2,000.
+//
+// Qui si deriva sulla curva in gradi CAMMA, dove i campioni sono quelli
+// misurati, e il risultato si riporta sull'asse manovella. Ricampionare una
+// derivata gia' calcolata non ricrea il dente di sega: quello nasce solo se si
+// DERIVA l'interpolato.
+function derivateLato(folCam, giocoCam, rockerEff, centro, tipo, finestra) {
+    var camValvola = new Array(361);
+    for (var i = 1; i <= 360; i++) {
+        camValvola[i] = Math.max(0, (folCam[i] || 0) - giocoCam) * rockerEff;
+    }
+    // lisciatura SENZA clamp dei negativi: qui serve la forma, non una curva
+    // rialzata sulla linea di fondo
+    if (finestra > 0) camValvola = smoothArray(camValvola, finestra, 360, false);
+    var D = derivateDominioCamma(camValvola);
+    return {
+        vel:  mapDerivataCamToCrank(D.vel,  folCam, centro, tipo),
+        acc:  mapDerivataCamToCrank(D.acc,  folCam, centro, tipo),
+        jerk: mapDerivataCamToCrank(D.jerk, folCam, centro, tipo)
+    };
+}
+
 function computeDerivatives(crankArr) {
     var vel = new Array(722);
     var acc = new Array(722);
@@ -4121,24 +4153,32 @@ var sgCoeffs = {
     11: { c: [-36, 9, 44, 69, 84, 89, 84, 69, 44, 9, -36], d: 429 }
 };
 
-function smoothArray(arr, windowSize) {
+// `n` = lunghezza del dominio: 720 per l'asse manovella, 360 per quello camma.
+// `clampNegativi` (default true): un'alzata non e' negativa, quindi per la curva
+// che si MOSTRA lo zero e' giusto. Ma il clamp agisce a UN SOLO VERSO, quindi
+// sposta la media: sul cerchio base il filtro produce piccoli negativi di rumore
+// e schiacciarli a zero alza la linea di fondo. Quando si liscia per DERIVARE si
+// passa false, perche' li' serve la forma vera, non una curva rialzata.
+function smoothArray(arr, windowSize, n, clampNegativi) {
     if (!windowSize || windowSize < 3 || !sgCoeffs[windowSize]) return arr;
+    n = n || 720;
+    if (clampNegativi === undefined) clampNegativi = true;
 
     var sg = sgCoeffs[windowSize];
     var half = Math.floor(windowSize / 2);
     var out = new Array(arr.length);
     for (var i = 0; i < arr.length; i++) out[i] = arr[i];
 
-    for (var i = 1; i <= 720; i++) {
+    for (var i = 1; i <= n; i++) {
         var sum = 0;
         for (var j = -half; j <= half; j++) {
             var idx = i + j;
-            if (idx < 1) idx += 720;
-            if (idx > 720) idx -= 720;
+            if (idx < 1) idx += n;
+            if (idx > n) idx -= n;
             sum += arr[idx] * sg.c[j + half];
         }
         out[i] = sum / sg.d;
-        if (out[i] < 0) out[i] = 0; // lift can't be negative
+        if (clampNegativi && out[i] < 0) out[i] = 0;
     }
     return out;
 }
@@ -4393,10 +4433,9 @@ function analyze() {
 
     // ====== KINEMATIC ANALYSIS ======
     var smoothW = numDi('smoothWindow');
-    var sIn = smoothW > 0 ? smoothArray(anlIn, smoothW) : anlIn;
-    var sEx = smoothW > 0 ? smoothArray(anlEx, smoothW) : anlEx;
-    var kinIn = computeDerivatives(sIn);
-    var kinEx = computeDerivatives(sEx);
+    // Le derivate NON si prendono piu' dall'array interpolato: vedi derivateLato.
+    var kinIn = derivateLato(folIntake, intakeClearCam, rockerInEff, _ecA.intake, 'intake', smoothW);
+    var kinEx = derivateLato(folExhaust, exhaustClearCam, rockerExEff, _ecA.exhaust, 'exhaust', smoothW);
 
     velIntake = kinIn.vel; accIntake = kinIn.acc; jerkIntake = kinIn.jerk;
     velExhaust = kinEx.vel; accExhaust = kinEx.acc; jerkExhaust = kinEx.jerk;
@@ -5555,10 +5594,12 @@ function runABComparison() {
         var durB_exh = durataMotore(findEvents(crankB_exh, DUR_EPS), crankB_exh, DUR_EPS);
 
         // Derivate (vel, acc) e asimmetria
-        var kinA_int = computeDerivatives(crankA_int);
-        var kinA_exh = computeDerivatives(crankA_exh);
-        var kinB_int = computeDerivatives(crankB_int);
-        var kinB_exh = computeDerivatives(crankB_exh);
+        // Stessa strada della scheda: derivata nel dominio camma.
+        var _fAB = numDi('smoothWindow');
+        var kinA_int = derivateLato(folA_int, giocoLatoCamma(clearA, 'intake'), rkIn, ecA.intake, 'intake', _fAB);
+        var kinA_exh = derivateLato(folA_exh, giocoLatoCamma(clearA, 'exhaust'), rkEx, ecA.exhaust, 'exhaust', _fAB);
+        var kinB_int = derivateLato(folB_int, giocoLatoCamma(clearB, 'intake'), rkIn, ecB.intake, 'intake', _fAB);
+        var kinB_exh = derivateLato(folB_exh, giocoLatoCamma(clearB, 'exhaust'), rkEx, ecB.exhaust, 'exhaust', _fAB);
         function peakAbs(arr) {
             var m = 0; for (var i = 1; i <= 720; i++) { var v = Math.abs(arr[i]); if (v > m) m = v; }
             return m;
