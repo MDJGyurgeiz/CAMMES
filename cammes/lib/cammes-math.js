@@ -106,34 +106,12 @@ function convertPuntToBicchiere(camLiftRaw, rBase, dBicch, rPunt) {
     // test e' vero, quindi l'avviso compariva a ogni analisi col bicchiere e
     // non segnalava piu' niente.
     //
-    // Il vincolo geometrico vero di un follower piatto e' un altro, e non
-    // dipende dal cerchio base: il punto di contatto si sposta lateralmente di
-    // dL/dphi (mm per radiante), quindi il piattello deve avere RAGGIO almeno
-    // pari all'offset massimo, altrimenti il contatto esce dal bordo e la
-    // conversione non e' piu' valida.
-    // Verificato sulla VW KR asp: offset massimo 17,19 mm -> serve Ø >= 34,4 mm,
-    // e il bicchiere reale di quel motore e' Ø35. Combacia con 0,3 mm di
-    // margine, che e' quanto ci si aspetta da un accoppiamento progettato.
-    var offsetMax = 0;
-    for (var q = 1; q <= 360; q++) {
-        var pr = lt[q === 1 ? 360 : q - 1], su = lt[q === 360 ? 1 : q + 1];
-        if (!isFinite(pr) || !isFinite(su)) continue;
-        var off = Math.abs((su - pr) / (2 * DEG));   // mm per radiante
-        if (off > offsetMax) offsetMax = off;
-    }
-    if (offsetMax > R && typeof window !== 'undefined' && window.cammesToast && !window._suppressBicchWarn) {
-        window._suppressBicchWarn = true;  // una volta per sessione
-        setTimeout(function () {
-            window.cammesToast({
-                kind: 'warn', title: 'Bicchiere troppo piccolo per questo lobo',
-                body: 'Il contatto si sposta fino a <b>' + offsetMax.toFixed(2) + ' mm</b> dall\'asse, ' +
-                      'ma il bicchiere &Oslash; ' + dBicch.toFixed(1) + ' mm ha raggio ' + R.toFixed(2) + ' mm: ' +
-                      'il punto di contatto esce dal bordo e l\'alzata simulata non &egrave; valida. ' +
-                      'Serve almeno &Oslash; ' + (2 * offsetMax).toFixed(1) + ' mm.',
-                duration: 9000
-            });
-        }, 400);
-    }
+    // Il vincolo geometrico vero di un follower piatto non dipende dal cerchio
+    // base: il punto di contatto si sposta lateralmente, e il piattello deve
+    // avere RAGGIO almeno pari a quello spostamento, altrimenti il contatto
+    // esce dal bordo e l'alzata simulata non vale piu'.
+    // Il controllo si fa PIU' SOTTO, quando la curva del piattello esiste:
+    // vedi la nota accanto a `escursioneContatto`.
 
     var raw = new Array(361);
     raw[0] = 0;
@@ -158,6 +136,40 @@ function convertPuntToBicchiere(camLiftRaw, rBase, dBicch, rPunt) {
         if (src === 0) src = 360;
         out[i] = raw[src];
     }
+
+    // ESCURSIONE DEL CONTATTO, sulla curva GIUSTA.
+    //
+    // Su un follower piatto il contatto si sposta dall'asse di ds/dpsi, dove s
+    // e' l'alzata DEL PIATTELLO. Prima si derivava `lt`, cioe' l'alzata del
+    // PUNTALINO (follower radiale): un'altra curva, e la differenza non e'
+    // piccola. Misurato sulla Peugeot 106 (bicchiere reale 29):
+    //     dalla curva puntalino  19,28 mm  ->  'mancano 4,78 mm'
+    //     dalla curva piattello  15,08 mm  ->  mancano 0,58 mm
+    // Un allarme gonfiato di otto volte, su un accoppiamento che e' solo al
+    // limite. E la vecchia controprova sulla VW ("margine 0,3 mm") veniva dallo
+    // stesso errore: col criterio giusto il margine e' 3,36 mm, cioe' comodo.
+    var escursioneContatto = 0;
+    for (var q = 1; q <= 360; q++) {
+        var pr = out[q === 1 ? 360 : q - 1], su = out[q === 360 ? 1 : q + 1];
+        if (!isFinite(pr) || !isFinite(su)) continue;
+        var off = Math.abs((su - pr) / (2 * DEG));   // mm per radiante
+        if (off > escursioneContatto) escursioneContatto = off;
+    }
+    if (escursioneContatto > R && typeof window !== 'undefined' && window.cammesToast && !window._suppressBicchWarn) {
+        window._suppressBicchWarn = true;  // una volta per sessione
+        setTimeout(function () {
+            window.cammesToast({
+                kind: 'warn', title: 'Bicchiere al limite per questo lobo',
+                body: 'Il contatto arriva a <b>' + escursioneContatto.toFixed(2) + ' mm</b> dall\'asse, ' +
+                      'ma il bicchiere &Oslash; ' + dBicch.toFixed(1) + ' mm ha raggio ' + R.toFixed(2) + ' mm: ' +
+                      'mancano ' + (escursioneContatto - R).toFixed(2) + ' mm e il contatto lavora sul bordo. ' +
+                      'Servirebbe almeno &Oslash; ' + (2 * escursioneContatto).toFixed(1) + ' mm. ' +
+                      '<i>Guarda l\'usura sulla faccia del bicchiere: se il contatto esce, si vede li\'.</i>',
+                duration: 9000
+            });
+        }, 400);
+    }
+    out.escursioneContatto = escursioneContatto;   // per i test e per chi vuole il numero
     return out;
 }
 

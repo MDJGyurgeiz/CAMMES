@@ -237,6 +237,30 @@ check('e delega a piccoConPlateau', /piccoConPlateau/.test(corpoFindMax));
 check('anche lo stato dell import usa la stessa regola',
     /piccoConPlateau\(curvaGrezza/.test(HTML));
 
+// ---------------------------------------------------------------
+// 8. Il diagramma di fasatura non deve sembrare bucato
+// ---------------------------------------------------------------
+//  Le fette "valvola chiusa" erano completamente trasparenti: su fondo scuro un
+//  arco trasparente e' indistinguibile da un arco NON disegnato, e il grafico si
+//  leggeva come rotto ("mancano 180 gradi"). Non mancavano: una valvola sta
+//  aperta circa un terzo del ciclo, quindi ogni anello e' chiuso per ~230 gradi
+//  di cerchio, e il settore in basso dove sono chiuse ENTRAMBE (134 gradi con
+//  una fasatura tipica) e' compressione + espansione.
+console.log('--- il diagramma di fasatura disegna anche il tratto chiuso ---');
+var iCol = HTML.indexOf('function colors(sl, rgba, solid)');
+check('la funzione dei colori del diagramma esiste', iCol > 0);
+if (iCol > 0) {
+    var corpoCol = HTML.substring(iCol, HTML.indexOf('\n    }\n', iCol) + 6);
+    check('il tratto chiuso non e piu trasparente',
+        !/rgba\(0,0,0,0\)/.test(corpoCol), 'un arco trasparente si legge come assente');
+    check('e usa un colore neutro del tema',
+        /--grid/.test(corpoCol), 'cosi vale sia in tema scuro sia in chiaro');
+}
+check('la legenda non promette piu un "vuoto"',
+    HTML.indexOf('Vuoto = valvola chiusa') < 0);
+check('e la sua pastiglia porta il colore vero, non il trasparente',
+    !/text: 'Grigio = valvola chiusa'[\s\S]{0,120}rgba\(0,0,0,0\)/.test(HTML));
+
 console.log('');
 if (fails) { console.log('RISULTATO: ' + fails + ' FALLITI\n'); process.exit(1); }
 console.log('VALIDATO: le etichette verificate descrivono il calcolo che il');

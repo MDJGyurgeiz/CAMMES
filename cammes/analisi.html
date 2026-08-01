@@ -5220,11 +5220,20 @@ function updateTimingDiagram(inEv, exEv, durIn, durEx, overlap) {
         // arco a cavallo della cucitura: [0..end] acceso, gap, [start..720] acceso
         return { data: [end, start - end, 720 - start], on: [true, false, true] };
     }
+    // Il tratto CHIUSO si disegna, in tinta neutra, invece di lasciare il vuoto.
+    //
+    // Prima era completamente trasparente: su fondo scuro un arco trasparente e'
+    // indistinguibile da un arco NON DISEGNATO, e il diagramma si leggeva come
+    // rotto — "mancano 180 gradi". Non mancavano: una valvola sta aperta circa un
+    // terzo del ciclo, quindi ogni anello e' chiuso per 230 gradi di cerchio, e
+    // il settore in basso dove sono chiuse ENTRAMBE (134 gradi con una fasatura
+    // tipica) e' la compressione piu' l'espansione. Adesso l'anello e' continuo e
+    // il tratto chiuso si vede come tale.
     function colors(sl, rgba, solid) {
-        var TR = 'rgba(0,0,0,0)';
+        var chiuso = (window.cammesGetCssVar && window.cammesGetCssVar('--grid')) || '#232a36';
         return {
-            bg: sl.on.map(function (o) { return o ? rgba : TR; }),
-            border: sl.on.map(function (o) { return o ? solid : TR; })
+            bg: sl.on.map(function (o) { return o ? rgba : chiuso; }),
+            border: sl.on.map(function (o) { return o ? solid : chiuso; })
         };
     }
     // ---- OVERLAP: l'arco che mancava -------------------------------------
@@ -5385,7 +5394,12 @@ function updateTimingDiagram(inEv, exEv, durIn, durEx, overlap) {
                                 { text: 'Aspirazione (esterno): ' + ((inEv && !inEv.ambiguous) ? durIn + '\u00B0' : 'n.d.'), fillStyle: 'rgba(0,212,255,0.85)', strokeStyle: '#00d4ff', lineWidth: 1, index: 0 },
                                 { text: 'Scarico (mediano): ' + ((exEv && !exEv.ambiguous) ? durEx + '\u00B0' : 'n.d.'), fillStyle: 'rgba(255,82,82,0.85)', strokeStyle: '#ff5252', lineWidth: 1, index: 1 },
                                 { text: 'Overlap (interno): ' + (isFinite(ov) && !amb ? ov.toFixed(1) + '\u00B0' : 'n.d.'), fillStyle: 'rgba(255,215,64,0.85)', strokeStyle: '#ffd740', lineWidth: 1, index: 2 },
-                                { text: 'Vuoto = valvola chiusa', fillStyle: 'rgba(0,0,0,0)', strokeStyle: anaColors().text, lineWidth: 1, index: 3 }
+                                // La pastiglia porta il colore VERO del tratto chiuso, non
+                                // il trasparente: una legenda che mostra il nulla accanto
+                                // alla parola "chiusa" non spiega niente.
+                                { text: 'Grigio = valvola chiusa',
+                                  fillStyle: (window.cammesGetCssVar && window.cammesGetCssVar('--grid')) || '#232a36',
+                                  strokeStyle: anaColors().text, lineWidth: 1, index: 3 }
                             ];
                             if (amb) labels.push({ text: '\u26A0 eventi AMBIGUI (vedi tabella)', fillStyle: 'rgba(255,180,0,0.85)', strokeStyle: '#ffb400', lineWidth: 1, index: 4 });
                             if (ovIncoerente) labels.push({ text: '\u26A0 overlap disegnato ' + ovDisegnato.toFixed(1) + '\u00B0 \u2260 tabella', fillStyle: 'rgba(255,180,0,0.85)', strokeStyle: '#ffb400', lineWidth: 1, index: 5 });
