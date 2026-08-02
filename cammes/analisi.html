@@ -3112,18 +3112,64 @@ function computeLobeAsymmetry(crankArr, peakIdx) {
 // derivata gia' calcolata non ricrea il dente di sega: quello nasce solo se si
 // DERIVA l'interpolato.
 function derivateLato(folCam, giocoCam, rockerEff, centro, tipo, finestra) {
-    var camValvola = new Array(361);
+    // ORDINE DELLE OPERAZIONI, e conta.
+    //
+    // Si liscia la curva MISURATA, poi si toglie il gioco. Prima si faceva il
+    // contrario, e la finestra di lisciatura a cavallo del taglio mescolava gli
+    // ZERI artificiali del clamp, deformando la curva anche dove la valvola e'
+    // gia' sollevata. Effetto misurato sulla Clio: "Acc. max" cambiava di 1,7
+    // volte fra gioco 0,20 e 0,50 — ma sottrarre una COSTANTE non puo' cambiare
+    // una derivata seconda, quindi quel salto era tutto della lisciatura sporca.
+    // La lisciatura e' un'operazione sul RUMORE DI MISURA: va fatta sui dati,
+    // non su una curva gia' modellata.
+    var camPulita = folCam;
+    if (finestra > 0) camPulita = smoothArray(folCam, finestra, 360, false);
+    // LO SPIGOLO NON SI TOGLIE: NON SI CREA.
+    //
+    // La curva valvola e' max(0, alzata - gioco), e quel max() introduce un
+    // angolo vivo dove l'alzata attraversa il gioco: pendenza da zero al valore
+    // della rampa, derivata seconda impulsiva. Su Clio e VW il massimo cadeva
+    // esattamente li'; sulla 106 no. Lo stesso numero misurava la camma o il
+    // gioco a seconda della camma.
+    //
+    // Escludere i campioni intorno allo spigolo NON funziona, ed e' stato
+    // misurato: sulla Clio il picco GENUINO sta a 237° con alzata 0,652, e con
+    // gioco 0,50 la valvola viene ripresa a 239-240°. Due gradi. Nessuna
+    // finestra separa le due cose, e toglierle cancella un dato vero.
+    //
+    // Si deriva quindi la curva NON troncata (alzata - gioco, anche negativa):
+    // sottrarre una costante non introduce alcun angolo, quindi non c'e' nessun
+    // impulso da togliere. Poi si guardano gli estremi SOLO dove la valvola si
+    // muove davvero. La curva MOSTRATA resta troncata, ma la costruisce
+    // mapCamToCrank per conto suo: qui serve solo derivare.
+    var camDerivabile = new Array(361);
     for (var i = 1; i <= 360; i++) {
-        camValvola[i] = Math.max(0, (folCam[i] || 0) - giocoCam) * rockerEff;
+        camDerivabile[i] = ((camPulita[i] || 0) - giocoCam) * rockerEff;
     }
-    // lisciatura SENZA clamp dei negativi: qui serve la forma, non una curva
-    // rialzata sulla linea di fondo
-    if (finestra > 0) camValvola = smoothArray(camValvola, finestra, 360, false);
-    var D = derivateDominioCamma(camValvola);
+    // Si deriva la curva NON troncata: nessuno spigolo, quindi nessun impulso.
+    var D = derivateDominioCamma(camDerivabile);
+
+    // Gli estremi si guardano SOLO dove la valvola si muove davvero, cioe' dove
+    // la curva non troncata e' positiva. Fuori di li' la valvola e' sulla sede:
+    // la sua accelerazione e' zero, e quella della camma non la riguarda.
+    var accPos = 0, accNeg = 0, jerkMax = 0, velPos = 0, velNeg = 0;
+    var gradiFermi = 0;
+    for (var m = 1; m <= 360; m++) {
+        if (camDerivabile[m] <= 0) { gradiFermi++; continue; }   // valvola sulla sede
+        if (D.acc[m] > accPos) accPos = D.acc[m];
+        if (D.acc[m] < accNeg) accNeg = D.acc[m];
+        if (Math.abs(D.jerk[m]) > Math.abs(jerkMax)) jerkMax = D.jerk[m];
+        if (D.vel[m] > velPos) velPos = D.vel[m];
+        if (D.vel[m] < velNeg) velNeg = D.vel[m];
+    }
     return {
         vel:  mapDerivataCamToCrank(D.vel,  folCam, centro, tipo),
         acc:  mapDerivataCamToCrank(D.acc,  folCam, centro, tipo),
-        jerk: mapDerivataCamToCrank(D.jerk, folCam, centro, tipo)
+        jerk: mapDerivataCamToCrank(D.jerk, folCam, centro, tipo),
+        // estremi dal dominio camma, sulla curva senza spigolo, e solo dove la
+        // valvola e' sollevata
+        estremi: { accPos: accPos, accNeg: accNeg, jerkMax: jerkMax,
+                   velPos: velPos, velNeg: velNeg, gradiEsclusi: gradiFermi }
     };
 }
 
@@ -3179,7 +3225,7 @@ function velAlGrado(vel, gradoFraz) {
 //     la sede".
 // Se gli eventi sono ambigui (closeIdx NaN) velSeat resta NaN: non si ripiega
 // sul minimo globale, che darebbe un numero diverso senza dirlo.
-function extractKinematicResults(vel, acc, jerk, peakIdx, rpm, closeIdx) {
+function extractKinematicResults(vel, acc, jerk, peakIdx, rpm, closeIdx, estremi) {
     var omega = rpm > 0 ? rpm * 6 : 0; // deg/s
     var omegaSq = omega * omega;
     var omegaCu = omegaSq * omega;
@@ -3200,6 +3246,16 @@ function extractKinematicResults(vel, acc, jerk, peakIdx, rpm, closeIdx) {
         if (acc[i] > accMaxPos) accMaxPos = acc[i];
         if (acc[i] < accMaxNeg) accMaxNeg = acc[i];
         if (Math.abs(jerk[i]) > Math.abs(jerkMax)) jerkMax = jerk[i];
+    }
+    // Se il chiamante ha gia' gli estremi calcolati nel dominio camma (dove i
+    // campioni sono veri) ed esclusa la ripresa del gioco, quelli VINCONO: la
+    // scansione qui sopra gira sull'array RICAMPIONATO e sullo spigolo.
+    var gradiEsclusi = 0;
+    if (estremi) {
+        accMaxPos = estremi.accPos; accMaxNeg = estremi.accNeg;
+        jerkMax = estremi.jerkMax;
+        velMaxOpen = estremi.velPos; velMaxClose = estremi.velNeg;
+        gradiEsclusi = estremi.gradiEsclusi || 0;
     }
 
     // Convert to time domain if RPM provided
@@ -3232,6 +3288,7 @@ function extractKinematicResults(vel, acc, jerk, peakIdx, rpm, closeIdx) {
         seatDeg: isFinite(closeIdx) ? closeIdx - 360 : NaN,
         accPos: aPos, accNeg: aNeg,
         jerkMax: jMax,
+        gradiEsclusi: gradiEsclusi,   // campioni tolti perche' sulla ripresa del gioco
         unitVel: unitVel, unitAcc: unitAcc, unitJerk: unitJerk
     };
 }
@@ -3716,8 +3773,8 @@ function liveRetuneForces() {
             window.lastAnalysis.arrays.fInertiaEx = fEx.fInertia;
         }
         if (typeof velIntake !== 'undefined' && velIntake.length) {
-            R.kinIntake  = extractKinematicResults(velIntake, accIntake, jerkIntake, intakeMaxIdx, rpm, window._closeIdxIn);
-            R.kinExhaust = extractKinematicResults(velExhaust, accExhaust, jerkExhaust, exhaustMaxIdx, rpm, window._closeIdxEx);
+            R.kinIntake  = extractKinematicResults(velIntake, accIntake, jerkIntake, intakeMaxIdx, rpm, window._closeIdxIn, window._estremiIn);
+            R.kinExhaust = extractKinematicResults(velExhaust, accExhaust, jerkExhaust, exhaustMaxIdx, rpm, window._closeIdxEx, window._estremiEx);
             applyKinematicResults(R.kinIntake, R.kinExhaust);   // schermo = export
             // AUDIT P1-02: anche le TRE curve cinematiche seguono il regime,
             // altrimenti numeri e grafici raccontano regimi diversi.
@@ -4439,13 +4496,16 @@ function analyze() {
 
     velIntake = kinIn.vel; accIntake = kinIn.acc; jerkIntake = kinIn.jerk;
     velExhaust = kinEx.vel; accExhaust = kinEx.acc; jerkExhaust = kinEx.jerk;
+    // Estremi calcolati nel dominio camma ed esclusa la ripresa del gioco:
+    // li usano sia l'analisi sia il ricalcolo immediato, che gira dopo.
+    window._estremiIn = kinIn.estremi; window._estremiEx = kinEx.estremi;
 
     // P1-10: il crossing di chiusura reale entra nel calcolo della velocita'
     // alla sede (inEv/exEv sono gia' stati calcolati sopra da findEvents).
     var resIn = extractKinematicResults(velIntake, accIntake, jerkIntake, mxIn.idx, rpm,
-                                        inEv.ambiguous ? NaN : inEv.closeIdx);
+                                        inEv.ambiguous ? NaN : inEv.closeIdx, kinIn.estremi);
     var resEx = extractKinematicResults(velExhaust, accExhaust, jerkExhaust, mxEx.idx, rpm,
-                                        exEv.ambiguous ? NaN : exEv.closeIdx);
+                                        exEv.ambiguous ? NaN : exEv.closeIdx, kinEx.estremi);
     // Conservati per il retune live, che ricalcola la cinematica senza
     // ripassare da findEvents.
     window._closeIdxIn = inEv.ambiguous ? NaN : inEv.closeIdx;

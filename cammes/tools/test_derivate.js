@@ -182,8 +182,18 @@ if (dl) {
     // La lisciatura per DERIVARE non deve schiacciare i negativi: il clamp
     // agisce a un solo verso e alza la linea di fondo.
     check('liscia senza schiacciare i negativi',
-        /smoothArray\(camValvola, finestra, 360, false\)/.test(dl),
+        /smoothArray\(folCam, finestra, 360, false\)/.test(dl),
         'il clamp e a un solo verso: sposta la media');
+    // Si liscia la curva MISURATA, poi si toglie il gioco: al contrario la
+    // finestra a cavallo del taglio mescolerebbe gli zeri del troncamento.
+    check('liscia PRIMA di togliere il gioco',
+        dl.indexOf('smoothArray(folCam') < dl.indexOf('- giocoCam'),
+        'la lisciatura e un\'operazione sul rumore di misura, non sul modello');
+    // E si deriva la curva NON troncata: nessuno spigolo da togliere.
+    check('deriva la curva non troncata',
+        /derivateDominioCamma\(camDerivabile\)/.test(dl));
+    check('e guarda gli estremi solo dove la valvola e sollevata',
+        /camDerivabile\[m\] <= 0/.test(dl), 'sulla sede l accelerazione della valvola e zero');
 }
 var an = corpo('analyze');
 check('l analisi principale usa derivateLato',
