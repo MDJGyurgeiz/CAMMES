@@ -1283,8 +1283,19 @@ var _wsSeq = 0;
 // sola lettura (query stato/misura) sono gestiti a parte.
 function isControlCommand(msg) {
     var c = msg.charAt(0);
-    // p q m d ! @ f l v c r w u a g k t S $  → controllo; ? = query (read-only)
-    if ('pqmd!@flvcrwuagktS$'.indexOf(c) >= 0) return true;
+    // p q ! @ f l v c r w u a g k t S $  → controllo
+    // ? m d                             → sola lettura, NON passano dal lease
+    //
+    // 'm' e 'd' erano nella lista dei comandi di controllo, ma nel firmware
+    // (master.ino) 'm' è emitMeasureOnly(readSensorMm()) e 'd' stampa il valore
+    // grezzo del sensore: non muovono niente, sono letture come '?'. La pagina
+    // di scansione le poll-a ogni 200 ms (100 ms a motore sbloccato), quindi un
+    // client osservatore riceveva 5-10 '#ctl:denied' al secondo — la raffica di
+    // notifiche segnalata dall'officina — e per giunta restava col comparatore
+    // CIECO, che è il motivo per cui bisognava spegnere e riaccendere.
+    // La promessa "qui vedi le misure ma i comandi sono disattivati" ora è vera
+    // in entrambe le metà: le misure si leggono davvero.
+    if ('pq!@flvcrwuagktS$'.indexOf(c) >= 0) return true;
     // AUDIT MOT-04 (v4): una riga "<seq> VERBO ..." che MUOVE o configura richiede
     // il lease. Senza questo, un comando v4 (che inizia per cifra) NON entrava
     // nella lista e sarebbe finito sulla seriale SENZA passare per il lease —

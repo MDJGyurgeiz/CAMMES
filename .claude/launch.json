@@ -4,8 +4,8 @@
     {
       "name": "cammes",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["./cammes/cammes_server.js", "--no-browser"],
-      "port": 3000
+      "runtimeArgs": ["./cammes/cammes_server.js", "--no-browser", "--port", "3300"],
+      "port": 3300
     }
   ]
 }

@@ -565,6 +565,101 @@ setInterval(function () {
     } catch (e) {}
 }, 100);
 
+// ===== Ruolo di questo client rispetto al banco (AUDIT MOT-04) ============
+// Il server assegna un CONTROLLORE unico: gli altri client vedono le misure ma
+// non muovono niente. Prima il ruolo viveva in window._cammesObserver, che
+// veniva SCRITTO in tre punti e non letto da nessuna parte: il messaggio
+// diceva "i comandi sono disattivati" e i pulsanti restavano vivi.
+//
+// E soprattutto: ogni singolo rifiuto faceva un toast. Il polling del
+// comparatore chiedeva 5 volte al secondo, quindi l'officina si trovava la pila
+// di notifiche che si riciclava di continuo (ne tiene 4) e il contatore della
+// campanella a "99+". Un rifiuto ripetuto non è una notizia ripetuta: è lo
+// stesso fatto. Qui si avvisa al CAMBIO di stato, e i rifiuti in raffica si
+// contano invece di gridarli uno per uno.
+var ruoloBanco = '';                 // '' = non ancora comunicato dal server
+var _rifiutoUltimoMs = 0;            // quando è uscito l'ultimo avviso di rifiuto
+var _rifiutoVistoMs = 0;             // quando è arrivato l'ultimo rifiuto, avvisato o no
+var _rifiutiTaciuti = 0;             // quanti ne abbiamo contati senza avvisare
+var SILENZIO_RIFIUTO_MS = 15000;     // sotto questo intervallo si conta, non si avvisa
+
+function bancoInSolaLettura() { return ruoloBanco === 'observer'; }
+
+// Due motivi indipendenti spengono gli stessi pulsanti: il motore sbloccato e
+// la sola lettura. Se ognuno chiamasse _setMotionUiDisabled per conto suo, il
+// secondo a finire riaccenderebbe quello che il primo aveva spento. Lo stato si
+// ricalcola da entrambi, sempre.
+//
+// I due nomi che servono (_setMotionUiDisabled e motorFree) stanno in un blocco
+// <script> PIÙ AVANTI nella pagina, mentre il ruolo arriva dal server pochi
+// millisecondi dopo connectEngine(). Fra un blocco e l'altro il browser smaltisce
+// gli eventi, quindi il primo '#ctl:observer' può cadere in quella finestra:
+// visto nel browser, la chiamata falliva dentro l'handler WebSocket, il toast
+// "Sola lettura" non usciva e i pulsanti restavano vivi mentre il messaggio
+// successivo diceva che erano spenti. Qui non si tira l'eccezione e lo stato si
+// riapplica a pagina caricata.
+function _aggiornaUiMoto() {
+    if (typeof _setMotionUiDisabled !== 'function') return;
+    var sbloccato = (typeof motorFree !== 'undefined') && motorFree;
+    _setMotionUiDisabled(!!sbloccato || bancoInSolaLettura());
+}
+if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('load', function () { _aggiornaUiMoto(); });
+}
+
+function applicaRuoloBanco(role) {
+    var toast = (typeof window !== 'undefined' && window.cammesToast) ? window.cammesToast : null;
+
+    // 'denied' NON è un ruolo: è la risposta a un comando. Non cambia lo stato,
+    // ma conferma che siamo in sola lettura anche se il ruolo non era arrivato.
+    if (role === 'denied') {
+        if (ruoloBanco !== 'observer') { ruoloBanco = 'observer'; _aggiornaUiMoto(); }
+        var ora = Date.now();
+        // Una raffica finita è finita: i rifiuti di dieci minuti fa non vanno
+        // sommati a quello di adesso, o l'avviso stampa un numero vecchio.
+        if (ora - _rifiutoVistoMs > SILENZIO_RIFIUTO_MS) _rifiutiTaciuti = 0;
+        _rifiutoVistoMs = ora;
+        if (ora - _rifiutoUltimoMs < SILENZIO_RIFIUTO_MS) { _rifiutiTaciuti++; return; }
+        var coda = _rifiutiTaciuti > 0
+            ? ' Negli ultimi ' + Math.round(SILENZIO_RIFIUTO_MS / 1000) +
+              ' secondi ne sono stati ignorati altri ' + _rifiutiTaciuti + '.'
+            : '';
+        _rifiutoUltimoMs = ora;
+        _rifiutiTaciuti = 0;
+        if (toast) toast({ kind: 'err', title: 'Comando ignorato (sola lettura)',
+            body: 'Il banco è comandato da un\'altra finestra o da un altro PC. Solo STOP è sempre permesso.' + coda,
+            duration: 5000 });
+        return;
+    }
+
+    // Solo i RUOLI cambiano lo stato. Il server manda anche '#ctl:info ...'
+    // (snapshot di stato al collegamento) e potrà mandare altro domani: tutto
+    // ciò che non è un ruolo va ignorato, non interpretato come "libero".
+    // Senza questa riga l'#ctl:info che segue l'#ctl:observer riabilitava i
+    // comandi e faceva uscire un "Banco disponibile" falso.
+    if (role !== 'observer' && role !== 'free' && role !== 'granted' && role !== 'released') return;
+
+    // free / granted / released significano tutti "qui si può comandare"
+    var nuovo = (role === 'observer') ? 'observer' : 'controller';
+    if (nuovo === ruoloBanco) return;              // stesso stato: niente da dire
+    var eraOsservatore = (ruoloBanco === 'observer');
+    ruoloBanco = nuovo;
+    _rifiutoUltimoMs = 0;
+    _rifiutoVistoMs = 0;
+    _rifiutiTaciuti = 0;
+    _aggiornaUiMoto();
+
+    if (nuovo === 'observer') {
+        if (toast) toast({ kind: 'warn', title: 'Sola lettura',
+            body: 'Il banco è già comandato da un\'altra finestra o da un altro PC. Qui le misure si vedono lo stesso, ma i comandi di moto sono disattivati. Si libera da sé quando l\'altra finestra viene chiusa.',
+            duration: 8000 });
+    } else if (eraOsservatore) {
+        // senza questo l'operatore non ha modo di sapere che può tornare a comandare
+        if (toast) toast({ kind: 'success', title: 'Banco disponibile',
+            body: 'Nessun altro sta comandando: i comandi di moto sono di nuovo attivi.', duration: 4000 });
+    }
+}
+
 // Probe periodico in idle:
 // - sensore a 5 Hz (200 ms) → display alzata "real-time" anche fuori scansione
 // - encoder a 0.2 Hz (5 s) → basta per LED + posizione assoluta
@@ -572,17 +667,27 @@ setInterval(function () {
 // Gli handle sono memorizzati così che ms()/start() possano fermarli
 // completamente prima di emettere un comando finale ($+units di 0V),
 // liberando la coda WebSocket dai messaggi di polling accodati.
+//
+// In SOLA LETTURA si legge più piano. Le misure arrivano comunque: il server
+// manda in broadcast a tutti ogni riga della seriale, quindi mentre l'altro
+// client legge (o scansiona) qui si vede tutto senza chiedere niente. Il probe
+// serve solo a non restare ciechi se chi controlla NON sta leggendo, e a quello
+// basta un quinto del ritmo — senza aggiungere traffico sulla seriale mentre
+// qualcun altro sta scansionando.
+var _tickSensore = 0;
+function pollAttivo() {
+    return typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1
+        && (typeof startflag === 'undefined' || startflag !== 1);
+}
 var pollEncoderId = setInterval(function() {
-    if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1
-        && (typeof startflag === 'undefined' || startflag !== 1)) {
-        try { sendSocket.send('?'); } catch(e) {}
-    }
+    if (!pollAttivo()) return;
+    if (bancoInSolaLettura()) return;   // la posizione la muove chi comanda: la riceviamo
+    try { sendSocket.send('?'); } catch(e) {}
 }, 5000);
 var pollSensorId = setInterval(function() {
-    if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1
-        && (typeof startflag === 'undefined' || startflag !== 1)) {
-        try { sendSocket.send('m'); } catch(e) {}
-    }
+    if (!pollAttivo()) return;
+    if (bancoInSolaLettura() && (++_tickSensore % 5) !== 0) return;   // 1 Hz invece di 5
+    try { sendSocket.send('m'); } catch(e) {}
 }, 200);
 
 
@@ -630,20 +735,7 @@ var _engineOnMessage = function(event) {
     // AUDIT MOT-04: messaggi di controllo del lease (server→client). Non sono
     // dati Arduino: gestiscono il ruolo controllore/osservatore.
     if (msg.indexOf('#ctl:') === 0) {
-        var role = msg.substring(5).split(' ')[0];
-        if (role === 'observer') {
-            window._cammesObserver = true;
-            if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Sola lettura',
-                body: 'Un altro client sta controllando il banco: qui vedi le misure ma i comandi sono disattivati. Chiudi l\'altra finestra per prendere il controllo.', duration: 8000 });
-        } else if (role === 'denied') {
-            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Comando ignorato (sola lettura)',
-                body: 'Il banco è controllato da un altro client. Solo STOP è sempre permesso.', duration: 5000 });
-        } else if (role === 'granted' || role === 'free') {
-            window._cammesObserver = false;
-        } else if (role === 'released') {
-            // il controllore precedente se n'è andato: questo client può ora prendere il controllo
-            window._cammesObserver = false;
-        }
+        applicaRuoloBanco(msg.substring(5).split(' ')[0]);
         return;
     }
 
@@ -1689,7 +1781,7 @@ function toggleMotorFree() {
         if (btn)   btn.innerHTML = '&#128274; Blocca motore';
         if (btn)   btn.classList.add('btn-warn');
         if (badge) badge.style.display = 'inline-flex';
-        _setMotionUiDisabled(true);
+        _aggiornaUiMoto();
 
         // Stop polling normale (5s/200ms) e attivo polling LIVE (100ms/100ms)
         try { clearInterval(pollEncoderId); } catch (e) {}
@@ -1716,7 +1808,7 @@ function toggleMotorFree() {
         if (btn)   btn.innerHTML = '&#128275; Sblocca motore';
         if (btn)   btn.classList.remove('btn-warn');
         if (badge) badge.style.display = 'none';
-        _setMotionUiDisabled(false);
+        _aggiornaUiMoto();
 
         // Stop polling LIVE e riavvio polling normale
         try { clearInterval(pollFreeEncoderId); } catch (e) {}
