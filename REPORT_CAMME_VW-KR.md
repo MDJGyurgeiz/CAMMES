@@ -96,7 +96,7 @@ Sensibilità empirica dai tuoi stessi rilievi: **≈0,13–0,15 mm per grado di 
 | Alzata al PMS scansione vs motore | **Causa individuata il 2026-07-28: cerchio base inserito come RAGGIO quando era il DIAMETRO** (vedi sotto) |
 | Ipotesi slittamento stepper | **ESCLUSA sperimentalmente** (banco 07-05: divergenza passi↔encoder 1° su 360°, zero backlash) |
 | Ripetibilità scanner | RMS 0,074 mm su ri-scansione a 2 mesi (camma Clio) |
-| Prossimo passo | Ri-scansione camme VW per il **residuo di durata dell'aspirazione** (10°): non più un'anomalia da un terzo |
+| Prossimo passo | **CHIUSO per indisponibilità della camma (2026-08-02)**: la ri-scansione non è più possibile. La compensazione del puntalino è stata confermata su un'altra strada — la 106 letta col puntalino r1,5 e col piattello Ø33 fisico, previsione entro 0,065 mm RMS (`cammes/tools/validate_106_piattello.js`) |
 
 ### 5.1 La "sottostima del 35%" era un errore di unità nel nostro dato d'ingresso
 
@@ -137,14 +137,22 @@ dentro la banda**; resta fuori la sua **durata, di 10°**, contro 18° di prima.
 > **(b)** resta un errore nella correzione — contro cui depone l'oracolo esatto,
 > che chiude a 1 µm su quattro geometrie e due raggi di punta, e il fatto che il
 > rumore di misura non la sbilancia (a ±4 µm il bias è +0,2 µm).
-> **La prova che decide è al banco: ri-scansione della camma rimontata (B.4) e
-> cerchio base al calibro (B.1).**
+> **AGGIORNAMENTO 2026-08-02: la camma VW non è più disponibile**, quindi la
+> ri-scansione (B.4) non è più possibile e la questione non si chiude su questo
+> albero. La conferma è arrivata da un'altra strada, migliore: sul banco la
+> **Peugeot 106 aspirazione è stata misurata due volte, col puntalino r 1,5 e
+> col piattello Ø33 fisico**. Prevedendo la seconda dalla prima:
+> formula precedente **RMS 0,309 mm**, nessuna compensazione **0,170 mm**,
+> inversa esatta **0,065 mm**. Due strumenti indipendenti, stesso lobo, nessuna
+> scheda di mezzo e nessun dubbio sull'usura: **la correzione è giusta**, e il
+> residuo VW resta attribuibile all'albero, non al calcolo.
+> (`cammes/tools/validate_106_piattello.js`)
 
 Quindi: lo scanner non sottostimava il medio-fianco di un terzo. Restava un errore
 di unità nel parametro che noi gli davamo. Il residuo dell'aspirazione (+10%, e in
 eccesso, non in difetto) è dell'ordine della dispersione che questo stesso report
 dichiara fra i due rilievi al motore (±0,15 mm) più il centraggio dell'acquisizione:
-per attribuirlo serve la ri-scansione, ma non è più l'anomalia che era. E ha
+per attribuirlo servirebbe la ri-scansione, che su questo albero non è più possibile (camma non disponibile dal 2026-08-02); resta comunque ben lontano dall'anomalia che era. E ha
 cambiato **verso**: le ipotesi costruite su "lo scanner sotto-misura il fianco" non
 servono più a spiegarlo.
 

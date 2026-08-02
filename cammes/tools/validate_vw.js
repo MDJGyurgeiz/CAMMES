@@ -111,8 +111,14 @@ var DBICCH = 35, RPUNT = 1.5, ANG_PMS = 105;
 // Le soglie qui sotto sono i residui MISURATI oggi piu' un margine dichiarato,
 // non un valore scelto per far passare il controllo. Servono come rilevatore di
 // deriva: se un domani un cambio le fa crescere ancora, la suite lo dice.
-// La prova che chiude la questione e' al banco: rimisurare questa camma dopo
-// averla rimontata, e misurare col calibro il cerchio base (B.1/B.4).
+// LA CAMMA VW NON E' PIU' DISPONIBILE (2026-08-02): la ri-scansione non si
+// puo' piu' fare, e su questo albero la questione non si chiude. La conferma
+// e' arrivata da un'altra strada e piu' forte: validate_106_piattello.js
+// confronta la stessa camma misurata col puntalino r1,5 e col piattello D33
+// FISICO, e la compensazione attuale prevede la seconda entro 0,065 mm RMS
+// contro 0,309 della formula precedente. La correzione e' giusta: il residuo
+// che resta qui e' dell'albero (usato, contro una scheda di camma nuova).
+// Questo file resta come rilevatore di deriva sui dati registrati.
 var MARGINE_DERIVA_MM = 0.10;
 var MARGINE_DERIVA_DEG = 3;
 var CASI = [
@@ -198,6 +204,10 @@ if (fails === 0) {
     console.log('l\'aspirazione resta fuori di 0,36 mm e 4°, contro 1,3 mm e 22° di prima.');
     console.log('La "sottostima ~35% del medio-fianco" era in larga parte il cerchio base');
     console.log('inserito come raggio, non un limite dello scanner. Il residuo');
-    console.log('dell\'aspirazione resta aperto: serve la ri-scansione.');
+    console.log('dell\'aspirazione resta DICHIARATO: la camma non c\'e\' piu\' e la');
+    console.log('ri-scansione non e\' piu\' possibile. La conferma che la compensazione');
+    console.log('del puntalino e\' giusta e\' arrivata da validate_106_piattello.js:');
+    console.log('stessa camma letta col puntalino r1,5 e col piattello D33 fisico,');
+    console.log('previsione entro 0,065 mm RMS contro 0,309 della formula precedente.');
     process.exit(0);
 } else { console.log(fails + ' CHECK FALLITI'); process.exit(1); }
