@@ -4914,7 +4914,11 @@ function analyze() {
         // AUDIT DYN-01: SOLO se il solver e' convergente — un modello non
         // convergente non produce verdetti (ne' negativi ne' "Compliance OK");
         // il toast 'Compliance NON convergente' sopra ha gia' avvisato.
-        if (complianceOn && (floatIn || floatEx) && compInfo && compInfo.status === 'CONVERGED') {
+        // _mollaOk: stesso cancello delle celle. Un verdetto sul treno valvole
+        // calcolato su una molla di esempio non e' un verdetto — e usciva
+        // verde ("Compliance OK, treno adeguato") mentre le celle accanto si
+        // astenevano.
+        if (_mollaOk && complianceOn && (floatIn || floatEx) && compInfo && compInfo.status === 'CONVERGED') {
             var maxFloatDyn = Math.max(floatIn ? floatIn.maxGap : 0, floatEx ? floatEx.maxGap : 0);
             _toastTimers.push(setTimeout(function () {
                 var detail = '';
@@ -5164,6 +5168,18 @@ function createComplianceChart(camLiftIn, valveLiftIn, camLiftEx, valveLiftEx, r
     // rosse "autorevoli" su una simulazione che non si e' stabilizzata.
     var distaccoAffidabile = !window._complianceInfo ||
                              window._complianceInfo.status === 'CONVERGED';
+    // CONVERGERE NON E' VALUTARE, e servono tutte e due.
+    //
+    // Il solver converge benissimo su dati inventati: con k, F₀ e massa ancora
+    // ai valori di esempio dell'HTML produce un risultato pulito e stabile, che
+    // pero' non parla di questo motore. Il cancello latoValutabile() protegge
+    // gia' le celle, il grafico forze, le sintesi del CSV e la tabella del PDF —
+    // ma non arrivava fin qui: le fasce rosse "distacco" comparivano lo stesso,
+    // duecento pixel sotto una cella che diceva "non valutabile".
+    // Per LATO, perche' aspirazione e scarico hanno molla e massa distinte e un
+    // lato confermato non rende valutabile l'altro.
+    var _distaccoIn = distaccoAffidabile && latoValutabile('intake');
+    var _distaccoEx = distaccoAffidabile && latoValutabile('exhaust');
 
     var labels = [];
     var camIn = [], valIn = [], camEx = [], valEx = [], floatIn = [], floatEx = [];
@@ -5184,8 +5200,8 @@ function createComplianceChart(camLiftIn, valveLiftIn, camLiftEx, valveLiftEx, r
         // nella zona critica non colorava nulla.
         // Ora si usa la stessa definizione di detectValveFloat e la stessa
         // soglia del verdetto (0,05 mm): valvola SOPRA la camma = contatto perso.
-        floatIn.push(distaccoAffidabile && vI !== null && (vI - cI) > SOGLIA_DISTACCO ? vI : null);
-        floatEx.push(distaccoAffidabile && vE !== null && (vE - cE) > SOGLIA_DISTACCO ? vE : null);
+        floatIn.push(_distaccoIn && vI !== null && (vI - cI) > SOGLIA_DISTACCO ? vI : null);
+        floatEx.push(_distaccoEx && vE !== null && (vE - cE) > SOGLIA_DISTACCO ? vE : null);
     }
 
     var titleEl = document.getElementById('complianceChartTitle');
@@ -6022,11 +6038,26 @@ function exportCSV() {
                 lines.push('Compliance residuo [m],' + fmtResiduo(R.complianceResidual, R.complianceTolX));
             }
         }
-        if (!R.complianceStatus || R.complianceStatus === 'CONVERGED') {
-            lines.push('Valve float dinamico asp. [mm],' + R.valveFloatIn.toFixed(3));
-            lines.push('Valve float dinamico asp. [deg],' + R.valveFloatInDeg);
-            lines.push('Valve float dinamico scar. [mm],' + R.valveFloatEx.toFixed(3));
-            lines.push('Valve float dinamico scar. [deg],' + R.valveFloatExDeg);
+        // Due condizioni diverse, servono entrambe: il solver deve essere
+        // convergente E la molla di quel lato deve essere quella vera. Prima
+        // bastava la prima, e il CSV portava un valve float calcolato sui valori
+        // di esempio mentre le sintesi accanto dicevano "non valutabile".
+        var _vfConv = (!R.complianceStatus || R.complianceStatus === 'CONVERGED');
+        if (_vfConv && (R.valutabileIn || R.valutabileEx)) {
+            if (R.valutabileIn) {
+                lines.push('Valve float dinamico asp. [mm],' + R.valveFloatIn.toFixed(3));
+                lines.push('Valve float dinamico asp. [deg],' + R.valveFloatInDeg);
+            } else {
+                lines.push('Valve float dinamico asp.,NON_VALUTABILE (' + MOTIVO_ESEMPIO + ')');
+            }
+            if (R.valutabileEx) {
+                lines.push('Valve float dinamico scar. [mm],' + R.valveFloatEx.toFixed(3));
+                lines.push('Valve float dinamico scar. [deg],' + R.valveFloatExDeg);
+            } else {
+                lines.push('Valve float dinamico scar.,NON_VALUTABILE (' + MOTIVO_ESEMPIO + ')');
+            }
+        } else if (_vfConv) {
+            lines.push('Valve float dinamico,NON_VALUTABILE (' + MOTIVO_ESEMPIO + ')');
         } else {
             lines.push('Valve float dinamico,NON_VALUTABILE (solver ' + R.complianceStatus + ')');
         }
@@ -6067,7 +6098,21 @@ function exportCSV() {
     var A = L.arrays;
     var gapEsportabile = !!(R.complianceOn && R.complianceStatus === 'CONVERGED' &&
                             A.valveLiftIn && A.valveLiftEx);
-    var intest = 'crank_deg,lift_in_mm,lift_ex_mm,vel_in_mmDeg,vel_ex_mmDeg,acc_in_mmDeg2,acc_ex_mmDeg2,jerk_in_mmDeg3,jerk_ex_mmDeg3,F_spring_in_N,F_inertia_in_N,F_spring_ex_N,F_inertia_ex_N';
+    // Le colonne di FORZA escono solo per i lati valutabili. Alzata, velocità,
+    // accelerazione e jerk vengono dalla misura e restano sempre; forza molla e
+    // forza d'inerzia no: dipendono da k, F₀ e massa, e finché sono ai valori di
+    // esempio esportarne 720 righe mentre il riepilogo si rifiuta di darne una
+    // sola è la stessa incoerenza chiusa altrove. Il commento qui sopra
+    // (P2-03) enunciava già la regola: mancava di applicarla a queste quattro.
+    var _forzeIn = !!R.valutabileIn, _forzeEx = !!R.valutabileEx;
+    var intest = 'crank_deg,lift_in_mm,lift_ex_mm,vel_in_mmDeg,vel_ex_mmDeg,acc_in_mmDeg2,acc_ex_mmDeg2,jerk_in_mmDeg3,jerk_ex_mmDeg3';
+    if (_forzeIn) intest += ',F_spring_in_N,F_inertia_in_N';
+    if (_forzeEx) intest += ',F_spring_ex_N,F_inertia_ex_N';
+    if (!_forzeIn || !_forzeEx) {
+        lines.push('# colonne di forza NON esportate per ' +
+            (!_forzeIn && !_forzeEx ? 'aspirazione e scarico' : (!_forzeIn ? 'aspirazione' : 'scarico')) +
+            ': ' + MOTIVO_ESEMPIO);
+    }
     if (gapEsportabile) intest += ',valve_lift_in_mm,valve_lift_ex_mm,gap_in_mm,gap_ex_mm';
     else if (R.complianceOn) lines.push('# traiettoria valvola e gap NON esportati: solver ' + (R.complianceStatus || 'non disponibile'));
     lines.push(intest);
@@ -6080,10 +6125,10 @@ function exportCSV() {
             num(A.anlIn[i], 4), num(A.anlEx[i], 4),
             num(A.velIn[i], 6), num(A.velEx[i], 6),
             num(A.accIn[i], 6), num(A.accEx[i], 6),
-            num(A.jerkIn[i], 6), num(A.jerkEx[i], 6),
-            num(A.fSpringIn[i], 2), num(A.fInertiaIn[i], 2),
-            num(A.fSpringEx[i], 2), num(A.fInertiaEx[i], 2)
+            num(A.jerkIn[i], 6), num(A.jerkEx[i], 6)
         ];
+        if (_forzeIn) riga.push(num(A.fSpringIn[i], 2), num(A.fInertiaIn[i], 2));
+        if (_forzeEx) riga.push(num(A.fSpringEx[i], 2), num(A.fInertiaEx[i], 2));
         if (gapEsportabile) {
             var vi = A.valveLiftIn[i], ve = A.valveLiftEx[i];
             var ci = A.anlIn[i], ce = A.anlEx[i];
@@ -6707,10 +6752,14 @@ function exportPDF() {
         rows.push(['Modello compliance',
             (R.complianceModel || '1-DOF') +
             (R.complianceStatus && R.complianceStatus !== 'CONVERGED' ? ' — ' + R.complianceStatus : ''), '']);
+        // Stesso doppio requisito del CSV e dello schermo: solver convergente E
+        // molla del lato confermata (latoValutabile). Il PDF e' il documento che
+        // esce dall'officina: non deve portare un verdetto in piu' di quelli che
+        // la scheda a schermo si e' rifiutata di dare.
         if (!R.complianceStatus || R.complianceStatus === 'CONVERGED') {
             rows.push(['Valve float dinamico',
-                R.valveFloatIn.toFixed(3) + ' mm @ ' + R.valveFloatInDeg + ' deg',
-                R.valveFloatEx.toFixed(3) + ' mm @ ' + R.valveFloatExDeg + ' deg']);
+                R.valutabileIn ? (R.valveFloatIn.toFixed(3) + ' mm @ ' + R.valveFloatInDeg + ' deg') : 'NON VALUTABILE',
+                R.valutabileEx ? (R.valveFloatEx.toFixed(3) + ' mm @ ' + R.valveFloatExDeg + ' deg') : 'NON VALUTABILE']);
         } else {
             rows.push(['Valve float dinamico', 'NON VALUTABILE', 'NON VALUTABILE']);
         }
