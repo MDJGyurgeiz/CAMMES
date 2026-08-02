@@ -58,6 +58,12 @@ function connect() {
         ws.on('error', reject);
     });
 }
+// I messaggi di ruolo portano ora un MOTIVO opzionale dopo il verbo
+// ("#ctl:denied occupato" contro "#ctl:denied stop-in-corso"): formato
+// additivo, come "#ctl:released <motivo>" che c'era gia'. I confronti si
+// fanno sul VERBO, non sulla riga intera, altrimenti ogni motivo nuovo
+// rompe i test senza che sia cambiato niente di sostanziale.
+function verbo(m) { return m ? String(m).split(" ")[0] : m; }
 function lastCtl(ws) { for (var i = ws._msgs.length - 1; i >= 0; i--) if (ws._msgs[i].indexOf('#ctl:') === 0 && ws._msgs[i].indexOf('#ctl:info') !== 0) return ws._msgs[i]; return null; }
 function has(ws, s) { return ws._msgs.some(function (m) { return m === s || m.indexOf(s) === 0; }); }
 
@@ -143,7 +149,7 @@ Promise.all([freePort(), freePort()]).then(async function (ports) {
     check('perdita controllore: STOP "x" inviato', afterStop.indexOf('x') >= 0, JSON.stringify(afterStop));
     B._msgs = [];
     B.send('#ctl:acquire'); await sleep(200);
-    check('takeover NEGATO durante la finestra STOPPING', lastCtl(B) === '#ctl:denied', lastCtl(B));
+    check('takeover NEGATO durante la finestra STOPPING', verbo(lastCtl(B)) === '#ctl:denied', lastCtl(B));
     // arriva il terminale del run -> finestra chiusa -> takeover ok
     await inject(['EVT STOPPED run=' + runN + ' reason=USER state=IDLE_LOCKED']); await sleep(200);
     B._msgs = [];

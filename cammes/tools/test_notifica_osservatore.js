@@ -67,6 +67,12 @@ function connect(wsPort) {
         ws.on('error', reject);
     });
 }
+// I messaggi di ruolo portano ora un MOTIVO opzionale dopo il verbo
+// ("#ctl:denied occupato" contro "#ctl:denied stop-in-corso"): formato
+// additivo, come "#ctl:released <motivo>" che c'era gia'. I confronti si
+// fanno sul VERBO, non sulla riga intera, altrimenti ogni motivo nuovo
+// rompe i test senza che sia cambiato niente di sostanziale.
+function verbo(m) { return m ? String(m).split(" ")[0] : m; }
 // solo i messaggi di RUOLO: '#ctl:info ...' e' informativo e non conta
 function lastCtl(ws) {
     for (var i = ws._msgs.length - 1; i >= 0; i--) {
@@ -77,7 +83,7 @@ function lastCtl(ws) {
 async function attendiCtl(ws, atteso, budgetMs) {
     var scaduto = Date.now() + (budgetMs || 5000);
     while (Date.now() < scaduto) {
-        if (lastCtl(ws) === atteso) return lastCtl(ws);
+        if (verbo(lastCtl(ws)) === verbo(atteso)) return lastCtl(ws);   // confronto sul verbo: il motivo e additivo
         await sleep(20);
     }
     return lastCtl(ws);
@@ -135,19 +141,19 @@ async function parteServer() {
     // ...e il gate NON si e' aperto su quello che muove o configura
     b._msgs = []; b.send('$+010');
     r = await attendiCtl(b, '#ctl:denied');
-    check('il moto resta rifiutato', r === '#ctl:denied', r);
+    check('il moto resta rifiutato', verbo(r) === '#ctl:denied', r);
 
     b._msgs = []; b.send('c360');
     r = await attendiCtl(b, '#ctl:denied');
-    check('la configurazione di scansione resta rifiutata', r === '#ctl:denied', r);
+    check('la configurazione di scansione resta rifiutata', verbo(r) === '#ctl:denied', r);
 
     b._msgs = []; b.send('p');
     r = await attendiCtl(b, '#ctl:denied');
-    check('il passo di scansione resta rifiutato', r === '#ctl:denied', r);
+    check('il passo di scansione resta rifiutato', verbo(r) === '#ctl:denied', r);
 
     b._msgs = []; b.send('f');
     r = await attendiCtl(b, '#ctl:denied');
-    check('lo sblocco motore resta rifiutato', r === '#ctl:denied', r);
+    check('lo sblocco motore resta rifiutato', verbo(r) === '#ctl:denied', r);
 
     try { a.close(); } catch (e) {}
     try { b.close(); } catch (e) {}
@@ -220,7 +226,7 @@ function parteBanco() {
     vm.runInContext(fnUiMoto, ctx);      // quello VERO: cosi si prova la composizione
     vm.runInContext(fnRuolo, ctx);
 
-    function ruolo(r) { vm.runInContext('applicaRuoloBanco(' + JSON.stringify(r) + ');', ctx); }
+    function ruolo(r, motivo) { vm.runInContext('applicaRuoloBanco(' + JSON.stringify(r) + ',' + JSON.stringify(motivo || '') + ');', ctx); }
 
     // 1) entrata in sola lettura: UNA notifica
     toasts = []; ruolo('observer');
@@ -263,6 +269,42 @@ function parteBanco() {
         // 15 s di silenzio a 5 Hz = ~75 rifiuti taciuti
         check('il conteggio e quello vero (~75 in 15 s a 5 Hz)', n >= 60 && n <= 80, String(n));
     }
+
+    // 4-bis) IL CASO VERO DEL BANCO, letto dal log del 2026-08-02.
+    //   13:37:24  Controllore perso (socket chiuso) -> STOP inviato alla seriale
+    //   13:37:24  Client #3 connesso (1 totali)        <- UN SOLO client
+    //   13:37:24  Lease NEGATO: STOP del controllore precedente ancora in corso
+    //             ... 24 volte, in 4 secondi ...
+    //   13:37:28  Lease concesso al client #3
+    // Massimo di client contemporanei in tutto il log: 1. Non c'era nessun
+    // altro utente, e il messaggio diceva di chiudere una finestra inesistente.
+    // Si parte dallo stato VERO di quel caso: un client solo, che comanda, a
+    // cui cade il collegamento. Non da uno stato di osservatore lasciato dai
+    // controlli precedenti — sarebbe un'altra situazione.
+    ruolo('granted');
+    toasts = [];
+    ora += 60000;
+    ruolo('denied', 'stop-in-corso');
+    var corpoAttesa = toasts.length ? ((toasts[0].title || '') + ' ' + (toasts[0].body || '')) : '';
+    check('rifiuto per STOP in corso: avvisa', toasts.length === 1, toasts.length + ' toast');
+    check('e NON dice che c e un altro che comanda',
+        !/altra finestra|altro PC|altro client|altro utente/i.test(corpoAttesa),
+        corpoAttesa.slice(0, 110));
+    check('dice invece che passa da solo',
+        /da sol|attend|qualche secondo/i.test(corpoAttesa), corpoAttesa.slice(0, 110));
+    check('e non mette la pagina in sola lettura (non e osservatore di nessuno)',
+        vm.runInContext('bancoInSolaLettura()', ctx) === false,
+        'un client solo non e osservatore');
+
+    // e il rifiuto per banco OCCUPATO deve invece dirlo
+    toasts = [];
+    ora += 60000;
+    ruolo('denied', 'occupato');
+    var corpoOcc = toasts.length ? ((toasts[0].title || '') + ' ' + (toasts[0].body || '')) : '';
+    check('rifiuto per banco occupato: dice che c e un altro che comanda',
+        /altra finestra|altro PC/i.test(corpoOcc), corpoOcc.slice(0, 110));
+    check('e quello si mette in sola lettura',
+        vm.runInContext('bancoInSolaLettura()', ctx) === true);
 
     // 5) finita la raffica, il conteggio NON si trascina: un rifiuto isolato
     //    mezz'ora dopo non deve stampare il numero di stamattina

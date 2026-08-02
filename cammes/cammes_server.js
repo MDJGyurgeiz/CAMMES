@@ -1365,7 +1365,13 @@ var _stopPendingUntil = 0;
 var STOP_SETTLE_MS = 4000;
 function grantLease(ws) {
     if (_stopPendingUntil && Date.now() < _stopPendingUntil) {
-        try { ws.send('#ctl:denied'); } catch (e) {}
+        // Il MOTIVO viaggia col rifiuto: senza, il client non può distinguere
+        // "c'è un altro che comanda" da "sto ancora fermando il moto di prima",
+        // e finiva per dire all'operatore di chiudere una finestra che non
+        // esisteva. Misurato sul banco (log 2026-08-02, 13:37:24): un solo
+        // client collegato, si ricarica la pagina, 24 rifiuti in 4 secondi.
+        // Formato additivo: i client vecchi leggono 'denied' e ignorano il resto.
+        try { ws.send('#ctl:denied stop-in-corso'); } catch (e) {}
         log.warn('WS', 'Lease NEGATO al client #' + ws._id + ': STOP del controllore precedente ancora in corso');
         return false;
     }
@@ -1454,7 +1460,7 @@ wsServer.on('connection', function (ws) {
             if (op === 'acquire') {
                 if (!controller) grantLease(ws);
                 else if (controller === ws) { try { ws.send('#ctl:granted'); } catch (e) {} }
-                else try { ws.send('#ctl:denied'); } catch (e) {}
+                else try { ws.send('#ctl:denied occupato'); } catch (e) {}
             } else if (op === 'release') {
                 if (controller === ws) releaseLease('rilascio esplicito');
             } // 'hb' e altri: no-op (la vitalità è via ping/pong)
@@ -1487,7 +1493,10 @@ wsServer.on('connection', function (ws) {
         if (isControlCommand(fr.canonical)) {
             if (!controller) grantLease(ws);
             if (controller !== ws) {
-                try { ws.send('#ctl:denied'); } catch (e) {}
+                // 'occupato' = c'e' davvero un altro client che comanda.
+                // Distinto da 'stop-in-corso' (vedi grantLease): il messaggio
+                // che l'operatore legge cambia, e uno dei due sarebbe falso.
+                try { ws.send('#ctl:denied occupato'); } catch (e) {}
                 log.debug('CMD', 'Comando da observer #' + ws._id + ' RIFIUTATO: "' + fr.canonical.trim() + '"');
                 return;
             }

@@ -9,6 +9,101 @@ Sistema di misura profili alberi a camme per motori.
 
 ---
 
+## v3.7.0 — 2026-08-02: quello che l'officina ha visto (firmware 4.1 INVARIATO)
+
+Undici commit, ognuno con un test che **falliva sulla v3.6.0**. Il firmware non è
+toccato: chi ha la 4.1 non riflasha.
+
+Questa release non nasce da un audit ma da **sette righe scritte da chi usa il
+banco**. Sei erano difetti veri. Il filo che le lega è sempre lo stesso di
+questo progetto: **una schermata che dice una cosa e un codice che ne fa
+un'altra** — e stavolta, in due casi su sette, la schermata mentiva su qualcosa
+che l'officina poteva controllare da sé.
+
+### ⚠ Cosa cambia nei numeri già visti
+
+Chi ha PDF o CSV fatti con la v3.6.0 vedrà numeri diversi. Nessuno era "giusto"
+prima:
+
+| Cosa | Prima | Adesso | Perché |
+|---|---|---|---|
+| **Acc. max**, **Jerk max**, forza d'inerzia, **Margine**, **Distacco valvola** | | **circa la metà** | la derivata si prendeva su una curva interpolata a mezzo grado: bastava digitare 0,5 in "Angolo lobo" perché l'accelerazione dimezzasse, esattamente ×2,000. Ora si deriva dove i campioni sono misurati |
+| **Acc. max** al variare del **gioco** | cambiava fino a 1,7× | **non cambia più** | misurava lo spigolo della ripresa del gioco, non la camma. Ora quello spigolo non viene creato |
+| Curve con follower **bicchiere / rullo / finger** | fianchi più alti | **fianchi più bassi** | la compensazione del puntalino sferico aveva il **verso rovesciato**: sommava l'errore invece di toglierlo. Su VW: durata asp. 286° → 280°, alzata al PMS sca. 3,25 → 2,84 mm |
+| **Diametro minimo del piattello** | dipendeva dal Ø digitato | **un numero solo** | era calcolato sulla curva già ritagliata dal bicchiere digitato. Sulla 106 asp.: digitando 20 diceva Ø35,1, digitando 32 diceva Ø29,6. Ora dice Ø30,8 qualunque cosa digiti |
+| **Valve float**, fasce di distacco, colonne di forza nel CSV | uscivano sempre | **solo a molla confermata** | il cancello che protegge le celle non arrivava al ramo dinamico: usciva un "Compliance OK, treno adeguato" calcolato su una molla di esempio |
+| **"Pos. max alzata"** nel CSV | una riga sola | **due righe distinte** | quel numero ricopiava il campo "Angolo lobo". Ora c'è la posizione **misurata** in gradi camma accanto all'angolo **dichiarato** |
+
+### Le sette segnalazioni
+
+**1. "Esce sempre *account in uso da un altro utente*, fino a 99 notifiche, e a
+volte lampeggia."** Il server contava `m` — *leggi il comparatore* — fra i
+comandi che muovono il motore. La pagina lo chiede ogni 200 ms, quindi bastava
+un rifiuto per prendersene cinque al secondo su una pila che ne mostra quattro.
+
+E il messaggio era **falso**. Il log del banco (2026-08-02, 13:37:24) dice che i
+client collegati erano **uno solo, sempre**: la pagina si era ricaricata dopo una
+scansione, il server stava fermando il moto in sicurezza per 4 secondi e
+rifiutava il comando — 24 volte. All'operatore veniva chiesto di chiudere una
+finestra che non esisteva. Ora il rifiuto porta il **motivo**, e i due casi si
+leggono diversi: *"il banco è comandato da un'altra finestra"* oppure *"il banco
+sta fermando il movimento, torna disponibile da solo"*.
+
+**2. "A volte non legge il comparatore, devo spegnere e riaccendere."** Stesso
+difetto: durante quei secondi `m` era rifiutato, quindi il comparatore restava
+**cieco**. Riaccendere apriva un collegamento nuovo che a volte arrivava dopo la
+finestra di sicurezza. Ora una lettura non passa dal lease e non si spegne mai.
+
+**3. "Non c'è più a quanti gradi è l'alzata massima."** Vero, ed era una
+regressione. Ma il numero che si leggeva prima **non misurava la camma**: usciva
+dalla curva già fasata, dove il picco viene ancorato sul centro dichiarato.
+Verificato su tre camme coi picchi veri a 189, 181 e 115 gradi camma: digitando
+90/100/105/112 si leggeva 90/100/105/112. Ora ci sono **entrambi**, etichettati.
+Il banco non può misurare quella posizione: non ha un riferimento al PMS del
+motore.
+
+**4. "A volte non completa l'auto zero."** Si piantava **proprio quando non
+serviva**: ad albero già in posizione lo sfasamento è zero e il comando
+costruito era `$+000`, che per il firmware non è un movimento nullo ma un
+comando **non valido**. L'ack di fine movimento non arrivava mai, la pagina
+aspettava 8 secondi al buio e poi si ricaricava buttando via la scansione.
+
+**5. "La lettura col puntalino r 1.5 non mi convince."** Fondato. La sfera, sui
+fianchi, legge **sempre in più** — e il programma **sommava** quell'errore invece
+di toglierlo, raddoppiandolo. Verificato contro un oracolo costruito da zero
+(profilo noto → misura della sfera per forza bruta a 0,01° → ritorno): scarto
+0,043-0,354 mm senza correzione, 0,087-0,704 mm con la formula vecchia,
+**0,0005-0,0012 mm** con l'inversa esatta.
+
+**6. "Comparto molle e piattello inattendibili."** Due difetti distinti, ora
+chiusi: il verdetto dinamico scavalcava il cancello delle molle, e il criterio
+del piattello si mordeva la coda.
+
+**7. "Grafico torta errato."** Non era la matematica — le fette sommano 720 su
+tutti e tre gli anelli. Era **un click sulla legenda**: Chart.js, sui grafici a
+ciambella, nasconde la fetta di quell'indice **in tutti gli anelli** e riscala il
+resto. Cliccando "Scarico" spariva l'arco aperto di aspirazione, scarico e
+incrocio insieme. Misurato sui dati VW: i totali passavano da 720/720/720 a
+**436/439/642**, e l'aspirazione si leggeva **511°** invece di 284.
+
+### Resta aperto, e dichiarato
+
+- **VW**: correggendo il verso del puntalino la camma si allontana dalla scheda
+  del rettificatore (durata asp. residuo 6° → 10°), tutti gli scarti nel verso
+  "più corta e più bassa". Due letture: **albero usato contro scheda di camma
+  nuova** (l'usura accorcia e abbassa, e l'errore del tastatore ne mascherava una
+  parte), oppure un residuo nella correzione. L'oracolo depone per la prima.
+  Decide il banco: ri-scansione e cerchio base al calibro.
+- **Modalità Puntalino**: è il default e **non applica nessuna correzione**. Le
+  letture non sono falsate dal programma, ma l'errore della sfera c'è lo stesso
+  (0,17 mm sui fianchi di una camma tipo 106). Offrirla anche lì cambierebbe ogni
+  numero già esportato col default: è una decisione, non una svista.
+- Accelerazione non convergente fra finestre di lisciatura, verdetto di
+  ripetibilità che esclude il cerchio base, P2-01/07/09/12, Lotto F rete,
+  SEC-01/03, REL-01/05, FW-02/07/12 e metrologia al banco.
+
+---
+
 ## v3.6.0 — 2026-07-29: un numero, una fonte (firmware 4.1 INVARIATO)
 
 Ventiquattro commit, ognuno con un test che **falliva sulla v3.5.0**. Il firmware

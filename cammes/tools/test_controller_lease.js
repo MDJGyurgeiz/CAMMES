@@ -34,6 +34,12 @@ function connect(wsPort) {
         ws.on('error', reject);
     });
 }
+// I messaggi di ruolo portano ora un MOTIVO opzionale dopo il verbo
+// ("#ctl:denied occupato" contro "#ctl:denied stop-in-corso"): formato
+// additivo, come "#ctl:released <motivo>" che c'era gia'. I confronti si
+// fanno sul VERBO, non sulla riga intera, altrimenti ogni motivo nuovo
+// rompe i test senza che sia cambiato niente di sostanziale.
+function verbo(m) { return m ? String(m).split(" ")[0] : m; }
 function lastCtl(ws) {
     // ignora lo snapshot informativo '#ctl:info ...' (CTRL-02): qui contano i
     // soli messaggi di RUOLO (free/observer/granted/denied/released)
@@ -92,7 +98,7 @@ var BUDGET_MSG_MS = 5000;
 async function attendiCtl(ws, atteso, budgetMs) {
     var scaduto = Date.now() + (budgetMs || BUDGET_MSG_MS);
     while (Date.now() < scaduto) {
-        if (lastCtl(ws) === atteso) return lastCtl(ws);
+        if (verbo(lastCtl(ws)) === verbo(atteso)) return lastCtl(ws);   // confronto sul verbo: il motivo e additivo
         await sleep(20);
     }
     return lastCtl(ws);   // il chiamante fa fallire il check con il valore vero
@@ -139,7 +145,7 @@ Promise.all([freePort(), freePort()]).then(async function (ports) {
     // B (observer) invia un comando di moto → RIFIUTATO
     b._msgs = []; b.send('$+010');
     r = await attendiCtl(b, '#ctl:denied');
-    check('B observer: comando di moto RIFIUTATO (#ctl:denied)', r === '#ctl:denied', r);
+    check('B observer: comando di moto RIFIUTATO (#ctl:denied)', verbo(r) === '#ctl:denied', r);
 
     // B può comunque chiedere STOP (non riceve denied)
     b._msgs = []; b.send('x');
@@ -151,7 +157,7 @@ Promise.all([freePort(), freePort()]).then(async function (ports) {
     // comandi di controllo e sarebbero finite sulla seriale SENZA lease.
     b._msgs = []; b.send('7 SCAN run=1 dir=+ units=360');
     r = await attendiCtl(b, '#ctl:denied');
-    check('B observer: comando v4 SCAN RIFIUTATO (#ctl:denied)', r === '#ctl:denied', r);
+    check('B observer: comando v4 SCAN RIFIUTATO (#ctl:denied)', verbo(r) === '#ctl:denied', r);
     // v4 STATUS è read-only → NON gated (nessun denied)
     b._msgs = []; b.send('8 STATUS');
     r = await attendiSilenzio(b);
@@ -160,7 +166,7 @@ Promise.all([freePort(), freePort()]).then(async function (ports) {
     // B prova ad acquisire mentre A controlla → negato
     b._msgs = []; b.send('#ctl:acquire');
     r = await attendiCtl(b, '#ctl:denied');
-    check('B non può prendere il lease mentre A controlla', r === '#ctl:denied', r);
+    check('B non può prendere il lease mentre A controlla', verbo(r) === '#ctl:denied', r);
 
     // A chiude → lease liberato; B ora può acquisire
     a.close(); await sleep(400);

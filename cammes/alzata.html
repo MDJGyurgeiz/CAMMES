@@ -607,13 +607,29 @@ if (typeof window !== 'undefined' && window.addEventListener) {
     window.addEventListener('load', function () { _aggiornaUiMoto(); });
 }
 
-function applicaRuoloBanco(role) {
+function applicaRuoloBanco(role, motivo) {
     var toast = (typeof window !== 'undefined' && window.cammesToast) ? window.cammesToast : null;
 
     // 'denied' NON è un ruolo: è la risposta a un comando. Non cambia lo stato,
     // ma conferma che siamo in sola lettura anche se il ruolo non era arrivato.
     if (role === 'denied') {
-        if (ruoloBanco !== 'observer') { ruoloBanco = 'observer'; _aggiornaUiMoto(); }
+        // DUE RIFIUTI DIVERSI, E DIRLI UGUALI È UNA BUGIA.
+        //
+        // 'occupato'      = c'è davvero un altro client che comanda il banco.
+        // 'stop-in-corso' = nessun altro: il server sta ancora fermando il moto
+        //                   del collegamento precedente (finestra di sicurezza
+        //                   di 4 s dopo la perdita del controllore) e non
+        //                   riassegna il comando finché il firmware non
+        //                   conferma. Dura pochi secondi e passa da sé.
+        //
+        // Il vecchio messaggio diceva sempre "un altro client sta controllando
+        // il banco: chiudi l'altra finestra". Sul banco vero (log 2026-08-02,
+        // 13:37:24) il caso è stato il SECONDO: un solo client collegato in
+        // tutto il log, la pagina si ricarica dopo una scansione, e in 4 secondi
+        // arrivano 24 rifiuti. All'operatore veniva chiesto di chiudere una
+        // finestra che non esisteva.
+        var attesa = (motivo === 'stop-in-corso');
+        if (!attesa && ruoloBanco !== 'observer') { ruoloBanco = 'observer'; _aggiornaUiMoto(); }
         var ora = Date.now();
         // Una raffica finita è finita: i rifiuti di dieci minuti fa non vanno
         // sommati a quello di adesso, o l'avviso stampa un numero vecchio.
@@ -626,9 +642,18 @@ function applicaRuoloBanco(role) {
             : '';
         _rifiutoUltimoMs = ora;
         _rifiutiTaciuti = 0;
-        if (toast) toast({ kind: 'err', title: 'Comando ignorato (sola lettura)',
-            body: 'Il banco è comandato da un\'altra finestra o da un altro PC. Solo STOP è sempre permesso.' + coda,
-            duration: 5000 });
+        if (toast) {
+            if (attesa) {
+                toast({ kind: 'warn', title: 'Banco in arresto: attendi qualche secondo',
+                    body: 'Il collegamento precedente si è chiuso e il banco sta fermando il movimento in sicurezza. ' +
+                          'Il comando torna disponibile da solo, senza fare niente.' + coda,
+                    duration: 5000 });
+            } else {
+                toast({ kind: 'err', title: 'Comando ignorato (sola lettura)',
+                    body: 'Il banco è comandato da un\'altra finestra o da un altro PC. Solo STOP è sempre permesso.' + coda,
+                    duration: 5000 });
+            }
+        }
         return;
     }
 
@@ -773,7 +798,8 @@ var _engineOnMessage = function(event) {
     // AUDIT MOT-04: messaggi di controllo del lease (server→client). Non sono
     // dati Arduino: gestiscono il ruolo controllore/osservatore.
     if (msg.indexOf('#ctl:') === 0) {
-        applicaRuoloBanco(msg.substring(5).split(' ')[0]);
+        var _p = msg.substring(5).split(' ');
+        applicaRuoloBanco(_p[0], _p[1] || '');
         return;
     }
 

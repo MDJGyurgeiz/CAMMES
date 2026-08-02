@@ -2,9 +2,9 @@
   "schema": "cammes-release-manifest/1",
   "app": {
     "name": "CAMMES",
-    "version": "3.6.0",
+    "version": "3.7.0",
     "channel": "beta-tecnica",
-    "note": "Un numero, una fonte. 24 commit, ognuno con un test che falliva sulla v3.5.0. Il firmware NON cambia (chi ha la 4.1 non riflasha). RIMOSSE le funzioni che indovinavano: risonanza spire (modello valido solo per molla singola cilindrica a passo costante) e Auto-tag (una Renault 19 veniva etichettata yamaha, e i tag si stampano sul PDF). CHIUSE le \"due verita\": il valve float aveva due scale (la stessa riga gialla a schermo e verde nel PDF), la durata due metodi (250 gradi nella scheda contro 249 nel confronto A/B), la durata della scansione quattro numeri, i campi con default due letture (validazione 106, calcolo 0). Il grafico forze non disegna piu un verdetto dove le celle dicono \"non valutabile\"; spegnere un modulo spegne il calcolo, non solo i campi. ATTENZIONE: cambiano tre valori esportati — alzata e durata del confronto A/B (ora lato valvola come la scheda) e \"Pos. max alzata\" (ora il centro del naso piatto, non il primo grado). La discrepanza VW aperta da giugno ha una causa: il cerchio base era inserito come RAGGIO invece che come diametro. Restano aperti P2-01/07/09/12 e la non-convergenza dell accelerazione. Vedi CHANGELOG.md e REMAINING_RISKS.md."
+    "note": "Quello che l officina ha visto. Undici commit, ognuno con un test che falliva sulla v3.6.0. Il firmware NON cambia (chi ha la 4.1 non riflasha). Nasce da sette segnalazioni di chi usa il banco: sei erano difetti veri. ATTENZIONE, CAMBIANO NUMERI GIA ESPORTATI: (1) Acc. max, Jerk max, forza d inerzia, Margine e Distacco valvola scendono a circa la meta — la derivata si prendeva su una curva interpolata a mezzo grado, e bastava digitare 0,5 in Angolo lobo perche l accelerazione dimezzasse; ora non dipende piu nemmeno dal gioco. (2) Le curve con follower bicchiere/rullo/finger hanno i fianchi piu bassi: la compensazione del puntalino sferico aveva il VERSO ROVESCIATO e raddoppiava l errore invece di toglierlo (verificato contro un oracolo esatto: 0,0005-0,0012 mm contro 0,087-0,704 mm). (3) Il diametro minimo del piattello non dipende piu dal diametro digitato. (4) Valve float, fasce di distacco e colonne di forza escono solo a molla confermata. (5) Pos. max alzata era un eco del campo Angolo lobo: ora la posizione MISURATA in gradi camma sta accanto a quella dichiarata. Corretti anche: la notifica di sola lettura che arrivava a 99 (e che accusava un altro utente che non esisteva — log del banco: un solo client collegato), il comparatore che restava cieco, lo zero virtuale che si piantava ad albero gia in posizione, e il diagramma di fasatura che un click sulla legenda svuotava. Restano aperti: il residuo VW (usura o correzione, decide il banco), la modalita Puntalino che non applica nessuna correzione, l accelerazione non convergente e P2-01/07/09/12. Vedi CHANGELOG.md e REMAINING_RISKS.md."
   },
   "firmware": {
     "version": "4.1",
@@ -17,9 +17,9 @@
     "sourceReproducibleNote": "REL-07 CHIUSO: build bit-per-bit riproducibile, verificata in CI (.github/workflows/firmware.yml) e in npm test (tools/verify_firmware.js)",
     "benchValidated": "2026-07-23 COM5: v3 39/39 + v4 28/28 (incl. FW-01 watchdog SCAN e true-positive FW-03 su guasto encoder reale)"
   },
-  "commit": "tag v3.6.0 (il commit esatto e il tag coincidono alla release)",
+  "commit": "tag v3.7.0 (il commit esatto e il tag coincidono alla release)",
   "gates": {
-    "npmTest": "41 suite, 667 check verdi (software; incl. mock-seriale, round-trip profili e coerenza dei documenti di release)",
+    "npmTest": "50 suite verdi (software; incl. mock-seriale, round-trip profili, oracolo puntalino e coerenza dei documenti di release)",
     "lint": "0 errori",
     "npmAudit": "1 moderata (pkg, devDep, no fix) — REL-02",
     "exeSigned": false,
@@ -47,7 +47,7 @@
     "true-positive fault encoder: OSSERVATO su guasto reale 2026-07-23 (chiuso)",
     "FW-07 LM339 + FW-12 oscilloscopio + metrologia banco — NEEDS_HARDWARE",
     "SEC-01 auth token LAN / REL-01 jsPDF / REL-02-05 firma exe — decisioni committente",
-    "UI Analisi: i rilievi della revisione v3.4.3 sono CHIUSI nella v3.6.0 (21 confermati + 3 parziali di una ricognizione avversariale). Restano: accelerazione non convergente (1,4x fra finestre di lisciatura) e verdetto di ripetibilita che esclude il cerchio base — scelta di calcolo da decidere."
+    "UI Analisi: chiuse nella v3.7.0 le sette segnalazioni dell officina (sei difetti confermati). Restano: residuo VW asp 10 gradi di durata dopo la correzione del puntalino (usura dell albero o residuo della correzione — decide la ri-scansione al banco); modalita Puntalino senza compensazione della sfera (decisione committente: cambierebbe ogni numero gia esportato col default); accelerazione non convergente fra finestre di lisciatura; verdetto di ripetibilita che esclude il cerchio base."
   ],
   "warning": "Beta tecnica: le protezioni software/firmware sono validate al banco, ma la caratterizzazione metrologica non e' completa e l'exe non e' firmato. Non presentare le misure come certificate."
 }
