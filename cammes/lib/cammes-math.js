@@ -113,29 +113,38 @@ function convertPuntToBicchiere(camLiftRaw, rBase, dBicch, rPunt) {
     // Il controllo si fa PIU' SOTTO, quando la curva del piattello esiste:
     // vedi la nota accanto a `escursioneContatto`.
 
-    var raw = new Array(361);
-    raw[0] = 0;
-    for (var a = 1; a <= 360; a++) {
-        var bestY = -Infinity;
-        for (var t2 = 1; t2 <= 360; t2++) {
-            var ang = (t2 - a) * DEG;
-            var x = r[t2] * Math.cos(ang);
-            if (x < -R || x > R) continue;
-            var y = r[t2] * Math.sin(ang);
-            if (y > bestY) bestY = y;
+    // Inviluppo del piattello: per ogni angolo, il punto del profilo con Y
+    // massima fra quelli che la faccia riesce a toccare (|x| ≤ semiLarghezza).
+    // Con semiLarghezza = Infinity il vincolo non c'è: è il piattello ideale.
+    function inviluppo(semiLarghezza) {
+        var raw = new Array(361);
+        raw[0] = 0;
+        for (var a = 1; a <= 360; a++) {
+            var bestY = -Infinity;
+            for (var t2 = 1; t2 <= 360; t2++) {
+                var ang = (t2 - a) * DEG;
+                var x = r[t2] * Math.cos(ang);
+                if (x < -semiLarghezza || x > semiLarghezza) continue;
+                var y = r[t2] * Math.sin(ang);
+                if (y > bestY) bestY = y;
+            }
+            var lift = bestY - rBase;
+            raw[a] = lift > 0 ? lift : 0;
         }
-        var lift = bestY - rBase;
-        raw[a] = lift > 0 ? lift : 0;
+        // Allineamento angolare: il raw del puntalino ha picco a θ_p,
+        // l'algoritmo qui sopra produce picco a (θ_p - 90)°. Compenso di +90°.
+        var o = new Array(361);
+        o[0] = 0;
+        for (var i = 1; i <= 360; i++) {
+            var src = ((i - 90) % 360 + 360) % 360;
+            if (src === 0) src = 360;
+            o[i] = raw[src];
+        }
+        return o;
     }
-    // Allineamento angolare: il raw del puntalino ha picco a θ_p,
-    // l'algoritmo qui sopra produce picco a (θ_p - 90)°. Compenso di +90°.
-    var out = new Array(361);
-    out[0] = 0;
-    for (var i = 1; i <= 360; i++) {
-        var src = ((i - 90) % 360 + 360) % 360;
-        if (src === 0) src = 360;
-        out[i] = raw[src];
-    }
+    // La curva SIMULATA usa il bicchiere vero: un piattello piccolo davvero non
+    // raggiunge i punti oltre il suo bordo, e quella limitazione è fisica.
+    var out = inviluppo(R);
 
     // ESCURSIONE DEL CONTATTO, sulla curva GIUSTA.
     //
@@ -148,9 +157,25 @@ function convertPuntToBicchiere(camLiftRaw, rBase, dBicch, rPunt) {
     // Un allarme gonfiato di otto volte, su un accoppiamento che e' solo al
     // limite. E la vecchia controprova sulla VW ("margine 0,3 mm") veniva dallo
     // stesso errore: col criterio giusto il margine e' 3,36 mm, cioe' comodo.
+    //
+    // E si deriva la curva NON VINCOLATA, non `out`.
+    //
+    // `out` e' gia' ritagliato dal bicchiere digitato: l'inviluppo scarta i punti
+    // oltre |x| > R. Derivare quello vuol dire calcolare il numero che deve dire
+    // "questo bicchiere e' troppo piccolo" sul comportamento di quel bicchiere
+    // troppo piccolo — e nel regime vincolato, l'UNICO in cui l'avviso compare,
+    // la curva prende dei ginocchi in ingresso e uscita dal vincolo, quindi la
+    // pendenza letta non e' piu' una proprieta' della camma.
+    // Misurato sulla 106 aspirazione (cerchio base 32, puntalino 1,5):
+    //     digitando 20  ->  "servirebbe almeno D 35,1"
+    //     digitando 29  ->  "servirebbe almeno D 30,2"
+    //     digitando 32  ->  "servirebbe almeno D 29,6"   <- il valore vero
+    // Il consiglio non era un punto fisso: chi comprava il D 35 indicato e lo
+    // digitava si sentiva rispondere che ne bastava 29,6.
+    var ideale = inviluppo(Infinity);
     var escursioneContatto = 0;
     for (var q = 1; q <= 360; q++) {
-        var pr = out[q === 1 ? 360 : q - 1], su = out[q === 360 ? 1 : q + 1];
+        var pr = ideale[q === 1 ? 360 : q - 1], su = ideale[q === 360 ? 1 : q + 1];
         if (!isFinite(pr) || !isFinite(su)) continue;
         var off = Math.abs((su - pr) / (2 * DEG));   // mm per radiante
         if (off > escursioneContatto) escursioneContatto = off;
