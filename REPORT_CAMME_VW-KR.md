@@ -38,7 +38,7 @@ Coppia di alberi a camme per VW 1.8 16V KR (rettifica Motor Rettifica, mod. **25
 | Centro lobo installato [° BTDC] | — | 105 (calettamento) | ~103,5 | ~103,5 |
 
 ⁽¹⁾ Picchi scansione coerenti con tutte le fonti (scarto ≤ 0,3 mm).
-⁽²⁾ **Valori ottenuti col cerchio base inserito come RAGGIO invece che come diametro** — errore di unità individuato il 2026-07-28 (§5.1). Ricalcolati col raggio corretto: alzata@PMS 3,86 (asp) / 3,25 (sca), durata 286° / 282°. Per fasare fanno comunque fede i rilievi al motore.
+⁽²⁾ **Valori ottenuti col cerchio base inserito come RAGGIO invece che come diametro** — errore di unità individuato il 2026-07-28 (§5.1). Ricalcolati col raggio corretto **e col verso della compensazione puntalino corretto** (2026-08-02, §5.1): alzata@PMS 3,43 (asp) / 2,84 (sca), durata 280° / 280°. Per fasare fanno comunque fede i rilievi al motore.
 
 **Dispersione tra i rilievi al motore** (stesso operatore, sessioni diverse): durata scarico 281↔291° (±5°), alzata@PMS asp 3,20↔3,50 mm (±0,15). È la normale incertezza del metodo goniometro+comparatore ai livelli di rampa; da tenere presente quando si regola "a gradi".
 
@@ -96,7 +96,7 @@ Sensibilità empirica dai tuoi stessi rilievi: **≈0,13–0,15 mm per grado di 
 | Alzata al PMS scansione vs motore | **Causa individuata il 2026-07-28: cerchio base inserito come RAGGIO quando era il DIAMETRO** (vedi sotto) |
 | Ipotesi slittamento stepper | **ESCLUSA sperimentalmente** (banco 07-05: divergenza passi↔encoder 1° su 360°, zero backlash) |
 | Ripetibilità scanner | RMS 0,074 mm su ri-scansione a 2 mesi (camma Clio) |
-| Prossimo passo | Ri-scansione camme VW per il **residuo dell'aspirazione** (+0,36 mm, +10%): non più un'anomalia da un terzo |
+| Prossimo passo | Ri-scansione camme VW per il **residuo di durata dell'aspirazione** (10°): non più un'anomalia da un terzo |
 
 ### 5.1 La "sottostima del 35%" era un errore di unità nel nostro dato d'ingresso
 
@@ -114,14 +114,31 @@ Ricalcolo sulle stesse scansioni, senza toccare i dati misurati:
 
 | | raggio sbagliato | **raggio corretto** | riferimenti indipendenti |
 |---|---|---|---|
-| ASP · alzata al PMS @105° | 2,18 mm | **3,86 mm** | 3,20 / 3,50 / scheda 3,5 |
-| ASP · durata | 272° | **286°** | 290 / 292 / scheda 295 |
-| SCA · alzata al PMS @105° | 1,61 mm | **3,25 mm** | 2,90 / 3,00 / scheda 3,3 |
-| SCA · durata | 272° | **282°** | 281 / 291 / scheda 285 |
+| ASP · alzata al PMS @105° | 2,18 mm | **3,43 mm** | 3,20 / 3,50 / scheda 3,5 |
+| ASP · durata | 272° | **280°** | 290 / 292 / scheda 295 |
+| SCA · alzata al PMS @105° | 1,61 mm | **2,84 mm** | 2,90 / 3,00 / scheda 3,3 |
+| SCA · durata | 272° | **280°** | 281 / 291 / scheda 285 |
 
-Lo **scarico rientra dentro la banda di tutte le fonti indipendenti**, su entrambe
-le grandezze. L'**aspirazione** resta fuori di **0,36 mm e 4°**, contro 1,3 mm e 18°
-di prima.
+Lo **scarico** rientra praticamente dentro la banda di tutte le fonti indipendenti
+(alzata a 0,06 mm dal bordo, durata a 1°). L'**alzata dell'aspirazione rientra
+dentro la banda**; resta fuori la sua **durata, di 10°**, contro 18° di prima.
+
+> **I numeri di questa tabella si sono spostati il 2 agosto 2026**, e non perché
+> siano cambiate le scansioni: è stato corretto il **verso della compensazione del
+> tastatore sferico**, che *sommava* l'errore invece di toglierlo. La sfera legge
+> in eccesso sui fianchi, quindi la correzione giusta **sottrae**: le durate si
+> accorciano e l'alzata a un dato angolo si abbassa. ASP durata 286° → 280°,
+> SCA alzata 3,25 → 2,84 mm. Tutti e tre i residui si sono spostati nel verso
+> "più corta e più bassa".
+>
+> Due letture, e non si chiude da qui: **(a)** l'albero è **usato** e la scheda è
+> di camma **nuova** — l'usura toglie materiale dai fianchi, cioè accorcia e
+> abbassa, e l'errore del tastatore ne mascherava una parte lusingando la misura;
+> **(b)** resta un errore nella correzione — contro cui depone l'oracolo esatto,
+> che chiude a 1 µm su quattro geometrie e due raggi di punta, e il fatto che il
+> rumore di misura non la sbilancia (a ±4 µm il bias è +0,2 µm).
+> **La prova che decide è al banco: ri-scansione della camma rimontata (B.4) e
+> cerchio base al calibro (B.1).**
 
 Quindi: lo scanner non sottostimava il medio-fianco di un terzo. Restava un errore
 di unità nel parametro che noi gli davamo. Il residuo dell'aspirazione (+10%, e in
@@ -153,7 +170,7 @@ Il programma ora chiede il **diametro** nel campo del cerchio base, e un test
 
 ## 6. Conclusioni
 
-1. **Le camme sono sane e coerenti** tra scheda e rilievi al motore (picchi, durate ~290°). Il medio-fianco della *scansione*, dato per anomalo per mesi, era in larga parte **il cerchio base inserito come raggio quando era il diametro** (§5.1): corretto, lo scarico rientra nella banda di tutte le fonti e all'aspirazione resta un residuo di 0,36 mm. Per fasare continuano a far fede i rilievi al motore, ma la scansione non è più da scartare.
+1. **Le camme sono sane e coerenti** tra scheda e rilievi al motore (picchi, durate ~290°). Il medio-fianco della *scansione*, dato per anomalo per mesi, era in larga parte **il cerchio base inserito come raggio quando era il diametro** (§5.1): corretto, lo scarico rientra nella banda di tutte le fonti e all'aspirazione resta un residuo di 10° sulla durata (l'alzata rientra). Per fasare continuano a far fede i rilievi al motore, ma la scansione non è più da scartare.
 2. **Fasatura attuale**: ICL ~102-104 / ECL ~103,5, overlap 79-85° — più anticipata e "incrociata" della prescrizione (105/105).
 3. **Per un'erogazione da 4000 rpm in su, la proposta 106/108 è tecnicamente fondata** (chiusura aspirazione ritardata + blowdown anticipato + LSA 107): adottala regolando per **alzata al PMS ≈ 2,90 mm (asp, gioco 0,30) e ≈ 2,40 mm (sca, gioco 0,40)**, un passo per volta, con verifica del gioco valvola-pistone.
 

@@ -5,17 +5,21 @@
 // lib/cammes-math.js (libreria condivisa col browser) e verifica
 // invarianti DERIVATE dal codice reale, non assunte:
 //
-//   PUNTALINO→ compensazione raggio sfera = offset NORMALE: ltrue = raw +
-//              rPunt·(1−cosα). Correzione ≥0, NULLA al naso/base, cresce sui
-//              fianchi (NON la vecchia sottrazione piatta raw−rPunt, che era
-//              un bug: abbassava tutto e faceva leggere il bicchiere < puntalino)
+//   PUNTALINO→ INVERSA dell'offset normale: la sfera legge sempre IN PIÙ del
+//              vero (d ≥ ρ + r), quindi la correzione SOTTRAE sui fianchi, è
+//              nulla al naso e sul cerchio base. La prova quantitativa sta in
+//              test_puntalino_ritorno.js (andata e ritorno contro un oracolo
+//              esatto); qui restano gli invarianti qualitativi.
+//              Storia: prima `raw − rPunt` (sottrazione piatta, abbassava anche
+//              il naso), poi `raw + rPunt·(1−cosα)` che aveva la forma giusta e
+//              il VERSO rovesciato — e raddoppiava l'errore invece di toglierlo.
 //   ROLLER   → rRoll→0 ⇒ profilo puntalino compensato (≥raw, =raw al picco);
 //              rRoll finito CAMBIA l'output e arrotonda il naso (Δ cresce col R)
 //   FINGER   → con tilt=0 e rPunt=0 la cinematica esatta si riduce al
 //              rapporto lineare: out[t] = raw[t] * (lValve / lArm)
 //              (e con lValve==lArm → identità)
 //   BICCHIERE→ piattello piatto: output finito e ≥0; picco ≈ picco grezzo;
-//              rPunt>0 NON cambia il picco (naso) ma alza i fianchi
+//              rPunt>0 NON cambia il picco (naso) e ABBASSA i fianchi
 //
 // Uso:  node cammes/tools/test_followers.js     (exit 0 = tutto ok)
 
@@ -54,18 +58,36 @@ console.log('=============================================================');
 // ---- PUNTALINO: compensazione offset normale (≥0, nulla al picco) ----
 var rPunt = 1.5;
 var comp = stylusCompensate(cam, 14, rPunt);
-var compNonNeg = true, compAdds = 0, pkCamIdx = 1, pkCam = 0;
+// IL VERSO DELLA CORREZIONE ERA ROVESCIATO, E QUESTI CHECK LO CONGELAVANO.
+// Chiedevano "correzione >= 0 ovunque" e "> 0 sui fianchi", cioe' esattamente
+// la proprieta' sbagliata: la sfera legge SEMPRE IN PIU' del vero (basta
+// prendere Delta = 0 dentro il massimo dell'inviluppo per avere d >= rho + r),
+// quindi la compensazione deve SOTTRARRE sui fianchi. Vedi
+// test_puntalino_ritorno.js per la prova di andata e ritorno contro un oracolo
+// esatto; qui restano gli invarianti qualitativi, col verso giusto.
+// La soglia NON e' scelta per far passare il controllo. L'inversa esatta
+// ricampiona su gradi interi una curva campionata a 1 grado, quindi dove la
+// rampa stacca dal cerchio base l'interpolazione lascia un residuo di segno
+// opposto. Misurato: 16 nanometri su questo lobo sintetico, fino a 2,8 micron
+// sulle quattro camme reali in prove/ — contro sottrazioni di 0,29-0,62 mm.
+// E' lo stesso ordine del rumore di misura del banco (2-4 micron), su uno
+// strumento che risolve 10 micron: sotto quella soglia non si sta piu'
+// affermando niente di fisico.
+var RESIDUO_RICAMPIONAMENTO = 0.005;   // mm
+var compAggiunta = 0, compTogli = 0, pkCamIdx = 1, pkCam = 0;
 for (var c = 1; c <= 360; c++) { if (cam[c] > pkCam) { pkCam = cam[c]; pkCamIdx = c; } }
 for (var ci = 1; ci <= 360; ci++) {
     var dcomp = (comp[ci]||0) - cam[ci];      // correzione = comp − raw
-    if (dcomp < -1e-9) compNonNeg = false;    // mai negativa
-    if (dcomp > compAdds) compAdds = dcomp;   // massima aggiunta (sui fianchi)
+    if (dcomp > compAggiunta) compAggiunta = dcomp;
+    if (-dcomp > compTogli) compTogli = -dcomp;  // massima sottrazione (sui fianchi)
 }
 var compAtPeak = Math.abs((comp[pkCamIdx]||0) - cam[pkCamIdx]);   // ~0 al naso
-console.log('PUNTALINO (stylusCompensate, offset normale):');
-check('correzione ≥ 0 ovunque (mai sottrae, era il bug)', compNonNeg);
+console.log('PUNTALINO (stylusCompensate, inversa dell offset normale):');
+check('la correzione non AGGIUNGE alzata (la sfera legge in piu, si sottrae)',
+    compAggiunta < RESIDUO_RICAMPIONAMENTO,
+    'max +' + compAggiunta.toExponential(2) + ' mm contro −' + compTogli.toFixed(3) + ' tolti');
 check('correzione ~0 al picco/naso (normale = radiale)', compAtPeak < 1e-3, 'Δ@picco ' + compAtPeak.toExponential(1));
-check('correzione > 0 sui fianchi (smussatura sfera)', compAdds > 1e-3, 'max +' + compAdds.toFixed(3) + ' mm');
+check('correzione < 0 sui fianchi (si toglie l eccesso della sfera)', compTogli > 1e-3, 'max −' + compTogli.toFixed(3) + ' mm');
 
 // ---- ROLLER: inviluppo radiale reale ----
 //  (1) rRoll→0 ⇒ profilo puntalino compensato (≥ raw, = raw al picco)
@@ -114,17 +136,19 @@ var biccPeakOK = (pkB >= 0.7 * pkRaw && pkB <= 1.4 * pkRaw);
 var biccR = convertPuntToBicchiere(cam, 14, 20, 1.5);
 var pkR = peakOf(biccR);
 var biccPeakSame = Math.abs(pkR - pkB) < 0.02 * pkB;
-var biccFlankUp = 0, biccNoDrop = true;
+// Stesso verso corretto, propagato al bicchiere: dichiarare un puntalino
+// sferico toglie l'eccesso di lettura sui fianchi e lascia il naso dov'e'.
+var biccFlankDown = 0, biccNoRise = true;
 for (var b = 1; b <= 360; b++) {
     var dd = (biccR[b]||0) - (bicc[b]||0);
-    if (dd > biccFlankUp) biccFlankUp = dd;
-    if (dd < -1e-6) biccNoDrop = false;       // rPunt non deve MAI abbassare (era il bug)
+    if (-dd > biccFlankDown) biccFlankDown = -dd;
+    if (dd > RESIDUO_RICAMPIONAMENTO) biccNoRise = false;   // stessa soglia, stesso motivo
 }
 console.log('BICCHIERE (piattello Ø20):');
 check('output finito e ≥0', biccFinite);
 check('picco ≈ picco grezzo (0.7–1.4×)', biccPeakOK, 'bicch ' + pkB.toFixed(3) + ' vs raw ' + pkRaw.toFixed(3));
-check('rPunt>0 NON abbassa il picco (naso invariato)', biccPeakSame && biccNoDrop, 'pkR ' + pkR.toFixed(3) + ' vs pk0 ' + pkB.toFixed(3));
-check('rPunt>0 alza i fianchi (compensazione sfera, non più bug)', biccFlankUp > 1e-3, 'max +' + biccFlankUp.toFixed(3) + ' mm');
+check('rPunt>0 NON sposta il picco (naso invariato)', biccPeakSame && biccNoRise, 'pkR ' + pkR.toFixed(3) + ' vs pk0 ' + pkB.toFixed(3));
+check('rPunt>0 abbassa i fianchi (toglie l eccesso della sfera)', biccFlankDown > 1e-3, 'max −' + biccFlankDown.toFixed(3) + ' mm');
 
 console.log('');
 if (fails === 0) { console.log('TUTTI I CHECK PASSANO (13/13)'); process.exit(0); }

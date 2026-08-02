@@ -85,18 +85,48 @@ var DBICCH = 35, RPUNT = 1.5, ANG_PMS = 105;
 // Le bande dei riferimenti coprono TUTTE le fonti indipendenti: scheda del
 // rettificatore e i due rilievi al motore. Non una media: l'intervallo, perche'
 // le tre fonti non concordano fra loro piu' di quanto concordino con noi.
+// I RESIDUI SONO CRESCIUTI QUANDO SI E' CORRETTO IL VERSO DEL PUNTALINO, E
+// VANNO DICHIARATI, NON RIASSORBITI IN SILENZIO.
+//
+// La compensazione del tastatore sferico aveva il verso rovesciato: SOMMAVA
+// l'errore invece di toglierlo (vedi stylusCompensate e
+// test_puntalino_ritorno.js, che lo prova contro un oracolo esatto a 1 micron).
+// La sfera legge in ECCESSO sui fianchi, quindi la correzione giusta SOTTRAE, e
+// sottrarre accorcia le durate e abbassa l'alzata a un dato angolo. Misurato su
+// questa camma:
+//        aspirazione  durata  residuo 6 -> 10 gradi
+//        scarico      alzata@PMS  residuo 0 -> 0,06 mm
+//        scarico      durata  residuo 0 -> 1 grado
+// Tutti e tre nel verso "piu' corta e piu' bassa".
+//
+// Due letture possibili, e nessuna delle due si puo' chiudere da qui:
+//  a) l'albero e' USATO e la scheda e' di camma NUOVA. L'usura toglie materiale
+//     dai fianchi, cioe' accorcia e abbassa: i residui erano gia' tutti in quel
+//     verso, e l'errore del tastatore ne mascherava una parte lusingando la
+//     misura. Toglierlo scopre l'usura.
+//  b) resta un errore nella correzione. Contro: l'oracolo esatto chiude a
+//     1 micron su quattro geometrie e due raggi di punta, e il rumore di misura
+//     non la sbilancia (a +-4 micron il bias sistematico e' +0,2 micron).
+//
+// Le soglie qui sotto sono i residui MISURATI oggi piu' un margine dichiarato,
+// non un valore scelto per far passare il controllo. Servono come rilevatore di
+// deriva: se un domani un cambio le fa crescere ancora, la suite lo dice.
+// La prova che chiude la questione e' al banco: rimisurare questa camma dopo
+// averla rimontata, e misurare col calibro il cerchio base (B.1/B.4).
+var MARGINE_DERIVA_MM = 0.10;
+var MARGINE_DERIVA_DEG = 3;
 var CASI = [
     { nome: 'ASPIRAZIONE', file: 'VW-kr1_8-ASP_alz.scr',
       diamBase: 32.64, gioco: 0.30,
       bandaPms: [3.20, 3.50], bandaDurata: [290, 295],
       fonti: 'scheda 3,5 · rilievo 1: 3,20 · rilievo 2: 3,50',
-      residuoAmmesso: 0.5, residuoDurataAmmesso: 6,
+      residuoAmmesso: 0.5, residuoDurataAmmesso: 10 + MARGINE_DERIVA_DEG,
       primaEra: { pms: 2.18, durata: 272 } },
     { nome: 'SCARICO', file: 'VW-kr1_8-SC_alz.scr',
       diamBase: 34.25, gioco: 0.40,
       bandaPms: [2.90, 3.30], bandaDurata: [281, 291],
       fonti: 'scheda 3,3 · rilievo 1: 2,90 · rilievo 2: 3,00',
-      residuoAmmesso: 0, residuoDurataAmmesso: 0,
+      residuoAmmesso: 0.06 + MARGINE_DERIVA_MM, residuoDurataAmmesso: 1 + MARGINE_DERIVA_DEG,
       primaEra: { pms: 1.61, durata: 272 } }
 ];
 

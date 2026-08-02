@@ -48,19 +48,39 @@ var window = root;   // alias: i riferimenti window._* puntano al global reale
 // Avvisa via toast se Ø bicchiere è troppo grande per il lobo (l'impronta
 // del piattello copre quasi tutta la cam → alzata simulata distorta).
 // Compensazione del raggio del PUNTALINO SFERICO usato in scansione.
-// La sfera (raggio rPunt) tocca la cam e il suo CENTRO traccia un profilo
-// offset di rPunt lungo la NORMALE alla superficie. Il comparatore è azzerato
-// sul cerchio base, dove la normale È radiale: lì l'offset rPunt è già incluso
-// nello zero. Quindi nell'ALZATA (differenza dallo zero) l'offset si CANCELLA
-// al naso e sul base circle, e resta solo un contributo sui FIANCHI, dove la
-// normale non è radiale:
-//      lift_vero(θ) = lift_misurato(θ) + rPunt·(1 − cos α),
-//      α = atan2( d(lift)/dθ , r ),   r = rBase + lift.
-// Poiché cos α ≤ 1, la correzione è SEMPRE ≥ 0: il puntalino "smussa" i fianchi
-// e il profilo cam vero è leggermente più pieno della misura grezza.
-// NB: il vecchio modello faceva `ltrue = raw − rPunt` (sottrazione piatta) —
-// ERRORE: abbassava tutta la curva di rPunt anche al naso (dove non c'è alcun
-// offset radiale), facendo leggere al bicchiere MENO del puntalino. Bug reale.
+//
+// LA SFERA LEGGE SEMPRE IN PIÙ, MAI IN MENO — quindi si SOTTRAE.
+// Il banco misura con una sfera di raggio rPunt il cui centro scorre su una
+// retta radiale: è la cinematica di un follower a rullo radiale. Il centro sta a
+//      d(a) = max_θ [ ρ·cos Δ + √(rPunt² − ρ²·sin²Δ) ],   Δ = θ − a
+// e prendendo Δ = 0 dentro il massimo si ottiene subito d(a) ≥ ρ(a) + rPunt.
+// Sui fianchi la normale non è radiale, la sfera tocca "più avanti" e il
+// comparatore legge in eccesso; al naso e sul cerchio base la normale È radiale
+// e l'errore è nullo (per questo l'alzata massima non cambia).
+//
+// L'INVERSA ESATTA. Il centro descrive la pitch curve d(a) = rBase + rPunt + s(a).
+// Il punto di contatto sta a distanza rPunt lungo la normale ALLA PITCH:
+//      φ  = atan2(d′, d)
+//      ρ  = √(d² − 2·d·rPunt·cos φ + rPunt²)
+//      θ  = a + atan2(rPunt·sin φ, d − rPunt·cos φ)
+// e poi si ricampiona sui gradi interi, perché θ NON è a: sui fianchi il
+// contatto è spostato di 1-2 gradi camma.
+//
+// LA RIASSEGNAZIONE DELL'ANGOLO NON È UN RAFFINAMENTO, È IL TERMINE DOMINANTE.
+// La versione precedente faceva `lift + rPunt·(1 − cos α)` con α misurato sul
+// raggio del profilo: calcolava bene la parte radiale ma assegnava quel raggio
+// all'angolo sbagliato, e il termine che nasce da quello vale circa il doppio ed
+// è di segno opposto. Risultato: il verso della correzione era rovesciato e
+// l'errore non veniva tolto ma RADDOPPIATO. Misurato contro un oracolo esatto
+// (profilo analitico noto → misura della sfera per forza bruta a 0,01° →
+// ritorno), su quattro geometrie e due raggi di punta, scarto massimo:
+//      curva grezza, non compensata   0,043 … 0,354 mm
+//      formula precedente             0,087 … 0,704 mm   (sempre il doppio)
+//      inversa esatta                 0,0005 … 0,0012 mm
+// Il vecchio commento affermava "la correzione è SEMPRE ≥ 0": era l'esatto
+// contrario del vero. Prima ancora si faceva `raw − rPunt` (sottrazione piatta),
+// sbagliata in un altro modo: abbassava anche il naso, dove non c'è errore.
+//
 // Ritorna l'array dell'alzata vera ltrue[1..360] (≥0) rispetto al cerchio base.
 function stylusCompensate(camLiftRaw, rBase, rPunt) {
     rPunt = (typeof rPunt === 'number' && rPunt > 0) ? rPunt : 0;
@@ -68,17 +88,49 @@ function stylusCompensate(camLiftRaw, rBase, rPunt) {
     lift[0] = 0;
     var i;
     for (i = 1; i <= 360; i++) { var v = camLiftRaw[i] || 0; lift[i] = v > 0 ? v : 0; }
-    if (rPunt === 0) return lift;          // nessun puntalino → nessuna correzione
+    if (rPunt === 0) return lift;          // punta a coltello → nessuna correzione
     var DEG = Math.PI / 180;
-    var out = new Array(361);
-    out[0] = 0;
+
+    // pitch curve: dove passa il CENTRO della sfera
+    var d = new Array(361);
+    for (i = 1; i <= 360; i++) d[i] = rBase + rPunt + lift[i];
+
+    // punti (θ, ρ) del profilo vero — NON su griglia intera
+    var pts = [];
     for (i = 1; i <= 360; i++) {
         var prev = i === 1 ? 360 : i - 1;
         var next = i === 360 ? 1 : i + 1;
-        var dLdTheta = (lift[next] - lift[prev]) / 2 / DEG;   // mm per radiante
-        var r = rBase + lift[i];
-        var alpha = Math.atan2(dLdTheta, r);                  // angolo normale↔radiale
-        out[i] = lift[i] + rPunt * (1 - Math.cos(alpha));
+        var dp = (d[next] - d[prev]) / 2 / DEG;               // dd/dθ, mm per radiante
+        var phi = Math.atan2(dp, d[i]);                       // normale ↔ radiale
+        var rho = Math.sqrt(d[i] * d[i] - 2 * d[i] * rPunt * Math.cos(phi) + rPunt * rPunt);
+        var delta = Math.atan2(rPunt * Math.sin(phi), d[i] - rPunt * Math.cos(phi)) / DEG;
+        pts.push({ th: i + delta, ro: rho });
+    }
+    pts.sort(function (a, b) { return a.th - b.th; });
+    var n = pts.length;
+
+    // ricampionamento circolare sui gradi interi
+    function roAt(x) {
+        if (x < pts[0].th || x > pts[n - 1].th) {             // segmento a cavallo dello 0
+            var a0 = pts[n - 1].th, a1 = pts[0].th + 360;
+            var xx = (x < pts[0].th) ? x + 360 : x;
+            var t = (xx - a0) / (a1 - a0);
+            return pts[n - 1].ro * (1 - t) + pts[0].ro * t;
+        }
+        var lo = 0, hi = n - 1;
+        while (hi - lo > 1) {
+            var mid = (lo + hi) >> 1;
+            if (pts[mid].th <= x) lo = mid; else hi = mid;
+        }
+        var f = (x - pts[lo].th) / (pts[hi].th - pts[lo].th);
+        return pts[lo].ro * (1 - f) + pts[hi].ro * f;
+    }
+
+    var out = new Array(361);
+    out[0] = 0;
+    for (i = 1; i <= 360; i++) {
+        var val = roAt(i) - rBase;
+        out[i] = val > 0 ? val : 0;
     }
     return out;
 }
