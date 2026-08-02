@@ -729,6 +729,44 @@ var _engineOnOpen = function(event) {
     msgold = "***";
 };
 
+// Sfasamento dello ZERO VIRTUALE, calcolato a parte perché è la parte che si
+// può sbagliare e che si deve poter provare da sola.
+//
+// L'albero va portato dove il picco sta a +180° dallo zero di scansione, usando
+// il conteggio encoder REALE registrato al momento del picco (immune a backlash,
+// slittamenti ed errori cumulativi del contatore di scansione).
+// Encoder: 4 conteggi = 1° camma, quindi 180° = 720 conteggi.
+//
+// Ritorna cmd = null quando NON c'è niente da muovere. Non è un dettaglio:
+// "$+000" non è un movimento nullo, è un comando NON VALIDO. Il firmware lo
+// rifiuta (master.ino: `valueM <= 0` → "*err $") e la riga che emette "*mv" non
+// viene mai raggiunta; il browser, che non ha nessun gestore per "*err", restava
+// 8 secondi ad aspettare un ack che non sarebbe mai arrivato — col LED Motore
+// che lampeggia "in movimento" a motore fermo — e poi ricaricava la pagina
+// buttando via grafico e dati della scansione, senza spiegare niente.
+// È il "a volte non completa l'auto zero" segnalato dall'officina, e capitava
+// proprio quando lo 0 virtuale NON serviva: albero già in posizione → delta
+// esattamente zero. La funzione gemella (Vai a posizione salvata) la guardia
+// ce l'ha già.
+function comandoZeroVirtuale(maxgEncoder, encoderOra, subStepsPerDeg) {
+    var encoderTarget = maxgEncoder + 720;
+    var rawDelta = encoderTarget - encoderOra;
+    // Modulo 360° (1440 conteggi): posizioni fisiche equivalenti. Si sceglie il
+    // movimento più corto fra +Δ e −Δ, per non far girare il motore di un giro
+    // intero in più (più backlash).
+    var deltaCount = ((rawDelta % 1440) + 1440) % 1440;   // 0..1439
+    if (deltaCount > 720) deltaCount -= 1440;             // -719..720
+    var deltaDeg = deltaCount / 4;
+    var units = Math.round(deltaDeg * subStepsPerDeg);
+    if (units === 0) {
+        return { units: 0, deltaCount: deltaCount, deltaDeg: deltaDeg, cmd: null };
+    }
+    var abs = Math.abs(units);
+    var pad = (abs < 10) ? '00' + abs : (abs < 100) ? '0' + abs : '' + abs;
+    return { units: units, deltaCount: deltaCount, deltaDeg: deltaDeg,
+             cmd: '$' + (units >= 0 ? '+' : '-') + pad };
+}
+
 var _engineOnMessage = function(event) {
     msg = event.data;
 
@@ -1153,35 +1191,34 @@ var _engineOnMessage = function(event) {
                 labms = 0;
                 location.reload(true);
             } else {
-                var encoderTarget = maxg_encoder + 720;  // +180° in conteggi encoder x4
-                var rawDelta      = encoderTarget - currentEncoderCount;
-                // Modulo 360° (1440 conteggi): posizioni fisiche equivalenti.
-                // Scegliamo il movimento più corto fra +Δ e -Δ per evitare di
-                // far girare il motore di un giro intero in più (più backlash).
-                var deltaCount = ((rawDelta % 1440) + 1440) % 1440;  // 0..1439
-                if (deltaCount > 720) deltaCount -= 1440;             // -719..720
-                var deltaDeg   = deltaCount / 4;
-                var deltaUnits = Math.round(deltaDeg * currentMode.subStepsPerDeg);
-                var sign          = (deltaUnits >= 0) ? '+' : '-';
-                var absUnits      = Math.abs(deltaUnits);
-                var rgradi        = (absUnits < 10) ? '00' + absUnits
-                                  : (absUnits < 100) ? '0' + absUnits
-                                  : '' + absUnits;
-                var rgradi2       = '$' + sign + rgradi;
-                if (window.CAMMES_DEBUG) console.log('[0V] picco encoder=' + maxg_encoder + ' (=' + (maxg_encoder/4).toFixed(2) + '°), target=' + encoderTarget + ' (=' + (encoderTarget/4).toFixed(2) + '°), now=' + currentEncoderCount + ', delta_raw=' + rawDelta + ' cnt → short=' + deltaCount + ' cnt = ' + deltaDeg.toFixed(2) + '° = ' + deltaUnits + ' units. cmd="' + rgradi2 + '"');
-                sendSocket.send(rgradi2 + '\n');
-                oldg = absUnits;
-                var stepEl = document.getElementById("step");
-                if (stepEl) stepEl.value = oldg;
+                var zv = comandoZeroVirtuale(maxg_encoder, currentEncoderCount, currentMode.subStepsPerDeg);
+                if (window.CAMMES_DEBUG) console.log('[0V] picco encoder=' + maxg_encoder + ' (=' + (maxg_encoder/4).toFixed(2) + '°), now=' + currentEncoderCount + ' → short=' + zv.deltaCount + ' cnt = ' + zv.deltaDeg.toFixed(2) + '° = ' + zv.units + ' units. cmd="' + (zv.cmd || 'nessuno') + '"');
                 labms = 0;
-                window._waiting_mv  = true;
-                window._mv_fallback = setTimeout(function(){
-                    if (window._waiting_mv) {
-                        if (window.CAMMES_DEBUG) console.warn('[0V] timeout fallback 8s, reload forzato');
-                        window._waiting_mv = false;
-                        location.reload(true);
-                    }
-                }, 8000);
+                if (zv.cmd === null) {
+                    // Già in posizione: il picco è entro mezzo grado dal bersaglio.
+                    // Niente da comandare — e soprattutto niente "$+000", che il
+                    // firmware rifiuterebbe lasciandoci ad aspettare un ack che non
+                    // arriva. Si conclude subito, dicendolo.
+                    if (window.cammesToast) window.cammesToast({
+                        kind: 'success', title: 'Zero virtuale: gi&agrave; in posizione',
+                        body: 'Il picco &egrave; gi&agrave; a 180&deg; dallo zero (scarto ' + Math.abs(zv.deltaDeg).toFixed(2) + '&deg;, sotto la risoluzione del passo): non serve muovere.',
+                        duration: 5000
+                    });
+                    setTimeout(function(){ location.reload(true); }, 1200);
+                } else {
+                    sendSocket.send(zv.cmd + '\n');
+                    oldg = Math.abs(zv.units);
+                    var stepEl = document.getElementById("step");
+                    if (stepEl) stepEl.value = oldg;
+                    window._waiting_mv  = true;
+                    window._mv_fallback = setTimeout(function(){
+                        if (window._waiting_mv) {
+                            if (window.CAMMES_DEBUG) console.warn('[0V] timeout fallback 8s, reload forzato');
+                            window._waiting_mv = false;
+                            location.reload(true);
+                        }
+                    }, 8000);
+                }
             }
         }
     }
