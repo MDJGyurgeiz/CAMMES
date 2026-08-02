@@ -4771,6 +4771,22 @@ function analyze() {
             maxLiftIn: mxIn.lift, maxLiftEx: mxEx.lift,
             maxPosIn: mxIn.pos, maxPosEx: mxEx.pos,
             camPkIn: _camPkIn, camPkEx: _camPkEx,
+            // POSIZIONE del picco in gradi CAMMA, dal file grezzo. È una misura:
+            // dice dove il naso è caduto in QUESTA scansione, e serve a ritrovare
+            // il punto se la si rifà. Stessa fonte e stesso metodo della riga di
+            // stato sotto Importa (piccoConPlateau sulla curva grezza), così i due
+            // numeri non possono divergere.
+            //
+            // NON confonderla con maxPosIn/maxPosEx, che stanno in gradi manovella
+            // e NON sono una misura: mapCamToCrank àncora il picco misurato
+            // esattamente sul centro dichiarato, quindi l'argmax cade per
+            // costruzione sul campo "Angolo lobo". Verificato su tre camme coi
+            // picchi veri a 189, 181 e 115 gradi camma: digitando 90/100/105/112
+            // si leggeva 90/100/105/112, 88/98/103/110 e 86/96/101/108.
+            // Il banco non può misurare quella posizione: non ha un riferimento
+            // al PMS del motore, l'albero è montato come capita.
+            camPkPosIn: (rawIntake && rawIntake.length) ? piccoConPlateau(rawIntake, 1, 360).idx : null,
+            camPkPosEx: (rawExhaust && rawExhaust.length) ? piccoConPlateau(rawExhaust, 1, 360).idx : null,
             areaIn: areaIn, areaEx: areaEx, areaDelta: areaDelta,
             asymIn: asymIn, asymEx: asymEx,
             fInertiaMaxIn: forcesIn.fInertiaMax, fInertiaMaxEx: forcesEx.fInertiaMax,
@@ -5942,8 +5958,16 @@ function exportCSV() {
     lines.push('Alzata scar. al PMS [mm],' + R.liftExTDC.toFixed(3));
     lines.push('Max alzata asp. [mm],' + R.maxLiftIn.toFixed(3));
     lines.push('Max alzata scar. [mm],' + R.maxLiftEx.toFixed(3));
-    lines.push('Pos. max alzata asp. [deg],' + R.maxPosIn);
-    lines.push('Pos. max alzata scar. [deg],' + R.maxPosEx);
+    // Due numeri diversi, e vanno detti per quello che sono.
+    // Il primo è una MISURA: dove il naso è caduto in questa scansione.
+    // Il secondo è una DICHIARAZIONE: viene dal campo "Angolo lobo" che
+    // l'operatore digita, e la curva fasata lo restituisce tale e quale perché
+    // mapCamToCrank ci àncora sopra il picco misurato. Prima si chiamava
+    // "Pos. max alzata [deg]" e sembrava una misura: non lo è mai stata.
+    lines.push('Posizione picco asp. [deg camma misurati],' + (R.camPkPosIn != null ? R.camPkPosIn : 'n.d.'));
+    lines.push('Posizione picco scar. [deg camma misurati],' + (R.camPkPosEx != null ? R.camPkPosEx : 'n.d.'));
+    lines.push('Angolo lobo asp. [deg manovella dichiarati],' + R.maxPosIn);
+    lines.push('Angolo lobo scar. [deg manovella dichiarati],' + R.maxPosEx);
     lines.push('Area asp. [mm·deg],' + R.areaIn.toFixed(2));
     lines.push('Area scar. [mm·deg],' + R.areaEx.toFixed(2));
     lines.push('Delta area asp/scar [%],' + R.areaDelta.toFixed(2));
@@ -6268,7 +6292,14 @@ function exportCamCard(testMode) {
     row('durata @ ' + I.durationRef.toFixed(2) + ' mm', R.durRefIn.toFixed(0) + '°', R.durRefEx.toFixed(0) + '°');
     row('alzata valvola', R.maxLiftIn.toFixed(2) + ' mm', R.maxLiftEx.toFixed(2) + ' mm', true);
     row('alzata camma', camPkIn.toFixed(2) + ' mm', camPkEx.toFixed(2) + ' mm');
-    row('angolo lobo', R.intakeCenter.toFixed(1) + '° ATDC', R.exhaustCenter.toFixed(1) + '° BTDC', true);
+    row('angolo lobo (dichiarato)', R.intakeCenter.toFixed(1) + '° ATDC', R.exhaustCenter.toFixed(1) + '° BTDC', true);
+    // La posizione MISURATA del picco: dove il naso è caduto in questa scansione.
+    // Va accanto all'angolo lobo, non al suo posto: quello è quanto l'operatore
+    // ha dichiarato, questo è quanto il banco ha visto. Sono in unità diverse
+    // (gradi camma contro gradi manovella dal PMS) e l'etichetta lo dice.
+    row('picco misurato (scansione)',
+        R.camPkPosIn != null ? R.camPkPosIn + '° camma' : 'n.d.',
+        R.camPkPosEx != null ? R.camPkPosEx + '° camma' : 'n.d.');
     row('apre', isFinite(R.intakeOpenBTC) ? R.intakeOpenBTC.toFixed(1) + '° BTDC' : 'n.d.',
                 isFinite(R.exOpenBBC) ? R.exOpenBBC.toFixed(1) + '° BBDC' : 'n.d.');
     row('chiude', isFinite(R.intakeCloseABC) ? R.intakeCloseABC.toFixed(1) + '° ABDC' : 'n.d.',
