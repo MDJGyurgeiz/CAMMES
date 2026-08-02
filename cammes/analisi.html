@@ -5479,6 +5479,30 @@ function updateTimingDiagram(inEv, exEv, durIn, durEx, overlap) {
                 legend: {
                     display: true,
                     position: 'bottom',
+                    // La legenda qui e' una DIDASCALIA, non un interruttore.
+                    //
+                    // Senza questa riga vale il predefinito di Chart.js per il
+                    // doughnut, che a ogni click chiama toggleDataVisibility(index).
+                    // Quello NON nasconde un dataset (un anello): nasconde la FETTA
+                    // di quell'indice IN TUTTI E TRE gli anelli, e poi ognuno
+                    // riscala gli archi rimasti perche' riempiano comunque il giro.
+                    // Le voci qui sotto portano index 0/1/2, che sono proprio gli
+                    // indici delle fette (0 = chiuso iniziale, 1 = ARCO APERTO,
+                    // 2 = chiuso finale): un click sulla seconda voce spegneva
+                    // l'arco aperto di aspirazione, scarico E incrocio insieme, e
+                    // restavano tre corone grigie.
+                    //
+                    // Misurato nel browser sui dati VW KR: dopo un click i totali
+                    // degli anelli passavano da 720 a 436,0 / 438,9 / 641,7, e
+                    // l'aspirazione si LEGGEVA 511 gradi invece di 284. Senza
+                    // nessun segnale: generateLabels non imposta 'hidden', quindi
+                    // la voce non veniva barrata. E lo stato alterato finiva anche
+                    // nel PDF, perche' l'export fotografa l'istanza viva.
+                    //
+                    // E' il "grafico torta errato" segnalato dall'officina: la
+                    // correzione precedente aveva colorato di grigio il tratto
+                    // chiuso (giusta, ma un'altra cosa) e questa causa era rimasta.
+                    onClick: function () {},
                     labels: {
                         color: anaColors().text,
                         font: { size: 11 },
