@@ -1624,8 +1624,15 @@ function benchVerdict(pdata, thresholds) {
     if (missing > 0) {
         return { status: 'NON_VALUTABILE', rms: NaN, max: NaN, covered: covered, missing: missing };
     }
+    // I residui tengono il SEGNO: qui si giudica un cilindro, non un'alzata.
+    // Col clamp dei negativi (il default, giusto per le camme) un avvallamento
+    // di -0,10 mm su 20 gradi usciva {OK, max 0,017} mentre lo stesso difetto
+    // a +0,10 usciva FAIL — e anche a banco sano l'RMS archiviato in Home era
+    // sottostimato di ~sqrt(2), perche' su rumore a media zero il clamp azzera
+    // meta' dei campioni. Il principio e' quello gia' scritto qui sopra: un
+    // campione non puo' MAI migliorare l'esito. (Audit 2026-08-09, 3.1)
     var arr = vals;
-    try { arr = removeCamBaseline(vals); } catch (e) {}
+    try { arr = removeCamBaseline(vals, false); } catch (e) {}
     var sq = 0, mx = 0;
     for (i = 1; i <= 360; i++) {
         var a = Math.abs(Number(arr[i]) || 0);
@@ -1673,7 +1680,14 @@ function _solve3(M, V) {
     return r;
 }
 
-function removeCamBaseline(raw) {
+// `clampNegativi` (default true): per un'ALZATA lo zero e' giusto — una camma
+// non scende sotto il cerchio base, e i piccoli negativi post-fit sono rumore.
+// Ma il clamp agisce a UN SOLO VERSO: per un RESIDUO (verifica banco sul
+// cilindro) azzerare i negativi significa perdonare meta' dei difetti e
+// sottostimare l'RMS di ~sqrt(2) anche a banco sano. Chi giudica residui passa
+// false. (Audit 2026-08-09, rilievo 3.1: -0,10 mm su 20 gradi usciva OK.)
+function removeCamBaseline(raw, clampNegativi) {
+    if (clampNegativi === undefined) clampNegativi = true;
     var DEG = Math.PI / 180, i;
     var out = new Array(361); out[0] = 0;
     var peak = 0;
@@ -1708,7 +1722,7 @@ function removeCamBaseline(raw) {
     for (i = 1; i <= 360; i++) {
         var base = a0 + a1 * Math.cos(i * DEG) + b1 * Math.sin(i * DEG);
         var cv = (raw[i] || 0) - base;
-        out[i] = cv > 0 ? cv : 0;
+        out[i] = (clampNegativi && cv < 0) ? 0 : cv;
     }
     return out;
 }
