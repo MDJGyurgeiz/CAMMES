@@ -26,13 +26,37 @@ raw (grado,alzata)
  → analysisRaw           (rimozione baseline/eccentricità di montaggio)
  → applyVirtualFollower  (puntalino → bicchiere/rullo/finger)  [una sola volta;
                           un file già-follower NON viene riconvertito, APP-07]
+                          dentro c'è stylusCompensate: inversa ESATTA della
+                          lettura a sfera (offset lungo la normale alla pitch
+                          curve + riassegnazione dell'angolo di contatto +
+                          ricampionamento circolare) — validata su misura
+                          fisica, 106 puntalino r1,5 vs piattello Ø33,
+                          0,065 mm RMS (validate_106_piattello.js)
  → mapCamToCrank         (fasatura: picco misurato camPeakPos + centro effettivo
                           effectiveCenters(anticipo); gioco sottratto qui)
  → (rocker ratio)        (applyRockerRatio, se ≠ 1)
  → findEvents            (apertura/chiusura dai CROSSING reali, sub-grado)
- → cinematica/dinamica   (derivate, compliance)
+ → cinematica/dinamica   (v. sotto: le DERIVATE non passano da questo asse)
  → output/export         (grafici, CSV, cam card, PDF: stesso oggetto eventi)
 ```
+
+**Derivate (dalla v3.7.0): ramo parallelo nel dominio CAMMA.** Le derivate NON
+si calcolano sull'array manovella qui sopra (interpolato a mezzo grado: un
+interpolante lineare concentra tutta la curvatura nei nodi, e il picco di
+accelerazione usciva esattamente 2× — misurato). Il ramo reale è `derivateLato`:
+
+```
+curva MISURATA (1..360 camma)
+ → smoothArray (Savitzky-Golay, SENZA clamp dei negativi: serve la forma)
+ → (alzata − gioco) NON troncata × rocker   [sottrarre una costante non crea
+                                             spigoli: niente impulso del gioco]
+ → derivateDominioCamma  (differenze centrali a 1° camma, poi /2ⁿ:
+                          vel /2, acc /4, jerk /8 — regola della catena)
+ → mapDerivataCamToCrank (RICAMPIONA la derivata già calcolata: non rideriva)
+```
+
+Gli estremi (Acc. max, Jerk max…) si valutano solo dove la curva non troncata
+è > 0 (valvola sollevata): la ripresa del gioco non è la camma.
 
 ## Picco (camPeakPos) — MAT-02
 
@@ -54,8 +78,10 @@ assume simmetria e su lobi asimmetrici sbaglia fino a ~60°):
 3. attraversamento **decrescente** dopo il picco → chiusura;
 4. interpolazione sub-grado: `xCross = x0 + (T − y0)/(y1 − y0)`;
 5. gestione wrap 720→1;
-6. se la coppia non è univoca → `ambiguous` (fallback documentato al vecchio
-   metodo, ma segnalato).
+6. se la coppia non è univoca → `ambiguous`: apertura e chiusura diventano
+   **NaN** e la UI mostra *n.d.* — **nessun fallback** al vecchio metodo
+   (AUDIT MAT-01: niente ricostruzione centro±durata/2). L'unico ripiego è il
+   conteggio dei bin, e vale per la **sola durata**.
 
 Mappatura agli eventi riportati (invariata su lobo simmetrico):
 
@@ -76,13 +102,14 @@ Valore e validità sono separati. Un grado senza campione valido resta
 lascia invalidi i gradi mancanti in tutti i run. Un profilo con
 `missingCount > 0` è **NON VALUTABILE** per conformità/timing/cam card (APP-09).
 
-## Reindicizzazione encoder (MAT-08)
+## Reindicizzazione encoder — RIMOSSA (2026-07-23)
 
-`reindexByEncoder` accetta un giro solo se lo span è ≥ 70% del giro atteso
-(counts/rev ≈ 1440); riporta la divergenza. **Limiti noti (PARTIAL,
-REMAINING_RISKS)**: mancano ancora counts/rev calibrati per-dispositivo,
-tolleranza di jitter e monotonicità stretta — da completare col device/boot-id
-del firmware (Lotto B).
+`reindexByEncoder` non esiste più: la validazione era troppo permissiva
+(accettava un giro al 90%, span 150%, inversioni) e tenerla in libreria la
+faceva sembrare un percorso affidabile. Al banco passi motore ed encoder
+coincidono entro 1° sull'intero giro, quindi l'asse del profilo sono i **passi
+motore**. L'encoder resta in uso per zero virtuale, reset zero e allarme
+slittamento (alzata.html). Storia: `git log lib/cammes-math.js`.
 
 ## Unità
 

@@ -23,7 +23,7 @@ Sistema completo per misurare e analizzare i profili degli alberi a camme: hardw
       └────────────┬──────────────┘
                    │ USB seriale 9600 baud (hot-plug: riconnessione automatica)
       ┌────────────┴──────────────┐
-      │     Arduino Uno (v3.6)    │   stepper via driver opto-isolato (TB6600/DM542)
+      │     Arduino Uno (fw 4.1)  │   stepper via driver opto-isolato (TB6600/DM542)
       │                           │   encoder LDP3806 1:1 camme (1440 cnt/giro)
       │                           │   comparatore Neoteck via LM339N
       └───────────────────────────┘
@@ -50,7 +50,7 @@ CAMMES/
 │   ├── fw/                       #   firmware precompilato (.hex) + avrdude per il flash in-app
 │   ├── prove/                    #   archivio misure .scr (con cestino .trash/, 30 gg)
 │   └── package.json              #   deps: ws, serialport · dev: eslint, pkg
-├── master/master.ino             # firmware unificato v3.6 (1 Arduino Uno)
+├── master/master.ino             # firmware unificato 4.1 (1 Arduino Uno, protocollo v3+v4)
 ├── legacy/                       # vecchia architettura 2-Arduino + polare.html (dismessi)
 ├── .github/workflows/release.yml # CI: su tag v* → test → build exe → asset in release
 ├── LICENSE                       # tutti i diritti riservati + limitazione responsabilità
@@ -77,7 +77,7 @@ anagrafica tag/preferiti) e cammes.log (diagnostica).
 
 ## Hardware
 
-- **Arduino Uno** — controller unico (firmware `master/master.ino` v3)
+- **Arduino Uno** — controller unico (firmware `master/master.ino` 4.1, protocollo v3+v4)
 - **Driver stepper opto-isolato** (TB6600/DM542, common-anode: 5V su PUL+/DIR+/ENA+; GND 36V separato dal GND Arduino)
 - **NEMA 17** — 32 micropassi = 1° camma (11.520 step/giro, riduzione inclusa)
 - **Encoder LDP3806-360BM** — 360 PPR ×4 = 1440 cnt/giro, 1:1 sull'albero camme, pull-up 4.7 kΩ su A e B
@@ -104,7 +104,7 @@ anagrafica tag/preferiti) e cammes.log (diagnostica).
 | `$±NNN` | PC→Uno | Rotazione manuale → `*mv` (o `*mabort` se interrotta) |
 | `m` | PC→Uno | Solo misura → `*sm` |
 | `?` / `!` | PC→Uno | Query encoder (`encoder=N deg=…` + `*pos`) / reset zero |
-| `v` | PC→Uno | Versione/capacità → `ver=3.6 scan=1 free=N` |
+| `v` | PC→Uno | Versione/capacità → `ver=4.1 scan=1 proto=4 free=N` (`proto=4` attiva il bridge v4 del server) |
 | `cN rN wN uN aN gN kN` | PC→Uno | Config: campioni, µpassi, settle, pulse, rampa, preset |
 | `f` / `l` | PC→Uno | Motore libero / bloccato |
 
@@ -126,7 +126,7 @@ npm run build      :: genera cammes.exe (pkg, node18-win-x64)
 ```
 
 ### Firmware
-Il modo più semplice: **Home → Sistema & aggiornamenti → ⚡ Aggiorna firmware Arduino** (usa l'hex e l'avrdude inclusi, ~15 s). In alternativa: `arduino-cli compile --fqbn arduino:avr:uno master` + upload. Lo **scan autonomo** e lo **STOP software** richiedono firmware **3.1+**; il **watchdog host** (il moto si ferma da solo se il PC sparisce per 5 s) e lo **STOP del Concerto** richiedono il **3.4**; il parser robusto (comandi fuori range rifiutati con `*err`) il **3.5**; il **FREE persistente** (movimenti rifiutati con `*locked` finché non si sblocca), le letture p/q assestate e l'**handshake di boot** (`*boot` con reset reason) il **3.6** (verifica col comando `v` o dalla card Sistema in Home). Il protocollo completo (comandi e risposte `*se/*sm/*sdone/*sabort/*mv/*mabort/*wdt/*tend/*tabort/*locked/*boot/*err`) è versionato nel commento di testa di `master/master.ino`.
+Il modo più semplice: **Home → Sistema & aggiornamenti → ⚡ Aggiorna firmware Arduino** (usa l'hex e l'avrdude inclusi, ~15 s). In alternativa: `arduino-cli compile --fqbn arduino:avr:uno master` + upload. Lo **scan autonomo** e lo **STOP software** richiedono firmware **3.1+**; il **watchdog host** (il moto si ferma da solo se il PC sparisce per 5 s) e lo **STOP del Concerto** richiedono il **3.4**; il parser robusto (comandi fuori range rifiutati con `*err`) il **3.5**; il **FREE persistente** (movimenti rifiutati con `*locked` finché non si sblocca), le letture p/q assestate e l'**handshake di boot** (`*boot` con reset reason) il **3.6** (verifica col comando `v` o dalla card Sistema in Home). Il protocollo completo (v3 e v4: comandi, eventi e terminali) è documentato in **PROTOCOL.md**, la fonte unica; il commento di testa di `master/master.ino` copre solo i comandi storici.
 
 ### Release
 `git tag vX.Y.Z && git push --tags` → la CI (runner Windows) esegue i test come gate, compila l'exe, calcola lo SHA256 e allega tutto alla release GitHub. L'update-check in-app punta all'asset `.exe` dell'ultima release.
@@ -135,8 +135,8 @@ Il modo più semplice: **Home → Sistema & aggiornamenti → ⚡ Aggiorna firmw
 
 ## Qualità e test
 
-- **`lib/cammes-math.js`**: tutta la matematica (conversioni follower, baseline/eccentricità, mappatura camma→albero, compliance 1/2/3-DOF, re-indicizzazione encoder) vive in un'unica libreria usata sia dal browser sia dai test node.
-- **`npm test`**: versione, follower, 3-DOF, carico molla richiesto, rimozioni, moduli spenti, baseline, encoder-reindex, misura affidabile (MAT-01/MET-01/02), fase&segni (MAT-02/03/04), confine di rete (SEC-01/02), robustezza server (SEC-05/06/07), valve float (DYN-01), fisica dell audit v3.4.3 (P1-04/06/09), validazione numerica dei campi (P1-12), Reset completo (P2-02), coerenza dei documenti di release (P2-13), validazione di PLAUSIBILITÀ su camme **Renault Clio 1.8 16V** e **VW KR 1.8 16V** reali (non un banco a motore trascinato: confronto con schede/misure di riferimento, non certificazione metrologica).
+- **`lib/cammes-math.js`**: tutta la matematica (conversioni follower con compensazione puntalino sferico, baseline/eccentricità, mappatura camma→albero, derivate nel dominio camma, compliance 1/2/3-DOF) vive in un'unica libreria usata sia dal browser sia dai test node.
+- **`npm test`**: versione, follower, 3-DOF, carico molla richiesto, rimozioni, moduli spenti, baseline, misura affidabile (MAT-01/MET-01/02), fase&segni (MAT-02/03/04), confine di rete (SEC-01/02), robustezza server (SEC-05/06/07), valve float (DYN-01), fisica dell audit v3.4.3 (P1-04/06/09), validazione numerica dei campi (P1-12), Reset completo (P2-02), coerenza dei documenti di release (P2-13), validazione di PLAUSIBILITÀ su camme **Renault Clio 1.8 16V** e **VW KR 1.8 16V** reali (confronto con schede/misure di riferimento) e validazione FISICA sulla **Peugeot 106** (stessa camma letta col puntalino r1,5 e col piattello Ø33: previsione entro 0,065 mm RMS — non certificazione metrologica).
 - Correzioni metrologiche documentate nel CHANGELOG (compensazione puntalino sferico a offset normale, alzata al PMS riferita al picco misurato, raggio base per lato, baseline 1ª armonica).
 
 ## Sincronizzazione

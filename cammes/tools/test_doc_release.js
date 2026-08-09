@@ -149,6 +149,51 @@ if (man) {
 }
 
 // ---------------------------------------------------------------
+// 4-bis. La versione firmware nei documenti e' quella vera (audit 2026-08-09)
+// ---------------------------------------------------------------
+// README e PROTOCOL dichiaravano "fw 3.6" e "ver=3.6" in sei punti mentre il
+// firmware reale rispondeva "ver=4.1 scan=1 proto=4": il token proto=4 e'
+// proprio quello su cui il server decide di attivare il bridge v4, quindi la
+// riga sbagliata era la piu' load-bearing del documento. Regola: ogni token
+// "ver=X.Y" o "fw=X.Y" nei documenti utente deve essere la versione di
+// fw/version.json — i numeri storici vivono nel CHANGELOG, non qui.
+console.log('--- la versione firmware nei documenti e quella vera ---');
+(function () {
+    var fwv = JSON.parse(fs.readFileSync(path.join(CAMMES, 'fw', 'version.json'), 'utf8'));
+    var vera = String(fwv.firmware);
+    var DOC_FW = ['README.md', 'PROTOCOL.md', 'MATH_SPEC.md'];
+    var stantii = [];
+    DOC_FW.forEach(function (d) {
+        var testo = leggi(d);
+        if (testo === null) { stantii.push(d + ': FILE ASSENTE'); return; }
+        testo.split('\n').forEach(function (riga, i) {
+            var re = /\b(?:ver|fw)=(\d+\.\d+)\b/g, m;
+            while ((m = re.exec(riga)) !== null) {
+                if (m[1] !== vera) stantii.push(d + ':' + (i + 1) + ' "' + m[0] + '" (reale ' + vera + ')');
+            }
+        });
+    });
+    check('nessun documento dichiara una versione firmware diversa da ' + vera,
+        stantii.length === 0, stantii.slice(0, 4).join(' | ') || 'tutte allineate');
+
+    // MATH_SPEC non deve descrivere come PRESENTE una funzione rimossa dalla
+    // libreria: reindexByEncoder e' stata ritirata il 2026-07-23 e la spec ha
+    // continuato a prometterci lavori sopra per due settimane.
+    var spec = leggi('MATH_SPEC.md') || '';
+    var lib = fs.readFileSync(path.join(CAMMES, 'lib', 'cammes-math.js'), 'utf8');
+    var fantasma = [];
+    var mSpec = /`?(\w+)`?\s+(?:accetta|calcola|restituisce|converte)/g, mm;
+    while ((mm = mSpec.exec(spec)) !== null) {
+        var nome = mm[1];
+        if (!/^[a-z_$][\w$]*$/i.test(nome) || nome.length < 6) continue;
+        if (lib.indexOf('function ' + nome) < 0 && spec.indexOf(nome + ' RIMOSSA') < 0 &&
+            !new RegExp(nome + '[^\\n]*RIMOSS', 'i').test(spec)) fantasma.push(nome);
+    }
+    check('MATH_SPEC non descrive come presenti funzioni assenti dalla libreria',
+        fantasma.length === 0, fantasma.join(', ') || 'nessun fantasma');
+})();
+
+// ---------------------------------------------------------------
 // 5. Ogni file di test citato deve esistere davvero
 // ---------------------------------------------------------------
 console.log('--- i test citati in "npm test" esistono ---');
