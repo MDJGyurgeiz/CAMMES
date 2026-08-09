@@ -2131,12 +2131,22 @@ function exportRaceReport() {
                 var pt = sweep.points[si];
                 var col = si < half ? margin : col2x;
                 var ry  = y + (si % half) * 5;
-                var _cf = classeFloat(pt.float);
-                var fcol = _cf === 'grave' ? [220,50,50] : (_cf === 'attenzione' ? [200,150,30] : [0,160,90]);
                 doc.setTextColor(90,90,110);
                 doc.text(Math.round(pt.rpm) + ' rpm:', col, ry);
-                doc.setTextColor(fcol[0],fcol[1],fcol[2]);
-                doc.text(pt.float.toFixed(3) + ' mm', col + 30, ry);
+                // Il gate di convergenza (DYN-01) vale anche su carta. Lo
+                // schermo mostra questi punti come "non conv." in grigio, ma
+                // il PDF li stampava colorati come misure valide: 97,276 mm di
+                // un solver divergente in rosso su un documento consegnabile.
+                // (Audit 2026-08-09, rilievo 3.3.)
+                if (pt.converged === false) {
+                    doc.setTextColor(150,150,150);
+                    doc.text('non conv.', col + 30, ry);
+                } else {
+                    var _cf = classeFloat(pt.float);
+                    var fcol = _cf === 'grave' ? [220,50,50] : (_cf === 'attenzione' ? [200,150,30] : [0,160,90]);
+                    doc.setTextColor(fcol[0],fcol[1],fcol[2]);
+                    doc.text(pt.float.toFixed(3) + ' mm', col + 30, ry);
+                }
             }
             y += half * 5 + 4;
             doc.setTextColor(40,46,60); doc.setFontSize(9);
@@ -2195,6 +2205,23 @@ function exportRaceReport() {
                 y += mapH + 6;
                 // Ripristina l'aspetto a schermo (tema scuro) per il box live
                 renderSpringMap(map, inp.springK, inp.springPreload);
+                // Sul PDF il colore era l'UNICO dato: la legenda a schermo vive
+                // in un elemento DOM che non entra nell'immagine, e le celle non
+                // convergenti uscivano grigio #cccccc senza spiegazione. Le
+                // sezioni 2 e 3 di questo stesso report dichiarano il non
+                // conclusivo; la 4 no. (Audit 2026-08-09, rilievo 3.4.)
+                doc.setFontSize(7.5); doc.setTextColor(90,90,110);
+                doc.text('Colore = float max: verde < ' + SOGLIE_FLOAT.attenzione.toFixed(1) +
+                         ' mm, giallo < ' + SOGLIE_FLOAT.grave.toFixed(1) +
+                         ' mm, rosso oltre. Grigio = solver NON convergente (cella non valutabile).', margin, y);
+                y += 4;
+                if (map.nonConvergedCount > 0) {
+                    doc.setTextColor(200,120,0);
+                    doc.text('ATTENZIONE: ' + map.nonConvergedCount + ' celle NON convergenti su ' +
+                             (map.cells ? map.cells.length : '?') + ': in quelle zone la mappa non conclude.', margin, y);
+                    y += 4;
+                }
+                doc.setTextColor(40,46,60); doc.setFontSize(9);
             } catch (e) { doc.text('(mappa non disponibile)', margin, y); y += 6; }
 
             // ===== 5. Compliance chart =====
@@ -4853,7 +4880,13 @@ function analyze() {
     var bRR = document.getElementById('btnRaceReport'); if (bRR) bRR.disabled = false;
     if (window.cammesToast) {
         var minRpmCrit = Math.min(forcesIn.rpmCrit, forcesEx.rpmCrit);
-        var rpmCritStr = isFinite(forcesIn.rpmCrit) && isFinite(forcesEx.rpmCrit)
+        // Il criterio giusto sta sul MINIMO, non sull'AND dei due lati: con
+        // asp. a 5.200 rpm e scar. a infinito, l'AND faceva dire "∞ (sicuro)"
+        // al riassunto mentre 500 ms dopo l'allarme (che usa il minimo, come
+        // il PDF) dichiarava "si stacca a 5.200 giri" — due verdetti opposti
+        // nella stessa analisi. Math.min(Inf,Inf)=Inf, quindi il caso "tutto
+        // sicuro" resta coperto. (Audit 2026-08-09, rilievo 3.6.)
+        var rpmCritStr = isFinite(minRpmCrit)
             ? Math.round(minRpmCrit).toLocaleString('it-IT') + ' rpm'
             : '&#x221e; (sicuro)';
         // Con i valori di esempio il distacco non e' riferito al motore in
@@ -6638,8 +6671,17 @@ function exportPDF() {
         doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
         doc.text(safetyText, margin + 4, y + 14);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-        var marginPct = isFinite(minRpmCrit) ? '+' + Math.round((minRpmCrit/rpm-1)*100) + '%' : 'inf';
-        var safetyDetail = 'Target ' + (rpm || '?') + ' rpm · Critico ' + (isFinite(minRpmCrit) ? Math.round(minRpmCrit) : 'inf') + ' rpm · Margine ' + marginPct;
+        // La riga destra deve passare dallo STESSO cancello del titolo: con la
+        // molla ai valori di esempio il titolo diceva "NON VALUTABILE" ma
+        // accanto stampava lo stesso "Critico N rpm · Margine +X%" — un numero
+        // che non riguarda questo motore. (Audit 2026-08-09, rilievo 3.5.)
+        var safetyDetail;
+        if (mollaOkPdf) {
+            var marginPct = isFinite(minRpmCrit) ? '+' + Math.round((minRpmCrit/rpm-1)*100) + '%' : 'inf';
+            safetyDetail = 'Target ' + (rpm || '?') + ' rpm · Critico ' + (isFinite(minRpmCrit) ? Math.round(minRpmCrit) : 'inf') + ' rpm · Margine ' + marginPct;
+        } else {
+            safetyDetail = 'Target ' + (rpm || '?') + ' rpm · inserisci k, F0 e masse per il margine';
+        }
         doc.text(safetyDetail, pageW - margin - doc.getTextWidth(safetyDetail), y + 14);
         y += bannerH + 12;
 
@@ -6812,6 +6854,16 @@ function exportPDF() {
     // ====== Indicatore visivo margine RPM critico ======
     if (y + 26 > pageH - 18) { doc.addPage(); y = margin; }
     sectionHeader('Margine sul distacco valvola');
+    // Stesso cancello del banner di copertina e delle celle: con la molla ai
+    // valori di esempio la barra usciva riempita col suo "rapporto: X.XXx" —
+    // in grigio, ma il numero c'era. Un margine calcolato su una molla mai
+    // inserita non e' un margine. (Audit 2026-08-09, rilievo 3.5.)
+    if (!mollaOkPdf) {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+        setText(COL.muted);
+        doc.text('Non valutabile: molla e/o masse ancora ai valori di esempio. Inserisci k, F0 e le masse del TUO motore.', margin, y + 5);
+        y += 14;
+    } else {
     var barX = margin, barW = pageW - 2 * margin, barH = 8;
     setFill(COL.bgLight); doc.rect(barX, y, barW, barH, 'F');
     setDraw(COL.border); doc.rect(barX, y, barW, barH, 'S');
@@ -6843,6 +6895,7 @@ function exportPDF() {
     doc.text(ratioLabel, barX, y - 2);
 
     y += barH + 12;
+    }   // fine gate mollaOkPdf sulla barra del margine
 
     // ============================================================
     // GRAFICI (uno per riga, footer/header automatico)
