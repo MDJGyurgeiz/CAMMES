@@ -319,8 +319,14 @@ if (!tracciati || !tracciati.length) {
     try { legenda = fs.readFileSync(path.join(__dirname, 'fixtures', 'README.md'), 'utf8'); } catch (e3) {}
     var crypto = require('crypto');
     var scr = fs.readdirSync(path.join(__dirname, 'fixtures')).filter(function (f) { return /\.scr$/.test(f); });
+    // L'impronta si calcola sul contenuto coi fine riga LF, cioe' sui byte che il
+    // repository conserva: su un checkout pulito git puo' convertire i fine riga
+    // (core.autocrlf), e un'impronta presa sui byte del disco cambierebbe da una
+    // macchina all'altra senza che la misura sia stata toccata. E' successo: la CI
+    // ha rifiutato tre file che sul PC di sviluppo risultavano a posto.
     var cambiati = scr.filter(function (f) {
-        var h = crypto.createHash('sha256').update(fs.readFileSync(path.join(__dirname, 'fixtures', f))).digest('hex');
+        var testo = fs.readFileSync(path.join(__dirname, 'fixtures', f), 'latin1').replace(/\r\n/g, '\n');
+        var h = crypto.createHash('sha256').update(testo, 'latin1').digest('hex');
         return legenda.indexOf('`' + f + '`') < 0 || legenda.indexOf(h) < 0;
     });
     check('i file di riferimento hanno ancora le impronte dichiarate nella legenda (rinominati, non modificati)',
