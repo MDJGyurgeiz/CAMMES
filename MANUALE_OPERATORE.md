@@ -15,9 +15,9 @@
 
 ## 2. Misurare una camma (Alzata)
 1. Monta l'albero, porta il tastatore sul **cerchio base** e azzera il comparatore.
-2. Pagina **Alzata** → scegli la **Modalità** (Veloce ~45 s per l'uso normale — al banco dà la stessa curva delle altre —, Precisione media 3 letture per ambienti rumorosi, Race 0,5° per fianchi molto ripidi).
+2. Pagina **Alzata** → scegli la **Modalità**: **Veloce** per l'uso normale (un punto per grado), **Race** per fianchi molto ripidi (un punto ogni mezzo grado, pausa più lunga prima di ogni lettura). Al banco danno la stessa curva: Veloce basta quasi sempre. La durata stimata la scrive la tendina accanto a ogni modalità.
 3. Premi **START** e aspetta il "giro" completo (barra di avanzamento + stima tempo).
-4. Scrivi il **nome** (es. `golf-asp`) e premi **Salva** → il file finisce nell'archivio (`prove/`), suffisso `_alz` automatico.
+4. Scrivi il **nome** (es. `albero1-asp`) e premi **Salva** → il file finisce nell'archivio (`prove/`), suffisso `_alz` automatico.
 
 Opzioni utili:
 - **Zero virtuale**: porta automaticamente il picco a +180° per confrontare alberi montati diversamente.
@@ -38,8 +38,8 @@ Controlli automatici: se il cerchio base non torna alla stessa quota a fine giro
 1. Pagina **Analisi** → importa il file di **aspirazione** e quello di **scarico**.
 2. Imposta per ciascun lato: **Angolo lobo** (centro lobo in gradi MOTORE), **Gioco valvola**.
 3. Premi **▶ Analizza** → durate, LSA, aperture/chiusure, **alzata al PMS**, incrocio + grafico 720°.
-4. Se il motore usa **bicchieri/punterie**: pannello **⚙ Funzioni** → attiva **Follower simulato**, scegli "Bicchiere piatto Ø" e inserisci diametro e **raggio base** (asp/scarico separati) → ri-Analizza. L'alzata al PMS ora è quella del bicchiere reale.
-5. **Esporta**: CSV (Excel), PDF (referto), **Salva profilo** (rimette in archivio il grezzo o la curva già convertita al follower).
+4. Se il motore usa **bicchieri/punterie**: pannello **⚙ Funzioni** → attiva **Follower simulato**, scegli "Bicchiere piatto Ø" e inserisci il diametro del bicchiere e il **diametro del cerchio base** misurato col calibro (il DIAMETRO, non il raggio: il programma lo dimezza da solo; asp/scarico separati) → ri-Analizza. L'alzata al PMS ora è quella del bicchiere reale.
+5. **Esporta**: CSV (Excel), PDF (referto completo), **Scheda camma** (una pagina per il cliente), **Salva profilo** (rimette in archivio il grezzo o la curva già convertita al follower). Tutti i PDF portano in testa la tua intestazione; nessuno nomina marche o modelli: portano i nomi dei file che hai scelto tu.
 
 Tutto il resto (molla e forze, dinamica valvole, strumenti race, animazione, confronto A/B) si accende **solo se ti serve** dal pannello **⚙ Funzioni** — la scelta viene ricordata.
 
@@ -47,12 +47,14 @@ Tutto il resto (molla e forze, dinamica valvole, strumenti race, animazione, con
 | Sintomo | Rimedio |
 |---|---|
 | LED Server rosso | `cammes.exe` non è in esecuzione: avvialo. Se già avviato, chiudi e riapri. |
-| LED Sensore spento/giallo | Controlla cavo USB e alimentazione del comparatore; il firmware deve essere caricato sull'Arduino. |
+| LED Comparatore spento/giallo | Controlla cavo USB e alimentazione del comparatore; il firmware deve essere caricato sull'Arduino. |
 | "NO SENSORE" sul display | Il comparatore non trasmette: spegni/riaccendi il comparatore, controlla il cablaggio LM339N. Quando torna a rispondere compare il messaggio "Comparatore rilevato" e il LED torna verde. |
-| La scansione non parte ("Comparatore non risponde") | Controllo pre-partenza: serve una misura valida recente. Collega/accendi il comparatore e aspetta il LED Sensore verde. |
-| La scansione si ferma da sola | 3 letture invalide consecutive (assenti o fuori scala) → sensore scollegato o disturbato. La misura interrotta NON va usata. |
+| La scansione non parte ("Comparatore non risponde") | Controllo pre-partenza: serve una misura valida recente. Collega/accendi il comparatore e aspetta il LED Comparatore verde. |
+| La scansione si ferma da sola | 3 letture invalide consecutive (assenti o fuori scala) → comparatore scollegato o disturbato. La misura interrotta NON va usata. |
 | Il motore non gira | Verifica alimentazione 36V del driver e il comando **Sblocca/Blocca motore**. |
-| "Nessun campione dal firmware" (scan autonomo) | Il firmware sull'Arduino non è v3: ri-flasha `master.ino` o torna a Motore scansione = Browser. |
+| "Banco in arresto: attendi qualche secondo" | Hai ricaricato o chiuso la pagina mentre il motore si muoveva: il banco lo sta fermando. I comandi tornano da soli in pochi secondi, senza fare niente. |
+| "Sola lettura" | Il banco è comandato da un'altra finestra o da un altro PC: qui le misure si vedono, i comandi no. Chiudi l'altra finestra per comandare da questa. |
+| "Firmware senza scan autonomo" | Il firmware sull'Arduino è vecchio: il programma passa da solo al metodo classico (più lento) e riparte. Aggiornalo dalla Home (⚡ Aggiorna firmware Arduino). |
 | Valori strani sul fianco / fondo che non torna a 0 | In Analisi lascia **Corr. baseline = ON**; verifica il centraggio dell'albero sul banco. |
 
 ## 5. Backup e assistenza
@@ -60,5 +62,5 @@ Tutto il resto (molla e forze, dinamica valvole, strumenti race, animazione, con
 - Home → **♻ Cestino**: i file eliminati restano ripristinabili per 30 giorni.
 - Home → **💾 Export** salva tag, preferiti e posizioni (file JSON, si ripristina con Import). Tag e preferiti sono comunque replicati sul server (settings.json accanto all'exe).
 - Se qualcosa non va: Home → **🩺 Diagnostica** scarica un file di testo con versioni e log — è quello da mandare all'assistenza.
-- Home → card **Sistema & aggiornamenti**: controlla nuove versioni su GitHub, aggiorna il **firmware Arduino** con un click (senza Arduino IDE), imposta **la tua intestazione** per i referti PDF.
+- Home → card **Sistema & aggiornamenti**: controlla nuove versioni su GitHub, aggiorna il **firmware Arduino** con un click (senza Arduino IDE), imposta **la tua intestazione** (compare in testa a tutti i PDF: report di analisi, race report, scheda camma, scheda tecnica della singola misura).
 - Questo manuale è sempre disponibile da Home → **📖 Manuale**.

@@ -79,11 +79,11 @@ var maxDiff = 0;
 for (var i = 1; i <= 720; i++) maxDiff = Math.max(maxDiff, Math.abs(m1[i] - m2[i]));
 check('curve mappate identiche (Δmax < 0.02 mm)', maxDiff < 0.02, 'Δmax ' + maxDiff.toFixed(4));
 
-// Fixture VW reale: il picco grezzo è a 189° (zero di scansione arbitrario);
+// Fixture camma RIF-2 reale: il picco grezzo è a 189° (zero di scansione arbitrario);
 // la fase mappata deve dipendere SOLO dal centro dichiarato.
-var vw = M.parseCamFile(fs.readFileSync(path.join(__dirname, 'fixtures', 'VW-kr1_8-ASP_alz.scr'), 'utf8'));
-var vwMap = M.mapCamToCrank(vw, 106, 0, 'intake');
-check('VW asp centro 106 → picco crank 466 (non 272)', Math.abs(peakIdx(vwMap, 1, 720) - 466) <= 1, 'picco a ' + peakIdx(vwMap, 1, 720));
+var rif2 = M.parseCamFile(fs.readFileSync(path.join(__dirname, 'fixtures', 'rif2_asp_alz.scr'), 'utf8'));
+var rif2Map = M.mapCamToCrank(rif2, 106, 0, 'intake');
+check('RIF-2 asp centro 106 → picco crank 466 (non 272)', Math.abs(peakIdx(rif2Map, 1, 720) - 466) <= 1, 'picco a ' + peakIdx(rif2Map, 1, 720));
 
 // ---------- Fianchi: la mappatura preserva l'orientamento temporale ----------
 console.log('\n--- MAT-03b: lobo asimmetrico, fianco apertura prima del picco ---');

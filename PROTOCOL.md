@@ -63,7 +63,8 @@ PC→Arduino:
   STOP            (fuori coda, priorità assoluta)
 
 Arduino→PC (formati REALI del fw 4.1):
-  ACK 45 state=SCANNING              (l'ACK NON porta run=)
+  ACK 45 state=SCANNING run=17       (SCAN e MOVE: l'ACK di accettazione PORTA run=)
+  ACK 43 state=IDLE_LOCKED           (tutti gli altri verbi: ACK generico, senza run=)
   NACK 46 code=BUSY state=SCANNING
   EVT SAMPLE run=17 idx=1 enc=4 mm=0.01 q=OK
   EVT DONE run=17 state=IDLE_LOCKED
@@ -96,6 +97,41 @@ nome COM. Firmware legacy (proto<4) non può muovere con server v4 →
 FSM firmware v4: `BOOT FREE IDLE_LOCKED MOVING SCANNING TONE STOPPING FAULT`;
 ingresso/uscita moto e livelli STEP/DIR/ENA centralizzati; nessun movimento
 fuori da MOVING/SCANNING/TONE; TONE un solo terminale (DONE **oppure** ABORTED).
+
+> **Correzione (2026-11-14).** Fino al 2026-08-09 questo blocco diceva che
+> «l'ACK NON porta run=». Era sbagliato per i due verbi che avviano un moto:
+> `executeV4` in `master/master.ino` stampa `ACK <seq> state=SCANNING run=<run>`
+> per SCAN e `ACK <seq> state=MOVING run=<run>` per MOVE. Solo l'ACK generico
+> (`emitAck`: STOP, LOCK, FREE, RESET_FAULT, CONFIG, HEARTBEAT) è senza `run=`.
+
+## Messaggi di ruolo server ↔ pagina (WebSocket, non arrivano all'Arduino)
+
+Il banco ha UN controllore alla volta (lease): è il primo client che manda un
+comando di controllo. Gli altri vedono le misure ma non comandano. Le letture
+(`?`, `m`, `d`) non passano dal lease; `x` (STOP) è sempre accettato da chiunque.
+
+| Messaggio | Verso | Significato |
+|---|---|---|
+| `#ctl:free` | server→pagina | nessuno comanda e il banco è assegnabile. Alla connessione, e in broadcast quando finisce una finestra di arresto |
+| `#ctl:observer` | server→pagina | alla connessione: un altro client ha il comando |
+| `#ctl:wait stop-in-corso` | server→pagina | nessuno comanda, ma il server sta ancora fermando il moto del controllore precedente: il banco non è assegnabile finché non arriva `#ctl:free` |
+| `#ctl:granted` | server→pagina | questo client ha preso il comando |
+| `#ctl:denied occupato` | server→pagina | comando rifiutato: un altro client comanda |
+| `#ctl:denied stop-in-corso` | server→pagina | comando rifiutato: arresto in corso (passa da sé) |
+| `#ctl:released <motivo>` | server→tutti | il controllore se n'è andato a banco fermo: il comando è libero |
+| `#ctl:info proto=.. fw=.. state=.. stateAge=.. serial=..` | server→pagina | snapshot informativo alla connessione; NON è un ruolo |
+| `#ctl:acquire` / `#ctl:release` | pagina→server | richiesta/rilascio esplicito del comando |
+
+**Finestra di arresto.** Quando il controllore si scollega il server manda
+sempre `x` alla seriale. Se un moto può essere ancora in corso — scan v4 attivo,
+oppure attività di scansione negli ultimi 5 s **senza** che il firmware abbia
+già dato il terminale dell'ultimo movimento — il comando non viene riassegnato
+per 4 s al massimo, o finché non arriva un terminale (`*mv`, `*mabort`,
+`*sdone`, `*sabort`, `EVT DONE/STOPPED/FAULT`). Un comando rifiutato riceve UNA
+risposta, col motivo vero. Se l'ultima cosa vista dal firmware è già un
+terminale e nessun comando di moto è partito dopo, la finestra non si apre:
+non c'è niente da aspettare (è il caso dello Zero virtuale, che ricarica la
+pagina appena riceve `*mv`).
 
 ## Migrazione
 

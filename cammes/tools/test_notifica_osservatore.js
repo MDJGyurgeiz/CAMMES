@@ -201,6 +201,25 @@ function parteBanco() {
         letture >= 3, letture + ' usi (serve almeno: polling sensore, polling encoder, UI)');
 
     // ---------- contesto finto ----------
+    // Lo stato si prende dal SORGENTE (le righe 'var' del blocco "Ruolo di
+    // questo client"), non da una copia scritta qui: dalla 3.7.1 il gestore
+    // conosce anche l'attesa per l'arresto (vedi test_lease_dopo_arresto.js) e
+    // una copia a mano sarebbe rimasta indietro senza che nessuno se ne accorga.
+    var bloccoStato = /\/\/ ===== Ruolo di questo client[\s\S]*?\nfunction bancoInSolaLettura/.exec(ALZATA);
+    var dichiarazioni = bloccoStato
+        ? bloccoStato[0].split('\n').filter(function (r) { return /^var /.test(r); }).join('\n') : '';
+    check('lo stato del ruolo e dichiarato in un blocco solo', /var ruoloBanco\b/.test(dichiarazioni) && /var SILENZIO_RIFIUTO_MS\b/.test(dichiarazioni));
+    // le funzioni di contorno che il gestore chiama (attesa per l'arresto,
+    // configurazione da rimandare): quelle vere, estratte come le altre
+    var CONTORNO = ['_sincronizzaConfigBanco', '_assicuraConfigBanco', '_entraInArresto', '_esciDaArresto', '_annullaAvvioRifiutato']
+        .map(estrai).filter(Boolean);
+    function carica(c) {
+        vm.runInContext(dichiarazioni, c);
+        vm.runInContext(fnSolaLettura, c);
+        vm.runInContext(fnUiMoto, c);    // quello VERO: cosi si prova la composizione
+        CONTORNO.forEach(function (f) { vm.runInContext(f, c); });
+        vm.runInContext(fnRuolo, c);
+    }
     var toasts = [];
     var ora = 1000000;                       // orologio finto, avanza a mano
     var ctx = {
@@ -210,21 +229,16 @@ function parteBanco() {
             cammesToast: function (o) { toasts.push(o); }
         },
         document: { getElementById: function () { return null; }, querySelectorAll: function () { return []; } },
+        setTimeout: function () { return 1; }, clearTimeout: function () {},   // i timer qui non scattano
+        sendSocket: { readyState: 1, send: function () {} },
+        currentMode: { samples: 1, microsteps: 32, settleMs: 30 },
         motorFree: false,
         _setMotionUiDisabled: function (v) { ctx._uiDisabilitata = v; },
         _uiDisabilitata: null
     };
     ctx.window.window = ctx.window;
     vm.createContext(ctx);
-    // le funzioni estratte usano queste variabili di stato
-    vm.runInContext('var ruoloBanco = ""; var _rifiutoUltimoMs = 0; var _rifiutoVistoMs = 0; var _rifiutiTaciuti = 0;', ctx);
-    vm.runInContext('var SILENZIO_RIFIUTO_MS = ' + (function () {
-        var m = /var SILENZIO_RIFIUTO_MS\s*=\s*(\d+)/.exec(ALZATA);
-        return m ? m[1] : '15000';
-    })() + ';', ctx);
-    vm.runInContext(fnSolaLettura, ctx);
-    vm.runInContext(fnUiMoto, ctx);      // quello VERO: cosi si prova la composizione
-    vm.runInContext(fnRuolo, ctx);
+    carica(ctx);
 
     function ruolo(r, motivo) { vm.runInContext('applicaRuoloBanco(' + JSON.stringify(r) + ',' + JSON.stringify(motivo || '') + ');', ctx); }
 
@@ -355,15 +369,14 @@ function parteBanco() {
     var ctx2 = {
         Date: { now: function () { return 1000; } }, Math: Math, JSON: JSON,
         console: { log: function () {}, warn: function () {} },
-        window: { cammesToast: function (o) { presto.push(o); } }
-        // di proposito: niente _setMotionUiDisabled, niente motorFree
+        window: { cammesToast: function (o) { presto.push(o); } },
+        setTimeout: function () { return 1; }, clearTimeout: function () {}   // del browser: ci sono sempre
+        // di proposito: niente _setMotionUiDisabled, niente motorFree, niente
+        // sendSocket/currentMode (stanno nei blocchi <script> successivi)
     };
     ctx2.window.window = ctx2.window;
     vm.createContext(ctx2);
-    vm.runInContext('var ruoloBanco = ""; var _rifiutoUltimoMs = 0; var _rifiutoVistoMs = 0; var _rifiutiTaciuti = 0; var SILENZIO_RIFIUTO_MS = 15000;', ctx2);
-    vm.runInContext(fnSolaLettura, ctx2);
-    vm.runInContext(fnUiMoto, ctx2);
-    vm.runInContext(fnRuolo, ctx2);
+    carica(ctx2);
     var esploso = null;
     try { vm.runInContext('applicaRuoloBanco("observer");', ctx2); }
     catch (e) { esploso = String(e.message); }

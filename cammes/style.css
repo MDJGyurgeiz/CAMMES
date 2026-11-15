@@ -801,11 +801,20 @@ select.input {
 /* Max display. L'input vive dentro <form name="mas">: il form è il flex item
    della toolbar, quindi DEVE crescere lui (flex:1 + display:flex), altrimenti
    l'input resta alla min-width e il valore mm del picco esce tagliato a destra
-   (visto al banco: "max 180 gradi 16…" troncato). */
+   (visto al banco: "max 180 gradi 16…" troncato).
+   E NON deve potersi restringere sotto la larghezza del valore: con
+   min-width:0 il form si schiacciava fino a 40 px (su un portatile 1366x768,
+   dove la riga dei comandi è già piena) mentre l'input, che ha la sua
+   min-width, gli usciva dai bordi e finiva SOTTO il campo "nome file" —
+   si leggeva "max 1(" e basta. Con la stessa soglia dell'input il form va a
+   capo su una riga sua (flex-wrap della toolbar), come voleva il commento
+   qui sotto. max-width:100% perché su uno schermo stretto non allarghi la
+   pagina. */
 form[name="mas"] {
-  flex: 1;
+  flex: 1 1 360px;
   display: flex;
-  min-width: 0;
+  min-width: 360px;
+  max-width: 100%;
 }
 .max-display {
   font-family: var(--font-mono);

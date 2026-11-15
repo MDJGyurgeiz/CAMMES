@@ -18,6 +18,30 @@ sola volta**; nessun grafico ricostruisce gli eventi per conto proprio.
   che avanza. Il verso è registrato nei metadati (`#verso`, MET-04) e i
   confronti tra lobi con verso diverso sono segnalati.
 
+## Dal campione al grado (acquisizione, prima di ogni altra cosa)
+
+Il file di misura ha sempre 360 punti, uno per grado camma. In Veloce il banco
+legge una volta per grado: il grado *d* **è** la lettura a *d*°. In Race legge
+ogni mezzo grado (720 letture) e `binCentrato` le condensa:
+
+```
+valore(d) = ¼·lettura(d − 0,5°) + ½·lettura(d°) + ¼·lettura(d + 0,5°)
+```
+
+- La media è **centrata** sul grado: su un tratto rettilineo il risultato è
+  esattamente la quota a *d*°. In generale, con S letture per grado, i pesi
+  sono (S − |k|)/S² sulle letture a distanza k sottopassi.
+- Il giro è chiuso: la lettura a 360,5° è quella a 0,5°.
+- Letture invalide: entrano solo **coppie simmetriche** (±k entrambe valide)
+  più la centrale; se non resta niente di centrato il grado è senza dato
+  (percorso MET-01), mai un valore inventato.
+- L'encoder associato al picco (riferimento dello Zero virtuale) è quello
+  della lettura **centrale** del grado.
+
+Fino alla v3.7.0 il grado *d* era la media di *d* − 0,5° e *d*°, cioè
+rappresentava *d* − 0,25°: i profili Race di quelle versioni sono in anticipo
+di un quarto di grado su quelli Veloce (`tools/test_bin_race.js`).
+
 ## Ordine delle trasformazioni (una volta, registrato nei metadati)
 
 ```
@@ -30,8 +54,8 @@ raw (grado,alzata)
                           lettura a sfera (offset lungo la normale alla pitch
                           curve + riassegnazione dell'angolo di contatto +
                           ricampionamento circolare) — validata su misura
-                          fisica, 106 puntalino r1,5 vs piattello Ø33,
-                          0,065 mm RMS (validate_106_piattello.js)
+                          fisica, camma RIF-3 puntalino r1,5 vs piattello Ø33,
+                          0,065 mm RMS (validate_rif3_piattello.js)
  → mapCamToCrank         (fasatura: picco misurato camPeakPos + centro effettivo
                           effectiveCenters(anticipo); gioco sottratto qui)
  → (rocker ratio)        (applyRockerRatio, se ≠ 1)

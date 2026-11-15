@@ -56,8 +56,16 @@ function connectEngine() {
 // (RMS 0,06-0,08 mm) e tempi quasi uguali (46-57 s) — una scelta senza
 // criterio per l'utente.
 
+// Il jog vale "1 grado" solo coi micropassi della modalità scelta nella pagina:
+// se c'è il dubbio che l'Arduino abbia un'altra configurazione (un comando
+// rifiutato, un'altra finestra che ha comandato) la pagina la rimanda prima.
+function _configPrimaDelMoto() {
+    if (typeof _assicuraConfigBanco === 'function') _assicuraConfigBanco();
+}
+
 function m1() {
     if (window._scanBusy && window._scanBusy('Il jog manuale')) return;   // audit MOT-02
+    _configPrimaDelMoto();
     oldg = Number(oldg) - 1;
     if (rsign == 1) { sendSocket.send('$-001\n'); }
     if (rsign == -1) { sendSocket.send('$+001\n'); }
@@ -66,6 +74,7 @@ function m1() {
 
 function p1() {
     if (window._scanBusy && window._scanBusy('Il jog manuale')) return;   // audit MOT-02
+    _configPrimaDelMoto();
     oldg = Number(oldg) + 1;
     if (rsign == 1) { sendSocket.send('$+001\n'); }
     if (rsign == -1) { sendSocket.send('$-001\n'); }

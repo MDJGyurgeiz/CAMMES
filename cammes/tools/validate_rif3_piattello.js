@@ -1,12 +1,12 @@
 // =============================================================
-//  validate_106_piattello.js — la stessa camma, due tastatori
+//  validate_rif3_piattello.js — la stessa camma, due tastatori
 // =============================================================
 //  VALIDAZIONE FISICA INDIPENDENTE, senza scheda del costruttore.
 //
-//  Sul banco la Peugeot 106 (aspirazione) e' stata misurata DUE volte, con due
+//  Sul banco la camma RIF-3 (aspirazione) e' stata misurata DUE volte, con due
 //  tastatori diversi:
-//      fixtures/106-ASP_puntalino-r1.5_alz.scr   puntalino SFERICO r 1,5
-//      fixtures/106-ASP_piattello-d33_alz.scr    piattello PIATTO  D 33
+//      fixtures/rif3_asp_puntalino-r1.5_alz.scr   puntalino SFERICO r 1,5
+//      fixtures/rif3_asp_piattello-d33_alz.scr    piattello PIATTO  D 33
 //
 //  Il programma deve saper PREVEDERE la seconda partendo dalla prima: e'
 //  esattamente cio' che fa convertPuntToBicchiere quando l'operatore chiede
@@ -17,7 +17,7 @@
 //  il verso ROVESCIATO fino alla v3.6.0: sommava l'errore invece di toglierlo.
 //  Il difetto era stato trovato contro un oracolo sintetico (profilo noto ->
 //  misura simulata della sfera -> ritorno), ma per la conferma FISICA si
-//  contava sulla camma VW e sulla scheda del rettificatore. Quella camma non
+//  contava sulla camma RIF-2 e sulla scheda del rettificatore. Quella camma non
 //  c'e' piu' e la ri-scansione non e' piu' possibile. Questa coppia la
 //  sostituisce, ed e' una prova migliore: nessuna scheda di mezzo, nessun
 //  dubbio sull'usura (stesso lobo, stessa sessione), due strumenti indipendenti.
@@ -27,7 +27,7 @@
 //      nessuna compensazione        RMS 0,170 mm
 //      inversa esatta (v3.7.0)      RMS 0,065 mm
 //
-//  Uso: node tools/validate_106_piattello.js   (exit 0 = ok)
+//  Uso: node tools/validate_rif3_piattello.js   (exit 0 = ok)
 
 var path = require('path');
 var fs = require('fs');
@@ -100,11 +100,11 @@ var R_PUNT = 1.5;
 var D_PIATT = 33;
 
 console.log('=============================================================');
-console.log(' PEUGEOT 106 ASPIRAZIONE — puntalino r1,5 contro piattello Ø33');
+console.log(' CAMMA RIF-3 ASPIRAZIONE — puntalino r1,5 contro piattello Ø33');
 console.log('=============================================================');
 
-var conPunt = leggi('106-ASP_puntalino-r1.5_alz.scr');
-var conPiatt = leggi('106-ASP_piattello-d33_alz.scr');
+var conPunt = leggi('rif3_asp_puntalino-r1.5_alz.scr');
+var conPiatt = leggi('rif3_asp_piattello-d33_alz.scr');
 var pP = picco(conPunt), pB = picco(conPiatt);
 console.log('  puntalino: picco ' + pP.v.toFixed(3) + ' mm @ ' + pP.i + '° camma');
 console.log('  piattello: picco ' + pB.v.toFixed(3) + ' mm @ ' + pB.i + '° camma');

@@ -1,5 +1,5 @@
 // =============================================================
-//  validate_vw.js — validazione su camme VW KR 1.8 16V reali
+//  validate_rif2.js — validazione su camme RIF-2 reali
 // =============================================================
 // Caso reale: due scansioni indipendenti aspirazione e scarico, fatte col
 // puntalino sferico Ø1.5, motore con bicchieri meccanici Ø35.
@@ -9,13 +9,14 @@
 // al calibro (confermato dal proprietario il 2026-07-26). Il raggio vero e'
 // 16,32 / 17,13.
 //
-// Presi per raggi darebbero un cerchio base di Ø65,3 / Ø68,5: per un 1.8 16V un
-// albero con lobi cosi' non entra in testa. E' un argomento di PLAUSIBILITA'
+// Presi per raggi darebbero un cerchio base di Ø65,3 / Ø68,5: per un
+// motore a 4 valvole per cilindro di media cilindrata un albero con
+// lobi cosi' non entra in testa. E' un argomento di PLAUSIBILITA'
 // sulla classe di motore, non una legge geometrica — attenzione a non usarne
 // una piu' forte di quel che vale: un follower PIATTO non impone che il cerchio
 // base sia piu' piccolo di lui, gli basta contenere l'escursione del punto di
-// contatto (max |dL/dphi|). Sulla Clio, per esempio, l'offset massimo e' 13,18
-// mm e un piattello Ø33 basta qualunque sia il cerchio base.
+// contatto (max |dL/dphi|). Sulla camma RIF-1, per esempio, l'offset massimo e'
+// 13,18 mm e un piattello Ø33 basta qualunque sia il cerchio base.
 // La prova vera del diametro e' doppia: la conferma del proprietario e
 // l'accordo con tre fonti indipendenti su due camme e due grandezze (sotto).
 //
@@ -23,7 +24,7 @@
 // (r(θ) = rBase + alzata, piu' l'angolo della normale nella compensazione del
 // puntalino), quindi il raggio sbagliato deformava la curva convertita.
 //
-// COSA HA RIVELATO. Il report REPORT_CAMME_VW-KR.md dichiarava da mesi una
+// COSA HA RIVELATO. Il report REPORT_CAMMA_RIF-2.md dichiarava da mesi una
 // "sottostima ~35% del medio-fianco" della scansione rispetto ai rilievi al
 // motore, e come prossimo passo una ri-scansione per capirne la causa.
 // Ricalcolando col raggio corretto:
@@ -45,13 +46,13 @@
 // ECCESSO, quindi le ipotesi costruite su "lo scanner sotto-misura il fianco"
 // non valgono piu' per spiegarlo.
 //
-// Nota sulla sensibilita' a rBase, misurata sulla Clio: passare da 16,5 a 19
+// Nota sulla sensibilita' a rBase, misurata sulla RIF-1: passare da 16,5 a 19
 // sposta la curva convertita di 0,122 mm RMS, cioe' 2,7 volte l'accordo che la
 // validazione fisica del 2026-07-11 aveva ottenuto (0,046 mm). Quindi il
 // parametro conta davvero e un fit su di esso e' significativo — non e' un
 // numero che si puo' sbagliare senza conseguenze.
 //
-// Uso:  node cammes/tools/validate_vw.js     (exit 0 = tutto ok)
+// Uso:  node cammes/tools/validate_rif2.js     (exit 0 = tutto ok)
 
 var fs = require('fs'), path = require('path');
 var M = require(path.join(__dirname, '..', 'lib', 'cammes-math.js'));
@@ -78,7 +79,7 @@ function check(label, cond, detail) {
 }
 
 console.log('=============================================================');
-console.log(' VALIDAZIONE VW KR 1.8 16V — bicchiere Ø35, cerchio base a DIAMETRO');
+console.log(' VALIDAZIONE CAMMA RIF-2 — bicchiere Ø35, cerchio base a DIAMETRO');
 console.log('=============================================================');
 
 var DBICCH = 35, RPUNT = 1.5, ANG_PMS = 105;
@@ -111,9 +112,9 @@ var DBICCH = 35, RPUNT = 1.5, ANG_PMS = 105;
 // Le soglie qui sotto sono i residui MISURATI oggi piu' un margine dichiarato,
 // non un valore scelto per far passare il controllo. Servono come rilevatore di
 // deriva: se un domani un cambio le fa crescere ancora, la suite lo dice.
-// LA CAMMA VW NON E' PIU' DISPONIBILE (2026-08-02): la ri-scansione non si
+// LA CAMMA RIF-2 NON E' PIU' DISPONIBILE (2026-08-02): la ri-scansione non si
 // puo' piu' fare, e su questo albero la questione non si chiude. La conferma
-// e' arrivata da un'altra strada e piu' forte: validate_106_piattello.js
+// e' arrivata da un'altra strada e piu' forte: validate_rif3_piattello.js
 // confronta la stessa camma misurata col puntalino r1,5 e col piattello D33
 // FISICO, e la compensazione attuale prevede la seconda entro 0,065 mm RMS
 // contro 0,309 della formula precedente. La correzione e' giusta: il residuo
@@ -122,13 +123,13 @@ var DBICCH = 35, RPUNT = 1.5, ANG_PMS = 105;
 var MARGINE_DERIVA_MM = 0.10;
 var MARGINE_DERIVA_DEG = 3;
 var CASI = [
-    { nome: 'ASPIRAZIONE', file: 'VW-kr1_8-ASP_alz.scr',
+    { nome: 'ASPIRAZIONE', file: 'rif2_asp_alz.scr',
       diamBase: 32.64, gioco: 0.30,
       bandaPms: [3.20, 3.50], bandaDurata: [290, 295],
       fonti: 'scheda 3,5 · rilievo 1: 3,20 · rilievo 2: 3,50',
       residuoAmmesso: 0.5, residuoDurataAmmesso: 10 + MARGINE_DERIVA_DEG,
       primaEra: { pms: 2.18, durata: 272 } },
-    { nome: 'SCARICO', file: 'VW-kr1_8-SC_alz.scr',
+    { nome: 'SCARICO', file: 'rif2_sca_alz.scr',
       diamBase: 34.25, gioco: 0.40,
       bandaPms: [2.90, 3.30], bandaDurata: [281, 291],
       fonti: 'scheda 3,3 · rilievo 1: 2,90 · rilievo 2: 3,00',
@@ -206,7 +207,7 @@ if (fails === 0) {
     console.log('inserito come raggio, non un limite dello scanner. Il residuo');
     console.log('dell\'aspirazione resta DICHIARATO: la camma non c\'e\' piu\' e la');
     console.log('ri-scansione non e\' piu\' possibile. La conferma che la compensazione');
-    console.log('del puntalino e\' giusta e\' arrivata da validate_106_piattello.js:');
+    console.log('del puntalino e\' giusta e\' arrivata da validate_rif3_piattello.js:');
     console.log('stessa camma letta col puntalino r1,5 e col piattello D33 fisico,');
     console.log('previsione entro 0,065 mm RMS contro 0,309 della formula precedente.');
     process.exit(0);

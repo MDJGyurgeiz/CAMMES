@@ -31,7 +31,7 @@ coperti dai test attuali.
    grafico, export e test alla stessa fonte dati.
 5. Non dichiarare `FIXED` un modello fisico solo perché produce valori finiti o
    perché converge numericamente.
-6. Conservare le fixture reali VW e Clio senza alterarle.
+6. Conservare le fixture reali delle camme RIF-2 e RIF-1 senza alterarle.
 7. Lavorare per commit logici separati. Per ogni rilievo:
    - scrivere prima un test che fallisce sulla v3.4.3;
    - applicare la correzione;
@@ -80,11 +80,11 @@ di esempio, export e release engineering.
 
 ### Dati utilizzati
 
-- `cammes/prove/VW-kr1_8-ASP_alz.scr`
-- `cammes/prove/VW-kr1_8-SC_alz.scr`
-- `cammes/prove/clio1_8_alz.scr` per il confronto A/B
+- `cammes/tools/fixtures/rif2_asp_alz.scr`
+- `cammes/tools/fixtures/rif2_sca_alz.scr`
+- `cammes/tools/fixtures/rif1_alz.scr` per il confronto A/B
 
-Parametri principali della prova VW:
+Parametri principali della prova RIF-2:
 
 - centro aspirazione: `102° ATDC`;
 - centro scarico: `103,5° BTDC`;
@@ -942,7 +942,7 @@ Gli script inline HTML non sono coperti dal lint normale.
 
 ### E2E minimo obbligatorio
 
-Usare Playwright con fixture VW:
+Usare Playwright con fixture RIF-2:
 
 1. import aspirazione/scarico;
 2. analisi base;

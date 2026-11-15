@@ -112,7 +112,7 @@ BANCO il 2026-07-17** (`tools/bench_fw34_test.js`, 16/16 PASS): watchdog
 scattato a ~5,5 s di silenzio con moto troncato a 1373° dei 4000° comandati e
 motore fermo (encoder congelato); nessun `*wdt` con keep-alive attivi; nota
 Concerto interrotta in 126 ms; `x` a vuoto non avvelena più il comando
-successivo; STOP classico in 186 ms. Scansione end-to-end sulla camma Clio:
+successivo; STOP classico in 186 ms. Scansione end-to-end sulla camma RIF-1:
 360/360 gradi, 0 letture invalide, 0 punti instabili, RMS 0,047 mm contro la
 scansione storica (convertita puntalino→piattello Ø33) = ripetibilità storica
 del banco. STOP a metà scansione: nessun riavvio spontaneo in 11 s (MOT-01
@@ -147,10 +147,10 @@ ora lintata; tag spurio `v3.2.0-1-ge15ac01` eliminato.
 **DYN-01 / DYN-03 / DYN-04 / DYN-05.** `detectValveFloat` ora misura la
 **perdita di contatto** cam-punteria tracciata dentro il solver (follower sopra
 la camma), non più lo schiacciamento elastico: il float è 0 al quasi-statico,
-cresce coi giri, cala se la molla è più rigida (verificato su camma Clio
+cresce coi giri, cala se la molla è più rigida (verificato su camma RIF-1
 reale). `camAt` interpolato linearmente nei tre solver (DYN-03). Parametri con
 nullish `_num` invece di `||` (DYN-04: damping 0 / preload 0 validi).
-`validate_clio` riscritto per validare la FISICA della metrica; dichiarato
+`validate_rif1` riscritto per validare la FISICA della metrica; dichiarato
 esplicitamente che il regime ASSOLUTO di float è esplorativo (DYN-05).
 Test: `tools/test_valve_float.js`.
 
@@ -181,7 +181,7 @@ convertendo il tastatore.
 range espliciti: `S+70000` (che con `atoi` int16 wrappava a 4464 unità eseguite)
 ora → `*err`, zero moto; tetti `S`≤1500, `$`≤3600. Stabilità sensore: un NaN
 azzera il confronto, <2 frame validi → NaN vero (scartato via MET-01).
-**Validato al banco**: harness 23/23, tre scansioni Clio con ripetibilità
+**Validato al banco**: harness 23/23, tre scansioni RIF-1 con ripetibilità
 0,024 mm RMS e zero gradi persi.
 
 **Lotto 10 — SEC-03 (XSS memorizzato).** Tag/nomi file/posizioni salvate
@@ -225,7 +225,7 @@ concentrici, origine al PMS di scoppio), overlap reale. APP-05: durata @ gioco
 con soglia fissa dichiarata (0,05 mm) al posto di max(0,05, 1% picco), esposta
 in results/cam card/CSV. APP-06: A/B passa dalla pipeline principale
 (baseline+follower+anticipo per lobo). APP-07: provenienza raw/convertito
-per-lato, niente doppia conversione. Verificato live sulla Clio.
+per-lato, niente doppia conversione. Verificato live sulla RIF-1.
 
 **Lotto 16 — MET-05 (posizioni encoder).** Le posizioni salvate sono legate a
 un'"epoca" dello zero encoder: reset `!` o reboot Arduino la incrementano e
@@ -272,7 +272,7 @@ salvo `pkg` (devDep, nessun fix a monte). Restano fuori, con motivazione:
   **FW-07/FW-12** (schema/BOM e verifica LM339/impulso pin
   all'oscilloscopio); **flash+bench del fw 3.6** (COM8 bloccata da un processo
   wedged: serve un replug USB, poi `bench_fw34_test.js`); **REP-01..04**
-  (rigenerazione report VW: serve la ri-scansione delle camme rimontate).
+  (rigenerazione report camma RIF-2: serve la ri-scansione delle camme rimontate).
 - **Firmware da fare col prossimo flash al banco**: **FW-09** (risposta `BUSY`
   ai comandi non-`x` durante il moto, oggi scartati in silenzio dal drain).
 - **Rinviato per scelta di rapporto costo/beneficio sul banco monoutente**:
@@ -286,6 +286,6 @@ salvo `pkg` (devDep, nessun fix a monte). Restano fuori, con motivazione:
   l'architettura PRECEDENTE, sostituita dall'app web. Da **archiviare** come
   legacy (non manutenere): #REF!/#VALUE! e le macro non impattano la UI attuale.
 - **Qualità test (TEST-01/02)**: la suite è passata da 52 check autoreferenziali
-  a 137, con dataset/fixture reali (Clio, VW) e riproduzioni dei bug dell'audit
+  a 137, con dataset/fixture reali (RIF-1, RIF-2) e riproduzioni dei bug dell'audit
   (MAT-01, MET-02, DYN-01, SEC-*). Restano da aggiungere in futuro fuzz/E2E e un
   harness firmware in CI (HIL) — coperti oggi da `bench_fw34_test.js` al banco.

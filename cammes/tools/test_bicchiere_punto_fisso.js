@@ -16,7 +16,7 @@
 //  ginocchi in ingresso e uscita dal vincolo e la pendenza letta non e' piu' una
 //  proprieta' della camma.
 //
-//  Conseguenza pratica: il consiglio non era un punto fisso. Sulla 106
+//  Conseguenza pratica: il consiglio non era un punto fisso. Sulla camma RIF-3
 //  aspirazione (cerchio base 32 mm, puntalino 1,5):
 //      digitando 20  ->  "servirebbe almeno D 35,1"
 //      digitando 29  ->  "servirebbe almeno D 30,2"
@@ -44,7 +44,7 @@ function check(label, cond, detail) {
     if (!cond) fails++;
 }
 function leggiScr(nome) {
-    var txt = fs.readFileSync(path.join(__dirname, '..', 'prove', nome), 'utf8');
+    var txt = fs.readFileSync(path.join(__dirname, 'fixtures', nome), 'utf8');
     var out = new Array(361);
     for (var i = 0; i <= 360; i++) out[i] = 0;
     txt.split(/\r?\n/).forEach(function (r) {
@@ -66,9 +66,9 @@ console.log(' PIATTELLO: l escursione del contatto e una proprieta della CAMMA')
 console.log('=============================================================');
 
 var CAMME = [
-    { nome: 'VW KR aspirazione', file: 'VW-kr1_8-ASP_alz.scr', rBase: 16.32 },
-    { nome: 'Clio', file: 'clio1_8_alz.scr', rBase: 16.5 },
-    { nome: 'test_v31', file: 'test_v31_fw_alz.scr', rBase: 16.0 }
+    { nome: 'camma RIF-2 aspirazione', file: 'rif2_asp_alz.scr', rBase: 16.32 },
+    { nome: 'camma RIF-1', file: 'rif1_alz.scr', rBase: 16.5 },
+    { nome: 'prova_fw31', file: 'prova_fw31_alz.scr', rBase: 16.0 }
 ];
 var DIAMETRI = [16, 20, 25, 28, 29, 30, 32, 35, 40, 60];
 
@@ -119,7 +119,7 @@ CAMME.forEach(function (c) {
 // piccolo davvero non raggiunge quei punti. Si corregge solo il CRITERIO.
 console.log('');
 console.log('--- la curva simulata resta quella di prima ---');
-var Lv = leggiScr('VW-kr1_8-ASP_alz.scr');
+var Lv = leggiScr('rif2_asp_alz.scr');
 var stretto = M.convertPuntToBicchiere(Lv, 16.32, 20, 1.5);
 var largo = M.convertPuntToBicchiere(Lv, 16.32, 40, 1.5);
 var diverse = 0, maxDiff = 0;

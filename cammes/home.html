@@ -774,7 +774,7 @@
         </div>
         <div class="flex items-center gap-8 mt-8" style="flex-wrap:wrap;">
             <div style="min-width:230px;">
-                <div style="font-size:12px;color:var(--text-muted);">La mia officina <span class="help-icon" data-tip="<strong>Intestazione referti</strong>Il nome compare nell'intestazione della <b>Scheda camma PDF</b>: &egrave; il documento che consegni al cliente. Salvato sul server (non nel browser)." tabindex="0">?</span></div>
+                <div style="font-size:12px;color:var(--text-muted);">La mia officina <span class="help-icon" data-tip="<strong>Intestazione referti</strong>Il nome compare in testa a <b>tutti i PDF</b> che consegni al cliente: report di analisi, race report, scheda camma e scheda tecnica della singola misura. Salvato sul server (non nel browser)." tabindex="0">?</span></div>
                 <input type="text" id="setOfficina" class="input" style="width:280px;" placeholder="Ragione sociale (per i referti PDF)">
             </div>
             <button class="home-action-btn" onclick="saveOfficina();">&#128190; Salva intestazione</button>
@@ -991,9 +991,10 @@ function getAllTagsWithCount() {
 var selectedTagFilters = [];  // Array di tag selezionati (AND filter)
 
 // Auto-tag RIMOSSO. Indovinava la marca dai NUMERI nel nome file: 12 marche e
-// 6 architetture cablate in un banco universale. Misurato: `r19_16v_alz.scr`
-// (Renault 19 16V) veniva etichettato `yamaha`, perche' il pattern delle moto
-// r[1-9] pesca "r1" dentro "r19". E i tag si STAMPANO sul PDF della singola
+// 6 architetture cablate in un banco universale. Misurato: un file con la
+// sigla di un'auto nel nome veniva etichettato con una marca di moto, perche'
+// il pattern delle moto (una lettera e una cifra) pesca due caratteri dentro
+// quella sigla, che e' piu' lunga. E i tag si STAMPANO sul PDF della singola
 // misura, quindi la marca indovinata arrivava al cliente.
 // Non si e' perso nulla: il tag veniva al 100% dal nome file, che e' gia'
 // ricercabile a testo libero. Il tagging MANUALE resta, qui sotto.
@@ -2352,6 +2353,11 @@ function exportSinglePDF(fileName, fileType) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(22);
     doc.setTextColor(255, 255, 255);
     doc.text('CAMMES', margin, 18);
+    // intestazione officina, a destra sulla riga del marchio (stessa funzione
+    // per tutti i PDF: cammes-ui.js). Prima questa scheda usciva anonima.
+    if (window.cammesIntestazionePdf) {
+        window.cammesIntestazionePdf(doc, window._officina, pageW - margin, 18, pageW - 2 * margin - 48, 12);
+    }
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
     doc.setTextColor(0, 212, 255);
     doc.text('Scheda tecnica camma', margin, 25);
@@ -2600,6 +2606,8 @@ function initSettingsUI() {
     fetch('/api/settings').then(function (r) { return r.json(); }).then(function (s) {
         var inp = document.getElementById('setOfficina');
         if (inp && s.officina && s.officina.nome) inp.value = s.officina.nome;
+        // serve anche qui: la scheda tecnica della singola misura la stampa
+        window._officina = (s.officina && s.officina.nome) || '';
         var badge = document.getElementById('benchBadge');
         if (badge && s.verificaBanco && s.verificaBanco.date) {
             var days = Math.floor((Date.now() - new Date(s.verificaBanco.date).getTime()) / 86400000);
@@ -2618,7 +2626,8 @@ function saveOfficina() {
     fetch('/api/settings', { method: 'POST', body: JSON.stringify({ officina: { nome: nome.trim() } }) })
         .then(function (r) { return r.json(); })
         .then(function (d) {
-            if (window.cammesToast) window.cammesToast({ kind: d.ok ? 'success' : 'err', title: d.ok ? 'Intestazione salvata' : 'Errore', body: d.ok ? 'Compare sui prossimi referti PDF.' : (d.error || '?'), duration: 4000 });
+            if (d.ok) window._officina = nome.trim();   // vale subito, senza ricaricare
+            if (window.cammesToast) window.cammesToast({ kind: d.ok ? 'success' : 'err', title: d.ok ? 'Intestazione salvata' : 'Errore', body: d.ok ? 'Compare in testa a tutti i prossimi PDF.' : (d.error || '?'), duration: 4000 });
         }).catch(function () {});
 }
 window.saveOfficina = saveOfficina;

@@ -9,6 +9,175 @@ Sistema di misura profili alberi a camme per motori.
 
 ---
 
+## v3.7.1 — 2026-11-15: ogni funzione provata, una per una (firmware 4.1 INVARIATO)
+
+Richiesta dell'officina: *verificare il progetto in ogni sua funzionalità,
+partendo da quale sia l'obiettivo, e correggere*. Con un difetto già indicato: la
+Scheda camma nominava un'automobile. Il firmware non è toccato: chi ha la 4.1
+non riflasha.
+
+**L'obiettivo, messo per iscritto.** Un banco UNIVERSALE: misura il profilo di
+alzata di qualunque albero a camme, un cilindro per volta, e ne ricava dati
+onesti e tracciabili — alzata, durata, fasatura, confronto, follower,
+cinematica, molle — in documenti consegnabili che sono **neutri** rispetto a
+marca e modello e che non affermano più di quanto la misura sostiene.
+
+**Come è stata fatta la verifica.** Il banco vero non si tocca senza l'operatore
+presente, quindi il server VERO è stato pilotato da un firmware emulato (stesse
+risposte del 4.1, lobo sintetico) e le quattro pagine sono state usate nel
+browser come le usa l'officina: scansione, STOP, Zero virtuale, jog,
+ripetizioni, verifica banco, archivio, cestino, backup, export, confronto a 4
+curve, collaudo su nominale, analisi con tutti i moduli, i quattro PDF, CSV,
+salvataggio profilo, confronto A/B, strumenti race. Ogni difetto ha un test che
+fallisce sul codice di prima. Suite: 60, tutte verdi.
+
+### ⚠ Cosa cambia per chi usa il banco
+
+| Cosa | Prima | Adesso |
+|---|---|---|
+| **Scheda camma PDF**, nota di metodo col bicchiere | citava il modello di un'automobile e uno scarto di 0.046 mm | «verificata su una camma letta sia col puntalino sia col piattello Ø33 (scarto 0.065 mm RMS)»: nessun nome, e il numero è quello che la suite misura oggi |
+| **Dopo lo Zero virtuale** | a volte la pagina restava in sola lettura, START spento, fino al ricaricamento a mano | il comando torna subito |
+| **Zero virtuale fermato** (STOP, comparatore non pronto, guasto) | "Comparatore non risponde", START rifiutato fino al ricaricamento | il comparatore resta letto, si riparte subito |
+| **Collaudo su nominale**, tolleranza scritta «0,05» | ignorata in silenzio: il verdetto usciva con ±0,10 | la virgola vale; un valore non valido non dà verdetto |
+| **Collaudo su nominale**, stessa camma partita mezzo grado più in là | NON CONFORME (0,12–0,17 mm di sola fase) | allineamento a frazioni di grado, dichiarato nel verdetto |
+| **Collaudo** con la vista su «Differenza» | giudicava le differenze: NON CONFORME di millimetri | giudica sempre le misure |
+| **Profili in modalità Race** | in anticipo di **0,25°** sugli stessi profili in Veloce (0,07 mm sul fianco) | centrati sul grado: Race e Veloce coincidono |
+| **Modalità di scansione** | Veloce, Precisione, Race | **Veloce e Race**: Precisione è stata tolta |
+| **Durata stimata** della Race | ~4m40s | ~2m20s — **stima calcolata**, vedi sotto |
+| **Intestazione dell'officina** | solo sulla Scheda camma | su tutti i PDF: report di analisi, race report, scheda camma, scheda della singola misura |
+| **Manuale**, follower simulato | «inserisci il raggio base» | «il DIAMETRO del cerchio base» (il campo chiede quello dal 28-07) |
+
+**I profili Race già in archivio** restano in anticipo di 0,25°: confrontandone
+uno vecchio con uno nuovo si vede quello scarto. È il difetto di prima, non una
+differenza fra le camme.
+
+### I difetti, uno per uno
+
+**1. Un nome d'auto nel documento per il cliente** *(segnalato dall'officina)*.
+La Scheda camma, col follower "bicchiere", stampava nelle note di metodo il
+modello dell'automobile su cui la conversione era stata provata. Altri cinque
+fumetti della pagina Analisi e un esempio del manuale citavano marche, modelli o
+sigle motore. Ora niente di ciò che l'operatore legge o consegna ne nomina. E il
+numero citato era superato — veniva dalla prova del 07-11, fatta con la
+compensazione del puntalino che poi si è scoperta rovesciata: quello di oggi è
+0,065 mm, e il test fallisce se nota e misura si separano.
+
+**2. Dopo lo Zero virtuale la pagina restava in sola lettura** *(regressione
+della v3.7.0)*. Lo Zero virtuale finisce ricaricando la pagina. Il server, perso
+il collegamento, per 4 secondi non riassegna il comando; la pagina nuova manda
+subito la sua configurazione e viene rifiutata — **due volte per lo stesso
+comando**: «arresto in corso» (vero) e «occupato» (falso). Letto «occupato», la
+pagina si metteva in sola lettura, e finita la finestra nessuno l'avvisava. Fino
+alla 3.6.0 il comando lo riprendeva per caso il polling del comparatore; la
+3.7.0, togliendo giustamente le letture dal lease, ha tolto anche quel caso.
+Ora: la finestra non si apre se il firmware ha già detto che il movimento è
+finito (è il caso dello Zero virtuale); quando serve, il rifiuto è uno solo col
+motivo vero, il server **annuncia** la fine dell'attesa e la pagina la tratta
+come un'attesa — comandi spenti finché dura, poi riaccesi da soli.
+
+**3. Uno Zero virtuale non concluso lasciava la pagina cieca.** Lo Zero
+virtuale spegneva i due polling contando sul ricaricamento finale per riaverli.
+Se non arrivava in fondo — STOP, comparatore non pronto alla partenza, guasto —
+restavano spenti: display fermo, LED rosso, START che rifiutava a comparatore
+sano. È con ogni probabilità il "a volte non legge il comparatore, devo spegnere
+e riaccendere" e il "a volte non completa l'auto zero". **La v3.7.0 li aveva
+dati per chiusi con una causa sola; ce n'erano altre due** (questa e la n. 5).
+Stessa radice: lo stato "Zero virtuale in corso" restava armato, e la scansione
+normale successiva finiva con uno spostamento del motore e la pagina ricaricata.
+
+**4. La configurazione dell'Arduino poteva essere quella di un'altra modalità.**
+Micropassi e pausa partivano solo all'apertura e al cambio modalità. Se quel
+primo invio era rifiutato nessuno li rimandava, e la modalità non sopravvive al
+ricaricamento: dopo uno Zero virtuale in Race la scansione Veloce successiva
+poteva girare coi micropassi della Race, cioè mezzo giro. Ora la configurazione
+si rimanda prima di ogni comando che muove, quando c'è il dubbio.
+
+**5. Il comparatore veniva interrogato più in fretta di quanto risponde.** Una
+lettura ogni 0,2 s senza aspettare la precedente. A comparatore spento ogni
+lettura dura 0,9 s: le richieste si accodavano nei 64 byte del buffer
+dell'Arduino, e dietro la coda finivano i comandi veri. Ora c'è al più una
+richiesta in volo.
+
+**6. "Media 3 letture" non era vero, e la modalità Precisione è stata tolta.**
+Dal firmware 3.6 la scansione legge sempre col criterio dei due frame concordi;
+il numero di campioni lo usa solo la lettura a riposo. Tolta la media che non
+faceva, Precisione restava identica alla Veloce salvo 20 ms di pausa in più a
+punto: una scelta senza criterio per chi sta al banco. Restano **Veloce** (un
+punto per grado) e **Race** (un punto ogni mezzo grado).
+
+**7. La Race metteva ogni punto un quarto di grado indietro.** Il grado *d* era
+la media delle letture a *d*−0,5° e *d*°. Ora è una media centrata, pesi
+¼-½-¼ su *d*−0,5°, *d*°, *d*+0,5°, col giro chiuso (360,5° = 0,5°). L'encoder
+del picco, che serve allo Zero virtuale, è quello della lettura centrale. Se
+una riga dello streaming si perde, il grado si recupera a fine giro dalla sua
+lettura centrale invece di restare senza valore.
+
+**8. Il collaudo su nominale poteva dare un verdetto diverso da quello
+chiesto.** Tre difetti nella pagina Confronto, l'unica che emette un giudizio:
+la tolleranza con la virgola veniva scartata e sostituita con 0,10 senza
+avviso; l'allineamento al nominale era solo a gradi interi, così la stessa
+camma partita mezzo grado più in là usciva NON CONFORME; e con la vista su
+«Differenza» il verdetto veniva calcolato sulle differenze disegnate. Ora il
+verdetto dice la tolleranza usata, lo scarto, il grado e di quanto la curva è
+stata riallineata. Un difetto vero non viene assorbito dall'allineamento: un
+bozzo di 0,2 mm resta 0,2 mm.
+
+**9. L'intestazione dell'officina usciva su un PDF solo.** Il campo in Home si
+chiama "per i referti PDF", ma report di analisi, race report e scheda della
+singola misura erano anonimi. Ora la scrive una funzione sola, per tutti.
+
+**10. Il manuale** diceva ancora di inserire il raggio base, citava un "LED
+Sensore" e un selettore "Motore scansione" che non esistono più.
+
+**11. PROTOCOL.md** affermava che «l'ACK non porta run=»: errore introdotto il
+2026-08-09 da un rilievo non verificato. Per SCAN e MOVE il firmware lo stampa.
+Ora documenta anche i messaggi di ruolo fra server e pagina.
+
+**12. Minori.** Il campo «max … gradi … mm» usciva tagliato sugli schermi da
+portatile. Confronto A/B: «Area asp. +-13.3 %». Ripetibilità: «σ max 0.000 mm
+@ 0°». Dopo una scansione chiusa incompleta i selettori restavano spenti.
+Sblocca motore restava cliccabile in sola lettura.
+
+### Il repository è neutro
+
+Per decisione dell'officina i nomi di auto, motori e aziende terze sono stati
+tolti non solo da ciò che l'operatore vede, ma da tutto il repository: commenti
+del codice, test, README, documenti e questa cronaca. Le camme reali su cui
+sono state fatte le prove si chiamano **RIF-1, RIF-2, RIF-3**
+(`cammes/tools/fixtures/README.md`). I file di riferimento sono stati solo
+rinominati: stessi byte, impronte SHA-256 dichiarate e controllate dalla suite,
+quindi le prove restano ripetibili. `tools/test_neutralita.js` fa fallire la
+suite se un nome ricompare, nei testi o nei nomi dei file.
+
+Restano fuori: i nomi dei file in `cammes/prove/`, che è l'archivio
+dell'officina e porta i nomi scelti da chi misura; i file di terzi; la storia di
+git fino alla v3.7.0, che non si riscrive.
+
+### Cosa NON è verificato, e lo si dice
+
+- **La durata della Race è calcolata, non cronometrata.** I 276 s di luglio
+  erano del motore classico con la media a 3 campioni. La nuova (140 s) viene
+  dal tempo misurato della Veloce più la differenza di pausa. Serve una
+  cronometrata al banco. La barra si corregge comunque da sola sul ritmo reale.
+- **La coda nel buffer dell'Arduino (n. 5)** è ricavata dal sorgente del
+  firmware (lettura bloccante, 64 byte) e riprodotta con un modello a tempo,
+  non osservata sull'hardware.
+- Tutto il resto è stato provato col firmware **emulato**: stessa logica, non
+  lo stesso ferro. Le tre prove al banco indicate nell'audit del 2026-08-09
+  (artefatto calibrato, chiusura giro sotto carico, isteresi) restano da fare.
+
+### Già nel repository dal 2026-08-09 (dopo il tag v3.7.0, senza una voce qui)
+
+- Il verdetto della **verifica banco** vede anche i difetti negativi del
+  cilindro, e l'RMS non è più sottostimato: **esce circa √2 volte più alto**
+  di quello archiviato dalle versioni precedenti.
+- "Ripetibilità eccellente" non esce più con un solo run in media.
+- Il **PDF race** non stampa più come validi i punti non convergenti.
+- MATH_SPEC, PROTOCOL e README riallineati, con un controllo anti-deriva.
+- `AUDIT_TOTALE_2026-08-09.md`: il rapporto completo.
+
+---
+
 ## v3.7.0 — 2026-08-02: quello che l'officina ha visto (firmware 4.1 INVARIATO)
 
 Undici commit, ognuno con un test che **falliva sulla v3.6.0**. Il firmware non è
@@ -29,8 +198,8 @@ prima:
 |---|---|---|---|
 | **Acc. max**, **Jerk max**, forza d'inerzia, **Margine**, **Distacco valvola** | | **circa la metà** | la derivata si prendeva su una curva interpolata a mezzo grado: bastava digitare 0,5 in "Angolo lobo" perché l'accelerazione dimezzasse, esattamente ×2,000. Ora si deriva dove i campioni sono misurati |
 | **Acc. max** al variare del **gioco** | cambiava fino a 1,7× | **non cambia più** | misurava lo spigolo della ripresa del gioco, non la camma. Ora quello spigolo non viene creato |
-| Curve con follower **bicchiere / rullo / finger** | fianchi più alti | **fianchi più bassi** | la compensazione del puntalino sferico aveva il **verso rovesciato**: sommava l'errore invece di toglierlo. Su VW: durata asp. 286° → 280°, alzata al PMS sca. 3,25 → 2,84 mm |
-| **Diametro minimo del piattello** | dipendeva dal Ø digitato | **un numero solo** | era calcolato sulla curva già ritagliata dal bicchiere digitato. Sulla 106 asp.: digitando 20 diceva Ø35,1, digitando 32 diceva Ø29,6. Ora dice Ø30,8 qualunque cosa digiti |
+| Curve con follower **bicchiere / rullo / finger** | fianchi più alti | **fianchi più bassi** | la compensazione del puntalino sferico aveva il **verso rovesciato**: sommava l'errore invece di toglierlo. Sulla camma RIF-2: durata asp. 286° → 280°, alzata al PMS sca. 3,25 → 2,84 mm |
+| **Diametro minimo del piattello** | dipendeva dal Ø digitato | **un numero solo** | era calcolato sulla curva già ritagliata dal bicchiere digitato. Sulla camma RIF-3 asp.: digitando 20 diceva Ø35,1, digitando 32 diceva Ø29,6. Ora dice Ø30,8 qualunque cosa digiti |
 | **Valve float**, fasce di distacco, colonne di forza nel CSV | uscivano sempre | **solo a molla confermata** | il cancello che protegge le celle non arrivava al ramo dinamico: usciva un "Compliance OK, treno adeguato" calcolato su una molla di esempio |
 | **"Pos. max alzata"** nel CSV | una riga sola | **due righe distinte** | quel numero ricopiava il campo "Angolo lobo". Ora c'è la posizione **misurata** in gradi camma accanto all'angolo **dichiarato** |
 
@@ -83,12 +252,12 @@ del piattello si mordeva la coda.
 tutti e tre gli anelli. Era **un click sulla legenda**: Chart.js, sui grafici a
 ciambella, nasconde la fetta di quell'indice **in tutti gli anelli** e riscala il
 resto. Cliccando "Scarico" spariva l'arco aperto di aspirazione, scarico e
-incrocio insieme. Misurato sui dati VW: i totali passavano da 720/720/720 a
+incrocio insieme. Misurato sui dati RIF-2: i totali passavano da 720/720/720 a
 **436/439/642**, e l'aspirazione si leggeva **511°** invece di 284.
 
 ### Resta aperto, e dichiarato
 
-- **VW**: correggendo il verso del puntalino la camma si allontana dalla scheda
+- **RIF-2**: correggendo il verso del puntalino la camma si allontana dalla scheda
   del rettificatore (durata asp. residuo 6° → 10°), tutti gli scarti nel verso
   "più corta e più bassa". Due letture: **albero usato contro scheda di camma
   nuova** (l'usura accorcia e abbassa, e l'errore del tastatore ne mascherava una
@@ -96,7 +265,7 @@ incrocio insieme. Misurato sui dati VW: i totali passavano da 720/720/720 a
   Decide il banco: ri-scansione e cerchio base al calibro.
 - **Modalità Puntalino**: è il default e **non applica nessuna correzione**. Le
   letture non sono falsate dal programma, ma l'errore della sfera c'è lo stesso
-  (0,17 mm sui fianchi di una camma tipo 106). Offrirla anche lì cambierebbe ogni
+  (0,17 mm sui fianchi di una camma tipo RIF-3). Offrirla anche lì cambierebbe ogni
   numero già esportato col default: è una decisione, non una svista.
 - Accelerazione non convergente fra finestre di lisciatura, verdetto di
   ripetibilità che esclude il cerchio base, P2-01/07/09/12, Lotto F rete,
@@ -137,9 +306,10 @@ verdetto era sbagliato dove serviva di più. Il codice lo dichiarava da sé
 verifica comunque in laboratorio. Via 585 righe.
 
 **Auto-tag (Home).** Indovinava la marca dai *numeri* nel nome file. Misurato:
-`r19_16v_alz.scr` — una Renault 19 16V — veniva etichettata **`yamaha`**, perché
-il pattern delle moto `\br[1-9]` pesca "r1" dentro "r19". E i tag si **stampano
-sul PDF** della singola misura. Il tagging manuale resta.
+un file con nel nome una sigla e dei numeri — un'auto — veniva etichettato con
+**una marca di moto**, perché il pattern delle moto `\br[1-9]` pesca "r1"
+all'inizio di quella sigla. E i tag si **stampano sul PDF** della singola misura.
+Il tagging manuale resta.
 
 **Preset motore** e **k pivot bilanciere** (già nella 3.5.0 su `main`): il primo
 cambiava l'alzata del 59% con una tendina etichettata per numero di cilindri, il
@@ -240,9 +410,9 @@ girano lo stesso — ricadevano sul `<select>` nascosto: un 3-DOF lasciato lì
 continuava a comandare, rileggendo masse e rigidezze dal DOM. Ora il modello si
 fotografa sempre.
 
-### La discrepanza VW: causa trovata
+### La discrepanza RIF-2: causa trovata
 
-`validate_vw.js` passava 32,64 e 34,25 alla conversione **come raggio** del
+`validate_rif2.js` passava 32,64 e 34,25 alla conversione **come raggio** del
 cerchio base, mentre sono i **diametri** misurati al calibro. Ricalcolando col
 raggio vero, sulle stesse scansioni e senza toccare un dato:
 
@@ -259,7 +429,7 @@ La «sottostima ~35% del medio-fianco», aperta da giugno, era in larga parte un
 errore di unità nel dato che davamo noi allo scanner. Il residuo
 dell'aspirazione è ora **in eccesso**, non in difetto: le ipotesi costruite su
 «lo scanner sotto-misura il fianco» non servono più a spiegarlo. Dettaglio in
-`REPORT_CAMME_VW-KR.md` §5.1.
+`REPORT_CAMMA_RIF-2.md` §5.1.
 
 ### Funzione nuova: quale carico serve alla molla
 
@@ -633,7 +803,7 @@ comandava nulla.
 
 *Chi è interessato*: solo le analisi fatte con follower "leva a dito", o con
 rigidezza del perno bilanciere valorizzata. Le misure con bicchiere o
-puntalino (Clio, VW con valori di fabbrica) restano valide.
+puntalino (camma RIF-1, RIF-2 con valori di fabbrica) restano valide.
 
 ### La cedevolezza del perno bilanciere veniva applicata al posto sbagliato (P1-06)
 
@@ -808,7 +978,7 @@ invariato). Due variabili CSS usate 10 volte ma mai definite rendevano
 Aggiunte 12 spiegazioni "?" sulle celle dei risultati (prima nessuna).
 
 **Correttezza verificata, non solo dichiarata.** Ricalcolo indipendente sulle
-camme VW reali: alzata massima, durata, area, LSA e overlap coincidono al
+camme RIF-2 reali: alzata massima, durata, area, LSA e overlap coincidono al
 100% con quanto mostrato. Suite 0 FAIL, lint 0.
 
 **Resta aperto** (dalla revisione avversariale di questa stessa release):
@@ -1066,7 +1236,7 @@ per ID in `REMAINING_RISKS.md`. Il secondo giro (Lotti A–G della controrevisio
   - Tempi apertura/chiusura (BTC, ABC, BBC, ATC)
   - Incrocio (overlap) e alzata al PMS
 - Diagramma circolare di fasatura (doughnut Chart.js)
-- Algoritmo cam-to-crank testato con file reale (305_asp_alz.scr):
+- Algoritmo cam-to-crank testato con file reale (una scansione di aspirazione dell'archivio):
   - Max: 8.04mm (8.54 - 0.50 gioco), Durata: 225 gradi
 
 ### Navigazione aggiornata
@@ -1337,7 +1507,7 @@ Sessione di refactor profondo e nuove feature avanzate. 35+ commit raggruppabili
 - **~6000 righe modificate** (35 file)
 - **8 brani musicali** curati (Inno di Mameli per primo)
 - **3 versioni firmware** flashate sull'Arduino reale via arduino-cli
-- **Hardware test reale Clio 1.8**: alzata 8.6 mm @ 179° camma
+- **Hardware test reale RIF-1**: alzata 8.6 mm @ 179° camma
 
 ### Stato corrente del progetto
 - ✅ **Production-ready**: 5 pagine + firmware + server, 0 issue critici
@@ -1351,7 +1521,7 @@ Sessione di refactor profondo e nuove feature avanzate. 35+ commit raggruppabili
 - [x] ~~Sweep RPM: trova RPM critico dinamico iterando~~ (sotto-sessione 6.2)
 - [x] ~~Optimizer molla: suggerisce k/F₀ minimi per float < soglia~~ (sotto-sessione 6.2)
 - [x] ~~Modello compliance 2-DOF (catena cam→bilancere→valvola)~~ (sotto-sessione 6.2)
-- [x] ~~Test compliance su camma race reale~~ (sotto-sessione 6.2, Clio)
+- [x] ~~Test compliance su camma race reale~~ (sotto-sessione 6.2, RIF-1)
 
 ---
 
@@ -1369,18 +1539,18 @@ evidenziata in rosso. Auto-hide se compliance OFF.
 ### 2. Sweep RPM (`rpmSweep` + `runRpmSweep`)
 Bottone "Sweep RPM": 12 simulazioni RK4 da rpm/2 a rpm×2, plotta
 valve float per ogni regime, identifica RPM critico dinamico.
-Test Clio @ Auto 4cyl kTrain 5000: tutto < 0.5 mm, picco risonanza
+Test RIF-1 @ Auto 4cyl kTrain 5000: tutto < 0.5 mm, picco risonanza
 @ 5023 rpm (0.363), minimo @ 6795 (0.100).
 
 ### 3. Optimizer molla (`springOptimizer` + `runSpringOptimizer`)
 Bottone "Suggerisci molla": griglia 88 combinazioni (k 20-400, F₀
-100-1500), trova la molla minima con float < 0.3 mm. Test Clio @ 6500:
+100-1500), trova la molla minima con float < 0.3 mm. Test RIF-1 @ 6500:
 suggerito k=20/F₀=100 (più leggera dell'attuale) → float 0.074 mm.
 
 ### 4. Compliance 2-DOF (`simulateCompliance2DOF`)
 Sistema a 2 masse (bilancere + valvola) + 2 rigidezze in serie, RK4
 4-stati. Selettore UI 1-DOF/2-DOF + input massa intermedia + k pushrod.
-Per V8 pushrod, vintage, finger con bilancere pesante. Test Clio:
+Per V8 pushrod, vintage, finger con bilancere pesante. Test RIF-1:
 1-DOF float 0.096 mm, 2-DOF 1.510 mm (cattura modo bilancere).
 
 ### 5. Fix critico k_train default 500 → 5000 N/mm
@@ -1413,7 +1583,7 @@ ciascuna via `simulateCompliance`. Risolve il "da fare" sweep multi-parametro.
 - Marker ◎ sulla molla corrente; assi etichettati k (N/mm) × F₀ (N)
 - `runSpringMap` / bottone `btnSpringMap` "🗺 Mappa molla" (~8 s)
 - A colpo d'occhio mostra quali combinazioni molla mantengono il treno
-  valvole sotto soglia al regime target (es. Clio 7/224 a 7000 rpm —
+  valvole sotto soglia al regime target (es. RIF-1 7/224 a 7000 rpm —
   fenomeno reale di surge della molla, non un bug)
 
 ### 2. Race report PDF (`exportRaceReport`)
@@ -1426,8 +1596,8 @@ mappa k×F₀ (heatmap rasterizzata) e grafico compliance cam vs valvola.
 ### Wire-up
 - Bottoni abilitati in `analyze()` quando compliance ON, disabilitati in
   `resetAll()`; canvas heatmap nascosto durante sweep/optimizer
-- `prove/clio_test_1_alz.scr`: scansione reale Clio 1.8 usata nei test
-  (3 simulazioni sweep+optimizer+mappa misurate a ~142 ms totali)
+- `tools/fixtures/rif1_prova1_alz.scr` (allora in `prove/`): scansione reale RIF-1
+  usata nei test (3 simulazioni sweep+optimizer+mappa misurate a ~142 ms totali)
 
 ### Da fare prossime sessioni
 - [x] ~~Modello compliance 3-DOF con cedevolezza sede valvola~~ (sotto-sessione 6.4)
@@ -1455,9 +1625,9 @@ RK4 a 6 stati, passo legato al modo più rigido + cap anti-freeze.
 - `tools/test_3dof.js`: regressione, 3/3 PASS (limite rigido k_seat→∞ ⇒
   3DOF≈2DOF a 0.005 mm; output finito a 9000 rpm; float cresce col regime).
 
-### 2. Validazione su Clio 1.8 16V reale (`tools/validate_clio.js`)
+### 2. Validazione su RIF-1 reale (`tools/validate_rif1.js`)
 Estrae la pipeline di produzione (parseCamFile→mapCamToCrank→solver) e la
-applica alla scansione reale `prove/clio_test_1_alz.scr`. Il motore F7P è
+applica alla scansione reale `tools/fixtures/rif1_prova1_alz.scr`. Il motore della RIF-1 è
 **DOHC a punteria diretta** → 1-DOF è la topologia corretta → float a 7000 rpm
 (fuorigiri) = **0.091 mm**, trascurabile come deve essere per un motore di
 serie sano. 6/6 check PASS; camma confermata 8.60 mm / 246°.
@@ -1557,10 +1727,10 @@ PNG di Chart.js è trasparente → su PDF bianco va bene il fondo, ma due bug re
 - `home.html` `exportSinglePDF`: cattura inline white-bg + 2× + aspect corretto.
 
 ### Verifica
-Test live (camma Clio reale, asp+scar+compliance): tutti i 7 grafici presenti e
+Test live (camma RIF-1 reale, asp+scar+compliance): tutti i 7 grafici presenti e
 con immagine valida (nessun null/bianco), helper produce fondo bianco opaco +
 aspect reale (profilo 0.59, timing 1.0), `exportPDF`/`exportRaceReport` senza
-eccezioni. Regressioni `test_3dof` 3/3 e `validate_clio` ancora verdi (fix solo
+eccezioni. Regressioni `test_3dof` 3/3 e `validate_rif1` ancora verdi (fix solo
 di rendering). Conferma visiva finale demandata all'utente (gli screenshot del
 preview vanno in timeout in questo ambiente).
 
@@ -1720,11 +1890,11 @@ Scelta animazione 2D (no 3D/WebGL: vincolo exe offline su PC officina).
 
 ---
 
-## Sotto-sessione 6.12 — 2026-06-13 — Alzata al PMS corretta (caso reale VW KR 1.8 16V)
+## Sotto-sessione 6.12 — 2026-06-13 — Alzata al PMS corretta (caso reale RIF-2)
 ### Tag: **v2.8.0**
 
-Innescata da un caso reale: due scansioni VW KR 1.8 16V (asp `VW-kr1_8-ASP_alz.scr`,
-sca `VW-kr1_8-SC_alz.scr`). L'utente si aspettava 3,5/3,3 mm di alzata al PMS, il
+Innescata da un caso reale: due scansioni RIF-2 (asp `rif2_asp_alz.scr`,
+sca `rif2_sca_alz.scr`). L'utente si aspettava 3,5/3,3 mm di alzata al PMS, il
 software dava 1,7/1,0. **Analisi → tre cause reali, tutte corrette.**
 
 ### Diagnosi (perché 1,7/1,0 era sbagliato)
@@ -1754,14 +1924,14 @@ angolo ora ha effetto senza re-importare (prima era un bug latente).
 
 ### Fix 3 — Raggio base per lato (asp/sca)
 Nuovo campo `rBaseExhaust`: aspirazione e scarico possono avere cerchio base diverso
-(VW KR: 32,64 / 34,25 mm). `applyVirtualFollower(camLift, side)` usa il raggio del lato.
+(RIF-2: 32,64 / 34,25 mm). `applyVirtualFollower(camLift, side)` usa il raggio del lato.
 
-### Esito sul caso VW KR (Ø35, gioco 0,3, centro lobo 104°)
+### Esito sul caso RIF-2 (Ø35, gioco 0,3, centro lobo 104°)
 - **Asp 2,18 mm / Sca 1,71 mm** — valore fisicamente corretto per centro lobo 104°.
 - I 3,5/3,3 attesi si ottengono a **centro lobo ~90° motore**: o le camme sono montate
   ~14° più anticipate, o quel dato viene da una fasatura diversa. Ora il software dà il
   numero vero per qualunque centro lobo l'utente inserisca (verificato in browser +
-  end-to-end con le funzioni reali; regressioni test_followers 13/13, 3dof/surge/clio ok).
+  end-to-end con le funzioni reali; regressioni test_followers 13/13, 3dof/surge/rif1 ok).
 
 ---
 
@@ -1791,10 +1961,10 @@ alla richiesta).
   una curva gia-follower. Memorizzati `intakeFileBase`/`exhaustFileBase` per i nomi.
 
 ### Verifica (browser, server reale)
-- Salvati i convertiti dei 2 file VW (bicchiere 35) -> creati in `prove/` (via `/api/files`).
+- Salvati i convertiti dei 2 file RIF-2 (bicchiere 35) -> creati in `prove/` (via `/api/files`).
 - Ricaricato il convertito: header rilevato -> follower forzato a Puntalino, picco 11.24,
   **alzata al PMS 2.175 mm identica** = nessuna riconversione. 0 errori console. File di test
-  poi rimossi. Regressioni test_followers 13/13, 3dof/surge/clio/vw invariate.
+  poi rimossi. Regressioni test_followers 13/13, 3dof/surge/rif1/rif2 invariate.
 
 ---
 
@@ -1823,14 +1993,14 @@ morti/vestigiali confermati. Nessun cambiamento funzionale.
   "Solo preferiti" ancora funzionante, checkbox rimosso, API pubbliche superstiti intatte.
 - alzata: `insert`/`update` assenti, `reset` presente, pagina ok.
 - polare: Salva = `type=button`, nessun form-owner, `sav()` definita.
-- 0 errori console su tutte e tre. Regressioni test_followers 13/13, 3dof/surge/clio/vw verdi.
+- 0 errori console su tutte e tre. Regressioni test_followers 13/13, 3dof/surge/rif1/rif2 verdi.
 
 ---
 
 ## Sotto-sessione 6.15 — 2026-06-14 — Correzione baseline / eccentricità (bonifica acquisizione b)
 ### Tag: **v2.11.0**
 
-Prima delle due "bonifiche acquisizione". Lo scarico VW ha un fondo di cerchio base che
+Prima delle due "bonifiche acquisizione". Lo scarico RIF-2 ha un fondo di cerchio base che
 non torna a 0 (~0,21 mm, variabile lungo il giro): firma di camma montata fuori centro /
 runout. Non è un offset costante → non si sottrae una costante.
 
@@ -1844,10 +2014,10 @@ runout. Non è un offset costante → non si sottrae una costante.
   resta il dato come misurato. Avviso una‑tantum se rimuove un'eccentricità > 0,05 mm.
 - **`tools/test_baseline.js`** (nuovo): camma pulita → no-op esatto (Δ 0.0000, picco
   preservato); camma + 0,25·cosθ → base→0 e profilo recuperato esattamente, eccentricità
-  stimata 0,250; **file VW scarico reale → base 0,220 → 0,048 mm**, picco 10,50 → 10,46.
+  stimata 0,250; **file RIF-2 scarico reale → base 0,220 → 0,048 mm**, picco 10,50 → 10,46.
 
 ### Verifica (browser + node)
-- Node: test_baseline tutti verdi + regressioni test_followers 13/13, 3dof/surge/clio/vw invariate.
+- Node: test_baseline tutti verdi + regressioni test_followers 13/13, 3dof/surge/rif1/rif2 invariate.
 - Browser: toggle presente; con ON l'alzata al PMS scarico cambia (1,706 → 1,829 mm:
   correzione applicata), eccentricità stimata ~0,08 mm, 0 errori console.
 
@@ -1882,7 +2052,7 @@ deformato.
   output valido, picco preservato, divergenza 18°; nessun encoder → null (fallback passi).
 
 ### Verifica e limiti
-- Node: test_encoder_reindex tutti verdi + regressioni invariate (baseline/followers/3dof/surge/clio/vw).
+- Node: test_encoder_reindex tutti verdi + regressioni invariate (baseline/followers/3dof/surge/rif1/rif2).
 - Browser: selettore presente (default Passi), funzioni cablate, identità esatta in-pagina,
   fallback null, 0 errori console.
 - **Limite onesto**: la *logica* di re-indicizzazione è testata, ma l'integrazione live
@@ -1921,11 +2091,11 @@ sono **moduli attivabili a spunta** — la schermata di default mostra solo l'es
 - Default: core visibile, 7 blocchi nascosti (molla/compliance/follower/race/confronto/
   RPM/cinematica). Attiva "dinamica" → compare compliance E parametri molla; race resta
   nascosto. Reload → scelta ricordata, checkbox sincronizzate, bottone "(1 attive)".
-- Analisi completa sui file VW a moduli spenti: risultati fasatura ok (durata 255°,
+- Analisi completa sui file RIF-2 a moduli spenti: risultati fasatura ok (durata 255°,
   overlap 47.5°), sezioni extra nascoste. Tutti i moduli ON → tutto ricompare e
   l'analisi popola anche forze/cinematica. 0 errori console.
 - Regressioni node tutte verdi (baseline, encoder_reindex, followers 13/13, 3dof, surge,
-  clio, vw — l'estrazione delle funzioni non è toccata).
+  rif1, rif2 — l'estrazione delle funzioni non è toccata).
 
 ---
 
@@ -1949,7 +2119,7 @@ web monolitico, consegna rotta. Piano in 4 fasi approvato dall'utente.
 - **Tutti e 7 i test migrati da eval-extraction a `require()`**: la classe di fragilità
   (rinomina/marker → test rotti) sparisce per costruzione.
 - Verifica: suite 7/7 verde; browser: valori IDENTICI al check storico (alzata al PMS
-  2.175/1.706 su VW, bicchiere Ø35), alzata.html ok (reindex dalla lib), 0 errori console.
+  2.175/1.706 su RIF-2, bicchiere Ø35), alzata.html ok (reindex dalla lib), 0 errori console.
 
 ### Fase 3 — Livello acquisizione condiviso `cammes-scan.js`
 - Le 7 funzioni IDENTICHE tra alzata e polare (verifica automatica con confronto
@@ -2004,7 +2174,7 @@ web monolitico, consegna rotta. Piano in 4 fasi approvato dall'utente.
 
 Banco collegato (Arduino COM8 + stepper + encoder + Neoteck + albero montato).
 Campagna eseguita in autonomia: flash v3 → sanity → calibrazione → doppio-scan →
-analisi. Camma installata identificata per correlazione: **Renault Clio 1.8 16V**
+analisi. Camma installata identificata per correlazione: **RIF-1**
 (RMS 0.074 mm vs la scansione d'archivio di 2 mesi fa → ripetibilità eccellente).
 
 ### Risultati
@@ -2035,9 +2205,9 @@ analisi. Camma installata identificata per correlazione: **Renault Clio 1.8 16V*
 5. Dati salvati in `prove/`: `bench_classic_alz.scr`, `bench_auto_alz.scr`.
 
 ### Cosa resta aperto
-- Il mistero del **fianco sottostimato VW** non era chiudibile oggi (montata la
-  Clio, non la VW). Però lo slittamento è ora ESCLUSO sperimentalmente: restano
-  dinamica del tastatore sui fianchi ripidi della VW (test: rimontare la VW e
+- Il mistero del **fianco sottostimato RIF-2** non era chiudibile oggi (montata la
+  RIF-1, non la RIF-2). Però lo slittamento è ora ESCLUSO sperimentalmente: restano
+  dinamica del tastatore sui fianchi ripidi della RIF-2 (test: rimontare la RIF-2 e
   scansionare in **autonomo** — il settle adattivo è il candidato-fix) o
   eccentricità di montaggio di allora.
 - La posizione di riposo dell'albero è ~qualche grado diversa da inizio sessione
@@ -2045,9 +2215,9 @@ analisi. Camma installata identificata per correlazione: **Renault Clio 1.8 16V*
 
 ---
 
-## Sessione 9 — 2026-07-11 — VALIDAZIONE FISICA del metodo puntalino→bicchiere (Clio + piattello Ø33)
+## Sessione 9 — 2026-07-11 — VALIDAZIONE FISICA del metodo puntalino→bicchiere (RIF-1 + piattello Ø33)
 
-Esperimento decisivo proposto dall'utente: stessa camma (Clio 1.8) misurata prima col
+Esperimento decisivo proposto dall'utente: stessa camma (RIF-1) misurata prima col
 **puntalino sferico** (+ conversione matematica a bicchiere Ø33), poi con un **piattello
 Ø33 fisico** montato al posto del puntalino. Se coincidono, il metodo è validato.
 Protocollo: **reset a 180° dal picco prima di OGNI scansione** (richiesto dall'utente;
@@ -2064,23 +2234,23 @@ autonoma v3 ×2, mediata 3 campioni ×1).
   quantizzazione 1° dell'allineamento). Controllo di fisica: il piattello legge
   **+2,5…+3,3 mm più del puntalino sui fianchi** e ~uguale al naso — esattamente come
   previsto dalla conversione (funzione di supporto). **Autocalibrazione: raggio base
-  reale della camma Clio ≈ 19 mm.**
-- Conseguenza per il caso VW: metodo/matematica/strumento ora validati fisicamente
-  end-to-end → per il fianco VW −35% resta un solo indiziato: il **setup
-  dell'acquisizione VW originale** (centraggio/eccentricità — coerente con l'ondulazione
-  di base 0,21 mm di quel file). Test finale: ri-scansione della camma VW su questo banco.
+  reale della camma RIF-1 ≈ 19 mm.**
+- Conseguenza per il caso RIF-2: metodo/matematica/strumento ora validati fisicamente
+  end-to-end → per il fianco RIF-2 −35% resta un solo indiziato: il **setup
+  dell'acquisizione RIF-2 originale** (centraggio/eccentricità — coerente con l'ondulazione
+  di base 0,21 mm di quel file). Test finale: ri-scansione della camma RIF-2 su questo banco.
 
 ### Note operative
 - Driver di campagna promosso a strumento permanente: **`tools/bench_campaign.js`**
   (5 scansioni + reset 180° via encoder, etichetta libera, porta auto-rilevata,
   keep-alive FTDI, retry apertura). Analisi one-off rimossa.
-- 10 file misura salvati: `prove/cliobench_punt_*` e `prove/cliobench_bicch33_*`.
+- 10 file misura salvati in `prove/`: 5 col puntalino e 5 col piattello Ø33.
 - Incidente driver FTDI: un errore di scrittura (error 31) ha lasciato un processo
   zombie inchiodato sulla COM (non uccidibile senza admin); risolto con
   scollega/ricollega USB dell'utente + watcher automatico di ripartenza. Il driver
   ora rileva la porta dinamicamente e ritenta l'apertura.
 
-### Export "Scheda camma" (cam card PDF) — richiesta utente su modello Cat Cams
+### Export "Scheda camma" (cam card PDF) — richiesta utente su modello della scheda di un produttore di camme
 - Nuovo bottone **📄 Scheda camma** in Analisi (abilitato dopo Analizza):
   `exportCamCard()` genera un **PDF A4 orizzontale in stile scheda rettificatore**:
   tabella asp/scarico (gioco, durata @gioco e @riferimento, **alzata valvola E alzata
@@ -2092,7 +2262,7 @@ autonoma v3 ×2, mediata 3 campioni ×1).
   — esattamente il flusso chiesto dall'utente, forte della validazione fisica di oggi.
 - `compress: true` → PDF da 2,9 MB a **62 KB**. Modalità test (`exportCamCard(true)`
   ritorna l'arraybuffer) per la verifica automatica.
-- Verifica browser: caso VW completo (bicchiere Ø35, rBase per lato, centri 106/104,
+- Verifica browser: caso RIF-2 completo (bicchiere Ø35, rBase per lato, centri 106/104,
   giochi 0,30/0,40) → PDF valido (%PDF, 62 KB), bottone gated correttamente,
   0 errori console.
 
@@ -2210,7 +2380,7 @@ Dettaglio in `AUDIT_RESPONSE.md`. Suite: 52 → **129 check verdi**; lint a 0;
 - **L7 `4deb398`** — DYN-01 (valve float = perdita di contatto reale: 0 al
   quasi-statico, crescente coi giri, cala con molla rigida), DYN-03 (camma
   interpolata nei solver), DYN-04 (default nullish `_num`), DYN-05 (modello
-  dichiarato esplorativo per il regime assoluto). `validate_clio` riscritto;
+  dichiarato esplorativo per il regime assoluto). `validate_rif1` riscritto;
   nuovo `test_valve_float.js`.
 
 Trappola d'ambiente registrata: `npm install` su Google Drive rompe con EBADF
@@ -2241,7 +2411,7 @@ del precedente). Ora tutto passa da `parseCamFile` (incluso lib in grafici),
 ogni slot ha il proprio array (`_cmpData`/`_polData`), limite 360, guardia
 `validCount<30` → file rifiutato, avviso su misure incomplete. Ramo `_pol`
 legacy preservato. Validato dal vivo: slot corto a 300° = 0 (non la coda del
-file lungo caricato prima), file da 20 righe rifiutato, Clio reale via
+file lungo caricato prima), file da 20 righe rifiutato, RIF-1 reale via
 `?files=` renderizzata (picco 8,52 mm, 360 punti).
 
 ### Lotto 21 — MAT-06, SER-01, FW-08/10, DOC-02 (residui software)
@@ -2250,7 +2420,7 @@ MAT-06 già risolto in L2. SER-01: l'autodetect seriale prova la firma firmware
 FW-10: attesa sensore rollover-safe. FW-08/DOC-02: README a fw 3.6, protocollo
 completo versionato in `master.ino`, claim qualificati (validazione di
 plausibilità, non certificazione; non è un banco a motore). Voci non chiudibili
-solo via software (E-stop/schema hardware FW-03/07/12, flash fw 3.6, report VW
+solo via software (E-stop/schema hardware FW-03/07/12, flash fw 3.6, report RIF-2
 REP, release/toolchain REL, legacy Excel XLS, fuzz/E2E TEST) elencate con
 motivazione in AUDIT_RESPONSE.md.
 
@@ -2259,7 +2429,7 @@ DYN-02: i solver 1/2/3-DOF fanno un **warm-up** di 3 giri (stato riportato tra
 i giri, registra solo l'ultimo) invece di misurare il transitorio dal fermo.
 DYN-06/07: dichiarati esplicitamente esplorativi/euristici (surge) e qualificato
 il dominio della conversione follower (RMS 0,046 mm solo per bicchiere Ø33 su
-Clio, risoluzione 1° camma). DYN-08 e APP-16 risultati **già risolti** nei lotti
+RIF-1, risoluzione 1° camma). DYN-08 e APP-16 risultati **già risolti** nei lotti
 precedenti. APP-10: il differenziale in Confronto esclude le bande nominali
 (solo misure 0-3). APP-11: vista polare ora `radar` = contorno reale della camma
 (non più disco pieno). APP-12: layout responsive via classi CSS invece di stili
@@ -2310,7 +2480,7 @@ STESSA pipeline dell'analisi (baseline + follower + anticipo per lobo) con
 guardia copertura. APP-07: provenienza raw/convertito PER-LATO
 (_metaIn/_metaEx.converted) — un file già follower non viene più ri-convertito
 al ricalcolo/salvataggio dopo un cambio follower. Verificato live sulla camma
-Clio (durata 231°, overlap 31°, archi doughnut = durata reale). Reso robusto
+RIF-1 (durata 231°, overlap 31°, archi doughnut = durata reale). Reso robusto
 anche l'harness dei test server (porte libere dal SO, niente più blocchi su
 porte "wedged" da un run killato).
 
@@ -2352,7 +2522,7 @@ di stabilità (due letture concordi separate da un buco non valgono più) e
 <2 frame validi nel budget → NaN vero (il browser lo scarta, MET-01). Fw
 **3.5** compilato (10260 byte), flashato e validato: harness a **23/23 PASS**
 (nuovo blocco G: 5 comandi malformati → *err, encoder immobile, comando
-legittimo dopo funziona). Tre scansioni Clio consecutive fw3.4↔fw3.5:
+legittimo dopo funziona). Tre scansioni RIF-1 consecutive fw3.4↔fw3.5:
 ripetibilità **0,024 mm RMS**, 0 gradi mancanti — il parser più severo non
 scarta punti buoni.
 
@@ -2363,7 +2533,7 @@ Il .scr ora registra `#tastatore` (selettore in Avanzate, ricordato),
 verso o tastatore diversi. Validato al banco con scansione reale (metadati
 completi nel file, ripetibilità 0,044 mm tra due scan consecutive).
 
-### Validazione al banco (2026-07-17, albero Clio montato con piattello Ø33)
+### Validazione al banco (2026-07-17, albero RIF-1 montato con piattello Ø33)
 Firmware **3.4 flashato** (8,7 s via API, verified) e provato con il nuovo
 harness hardware `tools/bench_fw34_test.js` (fuori da npm test, richiede
 banco): **16/16 PASS** — watchdog host scattato a ~5,5 s di silenzio (moto
@@ -2371,7 +2541,7 @@ troncato a 1373°/4000°, motore fermo, firmware vivo), nessun *wdt con
 keep-alive attivi, *tabort in 126 ms, cmdBuf pulito dopo 'x' a vuoto, STOP
 classico 186 ms. Il harness incorpora la trappola FTDI (kick '\n' ogni 150 ms,
 sospeso solo nella finestra muta del test watchdog, con verifica indiretta via
-encoder). Scansione end-to-end Veloce sulla Clio: 360/360 gradi, 0 invalide,
+encoder). Scansione end-to-end Veloce sulla RIF-1: 360/360 gradi, 0 invalide,
 0 instabili, picco 8,530 mm; **RMS 0,047 mm** contro la scansione storica
 convertita puntalino→Ø33 (= ripetibilità storica; il confronto grezzo dava
 1,26 mm perché il file storico è a puntalino — il .scr non registra il
@@ -2382,7 +2552,7 @@ nessun riavvio spontaneo, nessun degrado a fallback, zero timer armati
 ## Sessione 11 — 2026-07-13: profili movimento testati, motore scansione automatico, layout
 
 ### Test al banco dei 4 profili movimento (domanda utente: "che senso ha averne 4?")
-Scansione Veloce completa per k0/k1/k2/k3 sulla stessa camma (Clio):
+Scansione Veloce completa per k0/k1/k2/k3 sulla stessa camma (RIF-1):
 | profilo | tempo | picco | RMS vs Standard |
 |---|---|---|---|
 | k0 Scattoso | 46,4 s | 8,550 @223° | 0,076 mm |
@@ -2537,7 +2707,7 @@ alterato +0,3 sul naso → NON CONFORME 0,300 @109°.
 
 ### Test al banco delle 6 modalità di scansione (decisione utente: "servono tutte?")
 - Driver usa-e-getta: scan classico completo per fast/std/race/ultra/hyper sulla
-  stessa camma (Clio + piattello Ø33), binning a 1°, confronto RMS dopo
+  stessa camma (RIF-1 + piattello Ø33), binning a 1°, confronto RMS dopo
   allineamento. Risultati:
   | modalità | tempo | picco | RMS vs fast |
   |---|---|---|---|
@@ -2655,6 +2825,6 @@ Tutti testati live al banco (il n.1, bind 127.0.0.1, scartato dall'utente).
 
 ### Fixtures di validazione fuori dall'archivio utente
 - L'utente ha usato "Svuota archivio" → prove/ vuota, e `npm test` leggeva i file
-  reali da lì. I 3 file di riferimento (Clio + VW asp/sc) ora vivono in
+  reali da lì. I 3 file di riferimento (RIF-1 + RIF-2 asp/sc) ora vivono in
   `cammes/tools/fixtures/` (fallback a prove/); le 7 suite ripassano tutte.
 - I file di misura eliminati restano recuperabili dalla history git.

@@ -6,7 +6,7 @@
 //   (1) camma PULITA (base = 0) → no-op (output ≈ input, picco preservato)
 //   (2) camma + eccentricità e·cosθ → la base torna a ~0 e il profilo
 //       recuperato ≈ camma pulita (la 1ª armonica viene rimossa esattamente)
-//   (3) file VW scarico REALE → la base (fuori dal lobo) scende da ~0.2 a ~0,
+//   (3) file camma RIF-2 scarico REALE → la base (fuori dal lobo) scende da ~0.2 a ~0,
 //       picco preservato entro pochi %.
 //
 //  Uso:  node cammes/tools/test_baseline.js     (exit 0 = ok)
@@ -57,22 +57,21 @@ check('base torna a ~0', baseMaxAbs(c2) < 0.03, 'base maxAbs ' + baseMaxAbs(c2).
 check('profilo recuperato ≈ camma pulita', recMax < 0.03, 'maxΔ vs pulita ' + recMax.toFixed(4) + ' mm');
 check('eccentricità stimata ≈ ' + ecc, Math.abs((window._lastBaselineAmp || 0) - ecc) < 0.03, 'stima ' + (window._lastBaselineAmp || 0).toFixed(3) + ' mm');
 
-// (3) file VW scarico reale (riferimento in tools/fixtures/, fallback prove/)
-var fp = path.join(__dirname, 'fixtures', 'VW-kr1_8-SC_alz.scr');
-if (!fs.existsSync(fp)) fp = path.join(__dirname, '..', 'prove', 'VW-kr1_8-SC_alz.scr');
+// (3) file RIF-2 scarico reale (riferimento in tools/fixtures/)
+var fp = path.join(__dirname, 'fixtures', 'rif2_sca_alz.scr');
 if (fs.existsSync(fp)) {
     var L = fs.readFileSync(fp, 'utf8').split(/\r?\n/), raw = new Array(361);
     for (i = 1; i <= 360; i++) { var p = (L[i] || '').split(','); raw[i] = Number(p[1]) || 0; }
     // base reale dello scarico: fuori dal lobo (~deg 106..303)
-    function isLobeVW(t) { return t >= 106 && t <= 303; }
-    function baseMaxVW(a) { var m = 0; for (var k = 1; k <= 360; k++) if (!isLobeVW(k)) m = Math.max(m, Math.abs(a[k] || 0)); return m; }
+    function isLobeRIF2(t) { return t >= 106 && t <= 303; }
+    function baseMaxRIF2(a) { var m = 0; for (var k = 1; k <= 360; k++) if (!isLobeRIF2(k)) m = Math.max(m, Math.abs(a[k] || 0)); return m; }
     window._lastBaselineAmp = 0;
     var corr = removeCamBaseline(raw);
-    console.log('VW SCARICO reale:');
-    check('base scende verso 0', baseMaxVW(corr) < 0.06, 'base ' + baseMaxVW(raw).toFixed(3) + ' → ' + baseMaxVW(corr).toFixed(3) + ' mm');
+    console.log('RIF-2 SCARICO reale:');
+    check('base scende verso 0', baseMaxRIF2(corr) < 0.06, 'base ' + baseMaxRIF2(raw).toFixed(3) + ' → ' + baseMaxRIF2(corr).toFixed(3) + ' mm');
     check('picco preservato (entro 0.2 mm)', Math.abs(peakOf(corr) - peakOf(raw)) < 0.2, 'picco ' + peakOf(raw).toFixed(2) + ' → ' + peakOf(corr).toFixed(2) + ' (ecc ~±' + (window._lastBaselineAmp || 0).toFixed(2) + ')');
 } else {
-    console.log('VW SCARICO reale: (file assente, skip)');
+    console.log('RIF-2 SCARICO reale: (file assente, skip)');
 }
 
 console.log('');

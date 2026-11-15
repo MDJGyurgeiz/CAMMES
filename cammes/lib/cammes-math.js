@@ -203,11 +203,11 @@ function convertPuntToBicchiere(camLiftRaw, rBase, dBicch, rPunt) {
     // Su un follower piatto il contatto si sposta dall'asse di ds/dpsi, dove s
     // e' l'alzata DEL PIATTELLO. Prima si derivava `lt`, cioe' l'alzata del
     // PUNTALINO (follower radiale): un'altra curva, e la differenza non e'
-    // piccola. Misurato sulla Peugeot 106 (bicchiere reale 29):
+    // piccola. Misurato sulla camma RIF-3 (bicchiere reale 29):
     //     dalla curva puntalino  19,28 mm  ->  'mancano 4,78 mm'
     //     dalla curva piattello  15,08 mm  ->  mancano 0,58 mm
     // Un allarme gonfiato di otto volte, su un accoppiamento che e' solo al
-    // limite. E la vecchia controprova sulla VW ("margine 0,3 mm") veniva dallo
+    // limite. E la vecchia controprova sulla camma RIF-2 ("margine 0,3 mm") veniva dallo
     // stesso errore: col criterio giusto il margine e' 3,36 mm, cioe' comodo.
     //
     // E si deriva la curva NON VINCOLATA, non `out`.
@@ -218,7 +218,7 @@ function convertPuntToBicchiere(camLiftRaw, rBase, dBicch, rPunt) {
     // troppo piccolo — e nel regime vincolato, l'UNICO in cui l'avviso compare,
     // la curva prende dei ginocchi in ingresso e uscita dal vincolo, quindi la
     // pendenza letta non e' piu' una proprieta' della camma.
-    // Misurato sulla 106 aspirazione (cerchio base 32, puntalino 1,5):
+    // Misurato sulla RIF-3 aspirazione (cerchio base 32, puntalino 1,5):
     //     digitando 20  ->  "servirebbe almeno D 35,1"
     //     digitando 29  ->  "servirebbe almeno D 30,2"
     //     digitando 32  ->  "servirebbe almeno D 29,6"   <- il valore vero
@@ -318,7 +318,7 @@ function convertPuntToRoller(camLiftRaw, rBase, rRoll, rPunt) {
 // Parametro tiltDeg = θ_cam_0 in gradi (angolo a riposo del braccio camma
 // rispetto all'orizzontale). Convenzione: braccio "in linea" col pivot →
 // orizzontale = tilt 0. Braccio camma verticale (cam sopra il pivot) →
-// tilt 90°. Per VTEC e finger moderni: tilt ~ 0 a 30°.
+// tilt 90°. Per bilancieri a dito e finger moderni: tilt ~ 0 a 30°.
 //
 // Se tiltDeg = 0 e θ_val_0 = 180° (braccio valvola dall'altra parte, opposto),
 // la formula esatta si riduce al rapporto lineare L_valve/L_arm — backward
@@ -1087,7 +1087,7 @@ function effectiveCenters(intakeCenter, exhaustCenter, advance) {
 // Riportando il gioco lato camma prima della mappatura le due espressioni
 // coincidono, perche' max(0, L - g/r) * r === max(0, L*r - g) per r > 0.
 // Con bicchiere (rapporto 1,00) non cambia nulla: le misure gia' fatte su
-// Clio e VW restano identiche bit per bit.
+// camme RIF-1 e RIF-2 restano identiche bit per bit.
 function lashLatoCamma(clearanceValvola, rocker) {
     var g = Number(clearanceValvola);
     if (!isFinite(g) || g <= 0) return 0;
@@ -1400,7 +1400,7 @@ function parseCamFile(text) {
         // colonne: le righe escono come "1,0;;;;;;1,0" e i metadati come
         // "#fw=4.1;;;;;;#fw=4.1". Con la vecchia lettura ogni riga finiva
         // invalida (grado "1.0", alzata "") e un file di 360 punti veniva
-        // rifiutato per intero — capitato sul primo scarico della Peugeot 106.
+        // rifiutato per intero — capitato sul primo scarico della RIF-3.
         // Si collassa SOLO quando i campi non vuoti sono tutti IDENTICI: e' la
         // firma della duplicazione, e non tocca il CSV italiano "1;0,5", dove i
         // campi sono diversi ed e' il ';' a separare grado e alzata.
@@ -1569,6 +1569,108 @@ function canProduceOfficialResult(p) {
     return { ok: true, reason: '' };
 }
 
+// VALORE DI UN GRADO DA UNA SCANSIONE A PIU' LETTURE PER GRADO (modalita' Race).
+//
+// campioni[i] e' la lettura all'angolo i/S gradi dall'inizio del giro
+// (i = 1 .. N, con N = 360*S). Il grado d cade sull'indice c = d*S.
+//
+// Il file resta a 360 punti, quindi le letture intermedie vanno condensate. La
+// regola precedente (in alzata.html) mediava le letture a d-0,5° e d°: il
+// valore scritto al grado d rappresentava d-0,25°, e tutta la curva Race era in
+// anticipo di un quarto di grado sulla Veloce — 0,07 mm sul fianco.
+//
+// Qui la media e' CENTRATA su d, con pesi triangolari (S-|k|)/S² sulle letture
+// a distanza k sottopassi: per S=2 sono 1/4, 1/2, 1/4 su d-0,5°, d°, d+0,5°.
+// E' l'unico filtro simmetrico a supporto minimo che, su un tratto rettilineo,
+// restituisce esattamente la quota al grado; con S=1 si riduce alla lettura
+// stessa. Il giro e' chiuso: l'indice N+1 e' l'indice 1 (360,5° = 0,5°).
+//
+// Letture invalide: si usano solo COPPIE simmetriche (±k entrambe valide) piu'
+// la centrale se valida, rinormalizzando. Cosi' il baricentro resta sul grado:
+// una media con una sola laterale lo sposterebbe di nuovo. Se non resta niente
+// di centrato il grado e' senza dato (NaN), mai un valore inventato.
+function binCentrato(campioni, d, S, N) {
+    S = S || 1;
+    N = N || 360 * S;
+    var c = d * S;
+    function leggi(j) {
+        while (j < 1) j += N;
+        while (j > N) j -= N;
+        var x = campioni[j];
+        return (typeof x === 'number' && isFinite(x)) ? x : NaN;
+    }
+    var somma = 0, peso = 0;
+    var centrale = leggi(c);
+    if (isFinite(centrale)) { somma += S * centrale; peso += S; }
+    for (var k = 1; k < S; k++) {
+        var a = leggi(c - k), b = leggi(c + k);
+        if (isFinite(a) && isFinite(b)) { somma += (S - k) * (a + b); peso += 2 * (S - k); }
+    }
+    return peso > 0 ? somma / peso : NaN;
+}
+
+// COLLAUDO SU PROFILO NOMINALE: quanto si scosta una misura dal nominale, a
+// FORMA allineata. misura[1..360] e nominale[1..360] sono alzate in mm.
+//
+// Il collaudo giudica il profilo, non la fase: prima di confrontare, la misura
+// va fatta combaciare col nominale. La pagina Confronto lo faceva solo a gradi
+// INTERI (aggancio al picco, poi ±8° al minimo scarto quadratico). Ma due
+// scansioni della stessa camma non partono mai dallo stesso mezzo grado, e sui
+// fianchi mezzo grado vale 0,12-0,17 mm: piu' di una tolleranza di 0,10. Una
+// camma identica al nominale usciva NON CONFORME, con un numero dall'aria
+// normale e niente che dicesse "e' fase".
+//
+// Qui, trovato il miglior grado intero, lo spostamento si rifinisce a passi di
+// 0,05° fra −1° e +1° con lo stesso criterio (minimo scarto quadratico). Il
+// NOMINALE viene letto fra due gradi vicini per interpolazione lineare, a giro
+// chiuso; la MISURA non si tocca mai. L'interpolazione lineare non inventa
+// massimi e sbaglia al piu' di (curvatura)/8: qualche millesimo di mm.
+// Lo spostamento usato torna indietro, perche' il verdetto lo deve dichiarare.
+//
+// Cosa NON fa: assorbire un difetto. Lo spostamento e' uno solo per tutta la
+// curva: un bozzo locale o un'alzata piu' bassa restano interi nello scarto
+// (tools/test_collaudo_nominale.js).
+//
+// Convenzione: misura[d] si confronta col nominale alla posizione d + spostamento.
+// I gradi senza lettura (non finiti) sono esclusi dal conto, mai letti come zero.
+function scartoDalNominale(misura, nominale) {
+    function nomA(x) {                       // nominale alla posizione reale x (gradi), giro chiuso
+        var i0 = Math.floor(x), t = x - i0;
+        var k0 = ((i0 - 1) % 360 + 360) % 360 + 1;
+        var v0 = Number(nominale[k0]);
+        if (t === 0) return v0;
+        return (1 - t) * v0 + t * Number(nominale[(k0 % 360) + 1]);
+    }
+    var gradi = [], pkM = -Infinity, pkMi = 1, pkN = -Infinity, pkNi = 1, d;
+    for (d = 1; d <= 360; d++) {
+        var m = misura[d];
+        if (typeof m === 'number' && isFinite(m)) { gradi.push(d); if (m > pkM) { pkM = m; pkMi = d; } }
+        var n = Number(nominale[d]);
+        if (isFinite(n) && n > pkN) { pkN = n; pkNi = d; }
+    }
+    if (!gradi.length) return { spostamento: 0, scartoMax: NaN, gradoScartoMax: 0, punti: 0 };
+    function scartoQuadratico(s) {
+        var e = 0;
+        for (var q = 0; q < gradi.length; q++) { var df = misura[gradi[q]] - nomA(gradi[q] + s); e += df * df; }
+        return e;
+    }
+    var base = pkNi - pkMi, migliore = base, eMin = Infinity, s, e;
+    for (s = base - 8; s <= base + 8; s++) { e = scartoQuadratico(s); if (e < eMin) { eMin = e; migliore = s; } }
+    var fine = migliore;
+    for (var k = -20; k <= 20; k++) {        // da −1° a +1° a passi di 0,05° (interi: nessun accumulo di arrotondamenti)
+        if (k === 0) continue;
+        s = migliore + k / 20;
+        e = scartoQuadratico(s);
+        if (e < eMin) { eMin = e; fine = s; }
+    }
+    var scartoMax = 0, gradoMax = 0;
+    for (var q2 = 0; q2 < gradi.length; q2++) {
+        var dev = Math.abs(misura[gradi[q2]] - nomA(gradi[q2] + fine));
+        if (dev > scartoMax) { scartoMax = dev; gradoMax = gradi[q2]; }
+    }
+    return { spostamento: Math.round(fine * 20) / 20, scartoMax: scartoMax, gradoScartoMax: gradoMax, punti: gradi.length };
+}
+
 // AUDIT DATA-03 (controrevisione v3.4.1): media dei run ripetuti SOLO sui run
 // COMPLETI. La media naive di tutti i run produceva un profilo IBRIDO: run A
 // completo (tutti=1) + run B incompleto (grado 42 mancante, altri=3) dava
@@ -1661,7 +1763,7 @@ function benchVerdict(pdata, thresholds) {
 // b(θ) = a0 + a1·cosθ + b1·sinθ (DC + 1ª armonica). Lo si stima coi minimi
 // quadrati SUI SOLI punti di cerchio base (alzata sotto soglia, lobo escluso) e
 // lo si sottrae a tutta la curva: il fondo torna a ~0 e il lobo è depurato.
-// Su scansioni già pulite il fit ≈ 0 → no-op. (Es. scarico VW con fondo ~0.21mm.)
+// Su scansioni già pulite il fit ≈ 0 → no-op. (Es. scarico RIF-2 con fondo ~0.21mm.)
 function _det3(m) {
     return m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
          - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
@@ -1762,6 +1864,8 @@ var api = {
     fmtResiduo: fmtResiduo,
     serializeDiagnosticProfile: serializeDiagnosticProfile,
     averageRuns: averageRuns,
+    binCentrato: binCentrato,
+    scartoDalNominale: scartoDalNominale,
     averageCompleteRuns: averageCompleteRuns,
     canProduceOfficialResult: canProduceOfficialResult,
     benchVerdict: benchVerdict,

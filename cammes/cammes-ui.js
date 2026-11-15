@@ -9,7 +9,7 @@
   // -------- VERSIONE ------------------------------------------------------
   // Unico punto di verità della versione mostrata nella UI (badge in basso a
   // destra su ogni pagina). Allineala a package.json/tag quando rilasci.
-  var CAMMES_VERSION = 'v3.7.0';
+  var CAMMES_VERSION = 'v3.7.1';
   window.CAMMES_VERSION = CAMMES_VERSION;
 
   // -------- THEME (dark/light) -------------------------------------------
@@ -287,6 +287,32 @@
     if (wrap) wrap.classList.remove('active');
   }
   window.cammesScanProgress = { set: setScanProgress, reset: resetScanProgress };
+
+  // -------- INTESTAZIONE OFFICINA NEI PDF --------------------------------
+  // Il nome impostato in Home (Sistema & aggiornamenti) va in testa a TUTTI i
+  // documenti che l'officina consegna: referto di analisi, race report, scheda
+  // tecnica della singola misura, scheda camma. Prima lo portava solo la scheda
+  // camma: il campo si chiamava "per i referti PDF" e tre referti su quattro
+  // uscivano anonimi.
+  //
+  // Scrive `nome` allineato a destra con il margine destro in xDestra, sulla
+  // linea di base y, rimpicciolendo il corpo finché entra in larghezzaMax (un
+  // nome lungo non deve finire sopra il titolo). Font e colore li sceglie chi
+  // chiama, perché ogni documento ha la sua fascia. Senza nome non scrive
+  // niente e restituisce false.
+  function intestazionePdf(doc, nome, xDestra, y, larghezzaMax, corpoMax) {
+    var testo = String(nome == null ? '' : nome).replace(/\s+/g, ' ').trim().substring(0, 60);
+    if (!testo) return false;
+    var corpo = corpoMax || 12;
+    doc.setFontSize(corpo);
+    while (corpo > 6 && doc.getTextWidth(testo) > larghezzaMax) {
+      corpo -= 0.5;
+      doc.setFontSize(corpo);
+    }
+    doc.text(testo, xDestra - doc.getTextWidth(testo), y);
+    return true;
+  }
+  window.cammesIntestazionePdf = intestazionePdf;
 
   // -------- ETA TRACKER --------------------------------------------------
   // Stima tempo residuo di un loop. Usage:
@@ -701,7 +727,7 @@
       { sel: '#concert-toggle', title: 'Concerto col motore', body: 'Un extra: fai &ldquo;suonare&rdquo; lo stepper con brani famosi. 🎵' }
     ],
     alzata: [
-      { sel: '#scanMode',  title: 'Modalità scansione', body: 'Scegli tra <b>Veloce</b> (uso normale), <b>Precisione</b> (media 3 letture) e <b>Race</b> (risoluzione 0,5°). Il tempo stimato lo scrive la tendina stessa, accanto a ogni modalità.' },
+      { sel: '#scanMode',  title: 'Modalità scansione', body: 'Scegli tra <b>Veloce</b> (uso normale, un punto per grado) e <b>Race</b> (un punto ogni mezzo grado, per fianchi molto ripidi). Il tempo stimato lo scrive la tendina stessa, accanto a ogni modalità.' },
       { sel: '#scanAdvBtn', title: 'Impostazioni avanzate', body: 'Apre gli strumenti di controllo qualità: <b>Ripetizioni</b> (misura la ripetibilità del banco con N scansioni di fila) e <b>Verifica banco</b> (test periodico con un cilindro rettificato). Per l\'uso normale non servono.' },
       { sel: 'button[onclick^="start"]', title: 'Avvia', body: 'START esegue una scansione completa 360° del profilo di alzata.' },
       { sel: '#msBtn',     title: 'Zero virtuale', body: 'Porta in automatico il picco di alzata a un riferimento fisso (+180°), così alberi montati diversamente restano confrontabili.' },
@@ -783,10 +809,10 @@
     hole.style.height = (r.height + pad * 2) + 'px';
     // posiziona il pop sotto, o sopra se non c'è spazio
     var popH = pop.offsetHeight || 140, popW = pop.offsetWidth || 300;
-    var vw = window.innerWidth, vh = window.innerHeight;
+    var vpW = window.innerWidth, vpH = window.innerHeight;
     var top = r.bottom + 12;
-    if (top + popH > vh - 8) top = Math.max(8, r.top - popH - 12);
-    var left = Math.min(Math.max(8, r.left), vw - popW - 8);
+    if (top + popH > vpH - 8) top = Math.max(8, r.top - popH - 12);
+    var left = Math.min(Math.max(8, r.left), vpW - popW - 8);
     pop.style.top = top + 'px';
     pop.style.left = left + 'px';
   }

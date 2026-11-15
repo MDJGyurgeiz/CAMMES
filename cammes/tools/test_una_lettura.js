@@ -7,7 +7,7 @@
 //    - il calcolo rileggeva .value grezzo: Number('') = 0
 //  Lo stesso campo valeva 106 per il gate e 0 per il conto.
 //
-//  Riprodotto in pagina sulle camme VW reali:
+//  Riprodotto in pagina sulle camme RIF-2 reali:
 //    angolo lobo VUOTO, anticipo 3
 //      -> la cella LSA scrive "50.0°" e il suo stesso tooltip mostra il conto
 //         "(-3.0 + 103.0) / 2": il centro aspirazione e' -3 (= 0 - anticipo)

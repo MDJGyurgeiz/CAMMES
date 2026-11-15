@@ -92,7 +92,7 @@ if (formatta) {
             modi[mm[1]] = Number(mm[2]);
         });
     }
-    check('le tre modalita dichiarano un timeSec', Object.keys(modi).length === 3,
+    check('le due modalita dichiarano un timeSec', Object.keys(modi).length === 2,
         JSON.stringify(modi));
     Object.keys(modi).forEach(function (k) {
         console.log('        ' + k.padEnd(6) + ' timeSec ' + String(modi[k]).padStart(3) + ' -> ' + formatta(modi[k]));

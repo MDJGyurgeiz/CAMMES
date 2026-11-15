@@ -36,11 +36,11 @@ var p2 = M.parseCamFile('_pline\r\n42;\r\n');
 check('"42;" -> riga invalida, non zero', p2.covered[42] === false && p2.invalidRows >= 1);
 
 // --- CSV salvato da Excel: colonne duplicate con ';' di riempimento ---
-//  Capitato sul primo scarico della Peugeot 106 (2026-07-29): salvando da un
+//  Capitato sul primo scarico della camma RIF-3 (2026-07-29): salvando da un
 //  foglio con piu' colonne, Excel scrive "1,0;;;;;;1,0" e "#fw=4.1;;;;;;#fw=4.1".
 //  Il parser spezzava sui ';', leggeva grado "1.0" e alzata "", e dichiarava
 //  invalide TUTTE le 360 righe: un file buono veniva rifiutato per intero.
-var pEx = M.parseCamFile('scar 106;;;;;;scar 106\r\n_pline;;;;;;_pline\r\n' +
+var pEx = M.parseCamFile('scar RIF-3;;;;;;scar RIF-3\r\n_pline;;;;;;_pline\r\n' +
     '1,0;;;;;;1,0\r\n2,0.01;;;;;;2,0.01\r\n179,10.67;;;;;;179,10.67\r\n' +
     '#fw=4.1;;;;;;#fw=4.1\r\n');
 check('CSV con colonne duplicate da Excel: le righe si leggono',

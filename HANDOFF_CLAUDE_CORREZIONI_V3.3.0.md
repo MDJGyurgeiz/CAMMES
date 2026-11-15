@@ -1446,9 +1446,9 @@ Verificare:
 - profilo campione con misura indipendente;
 - alzata PMS e cam card esterna;
 - propagazione dell'incertezza;
-- raw B/C/D mancanti nel report VW.
+- raw B/C/D mancanti nel report della camma RIF-2.
 
-Il confronto Clio/VW corrente resta regressione software, non calibrazione.
+Il confronto fra le camme RIF-1/RIF-2 corrente resta regressione software, non calibrazione.
 
 ---
 
@@ -1461,9 +1461,9 @@ Il confronto Clio/VW corrente resta regressione software, non calibrazione.
 - AUDIT_RESPONSE descrive punti firmware ancora pendenti ma la release li
   presenta come validati;
 - fw/version.json termina ancora con una risposta ver=3.4;
-- REPORT_CAMME_VW-KR.md afferma che le alzate PMS misurate sono sottostimate
+- REPORT_CAMMA_RIF-2.md afferma che le alzate PMS misurate sono sottostimate
   circa del 35% e non sono riferimento;
-- tools/validate_vw.js tratta circa 2,18/1,71 mm come valore fisico corretto;
+- tools/validate_rif2.js tratta circa 2,18/1,71 mm come valore fisico corretto;
 - UI e documenti usano ancora espressioni come vero regime massimo,
   zone operative definitive o validata fisicamente;
 - manuale cita un selettore modalità ormai rimosso;

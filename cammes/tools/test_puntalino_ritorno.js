@@ -103,7 +103,7 @@ console.log('=============================================================');
 
 var CASI = [
     { n: 'auto tipica (base 34, alzata 9,0, dur 220)', rB: 34, h: 9.0, dur: 220 },
-    { n: 'Peugeot 106 (base 16, alzata 10,6, dur 230)', rB: 16, h: 10.6, dur: 230 },
+    { n: 'camma RIF-3 (base 16, alzata 10,6, dur 230)', rB: 16, h: 10.6, dur: 230 },
     { n: 'sportiva    (base 28, alzata 11,5, dur 200)', rB: 28, h: 11.5, dur: 200 },
     { n: 'stretta     (base 16, alzata 8,5, dur 180)', rB: 16, h: 8.5, dur: 180 }
 ];

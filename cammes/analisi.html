@@ -349,7 +349,7 @@
             <div class="param-separator">
                 <div class="param-group-title">Regime e durata</div>
                 <div class="param-row">
-                    <span class="param-label">Rif. durata <span class="help-icon" data-tip="<strong>Alzata di riferimento per durata</strong>Soglia di alzata sopra cui contare i gradi di durata. SAE/Ford: 1.27 mm (0.050 in). Tipico stradale: 1.0 mm. Race: 0.05 mm. La durata 'effettiva' si calcola sottraendo il gioco valvola.">?</span></span>
+                    <span class="param-label">Rif. durata <span class="help-icon" data-tip="<strong>Alzata di riferimento per durata</strong>Soglia di alzata sopra cui contare i gradi di durata. Convenzione SAE: 1.27 mm (0.050 in). Tipico stradale: 1.0 mm. Race: 0.05 mm. La durata 'effettiva' si calcola sottraendo il gioco valvola.">?</span></span>
                     <input type="number" id="durationRef" value="1.0" class="input" style="width:75px;" step="0.1" min="0">
                     <span class="param-unit">mm</span>
                 </div>
@@ -394,7 +394,7 @@
                     <span class="help-icon" data-tip="<strong>Cosa fa il bicchiere virtuale</strong>Permette di simulare quale alzata <i>vera</i> avresti se invece del puntalino sferico usato per misurare la camma, avessi un bicchiere piatto reale. Cos&igrave; misuri UNA volta col puntalino e simuli infiniti bicchieri diversi senza rifare scansioni.">?</span>
                 </div>
                 <div class="param-row">
-                    <span class="param-label">Tipo follower <span class="help-icon" data-tip="<strong>4 tipi di contatto cam-follower</strong><b>Puntalino</b>: dati grezzi della scansione, nessuna correzione.<br><b>Bicchiere piatto</b>: simula un piattello di Ø D mm appoggiato sulla cam (motori OHC moderni, tipico auto/moto).<br><b>Rullo</b>: simula un rullo di raggio R che rotola sulla cam (motori sportivi, alta velocità).<br><b>Finger follower</b>: simula una leva con punto di pivot (Honda VTEC, Yamaha R6, motori moderni high-rev).">?</span></span>
+                    <span class="param-label">Tipo follower <span class="help-icon" data-tip="<strong>4 tipi di contatto cam-follower</strong><b>Puntalino</b>: dati grezzi della scansione, nessuna correzione.<br><b>Bicchiere piatto</b>: simula un piattello di Ø D mm appoggiato sulla cam (motori OHC moderni, tipico auto/moto).<br><b>Rullo</b>: simula un rullo di raggio R che rotola sulla cam (motori sportivi, alta velocità).<br><b>Finger follower</b>: simula una leva con punto di pivot (bilancieri a dito, tipici dei motori moderni ad alto regime).">?</span></span>
                     <select id="followerType" class="input" style="width:180px;" onchange="onFollowerTypeChange();">
                         <option value="punt" selected>Puntalino (raw)</option>
                         <option value="bicch">Bicchiere piatto &Oslash; mm</option>
@@ -421,7 +421,7 @@
                     <span class="param-unit">mm</span>
                 </div>
                 <div class="param-row" id="rowLValve" style="display:none;">
-                    <span class="param-label">L braccio valvola <span class="help-icon" data-tip="<strong>Lunghezza braccio leva lato valvola</strong>Distanza tra il pivot e il punto di contatto con la valvola. Se L_valve &gt; L_arm: la leva amplifica l'alzata (es. VTEC 1.4:1). Se uguale: rapporto neutro.">?</span></span>
+                    <span class="param-label">L braccio valvola <span class="help-icon" data-tip="<strong>Lunghezza braccio leva lato valvola</strong>Distanza tra il pivot e il punto di contatto con la valvola. Se L_valve &gt; L_arm: la leva amplifica l'alzata (es. rapporto 1.4:1). Se uguale: rapporto neutro.">?</span></span>
                     <input type="number" id="lValve" value="30" class="input" style="width:75px;" step="0.5" min="1">
                     <span class="param-unit">mm</span>
                 </div>
@@ -440,7 +440,7 @@
                 </div>
                 <!-- R cerchio base e R puntalino: comuni a bicchiere/rullo/finger -->
                 <div class="param-row" id="rowRBase" style="display:none;">
-                    <span class="param-label">&#216; cerchio base <span class="help-icon" data-tip="<strong>DIAMETRO del cerchio base (per lato)</strong>Il cerchio base &egrave; la parte non sollevata della camma, dove la valvola &egrave; chiusa. Misuralo col <b>calibro</b> attraverso il fondo della camma e scrivilo cos&igrave; com&apos;&egrave;: il programma lo dimezza da solo. Prima questo campo chiedeva il raggio, e bisognava dividere a mente. Ordine di grandezza: 25-36 mm (es. VW KR 1.8 16V: circa 32,6 mm). Aspirazione e scarico possono differire: per questo sono due campi. Serve solo con follower simulato (bicchiere, rullo, leva): col puntalino la curva &egrave; quella grezza e questo campo non entra in nessun calcolo.">?</span></span>
+                    <span class="param-label">&#216; cerchio base <span class="help-icon" data-tip="<strong>DIAMETRO del cerchio base (per lato)</strong>Il cerchio base &egrave; la parte non sollevata della camma, dove la valvola &egrave; chiusa. Misuralo col <b>calibro</b> attraverso il fondo della camma e scrivilo cos&igrave; com&apos;&egrave;: il programma lo dimezza da solo. Prima questo campo chiedeva il raggio, e bisognava dividere a mente. Ordine di grandezza sulle camme di auto e moto: 20-40 mm. Aspirazione e scarico possono differire: per questo sono due campi. Serve solo con follower simulato (bicchiere, rullo, leva): col puntalino la curva &egrave; quella grezza e questo campo non entra in nessun calcolo.">?</span></span>
                     <input type="number" id="diamBase" class="input" style="width:60px;" step="0.01" min="1" placeholder="Ø asp" title="Diametro del cerchio base ASPIRAZIONE, misurato col calibro">
                     <input type="number" id="diamBaseExhaust" class="input" style="width:60px;" step="0.01" min="1" placeholder="Ø sca" title="Diametro del cerchio base SCARICO, misurato col calibro">
                     <span class="param-unit">mm (asp/sca)</span>
@@ -557,7 +557,7 @@
             </div>
             <div class="flex gap-8" style="margin-top:8px;">
                 <button class="btn btn-secondary" id="btnSaveProfile" onclick="saveProfileToArchive();" style="flex:1;" disabled data-tip="<strong>Salva profilo in archivio (prove/)</strong>Salva la curva come file .scr accanto alle altre misure (visibile in Home). Il menu <b>Tipo follower</b> decide COSA salvi:<br>&bull; <b>Puntalino</b> &rarr; salva il GREZZO cos&igrave; misurato;<br>&bull; <b>Bicchiere/Rullo/Finger</b> &rarr; salva la curva GI&Agrave; CONVERTITA col follower scelto (marcata: al ricarico non verr&agrave; riconvertita).">&#128190; Salva profilo</button>
-                <button class="btn btn-secondary" id="btnCamCard" onclick="exportCamCard();" style="flex:1;" disabled data-tip="<strong>Scheda camma (cam card PDF)</strong>Esporta una scheda in stile rettificatore (A4 orizzontale): tabella asp/scarico (durate, alzata valvola e camma, angolo lobo, fasatura, alzata al PMS) + diagramma dei due lobi sui gradi motore. Dichiara il metodo: <i>rilevato col puntalino, presentato come</i> il follower scelto (bicchiere &Oslash;, rullo, finger con leva) &mdash; conversione confrontata sul setup di riferimento (Clio &Oslash;33, RMS 0,046 mm); validazione metrologica indipendente ancora necessaria.">&#128196; Scheda camma</button>
+                <button class="btn btn-secondary" id="btnCamCard" onclick="exportCamCard();" style="flex:1;" disabled data-tip="<strong>Scheda camma (cam card PDF)</strong>Esporta una scheda in stile rettificatore (A4 orizzontale): tabella asp/scarico (durate, alzata valvola e camma, angolo lobo, fasatura, alzata al PMS) + diagramma dei due lobi sui gradi motore. Dichiara il metodo: <i>rilevato col puntalino, presentato come</i> il follower scelto (bicchiere &Oslash;, rullo, finger con leva) &mdash; la conversione al bicchiere &egrave; verificata su una camma letta sia col puntalino sia col piattello (scarto 0,065 mm RMS); validazione metrologica indipendente ancora necessaria.">&#128196; Scheda camma</button>
             </div>
 
             <!-- RACE-GRADE: Sweep RPM + Optimizer molla + Mappa + Report -->
@@ -2097,7 +2097,12 @@ function exportRaceReport() {
             doc.setFillColor(177, 76, 255); doc.rect(0, 42, pageW, 2.5, 'F');
             doc.setFont('helvetica','bold'); doc.setFontSize(24); doc.setTextColor(255,255,255);
             doc.text('CAMMES', margin, 20);
-            doc.setFontSize(13); doc.setTextColor(177,76,255);
+            // intestazione officina, a destra sulla stessa riga del marchio
+            // (stessa funzione per tutti i PDF: cammes-ui.js)
+            if (window.cammesIntestazionePdf) {
+                window.cammesIntestazionePdf(doc, window._officina, pageW - margin, 20, pageW - 2 * margin - 52, 12);
+            }
+            doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(177,76,255);
             doc.text('RACE REPORT — Analisi dinamica treno valvole', margin, 30);
             doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(190,180,210);
             doc.text(new Date().toLocaleString('it-IT') + '  ·  ' + (inp.intakeFile || 'camma') + '  ·  ' + inp.rpm + ' rpm target', margin, 38);
@@ -2396,7 +2401,7 @@ function getModules() {
 //
 // Prima: togliendo la spunta a "Follower simulato" il blocco si nascondeva ma
 // #followerType restava su 'bicch', e ogni consumatore lo legge direttamente.
-// Misurato al browser sulla camma VW KR reale (bicchiere 35, cerchio base
+// Misurato al browser sulla camma RIF-2 reale (bicchiere 35, cerchio base
 // 32,6): a modulo spento l'alzata al PMS restava 4,023 mm invece dei 1,033 mm
 // del puntalino grezzo — 2,99 mm su un lobo da 10,64, e l'alzata al PMS finisce
 // stampata sulla scheda camma. L'operatore vedeva sparire i controlli e
@@ -2580,7 +2585,7 @@ function onFollowerTypeChange() {
 // La Tipologia NON riscrive piu' bilanciere e gioco.
 //
 // Faceva la stessa cosa del "Preset motore" appena rimosso, in piccolo e in
-// modo piu' subdolo. Misurato sulla camma VW reale: passando da "Bicchiere
+// modo piu' subdolo. Misurato sulla camma RIF-2 reale: passando da "Bicchiere
 // meccanico" (leva 1,00) ad "Aste + bilanciere" (leva 1,60) l'alzata saltava
 // da 10,840 a 17,524 mm, il 62% in piu', per una tendina che nel calcolo e'
 // solo un'etichetta (intakeType/exhaustType finiscono unicamente in CSV e PDF).
@@ -2643,13 +2648,13 @@ var TOLL_PICCO_MM = 0.005;
 // Posizione del picco su una curva, tenendo conto del naso piatto.
 //
 // Prima si prendeva l'argmax con un confronto STRETTO (`>`), che su un plateau
-// restituisce il PRIMO slot. Misurato su test_v31_fw_alz: sette slot in
+// restituisce il PRIMO slot. Misurato su prova_fw31_alz: sette slot in
 // pareggio esatto (8,020000 mm da 96° a 102°). La curva corretta in baseline ha
 // invece una pendenza residua di SEI NANOMETRI sullo stesso tratto, che sposta
 // l'argmax sull'ULTIMO slot. Risultato: la stessa camma dichiarava il picco a
 // 96° da una parte e a 102° dall'altra — 6 gradi di scarto nati da una
 // differenza mille volte piu' piccola della risoluzione dello strumento.
-// Anche su clio1_8 (2°) e VW-SC (1°), con plateau da 3 slot.
+// Anche su rif1_alz (2°) e rif2_sca_alz (1°), con plateau da 3 slot.
 //
 // Ora si prende il CENTRO del plateau: tutti gli slot contigui che stanno entro
 // mezza divisione dal massimo. Su un naso piatto e' anche la risposta giusta —
@@ -2791,7 +2796,7 @@ function importIntake() {
     var nomes = nom[0].split('_');
     var tfile = nomes[nomes.length - 1];
     // Il nome e' un INDIZIO, non la misura. Prima un file senza suffisso _alz
-    // veniva respinto qui, senza nemmeno aprirlo: i due file della Peugeot 106
+    // veniva respinto qui, senza nemmeno aprirlo: i due file della camma RIF-3
     // uscivano dal banco corretti e non erano importabili. A decidere e' il
     // contenuto, che il parser sa gia' giudicare (sotto 30 righe valide
     // rifiuta, poco piu' avanti). Se il nome non segue la convenzione lo si
@@ -2867,7 +2872,7 @@ function importExhaust() {
     var nomes = nom[0].split('_');
     var tfile = nomes[nomes.length - 1];
     // Il nome e' un INDIZIO, non la misura. Prima un file senza suffisso _alz
-    // veniva respinto qui, senza nemmeno aprirlo: i due file della Peugeot 106
+    // veniva respinto qui, senza nemmeno aprirlo: i due file della camma RIF-3
     // uscivano dal banco corretti e non erano importabili. A decidere e' il
     // contenuto, che il parser sa gia' giudicare (sotto 30 righe valide
     // rifiuta, poco piu' avanti). Se il nome non segue la convenzione lo si
@@ -3144,7 +3149,7 @@ function derivateLato(folCam, giocoCam, rockerEff, centro, tipo, finestra) {
     // Si liscia la curva MISURATA, poi si toglie il gioco. Prima si faceva il
     // contrario, e la finestra di lisciatura a cavallo del taglio mescolava gli
     // ZERI artificiali del clamp, deformando la curva anche dove la valvola e'
-    // gia' sollevata. Effetto misurato sulla Clio: "Acc. max" cambiava di 1,7
+    // gia' sollevata. Effetto misurato sulla camma RIF-1: "Acc. max" cambiava di 1,7
     // volte fra gioco 0,20 e 0,50 — ma sottrarre una COSTANTE non puo' cambiare
     // una derivata seconda, quindi quel salto era tutto della lisciatura sporca.
     // La lisciatura e' un'operazione sul RUMORE DI MISURA: va fatta sui dati,
@@ -3155,12 +3160,12 @@ function derivateLato(folCam, giocoCam, rockerEff, centro, tipo, finestra) {
     //
     // La curva valvola e' max(0, alzata - gioco), e quel max() introduce un
     // angolo vivo dove l'alzata attraversa il gioco: pendenza da zero al valore
-    // della rampa, derivata seconda impulsiva. Su Clio e VW il massimo cadeva
-    // esattamente li'; sulla 106 no. Lo stesso numero misurava la camma o il
+    // della rampa, derivata seconda impulsiva. Su RIF-1 e RIF-2 il massimo cadeva
+    // esattamente li'; sulla RIF-3 no. Lo stesso numero misurava la camma o il
     // gioco a seconda della camma.
     //
     // Escludere i campioni intorno allo spigolo NON funziona, ed e' stato
-    // misurato: sulla Clio il picco GENUINO sta a 237° con alzata 0,652, e con
+    // misurato: sulla RIF-1 il picco GENUINO sta a 237° con alzata 0,652, e con
     // gioco 0,50 la valvola viene ripresa a 239-240°. Due gradi. Nessuna
     // finestra separa le due cose, e toglierle cancella un dato vero.
     //
@@ -3361,7 +3366,7 @@ var MIN_CAMPO_MOLLA = { springK: 0.0001, springPreload: 0, massEqIntake: 0.0001,
 // nascono con un numero plausibile e non dichiarano di essere un'ipotesi:
 //
 //  - RAGGIO BASE: e' una misura col calibro sulla camma in esame (lo dice il
-//    tooltip), ma nasce a 14,0. Misurato sulla VW KR: con 14,0 la durata a
+//    tooltip), ma nasce a 14,0. Misurato sulla RIF-2: con 14,0 la durata a
 //    1 mm esce 261 gradi e l'alzata al PMS 4,426 mm; col valore vero 32,64
 //    escono 222 gradi e 2,286 mm. Scarto massimo fra le due curve 2,434 mm su
 //    un'alzata di 11. E l'alzata al PMS finisce nella scheda camma.
@@ -5227,7 +5232,7 @@ function createComplianceChart(camLiftIn, valveLiftIn, camLiftEx, valveLiftEx, r
         // AUDIT v3.4.3 P1-03 — la condizione era ROVESCIATA.
         // Prima: cam - valvola > 0,02 = la camma sta SOPRA la valvola, cioe' la
         // normale compressione elastica del treno (F/k, ~0,09 mm, presente
-        // sempre): veniva dipinta di rosso come "distacco". Sulla Clio a 800
+        // sempre): veniva dipinta di rosso come "distacco". Sulla RIF-1 a 800
         // giri colorava 269 gradi su 720 mentre il distacco vero era 0,02 mm; a
         // 10.000 giri, col distacco vero a 3,14 mm, la fascia si RESTRINGEVA e
         // nella zona critica non colorava nulla.
@@ -5557,7 +5562,7 @@ function updateTimingDiagram(inEv, exEv, durIn, durEx, overlap) {
                     // l'arco aperto di aspirazione, scarico E incrocio insieme, e
                     // restavano tre corone grigie.
                     //
-                    // Misurato nel browser sui dati VW KR: dopo un click i totali
+                    // Misurato nel browser sui dati RIF-2: dopo un click i totali
                     // degli anelli passavano da 720 a 436,0 / 438,9 / 641,7, e
                     // l'aspirazione si LEGGEVA 511 gradi invece di 284. Senza
                     // nessun segnale: generateLabels non imposta 'hidden', quindi
@@ -5833,7 +5838,8 @@ function runABComparison() {
             chipHTML('Durata asp. B', durB_int + '\u00B0',
                      deltaArrow(dDurIn) + ' ' + (dDurIn >= 0 ? '+' : '') + dDurIn + '\u00B0 vs A',
                      deltaCls(dDurIn)) +
-            chipHTML('Area asp.', '+' + dAreaPctIn.toFixed(1) + ' %',
+            // il segno lo porta il numero: col '+' fisso un calo usciva "+-13.3 %"
+            chipHTML('Area asp.', (dAreaPctIn >= 0 ? '+' : '') + dAreaPctIn.toFixed(1) + ' %',
                      deltaArrow(dAreaPctIn) + ' B vs A',
                      deltaCls(dAreaPctIn)) +
             chipHTML('Vel. picco asp.', velB_int.toFixed(3) + ' mm/\u00B0',
@@ -6402,13 +6408,22 @@ function exportCamCard(testMode) {
         '# misura CAMMES: scansione 360° col puntalino, conversione geometrica al follower dichiarato.',
         // audit APP-20 + DYN-07: la nota di validazione fisica e' CONDIZIONALE sul
         // follower (ft, congelato dall'analisi ~riga 4316). La conversione geometrica
-        // e' a risoluzione 1° camma; la validazione al banco (RMS 0.046 mm) vale solo
-        // per il bicchiere piatto — non estenderla implicitamente a roller/finger.
+        // e' a risoluzione 1° camma; la verifica fisica vale solo per il bicchiere
+        // piatto — non estenderla implicitamente a roller/finger.
+        //
+        // IL REFERTO E' NEUTRO: dice COME e' stata verificata la conversione (la
+        // stessa camma letta con due tastatori), non su quale motore. Qui c'era
+        // scritto "([modello] Ø33, RMS 0.046 mm)": un nome d'auto nel documento che
+        // si consegna al cliente di un'altra auto, e per giunta un numero del
+        // 2026-07-11, calcolato con la compensazione del puntalino che poi si e'
+        // scoperta rovesciata. Lo scarto citato ora e' quello che la suite
+        // misura oggi (tools/validate_rif3_piattello.js) e test_neutralita.js
+        // fallisce se i due numeri si separano o se torna un nome.
         (ft === 'bicch'
-            ? '# conversione puntalino->bicchiere: confrontata sul setup di riferimento (Clio Ø33, RMS 0.046 mm) come regressione software; validazione metrologica indipendente ancora necessaria.'
+            ? '# conversione puntalino->bicchiere: verificata su una camma letta sia col puntalino sia col piattello Ø33 (scarto 0.065 mm RMS) come regressione software; validazione metrologica indipendente ancora necessaria.'
             : ft === 'punt'
                 ? '# curva grezza al puntalino: nessuna conversione follower applicata.'
-                : '# conversione geometrica al follower a risoluzione 1° camma; validazione fisica al banco solo per bicchiere piatto (RMS 0.046 mm).'),
+                : '# conversione geometrica al follower a risoluzione 1° camma; verifica fisica (stessa camma letta col puntalino e col piattello, scarto 0.065 mm RMS) solo per il bicchiere piatto.'),
         '# ripetibilità - ' + ripetTxt(I.metaIn, 'ASP') + ' ' + ripetTxt(I.metaEx, 'SCA'),
         '# correzione baseline/eccentricità: ' + (I.baselineOn ? 'ON' : 'OFF') + '.',
         '# durate e fasatura riferite al gioco valvola indicato; angoli in gradi MOTORE.'
@@ -6507,7 +6522,9 @@ function exportCamCard(testMode) {
 }
 window.exportCamCard = exportCamCard;
 
-// Intestazione officina per i referti (impostata in Home, salvata sul server)
+// Intestazione officina per i referti (impostata in Home, salvata sul server).
+// La usano TUTTI i PDF di questa pagina: report di analisi, race report e
+// scheda camma.
 fetch('/api/settings').then(function (r) { return r.json(); }).then(function (s) {
     if (s.officina && s.officina.nome) window._officina = s.officina.nome;
 }).catch(function () {});
@@ -6608,6 +6625,12 @@ function exportPDF() {
         doc.setFont('helvetica', 'bold'); doc.setFontSize(34);
         setText([255, 255, 255]);
         doc.text('CAMMES', margin, 28);
+        // Intestazione officina (Home → Sistema & aggiornamenti): a destra,
+        // sulla riga del marchio. Prima usciva solo sulla Scheda camma.
+        if (window.cammesIntestazionePdf) {
+            doc.setFont('helvetica', 'bold');
+            window.cammesIntestazionePdf(doc, window._officina, pageW - margin, 28, pageW - 2 * margin - 70, 13);
+        }
         doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
         setText(COL.accent);
         doc.text('Report analisi profili alberi a camme', margin, 36);

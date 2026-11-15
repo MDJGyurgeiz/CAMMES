@@ -741,7 +741,7 @@ accettabile il 90%.
 - `bench_v4_test.js` prova il watchdog su MOVE ma non su SCAN.
 - `test_convergenza.js` contiene asserzioni troppo deboli.
 - `test_3dof.js` accetta risultati non plausibili con un limite molto ampio.
-- `validate_vw.js` usa valori dichiarati corretti senza un oracle indipendente
+- `validate_rif2.js` usa valori dichiarati corretti senza un oracle indipendente
   sufficientemente tracciato.
 - mancano test E2E import incompleto → salvataggio → nuova importazione → report.
 

@@ -84,14 +84,13 @@
 
             <div class="controls-group">
                 <span class="toggle-label">Modalit&agrave;</span>
-                <select id="scanMode" class="input" style="width:230px;" onchange="onScanModeChange();" data-tip="<strong>Modalit&agrave; di scansione</strong>Definisce densit&agrave; di campionamento, settle delay e numero di campioni per ogni grado camma. Al banco (07-11) le tre modalit&agrave; danno la stessa curva entro 0,05 mm RMS: Veloce basta quasi sempre.">
+                <select id="scanMode" class="input" style="width:230px;" onchange="onScanModeChange();" data-tip="<strong>Modalit&agrave; di scansione</strong>Definisce il passo di campionamento (1&deg; o 0,5&deg;) e la pausa di assestamento dopo ogni movimento, prima di leggere. Al banco le due modalit&agrave; danno la stessa curva entro 0,05 mm RMS: Veloce basta quasi sempre.">
                     <!-- Le etichette le scrive popolaModalita() da SCAN_MODES: qui
                          restano solo i valori, cosi' la durata non si puo' ricopiare -->
                     <option value="fast" selected>Veloce</option>
-                    <option value="std">Precisione</option>
                     <option value="race">Race</option>
                 </select>
-                <span class="help-icon" data-tip="<strong>Quale scegliere?</strong><b>Veloce</b>: uso normale, validata al banco (identica alle altre entro 0,05 mm RMS). <b>Precisione</b>: media 3 letture per grado, per ambienti con vibrazioni. <b>Race</b>: risoluzione 0,5&deg; per fianchi molto ripidi di camme spinte. Le vecchie Ultra/Hyper/Atomic sono state ritirate: al banco non miglioravano nulla (Ultra) o non erano supportate dal passo minimo del firmware (Hyper/Atomic, r4/r1 rifiutati)." tabindex="0">?</span>
+                <span class="help-icon" data-tip="<strong>Quale scegliere?</strong><b>Veloce</b>: uso normale, un punto per grado, validata al banco. <b>Race</b>: un punto ogni mezzo grado e pausa pi&ugrave; lunga dopo ogni movimento (80 ms invece di 30) prima di leggere, per fianchi molto ripidi di camme spinte; al banco d&agrave; la stessa curva della Veloce entro 0,05 mm RMS. In entrambe ogni punto si legge finch&eacute; due letture consecutive del comparatore coincidono entro 5 &micro;m; se non succede entro 1,5 s il punto viene segnalato come non stabilizzato. La modalit&agrave; Precisione non c&apos;&egrave; pi&ugrave;: dava la stessa misura della Veloce." tabindex="0">?</span>
             </div>
 
             <div class="separator"></div>
@@ -345,26 +344,46 @@ function checkEncoderDivergence() {
 }
 var _encAlarmed = false;       // allarme già emesso in questo run (una volta)
 
-// Modalità scansione: ogni preset definisce campioni media, micropassi per unità,
-// passo motore totale per coprire 360° camma e quante letture aggregare per ogni
-// grado camma (subStepsPerDeg). Per modalità ad alta densità il file di output
-// resta a 360 punti, ottenuti come media di subStepsPerDeg letture vicine.
+// Modalità scansione: ogni preset definisce micropassi per unità, passo motore
+// totale per coprire 360° camma e quante letture fare per ogni grado camma
+// (subStepsPerDeg). Per le modalità ad alta densità il file di output resta a
+// 360 punti: ogni grado è la media CENTRATA delle letture intorno a lui
+// (_registraCampione / binCentrato).
 // settleMs = pausa dopo ogni movimento prima di leggere il sensore (firmware).
 // Smorza le vibrazioni meccaniche del puntalino del comparatore. Più alto =
 // curva di alzata più pulita ma scansione più lenta.
 var SCAN_MODES = {
-    // Ridotte da 6 a 3 dopo il test al banco del 07-11 (Clio + piattello Ø33):
-    // fast/std/race/ultra identiche entro 0,05 mm RMS (= ripetibilità run-to-run),
-    // quindi Ultra non aggiungeva nulla; Hyper (r4) e Atomic (r1) chiedevano passi
-    // che il firmware rifiuta (minimo r8) → giravano con il passo precedente
-    // percorrendo più giri per scansione.
-    // Tempi MISURATI al banco: 44s / 135s / 276s. `timeSec` e' quel tempo
-    // arrotondato per eccesso (50 / 140 / 280): il margine copre settle delay e
-    // latenza seriale, che variano. E' l'unico numero mostrato all'operatore —
-    // tendina, barra, toast e confirm lo prendono tutti da qui.
+    // DUE MODALITA', e la storia di come ci si e' arrivati:
+    //  - da 6 a 3 dopo il test al banco del 07-11 (stessa camma, con piattello
+    //    Ø33): fast/std/race/ultra identiche entro 0,05 mm RMS (= ripetibilita'
+    //    run-to-run), quindi Ultra non aggiungeva nulla; Hyper (r4) e Atomic
+    //    (r1) chiedevano passi che il firmware rifiuta (minimo r8) e giravano
+    //    col passo precedente, percorrendo piu' giri per scansione;
+    //  - da 3 a 2 il 2026-11-14 (decisione dell'officina): "Precisione" (std)
+    //    prometteva una media di 3 letture che il firmware non fa piu' dalla
+    //    3.6; tolta la promessa restava identica alla Veloce salvo 20 ms di
+    //    pausa in piu' a punto — una scelta senza criterio per l'operatore.
+    //
+    // COSA DISTINGUE DAVVERO LE DUE: il passo (1° o 0,5°) e la pausa di
+    // assestamento dopo ogni movimento (settleMs). NON il numero di letture:
+    // dal firmware 3.6 la scansione — autonoma e classica — legge sempre con
+    // readSensorStableMm (due frame concordi entro 5 µm) e cfgSamples lo usa
+    // soltanto 'm', la lettura a riposo. Per questo `samples` e' 1 ovunque:
+    // con 3 la scansione non cambiava di un micron, mentre a riposo ogni
+    // lettura durava tre frame — piu' dell'intervallo del polling — e le
+    // richieste si accodavano nell'Arduino. Vedi tools/test_modalita_oneste.js.
+    //
+    // `timeSec` e' l'unico numero di durata mostrato all'operatore (tendina,
+    // barra, toast e confirm lo prendono da qui), ed e' una STIMA per eccesso:
+    //   Veloce   50 s  misurata al banco con lo scan autonomo (50,6 s, 07-13)
+    //   Race    140 s  CALCOLATA, non cronometrata: tetto di 720 punti, ognuno
+    //                  al piu' lungo come un punto Veloce + 50 ms di pausa
+    //                  (136 s). I 276 s di luglio erano del motore classico con
+    //                  la media a 3 campioni, che non esiste piu'.
+    // Da confermare al banco; intanto la barra si corregge da sola sul ritmo
+    // reale dopo i primi punti (scanEta).
     fast:   { samples: 1, microsteps: 32, totalSteps: 360,   subStepsPerDeg: 1,  settleMs: 30,  label: 'Veloce',     timeSec: 50   },
-    std:    { samples: 3, microsteps: 32, totalSteps: 360,   subStepsPerDeg: 1,  settleMs: 50,  label: 'Precisione', timeSec: 140  },
-    race:   { samples: 3, microsteps: 16, totalSteps: 720,   subStepsPerDeg: 2,  settleMs: 80,  label: 'Race',       timeSec: 280  }
+    race:   { samples: 1, microsteps: 16, totalSteps: 720,   subStepsPerDeg: 2,  settleMs: 80,  label: 'Race',       timeSec: 140  }
 };
 var currentMode = SCAN_MODES.fast;
 
@@ -376,14 +395,16 @@ var currentMode = SCAN_MODES.fast;
 function etaModalita(m) {
     return window.cammesDurata ? window.cammesDurata(m.timeSec) : ("~" + m.timeSec + "s");
 }
-// Anche la densita' si descrive dai parametri veri, invece di ripeterli:
-// il passo e' 1/subStepsPerDeg gradi, la media c'e' se samples > 1.
+// Anche la densita' si descrive dal parametro vero, invece di ripeterlo: il
+// passo e' 1/subStepsPerDeg gradi. Nella tendina va SOLO quello: e' cio' che
+// l'operatore sceglie (un punto per grado o uno ogni mezzo grado). La pausa di
+// assestamento, che cambia anch'essa, la spiega il fumetto accanto: scritta qui
+// allungava l'etichetta oltre la larghezza della tendina, che la troncava
+// ("Veloce \u00b7 ~50s \u00b7 1\u00b0, p").
 function descriviModalita(m) {
     var passo = 1 / m.subStepsPerDeg;
-    var s = m.label + " \u00b7 " + etaModalita(m) + " \u00b7 " +
-            String(passo).replace(".", ",") + "\u00b0";
-    if (m.samples > 1) s += ", media " + m.samples + " letture";
-    return s;
+    return m.label + " \u00b7 " + etaModalita(m) + " \u00b7 " +
+           String(passo).replace(".", ",") + "\u00b0";
 }
 function popolaModalita() {
     var sel = document.getElementById("scanMode");
@@ -393,8 +414,63 @@ function popolaModalita() {
         if (m) o.textContent = descriviModalita(m);
     });
 }
-// Buffer di accumulo per modalità ad alta densità (chiave = grado camma 1..360)
-var subBuffer = {};
+// Letture della scansione in corso, per indice di campione (1..totalSteps):
+// il valore (NaN se invalido) e l'encoder letto insieme. Servono tutte finché
+// il giro non è finito, perché il valore di un grado si chiude solo quando è
+// arrivata anche la lettura DOPO di lui (vedi binCentrato in lib/cammes-math.js).
+var subVal = [];
+var subEnc = [];
+
+// Registra il campione iCamp e chiude i gradi che ora hanno tutto ciò che
+// serve: scrive pdata/pdindex, aggiorna il massimo e l'encoder del picco, e
+// restituisce l'elenco dei gradi chiusi IN ORDINE (per il grafico).
+//
+// Con una lettura per grado (Veloce) il grado d si chiude subito
+// ed è la lettura stessa. In Race (due letture per grado) il grado d si chiude
+// all'arrivo della lettura a d+0,5°; l'ultimo, il 360, alla fine del giro,
+// usando come "360,5°" la lettura a 0,5° fatta all'inizio.
+//
+// Se la lettura che doveva CHIUDERE un grado non arriva mai (una riga persa
+// sulla seriale: lo streaming la segnala con "Campioni persi"), quel grado
+// resterebbe aperto pur avendo la sua lettura centrale. A fine giro si passano
+// quindi tutti i gradi ancora senza valore e si recupera ciò che è
+// recuperabile con la stessa regola centrata: mai un valore inventato, ma
+// nemmeno un grado dichiarato mancante quando la misura sul grado c'è.
+function _registraCampione(iCamp, valore, enc) {
+    var S = currentMode.subStepsPerDeg, N = currentMode.totalSteps;
+    subVal[iCamp] = (typeof valore === 'number' && isFinite(valore)) ? valore : NaN;
+    subEnc[iCamp] = (enc === undefined) ? null : enc;
+    var chiusi = [];
+    var dPronto = (iCamp - (S - 1)) / S;      // il grado d è completo alla lettura d*S + (S-1)
+    if (dPronto >= 1 && dPronto <= 360 && dPronto === Math.floor(dPronto)) chiusi.push(dPronto);
+    var recuperi = [];
+    if (iCamp === N) {
+        for (var dU = Math.floor((N - (S - 1)) / S) + 1; dU <= 360; dU++) chiusi.push(dU);
+        for (var dR = 1; dR <= 360; dR++) {
+            if (chiusi.indexOf(dR) < 0 && !isFinite(Number(pdata[dR]))) recuperi.push(dR);
+        }
+    }
+    var daScrivere = chiusi.concat(recuperi);
+    for (var q = 0; q < daScrivere.length; q++) {
+        var d = daScrivere[q];
+        var val = binCentrato(subVal, d, S, N);
+        if (!isFinite(val)) continue;         // nessun dato centrato: il grado resta mancante
+        pdindex[d] = d;
+        pdata[d] = val;
+        if (val > max) {
+            max = val;
+            maxg = d;
+            // Posizione encoder REALE del picco: è il riferimento che lo Zero
+            // virtuale usa per portare il picco a +180°. Deve essere quella
+            // della lettura CENTRALE del grado — prima, in Race, era quella
+            // della lettura che per prima superava il massimo (d-0,5° oppure
+            // d°, a seconda dei casi).
+            var eC = subEnc[d * S];
+            if (eC !== null && eC !== undefined) maxg_encoder = eC;
+        }
+    }
+    return chiusi;
+}
 // ETA tracker condiviso fra start() / ms() / stop()
 var scanEta = window.cammesEta ? window.cammesEta.create() : { start:function(){return this;}, tick:function(){return null;}, stop:function(){} };
 
@@ -409,11 +485,10 @@ function onScanModeChange() {
     var sel = document.getElementById('scanMode');
     if (!sel) return;
     currentMode = SCAN_MODES[sel.value] || SCAN_MODES.fast;
-    if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1) {
-        sendSocket.send('c' + currentMode.samples + '\n');
-        sendSocket.send('r' + currentMode.microsteps + '\n');
-        sendSocket.send('w' + currentMode.settleMs + '\n');
-    }
+    // modalità nuova = configurazione nuova: se adesso non si può mandare
+    // (socket chiuso) resta segnata da allineare e parte prima del moto
+    _configDaAllineare = true;
+    if (typeof _sincronizzaConfigBanco === 'function') _sincronizzaConfigBanco();
 }
 
 
@@ -582,8 +657,83 @@ var _rifiutoUltimoMs = 0;            // quando è uscito l'ultimo avviso di rifi
 var _rifiutoVistoMs = 0;             // quando è arrivato l'ultimo rifiuto, avvisato o no
 var _rifiutiTaciuti = 0;             // quanti ne abbiamo contati senza avvisare
 var SILENZIO_RIFIUTO_MS = 15000;     // sotto questo intervallo si conta, non si avvisa
+// ARRESTO IN CORSO: terzo stato, diverso sia da "comando" sia da "sola lettura".
+// Nessun altro comanda, ma il server sta ancora fermando il moto del
+// collegamento precedente e per qualche secondo non assegna il banco a nessuno.
+// Passa da sé. Trattarlo come sola lettura era la regressione della v3.7.0: la
+// pagina ricaricata dopo lo Zero virtuale restava con START spento per sempre.
+var bancoInArresto = false;
+var _arrestoTimer = null;            // rete di sicurezza: l'attesa finisce comunque
+var _riprovaDopoArresto = false;     // un comando di QUESTA pagina è stato rifiutato per l'arresto
+var ARRESTO_MAX_MS = 5000;           // finestra del server (4 s) più margine
+// L'Arduino potrebbe non avere la configurazione di questa pagina: vero finché
+// non la mandiamo, e di nuovo vero ogni volta che un nostro comando è rifiutato.
+var _configDaAllineare = true;
 
 function bancoInSolaLettura() { return ruoloBanco === 'observer'; }
+
+// LA CONFIGURAZIONE DELL'ARDUINO È DI CHI COMANDA. Letture, micropassi, tempo
+// di assestamento e profilo di moto (k1, fisso) dipendono dalla modalità scelta
+// in QUESTA pagina, e ogni comando di moto li presuppone: '$+090' vale 90 gradi
+// con r32 e 45 con r16. Prima partivano solo all'apertura del socket e al cambio
+// di modalità, in tre copie; se quel primo invio veniva rifiutato (arresto in
+// corso, o un'altra finestra al comando) nessuno li rimandava più, e la
+// scansione successiva girava con i micropassi lasciati dalla sessione di
+// prima. La modalità non sopravvive al ricaricamento (torna Veloce), quindi
+// bastava uno Zero virtuale fatto in Race per restare a metà giro.
+function _sincronizzaConfigBanco() {
+    if (typeof sendSocket === 'undefined' || !sendSocket || sendSocket.readyState !== 1) return false;
+    try {
+        sendSocket.send('c' + currentMode.samples + '\n');
+        sendSocket.send('r' + currentMode.microsteps + '\n');
+        sendSocket.send('w' + currentMode.settleMs + '\n');
+        // Profilo movimento FISSO: Standard (k1). Il selettore a 4 profili
+        // è stato rimosso: era una scelta senza criterio per l'utente.
+        sendSocket.send('k1\n');
+    } catch (e) { console.warn('Config sync fallito:', e); return false; }
+    _configDaAllineare = false;
+    return true;
+}
+// Da chiamare PRIMA di ogni comando che muove: manda la configurazione solo se
+// c'è il dubbio che non sia la nostra (niente traffico in più sul jog normale).
+function _assicuraConfigBanco() {
+    if (_configDaAllineare) _sincronizzaConfigBanco();
+}
+
+function _entraInArresto() {
+    if (!bancoInArresto) { bancoInArresto = true; _aggiornaUiMoto(); }
+    // Il server annuncia la fine dell'arresto ('#ctl:free'). Se l'annuncio si
+    // perdesse, la pagina non deve restare spenta: oltre il tempo massimo della
+    // finestra si riaccende da sola e, se serve, riprova.
+    clearTimeout(_arrestoTimer);
+    _arrestoTimer = setTimeout(function () { _esciDaArresto(); }, ARRESTO_MAX_MS);
+}
+function _esciDaArresto() {
+    clearTimeout(_arrestoTimer);
+    _arrestoTimer = null;
+    if (!bancoInArresto) return false;
+    bancoInArresto = false;
+    _aggiornaUiMoto();
+    // Solo chi si è visto rifiutare un comando lo rimanda. Una pagina che stava
+    // soltanto guardando non si prende il banco per conto suo.
+    if (_riprovaDopoArresto) { _riprovaDopoArresto = false; _sincronizzaConfigBanco(); }
+    return true;
+}
+
+// UN AVVIO RIFIUTATO NON PARTIRÀ MAI. Senza questo la pagina restava "in
+// scansione" ad aspettare campioni, e dopo 6 s concludeva che il firmware era
+// troppo vecchio per lo scan autonomo: passava al metodo classico, più lento,
+// per tutta la sessione — per un rifiuto che col firmware non c'entrava niente.
+// Vale solo finché non è arrivato nemmeno un campione: una scansione che sta
+// già ricevendo dati è partita davvero e non si tocca.
+function _annullaAvvioRifiutato() {
+    if (typeof startflag === 'undefined' || startflag !== 1) return false;
+    if (typeof autoScanActive === 'undefined' || !autoScanActive) return false;
+    if (typeof _autoLastIdx !== 'undefined' && _autoLastIdx > 0) return false;
+    if (typeof _fermaScansioneLocale !== 'function') return false;
+    _fermaScansioneLocale();   // senza 'x': il moto in corso, se c'è, è di un altro
+    return true;
+}
 
 // Due motivi indipendenti spengono gli stessi pulsanti: il motore sbloccato e
 // la sola lettura. Se ognuno chiamasse _setMotionUiDisabled per conto suo, il
@@ -601,7 +751,14 @@ function bancoInSolaLettura() { return ruoloBanco === 'observer'; }
 function _aggiornaUiMoto() {
     if (typeof _setMotionUiDisabled !== 'function') return;
     var sbloccato = (typeof motorFree !== 'undefined') && motorFree;
-    _setMotionUiDisabled(!!sbloccato || bancoInSolaLettura());
+    // i motivi per cui questa pagina non può comandare: un altro comanda, oppure
+    // il banco si sta ancora fermando (bancoInArresto)
+    var nonComandabile = bancoInSolaLettura() || bancoInArresto;
+    _setMotionUiDisabled(!!sbloccato || nonComandabile);
+    // Sblocca/Blocca motore è un comando come gli altri: lasciarlo vivo voleva
+    // dire mostrare "Motore sbloccato" per un comando che il server rifiuta.
+    var fb = (typeof document !== 'undefined' && document.getElementById) ? document.getElementById('freeBtn') : null;
+    if (fb) fb.disabled = nonComandabile;
 }
 if (typeof window !== 'undefined' && window.addEventListener) {
     window.addEventListener('load', function () { _aggiornaUiMoto(); });
@@ -609,6 +766,24 @@ if (typeof window !== 'undefined' && window.addEventListener) {
 
 function applicaRuoloBanco(role, motivo) {
     var toast = (typeof window !== 'undefined' && window.cammesToast) ? window.cammesToast : null;
+
+    // 'wait' = annuncio del server: nessuno comanda, ma il banco si sta ancora
+    // fermando. Arriva a chi si collega durante l'arresto e a chi stava
+    // guardando quando il controllore se n'è andato. Comandi spenti finché
+    // dura; la fine la annuncia '#ctl:free'.
+    if (role === 'wait') {
+        var giaInAttesa = bancoInArresto;
+        _entraInArresto();
+        if (!giaInAttesa && toast) {
+            // i rifiuti che seguiranno sono lo stesso fatto: non si ri-avvisa
+            _rifiutoUltimoMs = Date.now();
+            toast({ kind: 'warn', title: 'Banco in arresto: attendi qualche secondo',
+                body: 'Il collegamento precedente si è chiuso e il banco sta fermando il movimento in sicurezza. ' +
+                      'I comandi tornano disponibili da soli, senza fare niente.',
+                duration: 5000 });
+        }
+        return;
+    }
 
     // 'denied' NON è un ruolo: è la risposta a un comando. Non cambia lo stato,
     // ma conferma che siamo in sola lettura anche se il ruolo non era arrivato.
@@ -629,8 +804,30 @@ function applicaRuoloBanco(role, motivo) {
         // arrivano 24 rifiuti. All'operatore veniva chiesto di chiudere una
         // finestra che non esisteva.
         var attesa = (motivo === 'stop-in-corso');
-        if (!attesa && ruoloBanco !== 'observer') { ruoloBanco = 'observer'; _aggiornaUiMoto(); }
+        // Un comando di questa pagina NON è arrivato all'Arduino: se era la
+        // configurazione, va rimandata prima del prossimo movimento.
+        _configDaAllineare = true;
+        var avvioAnnullato = _annullaAvvioRifiutato();
+        if (attesa) {
+            // non è sola lettura: è un'attesa che finisce da sé
+            _riprovaDopoArresto = true;
+            _entraInArresto();
+        } else if (ruoloBanco !== 'observer') { ruoloBanco = 'observer'; _aggiornaUiMoto(); }
         var ora = Date.now();
+        if (avvioAnnullato) {
+            // questo l'operatore lo deve leggere SEMPRE: ha premuto START e non è partito niente
+            _rifiutoUltimoMs = ora; _rifiutoVistoMs = ora; _rifiutiTaciuti = 0;
+            if (toast) {
+                toast(attesa
+                    ? { kind: 'warn', title: 'Scansione non avviata: banco in arresto',
+                        body: 'Il banco sta ancora fermando il movimento di prima. I comandi tornano disponibili da soli fra qualche secondo: poi premi di nuovo START.',
+                        duration: 7000 }
+                    : { kind: 'err', title: 'Scansione non avviata: sola lettura',
+                        body: 'Il banco è comandato da un\'altra finestra o da un altro PC: da qui la scansione non può partire.',
+                        duration: 7000 });
+            }
+            return;
+        }
         // Una raffica finita è finita: i rifiuti di dieci minuti fa non vanno
         // sommati a quello di adesso, o l'avviso stampa un numero vecchio.
         if (ora - _rifiutoVistoMs > SILENZIO_RIFIUTO_MS) _rifiutiTaciuti = 0;
@@ -664,9 +861,25 @@ function applicaRuoloBanco(role, motivo) {
     // comandi e faceva uscire un "Banco disponibile" falso.
     if (role !== 'observer' && role !== 'free' && role !== 'granted' && role !== 'released') return;
 
+    // Qualunque ruolo vero chiude l'attesa per l'arresto: o il banco è tornato
+    // assegnabile (e chi era stato rifiutato rimanda la sua configurazione),
+    // o lo ha preso un altro (e allora non c'è niente da riprovare).
+    var uscitoDaArresto = false;
+    if (role === 'observer') {
+        clearTimeout(_arrestoTimer); _arrestoTimer = null;
+        bancoInArresto = false; _riprovaDopoArresto = false;
+        _configDaAllineare = true;   // la configurazione ora è quella di chi comanda
+    } else {
+        uscitoDaArresto = _esciDaArresto();
+    }
+
     // free / granted / released significano tutti "qui si può comandare"
     var nuovo = (role === 'observer') ? 'observer' : 'controller';
-    if (nuovo === ruoloBanco) return;              // stesso stato: niente da dire
+    if (nuovo === ruoloBanco) {                    // stesso ruolo: resta da dire solo la fine dell'attesa
+        if (uscitoDaArresto && toast) toast({ kind: 'success', title: 'Banco pronto',
+            body: 'L\'arresto è concluso: i comandi di moto sono di nuovo attivi.', duration: 3000 });
+        return;
+    }
     var eraOsservatore = (ruoloBanco === 'observer');
     ruoloBanco = nuovo;
     _rifiutoUltimoMs = 0;
@@ -682,16 +895,27 @@ function applicaRuoloBanco(role, motivo) {
         // senza questo l'operatore non ha modo di sapere che può tornare a comandare
         if (toast) toast({ kind: 'success', title: 'Banco disponibile',
             body: 'Nessun altro sta comandando: i comandi di moto sono di nuovo attivi.', duration: 4000 });
+    } else if (uscitoDaArresto) {
+        if (toast) toast({ kind: 'success', title: 'Banco pronto',
+            body: 'L\'arresto è concluso: i comandi di moto sono di nuovo attivi.', duration: 3000 });
     }
 }
 
 // Probe periodico in idle:
 // - sensore a 5 Hz (200 ms) → display alzata "real-time" anche fuori scansione
 // - encoder a 0.2 Hz (5 s) → basta per LED + posizione assoluta
-// Disattivati durante scansione attiva (startflag==1) per non interferire.
-// Gli handle sono memorizzati così che ms()/start() possano fermarli
-// completamente prima di emettere un comando finale ($+units di 0V),
-// liberando la coda WebSocket dai messaggi di polling accodati.
+// Disattivati durante scansione attiva (startflag==1) per non interferire, e
+// mentre lo Zero virtuale aspetta la fine del suo spostamento (_waiting_mv):
+// la coda WebSocket deve restare libera per quel comando.
+//
+// I POLLING NON SI SPENGONO MAI DAVVERO: tacciono finché la condizione vale e
+// riprendono da soli quando cade. Prima lo Zero virtuale li fermava con
+// clearInterval contando sul ricaricamento finale della pagina per riaverli —
+// ma se lo Zero virtuale NON arrivava in fondo (STOP, avvio rifiutato dal
+// controllo comparatore, guasto, *sabort) nessuno li riaccendeva: display
+// fermo, LED Comparatore rosso, e START che rifiutava con "Comparatore non
+// risponde" a comparatore sanissimo, fino al ricaricamento manuale. È il
+// "a volte non legge il comparatore, devo spegnere e riaccendere" dell'officina.
 //
 // In SOLA LETTURA si legge più piano. Le misure arrivano comunque: il server
 // manda in broadcast a tutti ogni riga della seriale, quindi mentre l'altro
@@ -701,19 +925,56 @@ function applicaRuoloBanco(role, motivo) {
 // qualcun altro sta scansionando.
 var _tickSensore = 0;
 function pollAttivo() {
-    return typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1
-        && (typeof startflag === 'undefined' || startflag !== 1);
+    return !!(typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1
+        && (typeof startflag === 'undefined' || startflag !== 1)
+        && !(typeof window !== 'undefined' && window._waiting_mv));
 }
-var pollEncoderId = setInterval(function() {
-    if (!pollAttivo()) return;
-    if (bancoInSolaLettura()) return;   // la posizione la muove chi comanda: la riceviamo
-    try { sendSocket.send('?'); } catch(e) {}
-}, 5000);
-var pollSensorId = setInterval(function() {
-    if (!pollAttivo()) return;
-    if (bancoInSolaLettura() && (++_tickSensore % 5) !== 0) return;   // 1 Hz invece di 5
-    try { sendSocket.send('m'); } catch(e) {}
-}, 200);
+var pollEncoderId = null, pollSensorId = null;
+
+// FRENO SUL POLLING DEL COMPARATORE. La pagina chiedeva una lettura ('m') ogni
+// 200 ms senza guardare se la precedente era tornata. Il firmware le serve UNA
+// alla volta, bloccando finché la lettura non è pronta: ~0,1 s col comparatore
+// sano, ma 0,9 s (il suo timeout) quando il comparatore è spento o in
+// auto-spegnimento, e 0,3 s quando una modalità chiedeva la media di 3
+// campioni. In quei casi le richieste si accodavano nel buffer seriale
+// dell'Arduino — 64 byte, poi i byte in più vanno PERSI — e dietro la coda
+// finivano anche i comandi veri: display in ritardo di molti secondi, START o
+// Ruota che arrivano tardi o troncati. Proprio mentre l'operatore sta
+// riaccendendo il comparatore.
+//
+// Ora c'è al più UNA richiesta in volo: la successiva parte quando arriva la
+// risposta (o dopo POLL_SENSORE_ATTESA_MS, se la risposta si è persa). Col
+// comparatore sano il ritmo resta 5 letture al secondo; quando rallenta, la
+// pagina rallenta con lui invece di sommergerlo.
+var _pollSensoreInVolo = 0;          // quando è partita la richiesta ancora senza risposta (0 = nessuna)
+var POLL_SENSORE_ATTESA_MS = 1500;   // oltre questo la si considera persa (il firmware risponde entro 0,9 s)
+function _chiediSensore() {
+    var ora = Date.now();
+    if (_pollSensoreInVolo && (ora - _pollSensoreInVolo) < POLL_SENSORE_ATTESA_MS) return false;
+    _pollSensoreInVolo = ora;
+    try { sendSocket.send('m'); } catch (e) { _pollSensoreInVolo = 0; return false; }
+    return true;
+}
+function _sensoreHaRisposto() { _pollSensoreInVolo = 0; }
+
+// Un posto solo che accende i due polling "normali": lo usano il caricamento
+// della pagina e il ribloccaggio del motore (che prima ne teneva una copia sua,
+// senza il rallentamento in sola lettura).
+function _avviaPollNormale() {
+    clearInterval(pollEncoderId);
+    clearInterval(pollSensorId);
+    pollEncoderId = setInterval(function () {
+        if (!pollAttivo()) return;
+        if (bancoInSolaLettura()) return;   // la posizione la muove chi comanda: la riceviamo
+        try { sendSocket.send('?'); } catch (e) {}
+    }, 5000);
+    pollSensorId = setInterval(function () {
+        if (!pollAttivo()) return;
+        if (bancoInSolaLettura() && (++_tickSensore % 5) !== 0) return;   // 1 Hz invece di 5
+        _chiediSensore();
+    }, 200);
+}
+_avviaPollNormale();
 
 
 var _engineOnOpen = function(event) {
@@ -736,21 +997,19 @@ var _engineOnOpen = function(event) {
     // Allinea la config Arduino alla modalità corrente del browser (siamo
     // dentro onopen: il socket è già pronto). Senza questo, dopo un reload
     // la config Arduino resta quella dell'ultima sessione e $+N a fine 0
-    // virtuale può finire con scaling sbagliato.
-    try {
-        sendSocket.send('c' + currentMode.samples + '\n');
-        sendSocket.send('r' + currentMode.microsteps + '\n');
-        sendSocket.send('w' + currentMode.settleMs + '\n');
-        // Profilo movimento FISSO: Standard (k1). Il selettore a 4 profili
-        // è stato rimosso: era una scelta senza criterio per l'utente.
-        sendSocket.send('k1\n');
-        // Ping immediato sensore + encoder per accendere subito i LED
-        // (senza aspettare il prossimo tick di polling).
-        setTimeout(function(){
-            try { sendSocket.send('m'); } catch(e) {}
-            try { sendSocket.send('?'); } catch(e) {}
-        }, 100);
-    } catch (e) { console.warn('Config sync fallito:', e); }
+    // virtuale può finire con scaling sbagliato. Socket nuovo = nessuna
+    // certezza su cosa abbia l'Arduino: si riparte dal dubbio e si manda.
+    // Se il server la rifiuta (arresto in corso, altro controllore) il dubbio
+    // torna da sé e la configurazione riparte prima del primo movimento.
+    _configDaAllineare = true;
+    _sincronizzaConfigBanco();
+    _sensoreHaRisposto();   // socket nuovo: nessuna lettura è più "in volo"
+    // Ping immediato sensore + encoder per accendere subito i LED
+    // (senza aspettare il prossimo tick di polling).
+    setTimeout(function(){
+        try { sendSocket.send('m'); } catch(e) {}
+        try { sendSocket.send('?'); } catch(e) {}
+    }, 100);
     msgold = "***";
 };
 
@@ -843,7 +1102,12 @@ var _engineOnMessage = function(event) {
         }
     }
     // Fine movimento manuale: spegni subito il blu del LED Motore
-    if (msg === '*mv' || msg === '*mabort') window._motorMovingUntil = 0;
+    if (msg === '*mv' || msg === '*mabort') {
+        window._motorMovingUntil = 0;
+        // durante il moto il firmware scarta le letture richieste: quella
+        // eventualmente rimasta "in volo" non tornerà, si può richiedere subito
+        _sensoreHaRisposto();
+    }
 
     // STOP software confermato dal firmware (movimento interrotto a metà) — REL-03
     if (msg === '*mabort') {
@@ -898,6 +1162,7 @@ var _engineOnMessage = function(event) {
         autoScanActive = false;
         if (wasAborted) {
             startflag = 0;
+            labms = 0;   // uno Zero virtuale interrotto non resta "armato" per la scansione dopo
             if (window.cammesScanProgress) window.cammesScanProgress.set(0, currentMode.totalSteps, 0);
             if (scanEta) scanEta.stop();
             var smA = document.getElementById('scanMode');   if (smA) smA.disabled = false;
@@ -907,6 +1172,13 @@ var _engineOnMessage = function(event) {
             window._scanFaulted = false;
         } else if (startflag === 1 && i < currentMode.totalSteps) {
             startflag = 0;
+            labms = 0;
+            // come per l'interruzione: i due selettori tornano usabili (restavano
+            // spenti fino al ricaricamento) e l'avanzamento non resta a metà
+            if (window.cammesScanProgress) window.cammesScanProgress.set(0, currentMode.totalSteps, 0);
+            if (scanEta) scanEta.stop();
+            var smI = document.getElementById('scanMode');   if (smI) smI.disabled = false;
+            var rsI = document.getElementById('scanRepeat'); if (rsI) rsI.disabled = false;
             if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Scansione incompleta',
                 body: 'Il firmware ha chiuso a ' + i + '/' + currentMode.totalSteps + ' campioni.', duration: 6000 });
         }
@@ -945,6 +1217,7 @@ var _engineOnMessage = function(event) {
     // l'auto-stop (scansione completata piena di zeri, visto al banco).
     if (isNumericMeasure) {
         lastSensorAnyRx = Date.now();
+        _sensoreHaRisposto();   // il firmware ha servito una lettura: la prossima può partire
         var nChk = Number(msg);
         if (msg !== 'NaN' && nChk >= 0 && nChk < 32) {
             lastSensorRx = Date.now();
@@ -1017,50 +1290,24 @@ var _engineOnMessage = function(event) {
             // quindi l'allarme copre anche il motore Firmware — prima viveva
             // solo nel ramo '*se' che lo scan autonomo non emette mai.
             checkEncoderDivergence();
-            // Bin angolare 1..360 (grado camma reale). Se subStepsPerDeg>1 aggreghiamo
-            // più letture nello stesso bin con media filtrata di NaN.
-            var deg = Math.floor((i - 1) / currentMode.subStepsPerDeg) + 1;
-            if (deg < 1) deg = 1;
-            if (deg > 360) deg = 360;
-            var v = Number(msg);
-            if (currentMode.subStepsPerDeg <= 1) {
-                // AUDIT MET-01: una lettura invalida NON scrive il bin (prima
-                // ci finiva 0). Il grado resta senza dato e viene conteggiato
-                // come mancante a fine giro e al salvataggio.
-                if (isFinite(v)) {
-                    pdindex[deg] = deg;
-                    pdata[deg]   = v;
-                }
-            } else {
-                if (!subBuffer[deg]) subBuffer[deg] = [];
-                if (!isNaN(v)) subBuffer[deg].push(v);
-                if (subBuffer[deg].length >= currentMode.subStepsPerDeg) {
-                    var sum = 0;
-                    for (var k = 0; k < subBuffer[deg].length; k++) sum += subBuffer[deg][k];
-                    pdindex[deg] = deg;
-                    pdata[deg]   = sum / subBuffer[deg].length;
-                }
-            }
-            // Tracking massimo (su valore corrente del bin, anche se non ancora chiuso)
-            var currentBinVal = (currentMode.subStepsPerDeg <= 1) ? pdata[deg]
-                                : (subBuffer[deg] ? subBuffer[deg].reduce(function(a,b){return a+b;}, 0)/subBuffer[deg].length : 0);
-            if (currentBinVal > max) {
-                max = currentBinVal;
-                maxg = deg;
-                // Memorizza la posizione encoder REALE al momento del picco.
-                // È il riferimento usato dal 0 virtuale per calcolare il
-                // sfasamento di +180° in coordinate angolari assolute.
-                if (msgEncoder !== null) maxg_encoder = msgEncoder;
-            }
+            // Dal campione al grado (1..360): lo fa _registraCampione, che scrive
+            // pdata/pdindex e aggiorna massimo ed encoder del picco. Con una
+            // lettura per grado il grado È la lettura; con più letture per grado
+            // (Race) è una media CENTRATA sul grado, non più sulle due letture
+            // precedenti (che la spostavano di un quarto di grado).
+            // AUDIT MET-01: una lettura invalida non scrive niente: il grado
+            // resta senza dato e viene contato come mancante a fine giro.
+            var gradiChiusi = _registraCampione(i, Number(msg), msgEncoder);
             // Formato compatto: i 7 spazi fissi di prima spingevano il valore
             // mm (il dato più importante) fuori dal campo → troncato (foto banco).
             document.mas.mas.value = " max " + maxg + " gradi  " + max.toFixed(3) + " mm";
 
-            // Update Chart.js solo quando un bin si chiude (evita lag a 11520 punti)
-            if (currentMode.subStepsPerDeg <= 1 ||
-                (subBuffer[deg] && subBuffer[deg].length === currentMode.subStepsPerDeg)) {
-                config.data.labels.push(deg);
-                config.data.datasets.forEach(function(dataset){ dataset.data.push(pdata[deg]); });
+            // Update Chart.js solo quando un grado si chiude
+            if (gradiChiusi.length) {
+                gradiChiusi.forEach(function (dC) {
+                    config.data.labels.push(dC);
+                    config.data.datasets.forEach(function(dataset){ dataset.data.push(pdata[dC]); });
+                });
                 window.myLine.update();
             }
         }
@@ -1232,6 +1479,7 @@ var _engineOnMessage = function(event) {
                     });
                     setTimeout(function(){ location.reload(true); }, 1200);
                 } else {
+                    _assicuraConfigBanco();   // '$±N' presuppone i micropassi di questa modalità
                     sendSocket.send(zv.cmd + '\n');
                     oldg = Math.abs(zv.units);
                     var stepEl = document.getElementById("step");
@@ -1281,10 +1529,17 @@ fetch('/api/firmware-info').then(function (r) { return r.json(); })
 
 <script>
 var i = 0;
-function start() {
+function start(daZeroVirtuale) {
     // AUDIT MOT-02: un secondo START a scansione attiva riazzerava pdata e
     // l'indice mescolando lo stream in arrivo → misura corrotta in silenzio.
     if (_scanBusy('Un nuovo START')) return;
+    // "Zero virtuale in corso" (labms) lo arma SOLO ms(), che chiama start(true).
+    // Ogni altro avvio lo disarma: START, verifica banco. Prima un Zero virtuale
+    // che non partiva (comparatore non pronto) o che finiva male lasciava labms
+    // a 1, e la scansione NORMALE successiva si chiudeva con lo spostamento di
+    // zero e il ricaricamento della pagina: motore che si muove senza che
+    // nessuno lo abbia chiesto, misura appena fatta persa.
+    if (!daZeroVirtuale && typeof labms !== 'undefined') labms = 0;
     if (!_wsReady()) {
         if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Server non connesso',
             body: 'Avvia cammes_server.js e collega l’Arduino prima di scansionare.', duration: 4500 });
@@ -1422,8 +1677,11 @@ function _showRepeatedRunsStats() {
         window.cammesToast({
             kind: kind, title: Nused + '/' + N + ' run in media &middot; ripetibilit&agrave; ' + verdict,
             body: 'Picco medio <b>' + maxAvg.toFixed(3) + ' mm</b> a <b>' + maxAvgDeg +
-                  '&deg;</b> &middot; &sigma; max <b>' + maxStd.toFixed(3) + ' mm</b> @ ' + maxStdDeg +
-                  '&deg; &middot; CV max <b>' + maxCv.toFixed(2) + '%</b>',
+                  // il grado della sigma massima esiste solo se una sigma c'è: con i
+                  // run identici usciva "@ 0°", un grado che sulla camma non esiste
+                  '&deg;</b> &middot; &sigma; max <b>' + maxStd.toFixed(3) + ' mm</b>' +
+                  (maxStd > 0 && maxStdDeg >= 1 ? ' @ ' + maxStdDeg + '&deg;' : '') +
+                  ' &middot; CV max <b>' + maxCv.toFixed(2) + '%</b>',
             duration: 9000
         });
     }
@@ -1437,7 +1695,7 @@ function _startSingleRun(firstRun) {
     var sm = document.getElementById('scanMode'); if (sm) sm.disabled = true;
     i = 0;
     consecutiveNaN = 0;
-    subBuffer = {};
+    subVal = []; subEnc = [];
     pdata.length = 0; pdindex.length = 0;
     max = 0; maxg = 0; maxg_encoder = null;
     window._lastRepeatStats = null;   // le statistiche valgono solo per il run corrente
@@ -1460,6 +1718,8 @@ function _startSingleRun(firstRun) {
         autoScanActive = true; _autoLastIdx = 0; _autoGapWarned = false;
         i = 0;
         document.imp2.imp2.value = "gradi 0.00";
+        // il numero di passi che segue vale solo coi micropassi di QUESTA modalità
+        _assicuraConfigBanco();
         sendSocket.send('S' + (rsign == 1 ? '-' : '+') + currentMode.totalSteps + '\n');
         // Guardia firmware vecchio: nessun campione in 6 s → fallback
         // AUTOMATICO al metodo classico e scansione riavviata da capo.
@@ -1478,6 +1738,7 @@ function _startSingleRun(firstRun) {
     } else {
         i = i + 1;
         document.imp2.imp2.value = "gradi " + (i / currentMode.subStepsPerDeg).toFixed(2);
+        _assicuraConfigBanco();   // anche il passo 'p'/'q' dipende dai micropassi della modalità
         if (rsign == 1) { sendSocket.send('p'); }
         if (rsign == -1) { sendSocket.send('q'); }
     }
@@ -1527,6 +1788,15 @@ function stop() {
     if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1) {
         try { sendSocket.send('x'); } catch (e) {}
     }
+    _fermaScansioneLocale();
+    if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Scansione interrotta', body: 'I dati parziali non sono stati salvati.', duration: 3000 });
+}
+
+// La parte di STOP che riguarda SOLO questa pagina: nessun byte verso il banco.
+// Serve a parte perché un avvio rifiutato dal server va annullato qui senza
+// mandare 'x' — il moto eventualmente in corso è di un altro client, e fermarlo
+// sarebbe sbagliato (vedi _annullaAvvioRifiutato).
+function _fermaScansioneLocale() {
     // AUDIT MOT-01: cancella TUTTI i timer di scansione armati (riavvio run
     // ripetuto, fallback firmware) e invalida il generation token — senza
     // questo il motore poteva ripartire da solo ~8 s dopo lo STOP.
@@ -1545,7 +1815,6 @@ function stop() {
     repeatedRuns = [];
     if (scanEta) scanEta.stop();
     if (window.cammesScanProgress) window.cammesScanProgress.reset();
-    if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Scansione interrotta', body: 'I dati parziali non sono stati salvati.', duration: 3000 });
 }
 
 // AUDIT MOT-02: guardia unica per i comandi incompatibili con una scansione
@@ -1800,6 +2069,7 @@ function ruota() {
         if (rsign == -1) { crot = "$-" + (dif); }
     }
     if (dg - oldg != 0) {
+        _assicuraConfigBanco();   // i gradi richiesti valgono solo coi micropassi di questa modalità
         sendSocket.send(crot + '\n');
         // LED Motore blu "in movimento" per la durata stimata della rotazione
         // (≈4 ms/grado a passo pieno + margine); spento in anticipo da *mv/*mabort.
@@ -1827,12 +2097,11 @@ function ms() {
             body: 'Lo Zero virtuale richiede server e Arduino attivi.', duration: 4500 });
         return;
     }
-    // Ferma SUBITO i polling: la coda WebSocket deve essere libera
-    // quando il blocco di fine 0V invierà '$+units'. Senza questo,
-    // i 'm' di polling accodati possono ritardare la trasmissione del
-    // comando finale oltre il momento del location.reload().
-    clearInterval(pollSensorId);
-    clearInterval(pollEncoderId);
+    // I polling NON si spengono qui (lo si faceva con clearInterval, e chi li
+    // riaccendeva era solo il ricaricamento finale: vedi pollAttivo). Tacciono
+    // da soli per tutta la scansione (startflag) e durante lo spostamento
+    // finale (_waiting_mv), cioè proprio quando la coda WebSocket deve restare
+    // libera per il comando '$' di fine Zero virtuale.
     // Disabilita selector modalità: cambiare modalità in mezzo alla
     // scansione cambierebbe currentMode.subStepsPerDeg e farebbe
     // calcolare un 'units' sbagliato a fine scansione.
@@ -1843,7 +2112,14 @@ function ms() {
     maxg = 0;
     document.mas.mas.value = " max " + maxg + " gradi  " + max.toFixed(3) + " mm";
     reset();
-    start();
+    start(true);
+    // start() può rifiutarsi di partire (comparatore non pronto, server
+    // scollegato): in quel caso lo Zero virtuale NON è in corso e non deve
+    // restare armato, né lasciare spento il selettore della modalità.
+    if (startflag !== 1) {
+        labms = 0;
+        if (sm) sm.disabled = false;
+    }
 }
 </script>
 
@@ -1878,8 +2154,9 @@ function toggleMotorFree() {
                 try { sendSocket.send('?'); } catch (e) {}
         }, 200);
         pollFreeSensorId = setInterval(function () {
-            if (sendSocket && sendSocket.readyState === 1)
-                try { sendSocket.send('m'); } catch (e) {}
+            // stesso freno del polling normale: a 10 richieste al secondo il
+            // comparatore (un frame ogni ~0,1 s) è al limite anche da sano
+            if (sendSocket && sendSocket.readyState === 1) _chiediSensore();
         }, 100);
 
         showLiveTrace(true);
@@ -1902,18 +2179,7 @@ function toggleMotorFree() {
         try { clearInterval(pollFreeSensorId);  } catch (e) {}
         pollFreeEncoderId = null;
         pollFreeSensorId  = null;
-        pollEncoderId = setInterval(function () {
-            if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1
-                && (typeof startflag === 'undefined' || startflag !== 1)) {
-                try { sendSocket.send('?'); } catch (e) {}
-            }
-        }, 5000);
-        pollSensorId = setInterval(function () {
-            if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1
-                && (typeof startflag === 'undefined' || startflag !== 1)) {
-                try { sendSocket.send('m'); } catch (e) {}
-            }
-        }, 200);
+        _avviaPollNormale();
 
         if (window.cammesToast) window.cammesToast({
             kind: 'success', title: 'Motore bloccato',
@@ -2066,6 +2332,7 @@ function gotoSavedPosition(label) {
         return;
     }
     var cmd = '$' + sign + pad + '\n';
+    _assicuraConfigBanco();   // le unità calcolate qui sopra presuppongono questa modalità
     try { sendSocket.send(cmd); } catch (e) {}
     if (window.cammesToast) window.cammesToast({
         kind: 'info', title: 'Vado a ' + p.label,

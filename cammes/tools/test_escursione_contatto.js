@@ -8,7 +8,7 @@
 //
 //  L'avviso "Bicchiere troppo piccolo" derivava la curva SBAGLIATA: l'alzata
 //  del PUNTALINO (follower radiale) invece di quella del piattello. Misurato
-//  sulla Peugeot 106 col suo bicchiere reale (Ø29):
+//  sulla camma RIF-3 col suo bicchiere reale (Ø29):
 //      dalla curva puntalino  19,28 mm  ->  avrebbe detto "mancano 4,78 mm"
 //      dalla curva piattello  15,08 mm  ->  ne mancano 0,58
 //  Un allarme gonfiato di otto volte su un accoppiamento che e' solo al limite.
@@ -34,7 +34,6 @@ function derivMax(a) {
 }
 function leggi(rel) {
     var p = path.join(__dirname, 'fixtures', rel);
-    if (!fs.existsSync(p)) p = path.join(__dirname, '..', 'prove', rel);
     return fs.existsSync(p) ? M.parseCamFile(fs.readFileSync(p, 'utf8')) : null;
 }
 
@@ -76,17 +75,17 @@ check('e quella del puntalino e la MAGGIORE (l allarme si gonfiava)',
 //  Un criterio giusto deve dare, su motori di serie, un margine POSITIVO e
 //  ragionevole rispetto al bicchiere che quei motori montano davvero.
 console.log('--- controprova sui motori veri ---');
-var VW = [['VW-kr1_8-ASP_alz.scr', 32.64, 'asp'], ['VW-kr1_8-SC_alz.scr', 34.25, 'sca']];
-VW.forEach(function (c) {
+var RIF2 = [['rif2_asp_alz.scr', 32.64, 'asp'], ['rif2_sca_alz.scr', 34.25, 'sca']];
+RIF2.forEach(function (c) {
     var raw = leggi(c[0]);
     if (!raw) { console.log('        (fixture ' + c[0] + ' assente, salto)'); return; }
-    var f2 = M.convertPuntToBicchiere(raw, c[1] / 2, 35, 1.5);   // bicchiere reale della VW: 35
+    var f2 = M.convertPuntToBicchiere(raw, c[1] / 2, 35, 1.5);   // bicchiere reale della camma RIF-2: 35
     var margine = 17.5 - f2.escursioneContatto;
-    console.log('        VW ' + c[2] + ': escursione ' + f2.escursioneContatto.toFixed(2) +
+    console.log('        RIF-2 ' + c[2] + ': escursione ' + f2.escursioneContatto.toFixed(2) +
                 ' mm, bicchiere reale Ø35 (raggio 17,50) -> margine ' + margine.toFixed(2) + ' mm');
-    check('VW ' + c[2] + ': il bicchiere reale del motore risulta SUFFICIENTE',
+    check('RIF-2 ' + c[2] + ': il bicchiere reale del motore risulta SUFFICIENTE',
         margine > 0, 'margine ' + margine.toFixed(2) + ' mm');
-    check('VW ' + c[2] + ': e il margine e ragionevole, non al pelo',
+    check('RIF-2 ' + c[2] + ': e il margine e ragionevole, non al pelo',
         margine > 1 && margine < 8, margine.toFixed(2) + ' mm');
 });
 

@@ -118,7 +118,7 @@ function runTests() {
         ['privato: /package.json → 404', '/package.json', null, 404],
         ['privato: /node_modules/ws/package.json → 404', '/node_modules/ws/package.json', null, 404],
         ['privato: /fw/master.ino.hex → 404', '/fw/master.ino.hex', null, 404],
-        ['privato: /prove/qualcosa.scr → 404', '/prove/clio1_8_alz.scr', null, 404],
+        ['privato: /prove/qualcosa.scr → 404', '/prove/qualcosa_alz.scr', null, 404],
         ['traversal: /lib/../cammes.log → 404', '/lib/../cammes.log', null, 404],
         ['DNS-rebinding: Host evil.com → 403', '/', { Host: 'evil.com' }, 403],
         ['DNS-rebinding: Host evil.com:3210 → 403', '/alzata.html', { Host: 'evil.com:3210' }, 403],

@@ -1,17 +1,17 @@
-# REPORT TECNICO — Camme VW 1.8 16V "KR" (mod. 257a / 257s)
+# REPORT TECNICO — Camma RIF-2
 
-**Data:** 2026-07-05 · **Software:** CAMMES v3.0.0 · **File scansioni:** `prove/VW-kr1_8-ASP_alz.scr`, `prove/VW-kr1_8-SC_alz.scr`
+**Data:** 2026-07-05 · **Software:** CAMMES v3.0.0 · **File scansioni:** `tools/fixtures/rif2_asp_alz.scr`, `tools/fixtures/rif2_sca_alz.scr`
 
 ---
 
 ## 1. Oggetto e fonti dei dati
 
-Coppia di alberi a camme per VW 1.8 16V KR (rettifica Motor Rettifica, mod. **257a** aspirazione / **257s** scarico). Follower reale: **bicchiere meccanico Ø35 mm**. Cerchio base, **diametro** misurato al calibro: **32,64 mm** (asp) / **34,25 mm** (sca) — quindi raggio 16,32 / 17,13. Confermato dal proprietario il 2026-07-26: la versione precedente di questa riga li dichiarava come RAGGI, ed è da lì che l'errore si è propagato al tooltip del campo. Controprova geometrica: un cerchio base di raggio 32,64 avrebbe diametro 65,3 mm, quasi il doppio del bicchiere Ø35 che ci scorre sopra.
+Coppia di alberi a camme RIF-2, per un motore a 4 valvole per cilindro (rettificati: profilo di aspirazione / di scarico del rettificatore). Follower reale: **bicchiere meccanico Ø35 mm**. Cerchio base, **diametro** misurato al calibro: **32,64 mm** (asp) / **34,25 mm** (sca) — quindi raggio 16,32 / 17,13. Confermato dal proprietario il 2026-07-26: la versione precedente di questa riga li dichiarava come RAGGI, ed è da lì che l'errore si è propagato al tooltip del campo. Controprova geometrica: un cerchio base di raggio 32,64 avrebbe diametro 65,3 mm, quasi il doppio del bicchiere Ø35 che ci scorre sopra.
 
 | # | Fonte | Metodo | Data |
 |---|-------|--------|------|
 | A | Scansione CAMMES | puntalino sferico + conversione bicchiere Ø35 + corr. baseline | 2026-06-13 |
-| B | Scheda rettificatore | banco Motor Rettifica | (consegna camme) |
+| B | Scheda rettificatore | banco del rettificatore | (consegna camme) |
 | C | Rilievo al motore n°1 | goniometro + comparatori sul motore montato | 2026-06-14 |
 | D | Rilievo al motore n°2 | goniometro + comparatori sul motore montato | 2026-07-05 |
 
@@ -19,7 +19,7 @@ Coppia di alberi a camme per VW 1.8 16V KR (rettifica Motor Rettifica, mod. **25
 
 ## 2. Riepilogo misure per fonte
 
-### Aspirazione (257a) — gioco 0,30 mm
+### Aspirazione — gioco 0,30 mm
 
 | Grandezza | A · Scansione | B · Scheda | C · Rilievo 1 | D · Rilievo 2 |
 |---|---|---|---|---|
@@ -28,7 +28,7 @@ Coppia di alberi a camme per VW 1.8 16V KR (rettifica Motor Rettifica, mod. **25
 | Alzata al PMS [mm] | 2,08 @105° ⁽²⁾ | 3,5 | 3,20 | 3,50 |
 | Centro lobo installato [° ATDC] | — | 105 (calettamento) | ~104 | ~102 |
 
-### Scarico (257s) — gioco 0,40 mm (rilievo 2) / 0,25 (scheda)
+### Scarico — gioco 0,40 mm (rilievo 2) / 0,25 (scheda)
 
 | Grandezza | A · Scansione | B · Scheda | C · Rilievo 1 | D · Rilievo 2 |
 |---|---|---|---|---|
@@ -95,12 +95,12 @@ Sensibilità empirica dai tuoi stessi rilievi: **≈0,13–0,15 mm per grado di 
 | Correzione baseline/eccentricità | Attiva: fondo scarico 0,22→0,05 mm (eccentricità di montaggio ~±0,08-0,21 mm nell'acquisizione originale) |
 | Alzata al PMS scansione vs motore | **Causa individuata il 2026-07-28: cerchio base inserito come RAGGIO quando era il DIAMETRO** (vedi sotto) |
 | Ipotesi slittamento stepper | **ESCLUSA sperimentalmente** (banco 07-05: divergenza passi↔encoder 1° su 360°, zero backlash) |
-| Ripetibilità scanner | RMS 0,074 mm su ri-scansione a 2 mesi (camma Clio) |
-| Prossimo passo | **CHIUSO per indisponibilità della camma (2026-08-02)**: la ri-scansione non è più possibile. La compensazione del puntalino è stata confermata su un'altra strada — la 106 letta col puntalino r1,5 e col piattello Ø33 fisico, previsione entro 0,065 mm RMS (`cammes/tools/validate_106_piattello.js`) |
+| Ripetibilità scanner | RMS 0,074 mm su ri-scansione a 2 mesi (camma RIF-1) |
+| Prossimo passo | **CHIUSO per indisponibilità della camma (2026-08-02)**: la ri-scansione non è più possibile. La compensazione del puntalino è stata confermata su un'altra strada — la camma RIF-3 letta col puntalino r1,5 e col piattello Ø33 fisico, previsione entro 0,065 mm RMS (`cammes/tools/validate_rif3_piattello.js`) |
 
 ### 5.1 La "sottostima del 35%" era un errore di unità nel nostro dato d'ingresso
 
-Il 2026-07-28, riscrivendo `cammes/tools/validate_vw.js`, si è visto che passava
+Il 2026-07-28, riscrivendo `cammes/tools/validate_rif2.js`, si è visto che passava
 32,64 e 34,25 alla conversione a bicchiere **come raggio del cerchio base**, mentre
 sono i **diametri** misurati al calibro: il raggio vero è 16,32 / 17,13. Lo stesso
 errore che questo report conteneva nella sua prima versione (§1), e da cui si era
@@ -137,16 +137,16 @@ dentro la banda**; resta fuori la sua **durata, di 10°**, contro 18° di prima.
 > **(b)** resta un errore nella correzione — contro cui depone l'oracolo esatto,
 > che chiude a 1 µm su quattro geometrie e due raggi di punta, e il fatto che il
 > rumore di misura non la sbilancia (a ±4 µm il bias è +0,2 µm).
-> **AGGIORNAMENTO 2026-08-02: la camma VW non è più disponibile**, quindi la
+> **AGGIORNAMENTO 2026-08-02: la camma RIF-2 non è più disponibile**, quindi la
 > ri-scansione (B.4) non è più possibile e la questione non si chiude su questo
 > albero. La conferma è arrivata da un'altra strada, migliore: sul banco la
-> **Peugeot 106 aspirazione è stata misurata due volte, col puntalino r 1,5 e
+> **RIF-3 aspirazione è stata misurata due volte, col puntalino r 1,5 e
 > col piattello Ø33 fisico**. Prevedendo la seconda dalla prima:
 > formula precedente **RMS 0,309 mm**, nessuna compensazione **0,170 mm**,
 > inversa esatta **0,065 mm**. Due strumenti indipendenti, stesso lobo, nessuna
 > scheda di mezzo e nessun dubbio sull'usura: **la correzione è giusta**, e il
-> residuo VW resta attribuibile all'albero, non al calcolo.
-> (`cammes/tools/validate_106_piattello.js`)
+> residuo RIF-2 resta attribuibile all'albero, non al calcolo.
+> (`cammes/tools/validate_rif3_piattello.js`)
 
 Quindi: lo scanner non sottostimava il medio-fianco di un terzo. Restava un errore
 di unità nel parametro che noi gli davamo. Il residuo dell'aspirazione (+10%, e in
@@ -156,7 +156,7 @@ per attribuirlo servirebbe la ri-scansione, che su questo albero non è più pos
 cambiato **verso**: le ipotesi costruite su "lo scanner sotto-misura il fianco" non
 servono più a spiegarlo.
 
-**Quanto è sensibile il risultato a questo parametro** (misurato sulla Clio):
+**Quanto è sensibile il risultato a questo parametro** (misurato sulla RIF-1):
 passare da rBase 16,5 a 19 sposta la curva convertita di **0,122 mm RMS**, cioè 2,7
 volte l'accordo che la validazione fisica del 2026-07-11 aveva ottenuto col
 piattello Ø33 (0,046 mm). Il cerchio base non è un parametro che si possa sbagliare
@@ -164,10 +164,10 @@ senza conseguenze.
 
 *Nota su un argomento che NON va usato:* si era scritto qui che un cerchio base di
 raggio 32,64 (Ø65,3) sarebbe "impossibile" sotto un bicchiere Ø35. È vero che per un
-1.8 16V un albero con lobi da Ø65 non entra in testa — ma è un argomento di
+motore di media cilindrata a 4 valvole per cilindro un albero con lobi da Ø65 non entra in testa — ma è un argomento di
 **plausibilità sulla classe di motore, non una legge geometrica**: un follower piatto
 non richiede di essere più grande del cerchio base, gli basta contenere l'escursione
-del punto di contatto (max |dL/dφ|; sulla Clio 13,18 mm, per cui un Ø33 basta
+del punto di contatto (max |dL/dφ|; sulla RIF-1 13,18 mm, per cui un Ø33 basta
 qualunque sia il cerchio base). La prova del diametro sono la conferma diretta del
 proprietario e l'accordo con le tre fonti indipendenti qui sopra.
 
@@ -183,4 +183,4 @@ Il programma ora chiede il **diametro** nel campo del cerchio base, e un test
 3. **Per un'erogazione da 4000 rpm in su, la proposta 106/108 è tecnicamente fondata** (chiusura aspirazione ritardata + blowdown anticipato + LSA 107): adottala regolando per **alzata al PMS ≈ 2,90 mm (asp, gioco 0,30) e ≈ 2,40 mm (sca, gioco 0,40)**, un passo per volta, con verifica del gioco valvola-pistone.
 
 ---
-*Report generato da CAMMES v3.0.0 — dati: scansioni in `prove/`, rilievi operatore, scheda Motor Rettifica. La sensibilità 0,13-0,15 mm/° e i target del §4.2 derivano dai rilievi al motore (non dalla scansione).*
+*Report generato da CAMMES v3.0.0 — dati: scansioni in `tools/fixtures/`, rilievi operatore, scheda del rettificatore. La sensibilità 0,13-0,15 mm/° e i target del §4.2 derivano dai rilievi al motore (non dalla scansione).*

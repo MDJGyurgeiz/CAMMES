@@ -31,8 +31,8 @@ console.log('=============================================================');
 console.log(' VALVE FLOAT — regressione audit DYN-01 (perdita di contatto)');
 console.log('=============================================================');
 
-var vw = M.parseCamFile(fs.readFileSync(path.join(__dirname, 'fixtures', 'VW-kr1_8-ASP_alz.scr'), 'utf8'));
-var crank = M.mapCamToCrank(vw, 106, 0.0, 'intake');
+var rif2 = M.parseCamFile(fs.readFileSync(path.join(__dirname, 'fixtures', 'rif2_asp_alz.scr'), 'utf8'));
+var crank = M.mapCamToCrank(rif2, 106, 0.0, 'intake');
 
 function floatAt(rpm, params) {
     var v = M.simulateCompliance(crank, rpm, params || {});

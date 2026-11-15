@@ -137,7 +137,7 @@ check('il toast della mappa non dice "zona sicura" senza il numero',
 // ---------------------------------------------------------------
 //  L'analisi principale contava la durata con soglia 0,05 su curve LATO
 //  VALVOLA (rapporto bilanciere applicato); il confronto A vs B usava 0,001 su
-//  curve lasciate LATO CAMMA. Misurato sullo stesso file (Clio, angolo 110,
+//  curve lasciate LATO CAMMA. Misurato sullo stesso file (camma RIF-1, angolo 110,
 //  gioco 0,20): bilanciere 1,0 -> 236 gradi contro 239; bilanciere 1,5 -> 242
 //  gradi e picco 12,58 mm contro 247 gradi e 8,39 mm. Il gioco veniva diviso
 //  per il rapporto ma il rapporto non veniva mai riapplicato alla curva.

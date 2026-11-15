@@ -19,7 +19,7 @@
 //  di aspirazione, scarico E incrocio insieme: restano tre corone grigie.
 //  E' esattamente il sintomo riferito.
 //
-//  Misurato nel browser sui dati VW KR (ASP 319,63/284,02/116,35):
+//  Misurato nel browser sui dati della camma RIF-2 (ASP 319,63/284,02/116,35):
 //  dopo il click i totali degli anelli passano da 720 a 436,0 / 438,9 / 641,7.
 //
 //  Aggravante: generateLabels non imposta 'hidden', quindi la voce non viene
@@ -78,7 +78,7 @@ check('e il gestore non fa niente (e una didascalia)',
 console.log('');
 console.log('--- perche era rotto: il conto del predefinito Chart.js ---');
 
-// dati veri della VW KR: [chiuso, aperto, chiuso] per i tre anelli
+// dati veri della RIF-2: [chiuso, aperto, chiuso] per i tre anelli
 var ANELLI = {
     aspirazione: [319.63, 284.02, 116.35],
     scarico:     [116.79, 281.10, 322.11],

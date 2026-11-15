@@ -138,10 +138,11 @@ check('e non passa piu dal surge',
 // ---------------------------------------------------------------
 // 5. Auto-tag — indovinava la marca dai numeri nel nome file
 // ---------------------------------------------------------------
-//  Misurato: `r19_16v_alz.scr` (Renault 19 16V, motore comunissimo) veniva
-//  etichettato `yamaha`, perche' il pattern delle moto `\br[1-9]` pesca "r1"
-//  dentro "r19". E i tag vengono STAMPATI sul PDF della singola misura, quindi
-//  una marca indovinata arriva al cliente.
+//  Misurato: un file con una sigla e dei numeri nel nome (un motore d'auto
+//  comunissimo) veniva etichettato con una marca di moto, perche' il pattern
+//  delle moto `\br[1-9]` pesca la "r" e la prima cifra di quella sigla. E i tag
+//  vengono STAMPATI sul PDF della singola misura, quindi una marca indovinata
+//  arriva al cliente.
 //  Non si perde nulla: il tag veniva al 100% dal nome file, che e' gia'
 //  ricercabile a testo libero. Il tagging manuale resta.
 console.log('--- auto-tag (indovinava la marca dai numeri del nome) ---');

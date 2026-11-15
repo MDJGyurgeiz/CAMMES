@@ -261,6 +261,32 @@ check('la legenda non promette piu un "vuoto"',
 check('e la sua pastiglia porta il colore vero, non il trasparente',
     !/text: 'Grigio = valvola chiusa'[\s\S]{0,120}rgba\(0,0,0,0\)/.test(HTML));
 
+// ---------- segni doppi e gradi che non esistono (verifica del 2026-11-14) ----------
+//  Visti a schermo provando le pagine una per una:
+//    - Confronto A/B, riquadro "Area asp.": un calo usciva "+-13.3 %", perche'
+//      il '+' era scritto fisso davanti a un numero che il segno lo porta gia';
+//    - Ripetizioni, con run identici: "sigma max 0.000 mm @ 0°". Il grado 0 non
+//      esiste sulla camma: era il valore iniziale della variabile, mai assegnata
+//      perche' nessuna sigma superava zero.
+console.log('--- un segno solo, e nessun grado inventato ---');
+var corpoChip = /chipHTML\('Area asp\.',([\s\S]*?)\n/.exec(HTML);
+check('il riquadro "Area asp." del confronto A/B esiste', !!corpoChip);
+if (corpoChip) {
+    var espr = corpoChip[1].replace(/,\s*$/, '');
+    function testoArea(delta) { return vm.runInNewContext(espr, { dAreaPctIn: delta }); }
+    check('un calo si legge col solo segno meno', testoArea(-13.3) === '-13.3 %', JSON.stringify(testoArea(-13.3)));
+    check('un aumento col piu', testoArea(4.2) === '+4.2 %', JSON.stringify(testoArea(4.2)));
+}
+// (ALZATA è già stata letta più sopra, per il fumetto delle Ripetizioni)
+var pezzoSigma =/&sigma; max <b>' \+ maxStd\.toFixed\(3\) \+ ' mm<\/b>'([\s\S]*?)' &middot; CV max/.exec(ALZATA);
+check('la notifica di ripetibilita compone la sigma massima', !!pezzoSigma);
+if (pezzoSigma) {
+    var esprS = "'' " + pezzoSigma[1].replace(/\/\/[^\n]*\n/g, '\n') + " ''";
+    function testoSigma(s, d) { return vm.runInNewContext(esprS, { maxStd: s, maxStdDeg: d }); }
+    check('con sigma nulla non stampa nessun grado', testoSigma(0, 0).indexOf('@') < 0, JSON.stringify(testoSigma(0, 0)));
+    check('con una sigma vera stampa il suo grado', /@ 143/.test(testoSigma(0.012, 143)), JSON.stringify(testoSigma(0.012, 143)));
+}
+
 console.log('');
 if (fails) { console.log('RISULTATO: ' + fails + ' FALLITI\n'); process.exit(1); }
 console.log('VALIDATO: le etichette verificate descrivono il calcolo che il');

@@ -5,7 +5,7 @@
 //  LASCIAVA ATTIVA la conversione. L'operatore vede sparire i controlli e
 //  conclude di aver disattivato la funzione, mentre continua a lavorare.
 //
-//  Misurato al browser sulla camma VW KR reale (bicchiere 35, cerchio base
+//  Misurato al browser sulla camma RIF-2 reale (bicchiere 35, cerchio base
 //  32,6): con il modulo spento l'alzata al PMS restava 4,023 mm invece dei
 //  1,033 mm del puntalino grezzo. 2,99 mm di scarto su un lobo da 10,64 — e
 //  l'alzata al PMS finisce STAMPATA sulla scheda camma.

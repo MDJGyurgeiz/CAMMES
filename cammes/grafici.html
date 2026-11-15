@@ -124,7 +124,7 @@
 
             <div style="margin-top:10px;">
                 <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Collaudo su profilo nominale
-                    <span class="help-icon" data-tip="<strong>Collaudo PASS/FAIL</strong>Carica il profilo <b>nominale</b> (di progetto o di una camma nuova) e imposta la tolleranza: ogni curva caricata sopra viene confrontata punto-punto (dopo allineamento automatico al picco) e giudicata <b>CONFORME</b> o <b>NON CONFORME</b>. La banda grigia sul grafico mostra nominale &plusmn; tolleranza." tabindex="0">?</span>
+                    <span class="help-icon" data-tip="<strong>Collaudo: conforme o non conforme</strong>Carica il profilo <b>nominale</b> (di progetto o di una camma nuova) e scrivi la tolleranza, per esempio 0,05. Ogni misura caricata sopra viene fatta combaciare col nominale &mdash; si giudica la <b>forma</b> del profilo, non la fase &mdash; e confrontata grado per grado: <b>CONFORME</b> se lo scarto massimo resta entro la tolleranza, altrimenti <b>NON CONFORME</b>. La riga del verdetto dice lo scarto, a che grado, e di quanto la curva &egrave; stata riallineata. La banda grigia sul grafico mostra nominale &plusmn; tolleranza." tabindex="0">?</span>
                 </div>
                 <div class="flex items-center gap-8">
                     <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;">Nominale:</label>
@@ -132,7 +132,7 @@
                 </div>
                 <div class="flex items-center gap-8 mt-8">
                     <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;">Tolleranza &plusmn;</label>
-                    <input type="text" id="tolMm" class="input" style="width:64px;" value="0.10" onchange="evalNominal();">
+                    <input type="text" id="tolMm" class="input" style="width:64px;" value="0,10" onchange="evalNominal();">
                     <span style="font-size:13px;color:var(--text-muted);">mm</span>
                     <button class="btn btn-secondary btn-sm" onclick="evalNominal();" data-tip="<strong>Rivaluta</strong>Ricalcola i verdetti (da usare dopo aver caricato altre curve).">&#8635; Rivaluta</button>
                 </div>
@@ -521,6 +521,22 @@ function loadNominal() {
     fr.readAsText(input.files[0]);
 }
 
+// La tolleranza, letta come la scrive chi sta al banco. Prima era
+// Number(valore) || 0.10: "0,05" con la virgola — come nel manuale e negli altri
+// campi del programma — non e' un numero per Number(), quindi il verdetto usciva
+// con ±0,10 SENZA DIRLO. Chi chiedeva ±0,05 poteva leggere CONFORME su un pezzo
+// fuori di 0,08 mm. Ora la virgola vale, e un valore non valido (vuoto, zero,
+// negativo, testo) non diventa un altro numero: il campo viene segnalato e il
+// verdetto non si emette.
+function _tolleranzaCollaudo() {
+    var el = document.getElementById('tolMm');
+    var r = validaNumero(el ? el.value : '', { min: 0, minEsclusivo: true });
+    if (!r.ok && el && window.cammesValidate) {
+        window.cammesValidate.error(el, 'Tolleranza non valida: scrivi un numero maggiore di zero, per esempio 0,05.');
+    }
+    return r;
+}
+
 function evalNominal() {
     var box = document.getElementById('verdictBox');
     if (!_nominal) { if (box) box.innerHTML = ''; return; }
@@ -533,28 +549,46 @@ function evalNominal() {
         if (box) box.innerHTML = '<div style="font-size:13px;color:var(--danger,#e74c3c);font-weight:700;">&#9888; NON VALUTABILE — profilo nominale: ' + (window.cammesEscape ? window.cammesEscape(_nomGate.reason) : _nomGate.reason) + '. Carica un nominale completo e pulito (360 gradi) per il collaudo.</div>';
         // banda comunque disegnata sotto, ma nessun verdetto certificabile
     }
-    var tol = Math.abs(Number(document.getElementById('tolMm').value)) || 0.10;
+    var tolR = _tolleranzaCollaudo();
+    var tolOk = tolR.ok, tol = tolOk ? tolR.valore : NaN;
     if (!window.myLine) return;
     var ds = window.myLine.data.datasets;
     // labels: se il nominale arriva prima di qualunque curva, crea l'asse
     if (!window.myLine.data.labels.length) for (var L = 1; L <= 360; L++) window.myLine.data.labels.push(L);
 
-    // banda nominale ± tol: allineata alla PRIMA curva caricata (o shift 0)
-    var firstMeas = null;
-    for (var k = 0; k < 4; k++) if (ds[k] && ds[k].data.length) { firstMeas = ds[k].data; break; }
-    var bandShift = firstMeas ? _alignShift(firstMeas) : 0;
-    var plus = [], minus = [];
-    for (var d = 1; d <= 360; d++) { var nv = _nomAt(bandShift, d); plus.push(nv + tol); minus.push(Math.max(0, nv - tol)); }
+    // LE MISURE SI LEGGONO DAGLI SLOT (window._cmpData), MAI DAL GRAFICO. I dati
+    // del grafico sono cio' che e' DISEGNATO: in vista "Differenza" sono le
+    // differenze dalla prima curva. Leggendoli, premere Rivaluta in quella vista
+    // giudicava le differenze: ogni curva diventava NON CONFORME con scarti di
+    // millimetri, e il verdetto sbagliato restava anche tornando a "Sovrapposto".
+    var inDifferenza = ((document.getElementById('viewMode') || {}).value === 'diff');
+    var misure = [];
+    for (var k = 0; k < 4; k++) misure.push((window._cmpData && window._cmpData[k + 1]) || null);
+    var prima = null;
+    for (var k2 = 0; k2 < 4; k2++) if (misure[k2]) { prima = misure[k2]; break; }
+
+    // banda nominale ± tolleranza, allineata alla PRIMA curva caricata. In vista
+    // Differenza non si disegna: starebbe alla quota dell'alzata in mezzo a
+    // differenze di decimi, e schiaccerebbe la scala. Il verdetto resta scritto.
     while (ds.length < 6) ds.push({});
-    ds[4] = { label: 'Nominale +' + tol, data: plus,  borderColor: 'rgba(140,140,140,0.7)', borderDash: [5, 4], borderWidth: 1, pointRadius: 0, fill: false, tension: 0 };
-    ds[5] = { label: 'Nominale -' + tol, data: minus, borderColor: 'rgba(140,140,140,0.7)', borderDash: [5, 4], borderWidth: 1, pointRadius: 0, fill: '-1', backgroundColor: 'rgba(140,140,140,0.12)', tension: 0 };
+    if (tolOk && !inDifferenza) {
+        var primaDisegno = [];
+        if (prima) for (var dp = 1; dp <= 360; dp++) primaDisegno.push(prima[dp]);
+        var bandShift = prima ? _alignShift(primaDisegno) : 0;
+        var plus = [], minus = [];
+        for (var d = 1; d <= 360; d++) { var nv = _nomAt(bandShift, d); plus.push(nv + tol); minus.push(Math.max(0, nv - tol)); }
+        ds[4] = { label: 'Nominale +' + tol, data: plus,  borderColor: 'rgba(140,140,140,0.7)', borderDash: [5, 4], borderWidth: 1, pointRadius: 0, fill: false, tension: 0 };
+        ds[5] = { label: 'Nominale -' + tol, data: minus, borderColor: 'rgba(140,140,140,0.7)', borderDash: [5, 4], borderWidth: 1, pointRadius: 0, fill: '-1', backgroundColor: 'rgba(140,140,140,0.12)', tension: 0 };
+    } else {
+        ds[4] = {}; ds[5] = {};
+    }
     window.myLine.update('none');
 
     // verdetto per ogni curva caricata (ognuna col PROPRIO allineamento)
     var nominalOk = _nomGate.ok;   // DATA-04: gate unico, non solo missingCount
     var rows = '';
     for (var c = 0; c < 4; c++) {
-        if (!ds[c] || !ds[c].data.length) continue;
+        if (!misure[c]) continue;
         var name = (document.getElementById('lb' + (c + 1)) || {}).textContent || ('grafico' + (c + 1));
         // SEC-03: name è il nome file (arbitrario) riletto da lb1..4 — escapato.
         var safeName = window.cammesEscape ? window.cammesEscape(name) : name.replace(/[&<>]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]; });
@@ -571,19 +605,32 @@ function evalNominal() {
                 '<span style="color:var(--text-muted);">' + why + '</span></div>';
             continue;
         }
-        var sh = _alignShift(ds[c].data);
-        var maxDev = 0, maxDeg = 0;
-        for (var d3 = 1; d3 <= 360; d3++) {
-            var mv2 = Number(ds[c].data[d3 - 1]); if (!isFinite(mv2)) continue;
-            var dev = Math.abs(mv2 - _nomAt(sh, d3));
-            if (dev > maxDev) { maxDev = dev; maxDeg = d3; }
+        // Scarto a FORMA ALLINEATA (lib/cammes-math.js: scartoDalNominale). Il
+        // collaudo giudica il profilo, non la fase: l'allineamento e' a frazioni
+        // di grado, perche' a gradi interi una camma identica al nominale ma
+        // partita mezzo grado piu' in la' usciva NON CONFORME (0,12-0,17 mm sui
+        // fianchi). Lo spostamento usato si DICHIARA nella riga.
+        var sc = scartoDalNominale(camC, _nominal);
+        var maxDev = sc.scartoMax, maxDeg = sc.gradoScartoMax;
+        // una riga, un solo modo di scrivere i numeri (la virgola, come nel campo);
+        // il grado dello scarto si scrive solo se uno scarto c'e'
+        var dettaglio = 'scarto max ' + maxDev.toFixed(3).replace('.', ',') + ' mm' + (maxDev > 0 && maxDeg >= 1 ? ' a ' + maxDeg + '&deg;' : '') +
+            (sc.spostamento ? ' &middot; riallineata di ' + (sc.spostamento > 0 ? '+' : '') + String(sc.spostamento).replace('.', ',') + '&deg;' : '');
+        if (!tolOk) {
+            // senza una tolleranza valida non c'e' giudizio, ma il numero misurato resta
+            rows += '<div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;">' +
+                '<span style="font-weight:700;color:var(--warn,orange);">&#9888; TOLLERANZA NON VALIDA</span>' +
+                '<span style="flex:1;">' + safeName + '</span>' +
+                '<span style="color:var(--text-muted);">' + dettaglio + ' &middot; verdetto non emesso</span></div>';
+            continue;
         }
         var pass = maxDev <= tol;
+        var tolTxt = (tol < 1 ? tol.toFixed(3).replace(/0$/, '') : String(tol)).replace('.', ',');   // 0,05  0,10  0,125
         rows += '<div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;">' +
             '<span style="font-weight:700;color:' + (pass ? 'var(--success, #2ecc71)' : 'var(--danger, #e74c3c)') + ';">' +
             (pass ? '&#10003; CONFORME' : '&#10007; NON CONFORME') + '</span>' +
             '<span style="flex:1;">' + safeName + '</span>' +
-            '<span style="color:var(--text-muted);">max ' + maxDev.toFixed(3) + ' mm @ ' + maxDeg + '&deg;</span></div>';
+            '<span style="color:var(--text-muted);">' + (pass ? 'entro' : 'fuori da') + ' &plusmn;' + tolTxt + ' mm &middot; ' + dettaglio + '</span></div>';
     }
     if (box && rows) box.innerHTML = rows;
     else if (box && !box.innerHTML) box.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">Carica almeno una curva misurata qui sopra per avere il verdetto.</div>';

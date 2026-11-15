@@ -1,16 +1,16 @@
 // CAMPAGNA DI BANCO riutilizzabile: 5 scansioni con reset a 180° dal picco.
-// (nata per il test Clio puntalino-vs-piattello del 2026-07-11)
+// (nata per il test puntalino-vs-piattello sulla camma RIF-1 del 2026-07-11)
 //   uso:  node bench_campaign.js punt      (fase 1: puntalino montato)
 //         node bench_campaign.js bicch33   (fase 2: piattello Ø33 montato)
 // Esegue: sanity → scan di localizzazione → reset picco@+180° → 5 scansioni
 // (fast ×2, autonoma ×2, mediata c3 ×1) con reset verificato prima di ognuna.
-// Salva prove/cliobench_<fase>_<nome>_alz.scr + JSON completo in scratchpad.
+// Salva prove/bench_<fase>_<nome>_alz.scr + JSON completo in scratchpad.
 var fs = require('fs'), path = require('path');
 var { SerialPort } = require(path.join(__dirname, '..', 'node_modules', 'serialport'));
 
 var PHASE = process.argv[2];
-if (!PHASE || !/^[A-Za-z0-9_-]{1,24}$/.test(PHASE)) { console.log('uso: node bench_campaign.js <etichetta>  (es. punt, bicch33, vw-asp)'); process.exit(1); }
-var OUT_JSON = 'C:/jvmtmp/claude/H--Il-mio-Drive-Public-Progetti-IoT-cammes/60e1258e-4763-45dd-baf8-21a107d47e37/scratchpad/clio_' + PHASE + '.json';
+if (!PHASE || !/^[A-Za-z0-9_-]{1,24}$/.test(PHASE)) { console.log('uso: node bench_campaign.js <etichetta>  (es. punt, bicch33, rif2-asp)'); process.exit(1); }
+var OUT_JSON = 'C:/jvmtmp/claude/H--Il-mio-Drive-Public-Progetti-IoT-cammes/60e1258e-4763-45dd-baf8-21a107d47e37/scratchpad/bench_' + PHASE + '.json';
 
 var port = null, buf = '', lines = [], kick = null;
 async function openPort() {
@@ -192,7 +192,7 @@ async function resetTo180(encPeak) {
         await setCfg(['c1', 'w30']);
         await resetTo180(encPeak);
         fs.writeFileSync(OUT_JSON, JSON.stringify(R));
-        console.log('\nFASE ' + PHASE + ' COMPLETATA. 5 scansioni salvate (cliobench_' + PHASE + '_*). Camma lasciata a 180° dal picco (cerchio base).');
+        console.log('\nFASE ' + PHASE + ' COMPLETATA. 5 scansioni salvate (bench_' + PHASE + '_*). Camma lasciata a 180° dal picco (cerchio base).');
         clearInterval(kick); port.close(function () { process.exit(0); });
     } catch (err) {
         console.log('ERRORE: ' + err.message);

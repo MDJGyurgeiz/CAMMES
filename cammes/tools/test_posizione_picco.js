@@ -42,7 +42,7 @@ function check(label, cond, detail) {
     if (!cond) fails++;
 }
 function leggiScr(nome) {
-    var txt = fs.readFileSync(path.join(__dirname, '..', 'prove', nome), 'utf8');
+    var txt = fs.readFileSync(path.join(__dirname, 'fixtures', nome), 'utf8');
     var out = new Array(361);
     for (var i = 0; i <= 360; i++) out[i] = 0;
     txt.split(/\r?\n/).forEach(function (r) {
@@ -67,9 +67,9 @@ function argmaxCrank(a) {
     return i0 - 360;
 }
 var CAMME = [
-    { nome: 'VW asp', file: 'VW-kr1_8-ASP_alz.scr' },
-    { nome: 'Clio', file: 'clio1_8_alz.scr' },
-    { nome: 'test_v31', file: 'test_v31_fw_alz.scr' }
+    { nome: 'camma RIF-2 asp', file: 'rif2_asp_alz.scr' },
+    { nome: 'camma RIF-1', file: 'rif1_alz.scr' },
+    { nome: 'prova_fw31', file: 'prova_fw31_alz.scr' }
 ];
 CAMME.forEach(function (c) {
     var L = leggiScr(c.file);

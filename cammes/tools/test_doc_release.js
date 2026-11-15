@@ -194,6 +194,57 @@ console.log('--- la versione firmware nei documenti e quella vera ---');
 })();
 
 // ---------------------------------------------------------------
+// 4-ter. Manuale e PROTOCOL descrivono il programma di OGGI (verifica 2026-11-14)
+// ---------------------------------------------------------------
+// Il manuale operatore viaggia dentro l'exe (Home -> Manuale). Diceva ancora
+// "inserisci diametro e RAGGIO base" quando il campo chiede il DIAMETRO dal
+// 2026-07-28: e' esattamente l'errore di inserimento che aveva falsato il
+// confronto con la scheda del rettificatore. Citava anche un "LED Sensore" e un
+// selettore "Motore scansione" che non esistono piu'. E PROTOCOL.md affermava
+// che l'ACK non porta run=, contro quello che il firmware stampa.
+console.log('--- manuale e PROTOCOL descrivono il programma di oggi ---');
+(function () {
+    var manuale = leggi('MANUALE_OPERATORE.md') || '';
+    var alzata = fs.readFileSync(path.join(CAMMES, 'alzata.html'), 'utf8');
+    var analisi = fs.readFileSync(path.join(CAMMES, 'analisi.html'), 'utf8');
+    var server = fs.readFileSync(path.join(CAMMES, 'cammes_server.js'), 'utf8');
+    var fw = fs.readFileSync(path.join(CAMMES, '..', 'master', 'master.ino'), 'utf8');
+    var proto = leggi('PROTOCOL.md') || '';
+    var m;
+
+    check('il campo del cerchio base, nella pagina, e un DIAMETRO',
+        /id="diamBase"/.test(analisi) && !/id="rBase"/.test(analisi));
+    check('...e il manuale chiede il diametro, non il raggio',
+        /diametro del cerchio base/i.test(manuale) && !/\braggio base\b/i.test(manuale),
+        (/[^.|]*raggio base[^.|]*/i.exec(manuale) || [''])[0].trim().slice(0, 90));
+
+    var ledPagina = [], reLed = /class="status-led" data-tip="<strong>([^<]+)<\/strong>/g;
+    while ((m = reLed.exec(alzata)) !== null) ledPagina.push(m[1]);
+    var ledManuale = (manuale.match(/LED [A-Z][a-z]+/g) || []).map(function (s) { return s.slice(4); });
+    var ledInesistenti = ledManuale.filter(function (n) { return ledPagina.indexOf(n) < 0; });
+    check('la pagina ha i suoi LED di stato', ledPagina.length === 4, ledPagina.join(', '));
+    check('ogni LED nominato nel manuale esiste con quel nome',
+        ledManuale.length > 0 && ledInesistenti.length === 0, ledInesistenti.join(', ') || ledManuale.length + ' citazioni');
+
+    check('il manuale non rimanda a comandi ritirati (selettore "Motore scansione")', !/Motore scansione/i.test(manuale));
+    var nCodice = /var NAN_TO_AUTOSTOP\s*=\s*(\d+)/.exec(alzata), nManuale = /(\d+) letture invalide consecutive/.exec(manuale);
+    check('le letture invalide che fermano la scansione sono quelle del codice',
+        !!nCodice && !!nManuale && nCodice[1] === nManuale[1], (nCodice || [])[1] + ' nel codice, ' + (nManuale || [])[1] + ' nel manuale');
+
+    check('il firmware stampa run= nell ACK che accetta uno SCAN',
+        /F\("ACK "\)\);[^\n]*F\(" state=SCANNING run="\)/.test(fw));
+    check('...e PROTOCOL lo riporta cosi',
+        /ACK \d+ state=SCANNING run=\d+/.test(proto) && !/\(l'ACK NON porta run=\)/.test(proto));
+
+    var mandati = {}, reCtl = /'#ctl:([a-z]+)/g;
+    while ((m = reCtl.exec(server)) !== null) mandati[m[1]] = 1;
+    var nonDocumentati = Object.keys(mandati).filter(function (k) { return proto.indexOf('#ctl:' + k) < 0; });
+    check('ogni messaggio di ruolo che il server manda e documentato in PROTOCOL',
+        Object.keys(mandati).length >= 6 && nonDocumentati.length === 0,
+        nonDocumentati.join(', ') || Object.keys(mandati).sort().join(', '));
+})();
+
+// ---------------------------------------------------------------
 // 5. Ogni file di test citato deve esistere davvero
 // ---------------------------------------------------------------
 console.log('--- i test citati in "npm test" esistono ---');

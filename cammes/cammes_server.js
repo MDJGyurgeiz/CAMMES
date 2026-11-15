@@ -1362,9 +1362,57 @@ function parseFrame(raw) {
 // secondo client poteva prendere il lease e comandare mentre lo STOP del
 // predecessore era ancora in volo.
 var _stopPendingUntil = 0;
+var _stopPendingTimer = null;
 var STOP_SETTLE_MS = 4000;
+
+// QUANDO SERVE DAVVERO LA FINESTRA. Il criterio originale era solo "attività di
+// scansione negli ultimi 5 s": prudente, ma cieco su una cosa che il server sa
+// benissimo — se il movimento è già FINITO. Dopo lo Zero virtuale la pagina si
+// ricarica appena riceve '*mv': il server ha visto quel terminale, nessun altro
+// comando di moto è partito, il motore è fermo. Aprire lo stesso la finestra
+// voleva dire rifiutare per 4 secondi la pagina appena ricaricata (sul banco:
+// 24 rifiuti in 4 s, log 2026-08-02 13:37:24) per aspettare un arresto che era
+// già avvenuto.
+//
+// Si ragiona sull'ORDINE degli eventi, non sugli orari: due righe nello stesso
+// millisecondo hanno comunque un prima e un dopo. Il banco è "fermo di certo"
+// solo se l'ultima cosa vista è un terminale di moto, arrivato DOPO l'ultimo
+// comando di moto inoltrato e DOPO l'ultimo campione. In ogni altro caso
+// (campioni senza terminale, comando partito dopo il terminale, comando
+// rifiutato che un terminale non lo avrà mai) vale il criterio di prima.
+var _evSeq = 0;
+var _seqMotoCmd = 0;     // ultimo comando di MOTO inoltrato alla seriale
+var _seqMotoTerm = 0;    // ultimo terminale di moto arrivato dal firmware
+var _seqCampione = 0;    // ultima riga di attività di scansione
+function isMotionCommand(msg) {
+    var c = msg.charAt(0);
+    if (c === 'p' || c === 'q' || c === '$' || c === 'S' || c === 't') return true;
+    var m4 = msg.match(/^\d{1,6} ([A-Z_]+)/);
+    return !!(m4 && (m4[1] === 'SCAN' || m4[1] === 'MOVE' || m4[1] === 'TONE'));
+}
+function bancoFermoDiCerto() {
+    return _seqMotoTerm > 0 && _seqMotoTerm > _seqMotoCmd && _seqMotoTerm > _seqCampione;
+}
+function stopWindowActive() { return !!_stopPendingUntil && Date.now() < _stopPendingUntil; }
+function openStopWindow() {
+    _stopPendingUntil = Date.now() + STOP_SETTLE_MS;
+    if (_stopPendingTimer) clearTimeout(_stopPendingTimer);
+    // La finestra deve FINIRE da sé e dirlo: prima scadeva in silenzio, e un
+    // client rifiutato non aveva modo di sapere quando riprovare.
+    _stopPendingTimer = setTimeout(function () { closeStopWindow('tempo di guardia scaduto'); }, STOP_SETTLE_MS + 25);
+    if (_stopPendingTimer.unref) _stopPendingTimer.unref();
+}
+function closeStopWindow(why) {
+    if (_stopPendingTimer) { clearTimeout(_stopPendingTimer); _stopPendingTimer = null; }
+    if (!_stopPendingUntil) return;
+    _stopPendingUntil = 0;
+    log('WS', 'Finestra di arresto chiusa (' + why + ')');
+    // L'annuncio vale solo se il banco è davvero assegnabile: se nel frattempo
+    // qualcuno ha preso il comando, agli altri "libero" sarebbe una bugia.
+    if (!controller) wsBroadcast('#ctl:free');
+}
 function grantLease(ws) {
-    if (_stopPendingUntil && Date.now() < _stopPendingUntil) {
+    if (stopWindowActive()) {
         // Il MOTIVO viaggia col rifiuto: senza, il client non può distinguere
         // "c'è un altro che comanda" da "sto ancora fermando il moto di prima",
         // e finiva per dire all'operatore di chiudere una finestra che non
@@ -1393,12 +1441,19 @@ function releaseLease(reason) {
         log.warn('WS', 'Controllore perso (' + reason + ') → STOP inviato alla seriale');
         // CTRL-02: se c'era un run bridge attivo o attività di scan recente, il
         // moto potrebbe essere ancora in decelerazione: blocca il takeover
-        // finché non arriva il terminale (o il timeout di guardia).
-        if (v4ActiveRun >= 0 || (Date.now() - lastScanActivity) < 5000) {
-            _stopPendingUntil = Date.now() + STOP_SETTLE_MS;
+        // finché non arriva il terminale (o il timeout di guardia). Non serve
+        // se il firmware ha già detto che il movimento è finito (vedi sopra).
+        if (v4ActiveRun >= 0 || ((Date.now() - lastScanActivity) < 5000 && !bancoFermoDiCerto())) {
+            openStopWindow();
         }
     }
-    wsBroadcast('#ctl:released ' + reason);
+    // A chi resta collegato si dice la verità del momento: "libero" se lo è,
+    // "aspetta" se il banco si sta ancora fermando — in quel caso "libero"
+    // arriva dopo, da closeStopWindow. Prima usciva sempre '#ctl:released', che
+    // le pagine leggono come "puoi comandare", seguito da 4 s di rifiuti.
+    // Formato additivo: una pagina vecchia ignora '#ctl:wait' e resta com'era
+    // finché non arriva '#ctl:free'.
+    wsBroadcast(stopWindowActive() ? '#ctl:wait stop-in-corso' : '#ctl:released ' + reason);
 }
 
 // AUDIT SEC-08: rate limiter a finestra fissa di 1 s per connessione. Refill
@@ -1426,7 +1481,12 @@ wsServer.on('connection', function (ws) {
     wsClients.push(ws);
     log('WS', 'Client #' + ws._id + ' connesso (' + wsClients.length + ' totali)');
     // Comunica il ruolo iniziale: se c'è già un controllore, questo è observer.
-    try { ws.send(controller ? '#ctl:observer' : '#ctl:free'); } catch (e) {}
+    // Durante la finestra di arresto non è né l'uno né l'altro: il banco non è
+    // di nessuno ma non è ancora assegnabile. Dire "libero" qui era il primo
+    // anello della catena che lasciava la pagina ricaricata in sola lettura.
+    try {
+        ws.send(controller ? '#ctl:observer' : (stopWindowActive() ? '#ctl:wait stop-in-corso' : '#ctl:free'));
+    } catch (e) {}
     // AUDIT CTRL-02: snapshot di stato al collegamento — il client parte dallo
     // stato REALE del device, non da una previsione locale. Formato additivo
     // '#ctl:info ...': i client v3 che non lo conoscono lo ignorano.
@@ -1491,7 +1551,15 @@ wsServer.on('connection', function (ws) {
         // Comandi di controllo/moto: serve il lease. Il primo che ne manda uno
         // (senza controllore attivo) lo acquisisce; gli altri sono respinti.
         if (isControlCommand(fr.canonical)) {
-            if (!controller) grantLease(ws);
+            // UN COMANDO, UNA RISPOSTA. Se il lease non è assegnabile perché il
+            // banco si sta fermando, grantLease lo ha già detto col motivo vero
+            // ('stop-in-corso') e qui ci si ferma. Prima si proseguiva nel ramo
+            // sotto, che aggiungeva 'occupato': due rifiuti per lo stesso
+            // comando, il secondo falso — e la pagina credeva al secondo.
+            if (!controller && !grantLease(ws)) {
+                log.debug('CMD', 'Comando da #' + ws._id + ' RIFIUTATO (arresto in corso): "' + fr.canonical.trim() + '"');
+                return;
+            }
             if (controller !== ws) {
                 // 'occupato' = c'e' davvero un altro client che comanda.
                 // Distinto da 'stop-in-corso' (vedi grantLease): il messaggio
@@ -1506,6 +1574,9 @@ wsServer.on('connection', function (ws) {
         // Con fw v4 lo scan-start "S±N" viene tradotto in "SCAN run=..." (bridge).
         if (serialPort && serialPort.isOpen) {
             var outCmd = bridgeOutgoing(fr.canonical);
+            // un comando di moto è partito: finché non arriva il suo terminale
+            // il banco NON è "fermo di certo" (vedi bancoFermoDiCerto)
+            if (isMotionCommand(fr.canonical)) _seqMotoCmd = ++_evSeq;
             serialPort.write(outCmd, function (err) {
                 if (err) log.error('SERIAL', 'Errore invio: ' + err.message);
             });
@@ -1708,11 +1779,15 @@ function processSerialLine(line) {
     if (sm) { deviceState = sm[1]; deviceStateAt = Date.now(); }
     // Un terminale di moto chiude la finestra STOPPING (takeover di nuovo lecito)
     if (/^(\*mabort|\*sabort|\*sdone|\*mv)$/.test(line) || /^EVT (STOPPED|DONE|FAULT)\b/.test(line)) {
-        _stopPendingUntil = 0;
+        _seqMotoTerm = ++_evSeq;
+        closeStopWindow('terminale dal firmware');   // e lo annuncia a chi aspetta
     }
     // Attività di scansione: righe streaming '#i:...' (autonomo),
     // ack misura '*se' (classico) o 'EVT SAMPLE' (v4) → guardia anti-flash
-    if (line.charAt(0) === '#' || line === '*se' || line.indexOf('EVT SAMPLE') === 0) lastScanActivity = Date.now();
+    if (line.charAt(0) === '#' || line === '*se' || line.indexOf('EVT SAMPLE') === 0) {
+        lastScanActivity = Date.now();
+        _seqCampione = ++_evSeq;
+    }
     // Fase 2: traduci gli EVT v4 nel formato v3 della UI (bridge).
     // Con fw legacy bridgeIncoming ritorna [line] invariata.
     var outLines = bridgeIncoming(line);

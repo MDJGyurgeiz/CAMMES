@@ -41,13 +41,13 @@ console.log('=============================================================');
 
 // ---------- MAT-01: centri a mezzo grado ----------
 console.log('\n--- MAT-01: mapCamToCrank con centri frazionari ---');
-var vwAsp = M.parseCamFile(fs.readFileSync(path.join(__dirname, 'fixtures', 'VW-kr1_8-ASP_alz.scr'), 'utf8'));
-var rawMax = maxOf(vwAsp, 1, 360);
+var rif2Asp = M.parseCamFile(fs.readFileSync(path.join(__dirname, 'fixtures', 'rif2_asp_alz.scr'), 'utf8'));
+var rawMax = maxOf(rif2Asp, 1, 360);
 
 var angles = [106, 106.5, 107, 108.5];
 for (var a = 0; a < angles.length; a++) {
     var ang = angles[a];
-    var crank = M.mapCamToCrank(vwAsp, ang, 0, 'intake');
+    var crank = M.mapCamToCrank(rif2Asp, ang, 0, 'intake');
     var fracKeys = Object.keys(crank).filter(function (k) {
         return isFinite(+k) && !Number.isInteger(+k);
     }).length;
@@ -59,8 +59,8 @@ for (var a = 0; a < angles.length; a++) {
     check('centro ' + ang + '° → 720 slot tutti finiti', allFinite);
 }
 // La curva a 106.5° deve avere estensione simile a 106° (non collassare)
-var c106  = M.mapCamToCrank(vwAsp, 106, 0, 'intake');
-var c1065 = M.mapCamToCrank(vwAsp, 106.5, 0, 'intake');
+var c106  = M.mapCamToCrank(rif2Asp, 106, 0, 'intake');
+var c1065 = M.mapCamToCrank(rif2Asp, 106.5, 0, 'intake');
 check('106.5° → estensione lobo simile a 106° (±6 slot)', Math.abs(positives(c1065) - positives(c106)) <= 6,
       positives(c1065) + ' vs ' + positives(c106) + ' slot positivi');
 
@@ -129,10 +129,10 @@ check('riga "2,NaN" → grado 2 non coperto', pNaN.validCount === 2 && pNaN.cove
       'valid ' + pNaN.validCount);
 
 // (4) file completo reale → copertura piena, nessuna regressione
-var pFull = M.parseCamFile(fs.readFileSync(path.join(__dirname, 'fixtures', 'VW-kr1_8-ASP_alz.scr'), 'utf8'));
-check('fixture VW → validCount 360, missingCount 0', pFull.validCount === 360 && pFull.missingCount === 0,
+var pFull = M.parseCamFile(fs.readFileSync(path.join(__dirname, 'fixtures', 'rif2_asp_alz.scr'), 'utf8'));
+check('fixture camma RIF-2 → validCount 360, missingCount 0', pFull.validCount === 360 && pFull.missingCount === 0,
       'valid ' + pFull.validCount + ', missing ' + pFull.missingCount);
-check('fixture VW → valori intatti (picco 11.24)', Math.abs(maxOf(pFull, 1, 360) - 11.24) < 0.01);
+check('fixture RIF-2 → valori intatti (picco 11.24)', Math.abs(maxOf(pFull, 1, 360) - 11.24) < 0.01);
 
 console.log('');
 if (fails > 0) {

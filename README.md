@@ -2,7 +2,7 @@
 
 Sistema completo per misurare e analizzare i profili degli alberi a camme: hardware (Arduino Uno + stepper + encoder + comparatore), server PC (Node.js, distribuito come `.exe` standalone offline) e interfaccia web.
 
-**Versione corrente: v3.7.0** (firmware Arduino **4.1**, protocollo seriale v4) — la versione in esecuzione è mostrata in basso a destra in ogni pagina; il controllo aggiornamenti è automatico (GitHub Releases).
+**Versione corrente: v3.7.1** (firmware Arduino **4.1**, protocollo seriale v4) — la versione in esecuzione è mostrata in basso a destra in ogni pagina; il controllo aggiornamenti è automatico (GitHub Releases).
 
 > Per l'uso quotidiano in officina vedi **[MANUALE_OPERATORE.md](MANUALE_OPERATORE.md)** (1 pagina).
 
@@ -46,7 +46,7 @@ CAMMES/
 │   ├── lib/cammes-math.js        #   LIBRERIA MATEMATICA (usata da browser E test node)
 │   ├── lib/                      #   Chart.js v4, plugin zoom, hammer
 │   ├── tools/                    #   test regressione + validazioni (npm test)
-│   │   └── fixtures/             #   file di riferimento dei test (Clio, VW)
+│   │   └── fixtures/             #   file di riferimento dei test (camme RIF-1, RIF-2)
 │   ├── fw/                       #   firmware precompilato (.hex) + avrdude per il flash in-app
 │   ├── prove/                    #   archivio misure .scr (con cestino .trash/, 30 gg)
 │   └── package.json              #   deps: ws, serialport · dev: eslint, pkg
@@ -120,7 +120,7 @@ Scarica `cammes.exe` dall'ultima **GitHub Release** e avvialo: **un solo file, a
 cd cammes
 npm install
 npm start          :: server su :3000 + WS :8080
-npm test           :: 53 suite di regressione/validazione (il totale dei check lo stampa la suite)
+npm test           :: 60 suite di regressione/validazione (il totale dei check lo stampa la suite)
 npm run lint       :: eslint su server + moduli + tools
 npm run build      :: genera cammes.exe (pkg, node18-win-x64)
 ```
@@ -136,8 +136,8 @@ Il modo più semplice: **Home → Sistema & aggiornamenti → ⚡ Aggiorna firmw
 ## Qualità e test
 
 - **`lib/cammes-math.js`**: tutta la matematica (conversioni follower con compensazione puntalino sferico, baseline/eccentricità, mappatura camma→albero, derivate nel dominio camma, compliance 1/2/3-DOF) vive in un'unica libreria usata sia dal browser sia dai test node.
-- **`npm test`**: versione, follower, 3-DOF, carico molla richiesto, rimozioni, moduli spenti, baseline, misura affidabile (MAT-01/MET-01/02), fase&segni (MAT-02/03/04), confine di rete (SEC-01/02), robustezza server (SEC-05/06/07), valve float (DYN-01), fisica dell audit v3.4.3 (P1-04/06/09), validazione numerica dei campi (P1-12), Reset completo (P2-02), coerenza dei documenti di release (P2-13), validazione di PLAUSIBILITÀ su camme **Renault Clio 1.8 16V** e **VW KR 1.8 16V** reali (confronto con schede/misure di riferimento) e validazione FISICA sulla **Peugeot 106** (stessa camma letta col puntalino r1,5 e col piattello Ø33: previsione entro 0,065 mm RMS — non certificazione metrologica).
-- Correzioni metrologiche documentate nel CHANGELOG (compensazione puntalino sferico a offset normale, alzata al PMS riferita al picco misurato, raggio base per lato, baseline 1ª armonica).
+- **`npm test`**: neutralità dei testi (nessun nome di auto o motore davanti all'operatore), ruolo dei client dopo un arresto, Zero virtuale interrotto, modalità di scansione e ritmo del polling, bin della modalità Race, versione, follower, 3-DOF, carico molla richiesto, rimozioni, moduli spenti, baseline, misura affidabile (MAT-01/MET-01/02), fase&segni (MAT-02/03/04), confine di rete (SEC-01/02), robustezza server (SEC-05/06/07), valve float (DYN-01), fisica dell audit v3.4.3 (P1-04/06/09), validazione numerica dei campi (P1-12), Reset completo (P2-02), coerenza dei documenti di release (P2-13), validazione di PLAUSIBILITÀ su camme reali **RIF-1** e **RIF-2** (confronto con schede/misure di riferimento) e validazione FISICA sulla **RIF-3** (stessa camma letta col puntalino r1,5 e col piattello Ø33: previsione entro 0,065 mm RMS — non certificazione metrologica).
+- Correzioni metrologiche documentate nel CHANGELOG (compensazione puntalino sferico a offset normale, alzata al PMS riferita al picco misurato, cerchio base per lato (si inserisce il diametro), baseline 1ª armonica).
 
 ## Sincronizzazione
 
