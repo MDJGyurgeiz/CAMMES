@@ -281,7 +281,7 @@
                 </div>
                 <input type="file" id="fileIntake" class="file-input" style="width:100%;" accept=".scr,.txt,.csv,.*">
                 <div class="param-row">
-                    <span class="param-label">Tipologia <span class="help-icon" data-tip="<strong>Tipo di treno valvole</strong>Determina il rapporto di trasmissione tra alzata camma e alzata valvola. <b>Bicchiere meccanico/idraulico</b>: rapporto 1:1. <b>Aste+bilancere</b>: tipicamente 1.4-1.6:1. <b>Finger follower</b>: ~1.5-1.8:1. <b>Bilancere a rullo</b>: ~1.3-1.7:1.">?</span></span>
+                    <span class="param-label">Tipologia <span class="help-icon" data-tip="<strong>Tipo di comando valvola</strong>Serve a <b>descrivere</b> il comando valvola sul referto e nel CSV: <b>non cambia i conti</b>, con una sola eccezione, <b>Bicchiere idraulico</b>, che porta il gioco a 0. Il rapporto fra alzata camma e alzata valvola si scrive nel campo <b>Bilanciere asp.</b> (vista Avanzato): a 1,00 l'alzata valvola &egrave; uguale a quella della camma, qualunque tipologia sia scelta qui. La forma della punteria (bicchiere, rullo, leva) la simula il modulo <b>Follower simulato</b>, in &#9881; Funzioni.">?</span></span>
                     <select id="intakeType" class="input" style="width:160px;" onchange="onTypologyChange('intake');">
                         <option value="bucket_mech" selected>Bicchiere meccanico</option>
                         <option value="bucket_hyd">Bicchiere idraulico</option>
@@ -313,7 +313,7 @@
                 </div>
                 <input type="file" id="fileExhaust" class="file-input" style="width:100%;" accept=".scr,.txt,.csv,.*">
                 <div class="param-row">
-                    <span class="param-label">Tipologia <span class="help-icon" data-tip="<strong>Tipo treno valvole scarico</strong>Stessa logica della tipologia aspirazione.">?</span></span>
+                    <span class="param-label">Tipologia <span class="help-icon" data-tip="<strong>Tipo di comando valvola, scarico</strong>Come per l'aspirazione: &egrave; la dicitura del referto e del CSV e <b>non cambia i conti</b> (tranne Bicchiere idraulico, che porta il gioco a 0). Il rapporto si scrive in <b>Bilanciere scar.</b> (vista Avanzato), la forma della punteria nel modulo <b>Follower simulato</b>.">?</span></span>
                     <select id="exhaustType" class="input" style="width:160px;" onchange="onTypologyChange('exhaust');">
                         <option value="bucket_mech" selected>Bicchiere meccanico</option>
                         <option value="bucket_hyd">Bicchiere idraulico</option>
@@ -545,7 +545,7 @@
             <!-- Action buttons -->
             <div class="flex gap-8" style="margin-top:16px;">
                 <button class="btn btn-success" id="analyzeBtn" onclick="analyze();" style="flex:1;" data-tip="<strong>Esegui analisi</strong>Calcola durata, LSA, centri lobi, velocit&agrave; e accelerazione, forze inerziali, limite di distacco valvola. Risultati nella sezione 'Risultati Analisi' sotto. Servono <b>entrambi</b> i file, aspirazione E scarico: l'analisi correla i due lobi (LSA, centri, incrocio), quindi con uno solo si ferma.">&#9654; Analizza</button>
-                <button class="btn btn-secondary" onclick="resetAll();" data-tip="<strong>Reset analisi</strong>Cancella i dati importati e i risultati. I parametri di configurazione restano.">&#8634; Reset</button>
+                <button class="btn btn-secondary" onclick="resetAll();" data-tip="<strong>Reset analisi</strong>Cancella i dati importati e i risultati, e riporta <b>tutti i parametri</b> ai valori di partenza (da confermare di nuovo). Non chiede conferma.">&#8634; Reset</button>
             </div>
             <!-- AUDIT APP-01: avviso analisi non aggiornata (parametri di curva cambiati) -->
             <div id="analysisStaleBanner" style="display:none;margin-top:8px;padding:8px 12px;border-radius:6px;background:rgba(255,170,0,0.12);border:1px solid var(--warn,orange);color:var(--warn,orange);font-size:13px;">
@@ -567,7 +567,7 @@
             </div>
             <div class="flex gap-8" style="margin-top:8px;" data-module="race">
                 <button class="btn btn-secondary" id="btnSpringMap" onclick="runSpringMap();" style="flex:1;" disabled data-tip="<strong>Mappa molla k×F&#8320;</strong>Heatmap del valve float al variare SIMULTANEO di rigidezza k e precarico F&#8320;. Verde = sicuro (&lt;0.1mm), giallo = limite (0.1-0.3), rosso = float eccessivo. Marca la tua molla attuale (&#9678;) e la zona sicura. A colpo d'occhio vedi quali combinazioni funzionano. Tempo: ~8 secondi.">&#128506; Mappa molla</button>
-                <button class="btn btn-accent" id="btnRaceReport" onclick="exportRaceReport();" style="flex:1;" disabled data-tip="<strong>Race report PDF</strong>Genera un report PDF dedicato all'analisi dinamica: sweep RPM, molla ottimale, mappa k×F&#8320;, grafico compliance. Documento completo per validare il treno valvole di un motore da corsa.">&#127942; Race report</button>
+                <button class="btn btn-accent" id="btnRaceReport" onclick="exportRaceReport();" style="flex:1;" disabled data-tip="<strong>Race report PDF</strong>Genera un report PDF con le simulazioni esplorative del <b>solo lato aspirazione</b>: sweep RPM, esplorazione molla, mappa k×F&#8320;, grafico compliance. Usa molla e masse dichiarate: &egrave; un'esplorazione, non una validazione del treno valvole.">&#127942; Race report</button>
             </div>
             <div class="flex gap-8" style="margin-top:8px;" data-module="race">
                 <button class="btn btn-secondary" id="btnSweep3D" onclick="run3DSweep();" style="flex:1;" disabled data-tip="<strong>Sweep 3D k×F&#8320;×RPM</strong>Nuvola ruotabile del valve float sui TRE assi insieme: rigidezza k, precarico F&#8320; e regime. Ogni punto colorato (verde sicuro &rarr; rosso float) &egrave; una combinazione simulata. Trascina per ruotare la vista ed esplorare il volume sicuro nello spazio molla-regime. Tempo: ~0.5 s.">&#127922; Sweep 3D</button>
@@ -617,6 +617,15 @@
 
             <!-- Right: Results table -->
             <div>
+                <!-- Da confermare: IN TESTA ai risultati e fuori da ogni modulo.
+                     Testo generato: elenca i campi ancora da confermare e cosa
+                     comporta lasciarli ai valori di partenza. Prima stava dentro la
+                     sezione Forze (modulo molla): in vista Base, coi moduli spenti,
+                     non si vedeva proprio dove servirebbe. -->
+                <div class="result-row" id="notaValoriEsempio" style="border-bottom:none;display:none;margin-bottom:8px;">
+                    <span class="result-label" id="notaValoriEsempioTesto"
+                          style="font-size:12px;color:var(--warning-text);flex:1;line-height:1.4;"></span>
+                </div>
                 <!-- Durata -->
                 <div class="result-section">
                     <div class="result-section-title">Durata</div>
@@ -758,14 +767,6 @@
                     </div>
                     <div class="result-row" style="border-bottom:none;">
                         <span class="result-label" style="font-size:11px;color:var(--text-muted);flex:1;">Calcolo statico: dipende da molla e masse, non dal regime impostato.</span>
-                    </div>
-                    <div class="result-row" id="notaValoriEsempio" style="border-bottom:none;display:none;">
-                        <!-- Testo generato: elenca i campi ancora da confermare e cosa
-                             comporta lasciarli ai valori di partenza. Prima parlava solo
-                             di molla e masse, ma la stessa cosa vale per raggio base,
-                             diametro bicchiere, angoli lobo, massa molla e spire. -->
-                        <span class="result-label" id="notaValoriEsempioTesto"
-                              style="font-size:11px;color:var(--warning-text);flex:1;line-height:1.4;"></span>
                     </div>
                 </div>
             </div>
@@ -2108,6 +2109,15 @@ function exportRaceReport() {
             doc.text(new Date().toLocaleString('it-IT') + '  ·  ' + (inp.intakeFile || 'camma') + '  ·  ' + inp.rpm + ' rpm target', margin, 38);
 
             var y = 54;
+            // Sweep, esplorazione molla e mappa simulano SOLO il lato aspirazione
+            // (curva e massa di aspirazione). Prima lo diceva una sola frase di
+            // esito, e quando andava bene il report sembrava valere per tutto il
+            // treno valvole: in testa, una volta per tutte.
+            doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(200,30,30);
+            doc.text('Simulazione del solo lato ASPIRAZIONE: lo scarico non e\' valutato in questo report.', margin, y);
+            doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(90,96,110);
+            doc.text('Esplorazione con molla e masse dichiarate: non e\' una validazione del treno valvole.', margin, y + 5);
+            y += 13;
             function sect(t) {
                 doc.setFillColor(177,76,255); doc.rect(margin, y-1, 1.5, 6, 'F');
                 doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(40,46,60);
@@ -2169,7 +2179,7 @@ function exportRaceReport() {
             } else if (sweep.criticalRpm) {
                 doc.text('Nella simulazione il distacco supera ' + sweep.threshold + ' mm da ~' + Math.round(sweep.criticalRpm) + ' giri (solo aspirazione)', margin, y);
             } else {
-                doc.text('Nessun valve float > ' + sweep.threshold + ' mm nel range testato. Margine ampio.', margin, y);
+                doc.text('Nessun distacco > ' + sweep.threshold + ' mm nel range testato (solo aspirazione).', margin, y);
             }
             y += 8;
 
@@ -2254,6 +2264,8 @@ function exportRaceReport() {
                 doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(120,130,145);
                 doc.text('CAMMES Race Report', margin, fy);
                 doc.text('Pagina ' + p + ' di ' + tp, pageW - margin - 22, fy);
+                doc.setFontSize(6.5);
+                doc.text('Simulazione esplorativa del solo lato aspirazione, con molla e masse dichiarate: non sostituisce una prova al banco del motore.', margin, fy - 5);
             }
 
             var fname = 'cammes_race_report_' + new Date().toISOString().substring(0,10) + '.pdf';
@@ -2616,6 +2628,8 @@ function onTypologyChange(side) {
         clearEl.disabled = false;
     }
     if (typeof markAnalysisStale === 'function') markAnalysisStale();
+    // bloccato o sbloccato, il gioco entra o esce dai campi da confermare
+    if (typeof aggiornaMarcaturaEsempio === 'function') aggiornaMarcaturaEsempio();
 }
 
 // Initialize arrays to zero
@@ -2785,6 +2799,7 @@ function testoStatoImport(nomeFile, curvaGrezza, meta) {
     if (p.ampiezzaPlateau > 1) s += ' (naso piatto ' + p.ampiezzaPlateau + '°)';
     if (meta && meta.validCount) s += ' | ' + meta.validCount + ' punti';
     if (meta && meta.stato === 'INCOMPLETO') s += ' | INCOMPLETA';
+    if (avvisoMisuraSospetta(meta)) s += ' | SOSPETTA';
     return s;
 }
 
@@ -2824,6 +2839,9 @@ function importIntake() {
             if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura INCOMPLETA caricata (aspirazione)',
                 body: (camLift.missingCount || camLift.meta.gradiMancanti || '?') + ' gradi senza lettura (riempiti a 0): durate, aree e verdetti possono essere falsati. Usala solo per un\'occhiata, non per un confronto.', duration: 10000 });
         }
+        var _sospIn = avvisoMisuraSospetta(camLift.meta);
+        if (_sospIn && window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura SOSPETTA caricata (aspirazione)',
+            body: _sospIn.replace('MISURA SOSPETTA: ', '') + ': al banco il programma aveva chiesto di ripeterla. I risultati valgono quanto la misura.', duration: 10000 });
         window._metaIn = camLift.meta || {};               // metadati #k=v (data, runs, sigma…)
         window._metaIn.converted = _convIn || false;       // provenienza PER-LATO (audit APP-07)
         // AUDIT DATA-01: la maschera di copertura NON sopravvive a .slice() (che
@@ -2895,6 +2913,9 @@ function importExhaust() {
             if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura INCOMPLETA caricata (scarico)',
                 body: (camLift.missingCount || camLift.meta.gradiMancanti || '?') + ' gradi senza lettura (riempiti a 0): durate, aree e verdetti possono essere falsati. Usala solo per un\'occhiata, non per un confronto.', duration: 10000 });
         }
+        var _sospEx = avvisoMisuraSospetta(camLift.meta);
+        if (_sospEx && window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura SOSPETTA caricata (scarico)',
+            body: _sospEx.replace('MISURA SOSPETTA: ', '') + ': al banco il programma aveva chiesto di ripeterla. I risultati valgono quanto la misura.', duration: 10000 });
         window._metaEx = camLift.meta || {};               // metadati #k=v (data, runs, sigma…)
         window._metaEx.converted = _convEx || false;       // provenienza PER-LATO (audit APP-07)
         window._metaEx.covered = camLift.covered;          // AUDIT DATA-01: maschera per il salvataggio onesto
@@ -3392,6 +3413,16 @@ var CAMPI_LEVA      = ['lArm', 'lValve'];
 // Rigidezza del treno e smorzamento governano la compliance e TUTTI gli
 // strumenti Race. Sono valori di classe, non misure di questo motore.
 var CAMPI_TRENO     = ['kTrain', 'dampingRatio'];
+// Il GIOCO VALVOLA viene dalla scheda del motore: è una dichiarazione come gli
+// angoli lobo. Nasce a 0,50 mm, che il suo stesso fumetto chiama "segnaposto",
+// e fra 0 e 0,50 la durata cambia di circa 38 gradi motore: senza bordo
+// tratteggiato e senza riserva, durate, aperture e chiusure calcolate su un
+// numero che nessuno ha scritto finivano sulla scheda camma come dati veri.
+// Bloccato a 0 dal bicchiere idraulico non conta: lì lo 0 discende dalla
+// tipologia scelta dall'operatore.
+var CAMPI_GIOCO     = ['intakeClearance', 'exhaustClearance'];
+function giocoRilevante(id) { var el = document.getElementById(id); return !!el && !el.disabled; }
+function giocoConfermato() { return CAMPI_GIOCO.filter(giocoRilevante).every(campoEConfermato); }
 var MIN_CAMPO_ALTRI = {
     diamBase: 0.0001, diamBaseExhaust: 0.0001, diamBicch: 0.0001
     // gli angoli lobo non hanno minimo: qualunque valore finito e' lecito
@@ -3404,7 +3435,7 @@ function geometriaRilevante() {
     return !!ft && ft !== 'punt';
 }
 function campiDaConfermare() {
-    var l = CAMPI_MOLLA.concat(CAMPI_FASATURA);
+    var l = CAMPI_MOLLA.concat(CAMPI_FASATURA, CAMPI_GIOCO.filter(giocoRilevante));
     if (geometriaRilevante()) {
         l = l.concat(['diamBase', 'diamBaseExhaust']);
         var ft = (document.getElementById('followerType') || {}).value;
@@ -3508,7 +3539,7 @@ function smarcaCampiMolla() {
 // funzione il Reset lasciava gli angoli lobo senza bordo tratteggiato e senza
 // nota, mentre LSA, centri lobo, incrocio e alzata al PMS ne discendono.
 function smarcaCampiDichiarati() {
-    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA, CAMPI_LEVA, CAMPI_TRENO).forEach(function (id) {
+    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA, CAMPI_GIOCO, CAMPI_LEVA, CAMPI_TRENO).forEach(function (id) {
         var el = document.getElementById(id);
         if (el) delete el.dataset.confermato;
     });
@@ -3535,7 +3566,7 @@ function aggiornaMarcaturaEsempio() {
     // puntalino) viene togliata: segnalare un campo che non entra in nessun
     // calcolo e' rumore.
     var daConfermare = campiDaConfermare();
-    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA, CAMPI_LEVA, CAMPI_TRENO).forEach(function (id) {
+    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA, CAMPI_GIOCO, CAMPI_LEVA, CAMPI_TRENO).forEach(function (id) {
         var el = document.getElementById(id);
         if (!el) return;
         var serve = daConfermare.indexOf(id) >= 0;
@@ -3559,6 +3590,7 @@ function descriviCampiDaConfermare(mancanti) {
         diamBase: '\u00d8 cerchio base asp.', diamBaseExhaust: '\u00d8 cerchio base scar.',
         diamBicch: 'diametro bicchiere',
         intakeAngle: 'angolo lobo asp.', exhaustAngle: 'angolo lobo scar.',
+        intakeClearance: 'gioco valvola asp.', exhaustClearance: 'gioco valvola scar.',
         lArm: 'L braccio camma', lValve: 'L braccio valvola',
         kTrain: 'rigidezza treno', dampingRatio: 'smorzamento'
     };
@@ -3574,7 +3606,11 @@ function descriviCampiDaConfermare(mancanti) {
         conseguenze.push('compliance e strumenti Race girano su valori <b>di classe</b>, non del tuo motore');
     if (mancanti.some(function (id) { return CAMPI_FASATURA.indexOf(id) >= 0; }))
         conseguenze.push('LSA, centri lobo, incrocio e alzata al PMS restano <b>dichiarati</b>, non misurati');
-    return '&#9888; Da confermare (bordo tratteggiato): <b>' + nomi.join('</b>, <b>') + '</b>. ' +
+    if (mancanti.some(function (id) { return CAMPI_GIOCO.indexOf(id) >= 0; }))
+        conseguenze.push('durate, aperture e chiusure sono calcolate con un gioco <b>non confermato</b> (0,50 di partenza: fra 0 e 0,50 la durata cambia di circa 38 gradi)');
+    // (le etichette abbreviate finiscono gia' col punto: "scar." non diventa "scar..")
+    var punto = /\.$/.test(nomi[nomi.length - 1] || '') ? '</b> ' : '</b>. ';
+    return '&#9888; Da confermare (bordo tratteggiato): <b>' + nomi.join('</b>, <b>') + punto +
            'Finché restano i valori di partenza, ' + conseguenze.join('; ') + '.';
 }
 window.aggiornaMarcaturaEsempio = aggiornaMarcaturaEsempio;
@@ -3596,7 +3632,7 @@ function setRpmCell(id, crit, rpm, valutabile) {
     el.innerHTML = rpmIcon(crit, rpm) + fmtRpm(crit);
     el.className = 'result-value ' + rpmClass(crit, rpm);
     var margin = isFinite(crit) ? ((crit/rpm - 1) * 100).toFixed(0) : '∞';
-    el.title = 'Margine: ' + (isFinite(crit) ? (margin + '%') : 'sicuro') +
+    el.title = 'Margine: ' + (isFinite(crit) ? (margin + '%') : 'nessun distacco nel calcolo statico') +
                ' (regime di prova ' + rpm.toLocaleString('it-IT') + ')';
 }
 // AUDIT v3.4.3 P1-12: con un regime non ammesso (0, vuoto, negativo, testo) il
@@ -4090,7 +4126,7 @@ function initLiveTuning() {
     // molla e masse: cerchio base, diametro bicchiere, angoli lobo. La
     // marcatura si aggiorna anche quando cambia il follower, perche' cambia
     // QUALI campi servono.
-    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA, CAMPI_LEVA, CAMPI_TRENO).forEach(function (id) {
+    CAMPI_MOLLA.concat(CAMPI_GEOMETRIA, CAMPI_FASATURA, CAMPI_GIOCO, CAMPI_LEVA, CAMPI_TRENO).forEach(function (id) {
         var el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('input', function () {
@@ -4628,8 +4664,24 @@ function analyze() {
     // ====== DISPLAY RESULTS ======
     document.getElementById('resultsCard').style.display = 'block';
 
-    document.getElementById('resDurIn').textContent = durIntake + '\u00B0';
-    document.getElementById('resDurEx').textContent = durExhaust + '\u00B0';
+    // Riserva sui numeri che discendono da valori DICHIARATI non ancora
+    // confermati: prima la portavano solo LSA e centri lobo, mentre durate,
+    // aperture, chiusure, incrocio e alzata al PMS (che dipendono dagli stessi
+    // angoli e dal gioco) uscivano come numeri pieni. Il numero resta.
+    var _giocoOk = giocoConfermato();
+    var _faseOk = fasaturaConfermata();
+    function _riserva(id, testo, ok, perche) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var valido = !/n\.d\./.test(String(testo));
+        el.textContent = testo + (ok || !valido ? '' : ' (da confermare)');
+        el.style.opacity = (ok || !valido) ? '' : '0.75';
+        if (!ok && valido) el.title = perche;
+    }
+    var _perGioco = 'Calcolata col gioco valvola del campo, ancora quello di partenza (un segnaposto): inserisci il gioco a freddo della scheda del motore.';
+    var _perFase = 'Dipende da valori dichiarati non ancora confermati (angoli lobo e/o gioco valvola): indicativo finch\u00E9 non li confermi.';
+    _riserva('resDurIn', durIntake + '\u00B0', _giocoOk, _perGioco);
+    _riserva('resDurEx', durExhaust + '\u00B0', _giocoOk, _perGioco);
 
     // Duration at reference
     document.getElementById('resDurRefLabel').textContent = 'Durata asp. @ ' + refHeight.toFixed(1) + ' mm';
@@ -4666,13 +4718,14 @@ function analyze() {
         exhaustCenter.toFixed(1) + ') / 2. Non e\' misurata dal banco.' +
         (_fasOk ? '' : ' Angoli lobo ancora da confermare.');
     // AUDIT MAT-01: eventi ambigui -> 'n.d.', mai numeri ricostruiti
-    document.getElementById('resIntOpen').textContent = fmtDeg(intakeOpenBTC, 1);
-    document.getElementById('resIntClose').textContent = fmtDeg(intakeCloseABC, 1);
-    document.getElementById('resExOpen').textContent = fmtDeg(exOpenBBC, 1);
-    document.getElementById('resExClose').textContent = fmtDeg(exCloseATC, 1);
-    document.getElementById('resOverlap').textContent = fmtDeg(overlap, 1);
-    document.getElementById('resLiftInTDC').textContent = liftInTDC.toFixed(3) + ' mm';
-    document.getElementById('resLiftExTDC').textContent = liftExTDC.toFixed(3) + ' mm';
+    var _okFG = _giocoOk && _faseOk;
+    _riserva('resIntOpen', fmtDeg(intakeOpenBTC, 1), _okFG, _perFase);
+    _riserva('resIntClose', fmtDeg(intakeCloseABC, 1), _okFG, _perFase);
+    _riserva('resExOpen', fmtDeg(exOpenBBC, 1), _okFG, _perFase);
+    _riserva('resExClose', fmtDeg(exCloseATC, 1), _okFG, _perFase);
+    _riserva('resOverlap', fmtDeg(overlap, 1), _okFG, _perFase);
+    _riserva('resLiftInTDC', liftInTDC.toFixed(3) + ' mm', _okFG, _perFase);
+    _riserva('resLiftExTDC', liftExTDC.toFixed(3) + ' mm', _okFG, _perFase);
 
     // Area-Tempo and Asymmetry
     document.getElementById('resAreaIn').textContent = areaIn.toFixed(1) + ' mm\u00B7\u00B0';
@@ -4785,6 +4838,10 @@ function analyze() {
             lArm: Number((document.getElementById('lArm') || {}).value) || 0,
             lValve: Number((document.getElementById('lValve') || {}).value) || 0,
             baselineOn: (typeof baselineEnabled === 'function') ? baselineEnabled() : false,
+            // stato di conferma AL MOMENTO di Analizza: i documenti dichiarano
+            // questo, non il DOM al momento dell'export
+            fasaturaConfermata: fasaturaConfermata(),
+            giocoConfermato: giocoConfermato(),
             metaIn: window._metaIn || {},   // metadati del file misura (data, runs, sigma…)
             metaEx: window._metaEx || {}
         },
@@ -4893,7 +4950,7 @@ function analyze() {
         // sicuro" resta coperto. (Audit 2026-08-09, rilievo 3.6.)
         var rpmCritStr = isFinite(minRpmCrit)
             ? Math.round(minRpmCrit).toLocaleString('it-IT') + ' rpm'
-            : '&#x221e; (sicuro)';
+            : 'nessuno nel calcolo statico';
         // Con i valori di esempio il distacco non e' riferito al motore in
         // prova: non lo si annuncia e non si emettono allarmi (sarebbe un
         // rosso calcolato su una molla che non e' quella dell'utente).
@@ -4912,14 +4969,17 @@ function analyze() {
         } else if (_okTIn || _okTEx) {
             var _f = _okTIn ? forcesIn.rpmCrit : forcesEx.rpmCrit;
             _fraseDistacco = ' &middot; distacco ' + (_okTIn ? 'asp.' : 'scar.') + ' <b>' +
-                (isFinite(_f) ? Math.round(_f).toLocaleString('it-IT') + ' rpm' : '&#x221e; (sicuro)') +
+                (isFinite(_f) ? Math.round(_f).toLocaleString('it-IT') + ' rpm' : 'nessuno nel calcolo statico') +
                 '</b> &middot; <i>l\'altro lato &egrave; ai valori di esempio</i>';
         } else {
             _fraseDistacco = ' &middot; <i>molla ai valori di esempio: distacco non valutato</i>';
         }
         window.cammesToast({
             kind: 'info', title: 'Analisi eseguita',
-            body: 'separazione lobi (LSA) <b>' + LSA.toFixed(1) + '&deg;</b> &middot; durata asp. <b>' + durIntake + '&deg;</b>' +
+            // la stessa riserva della tabella: LSA viene dagli angoli dichiarati,
+            // la durata dal gioco
+            body: 'separazione lobi (LSA) <b>' + LSA.toFixed(1) + '&deg;</b>' + (_faseOk ? '' : ' (da confermare)') +
+                  ' &middot; durata asp. <b>' + durIntake + '&deg;</b>' + (_giocoOk ? '' : ' (da confermare)') +
                   _fraseDistacco,
             duration: 5500, analisi: _idAnalisiToast
         });
@@ -4973,13 +5033,13 @@ function analyze() {
                     window.cammesToast({
                         kind: 'warn', title: 'Valve float dinamico minore',
                         body: 'Gap massimo ' + maxFloatDyn.toFixed(2) + ' mm a ' + rpm + ' rpm. ' + detail +
-                              ' Accettabile per uso saltuario, evita zona rossa prolungata.',
+                              ' Nella simulazione il distacco resta piccolo: evita di restare a lungo in zona rossa.',
                         duration: 7000
                     });
                 } else {
                     window.cammesToast({
                         kind: 'success', title: 'Compliance OK',
-                        body: 'Valvola segue la cam con gap < 0.1 mm. Treno valvole adeguato per ' + rpm + ' rpm.',
+                        body: 'Nella simulazione a ' + rpm + ' rpm la valvola segue la camma (distacco sotto 0,1 mm), con molla e masse dichiarate.',
                         duration: 5000
                     });
                 }
@@ -5975,6 +6035,11 @@ function exportCSV() {
     lines.push('# Angolo lobo scar. [deg],' + L.inputs.exhaustAngle);
     lines.push('# Gioco asp. [mm],' + L.inputs.intakeClearance);
     lines.push('# Gioco scar. [mm],' + L.inputs.exhaustClearance);
+    // la stessa riserva dello schermo e dei PDF (prima il CSV usciva senza)
+    if (L.inputs.giocoConfermato === false)
+        lines.push('# DA CONFERMARE,' + csvEscape('gioco valvola ancora al valore di partenza (segnaposto): durate, aperture e chiusure sono indicative'));
+    if (L.inputs.fasaturaConfermata === false)
+        lines.push('# DA CONFERMARE,' + csvEscape('angoli lobo ancora ai valori di partenza: LSA, centri, aperture, chiusure, incrocio e alzata al PMS sono dichiarati, non misurati'));
     lines.push('# Anticipo [deg],' + L.inputs.advance);
     lines.push('# RPM,' + L.inputs.rpm);
     lines.push('# Rocker asp.,' + L.inputs.rockerIntake);
@@ -6371,12 +6436,18 @@ function exportCamCard(testMode) {
     }
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
     doc.text('dati camma', x0, y); doc.text('aspirazione', xI, y); doc.text('scarico', xE, y); y += lh + 1;
-    row('gioco valvola', I.intakeClearance.toFixed(2) + ' mm', I.exhaustClearance.toFixed(2) + ' mm');
-    row('durata @ gioco (>' + (R.durThresh != null ? R.durThresh.toFixed(2) : '0.05') + ' mm)', R.durIntake.toFixed(0) + '°', R.durExhaust.toFixed(0) + '°');
+    // "*" = discende da un valore DICHIARATO che l'operatore non ha confermato
+    // (stato fotografato ad Analizza). A schermo questi numeri portano "(da
+    // confermare)"; prima la scheda li stampava pieni, come misure del banco.
+    var nG = I.giocoConfermato === false ? ' *' : '';
+    var nF = I.fasaturaConfermata === false ? ' *' : '';
+    var nGF = (nG || nF) ? ' *' : '';
+    row('gioco valvola' + nG, I.intakeClearance.toFixed(2) + ' mm', I.exhaustClearance.toFixed(2) + ' mm');
+    row('durata @ gioco (>' + (R.durThresh != null ? R.durThresh.toFixed(2) : '0.05') + ' mm)' + nG, R.durIntake.toFixed(0) + '°', R.durExhaust.toFixed(0) + '°');
     row('durata @ ' + I.durationRef.toFixed(2) + ' mm', R.durRefIn.toFixed(0) + '°', R.durRefEx.toFixed(0) + '°');
     row('alzata valvola', R.maxLiftIn.toFixed(2) + ' mm', R.maxLiftEx.toFixed(2) + ' mm', true);
     row('alzata camma', camPkIn.toFixed(2) + ' mm', camPkEx.toFixed(2) + ' mm');
-    row('angolo lobo (dichiarato)', R.intakeCenter.toFixed(1) + '° ATDC', R.exhaustCenter.toFixed(1) + '° BTDC', true);
+    row('angolo lobo (dichiarato)' + nF, R.intakeCenter.toFixed(1) + '° ATDC', R.exhaustCenter.toFixed(1) + '° BTDC', true);
     // La posizione MISURATA del picco: dove il naso è caduto in questa scansione.
     // Va accanto all'angolo lobo, non al suo posto: quello è quanto l'operatore
     // ha dichiarato, questo è quanto il banco ha visto. Sono in unità diverse
@@ -6384,13 +6455,13 @@ function exportCamCard(testMode) {
     row('picco misurato (scansione)',
         R.camPkPosIn != null ? R.camPkPosIn + '° camma' : 'n.d.',
         R.camPkPosEx != null ? R.camPkPosEx + '° camma' : 'n.d.');
-    row('apre', isFinite(R.intakeOpenBTC) ? R.intakeOpenBTC.toFixed(1) + '° BTDC' : 'n.d.',
+    row('apre' + nGF, isFinite(R.intakeOpenBTC) ? R.intakeOpenBTC.toFixed(1) + '° BTDC' : 'n.d.',
                 isFinite(R.exOpenBBC) ? R.exOpenBBC.toFixed(1) + '° BBDC' : 'n.d.');
-    row('chiude', isFinite(R.intakeCloseABC) ? R.intakeCloseABC.toFixed(1) + '° ABDC' : 'n.d.',
+    row('chiude' + nGF, isFinite(R.intakeCloseABC) ? R.intakeCloseABC.toFixed(1) + '° ABDC' : 'n.d.',
                   isFinite(R.exCloseATC) ? R.exCloseATC.toFixed(1) + '° ATDC' : 'n.d.');
-    row('alzata al PMS', R.liftInTDC.toFixed(2) + ' mm', R.liftExTDC.toFixed(2) + ' mm', true);
-    row('incrocio (overlap)', fmtDeg(R.overlap, 1), '');
-    row('LSA', R.LSA.toFixed(1) + '°', '');
+    row('alzata al PMS' + nGF, R.liftInTDC.toFixed(2) + ' mm', R.liftExTDC.toFixed(2) + ' mm', true);
+    row('incrocio (overlap)' + nGF, fmtDeg(R.overlap, 1), '');
+    row('LSA' + nF, R.LSA.toFixed(1) + '°', '');
 
     // ---- note metodo ----
     y += 3;
@@ -6428,6 +6499,13 @@ function exportCamCard(testMode) {
         '# correzione baseline/eccentricità: ' + (I.baselineOn ? 'ON' : 'OFF') + '.',
         '# durate e fasatura riferite al gioco valvola indicato; angoli in gradi MOTORE.'
     ];
+    if (nGF) {
+        var nonConf = [];
+        if (nG) nonConf.push('gioco valvola');
+        if (nF) nonConf.push('angoli lobo');
+        remarks.push('# * valori DICHIARATI e non confermati dall\'operatore (' + nonConf.join(', ') +
+                     '): le righe segnate sono indicative, non misure del banco.');
+    }
     remarks.forEach(function (r2) {
         // splitTextToSize per far scendere y di TUTTE le righe del wrap (con
         // maxWidth+incremento fisso le note lunghe si sovrapponevano)
@@ -6573,7 +6651,10 @@ function exportPDF() {
     var safetyCol   = safetyClass === 'safe' ? COL.success
                     : safetyClass === 'caution' ? COL.warn
                     : COL.danger;
-    var safetyText  = safetyClass === 'safe'    ? 'OK · Margine ampio'
+    // Il banner descrive il CONTO, non promette: e' un calcolo statico molla
+    // contro inerzia con molla e masse dichiarate. Prima diceva "OK" e altrove
+    // "(sicuro)", "motore sicuro": verdetti piu' forti di quanto il calcolo provi.
+    var safetyText  = safetyClass === 'safe'    ? 'MARGINE AMPIO · distacco oltre +50% del regime di prova'
                     : safetyClass === 'caution' ? 'ATTENZIONE · Margine stretto'
                     : 'CRITICO · Rischio distacco valvola';
     // Con molla e masse ai valori di esempio il verdetto NON riguarda questo
@@ -6611,6 +6692,11 @@ function exportPDF() {
         doc.text(pageStr, pageW - margin - doc.getTextWidth(pageStr), fy);
         var tsStr = L.timestamp || '';
         doc.text(tsStr, pageW / 2 - doc.getTextWidth(tsStr) / 2, fy);
+        // la stessa avvertenza della scheda camma (prima c'era solo li')
+        doc.setFontSize(6.5);
+        doc.text('Misura a carattere indicativo: non sostituisce un collaudo metrologico certificato. ' +
+                 'Il margine sul distacco e\' un calcolo statico con molla e masse dichiarate.', margin, fy - 5);
+        doc.setFontSize(8);
     }
 
     // ============================================================
@@ -6675,12 +6761,16 @@ function exportPDF() {
                 doc.text(sub, x + 4, y + 22);
             }
         }
-        drawKPI(margin,          y, 'LSA',                R.LSA.toFixed(1) + ' deg',                'Separazione lobi',                          COL.accent);
-        drawKPI(margin + boxW+6, y, 'Durata asp.',        R.durIntake + ' deg',                     'Durata totale aspirazione',                 COL.accent);
+        // LSA e' DICHIARATA (dagli angoli lobo), la durata dipende dal gioco:
+        // il sottotitolo lo dice, e dice se quei valori sono da confermare.
+        drawKPI(margin,          y, 'LSA',                R.LSA.toFixed(1) + ' deg',
+                'Dagli angoli lobo dichiarati' + (I.fasaturaConfermata === false ? ' - DA CONFERMARE' : ''), COL.accent);
+        drawKPI(margin + boxW+6, y, 'Durata asp.',        R.durIntake + ' deg',
+                'Al gioco di ' + I.intakeClearance + ' mm' + (I.giocoConfermato === false ? ' - DA CONFERMARE' : ''), COL.accent);
         y += boxH + 6;
         drawKPI(margin,          y, 'Max alzata asp.',    R.maxLiftIn.toFixed(2) + ' mm',           'Alzata massima @ rocker ' + I.rockerIntake, COL.accent2);
         var rpmCritStr = !mollaOkPdf ? 'non valutabile'
-                       : (isFinite(minRpmCrit) ? Math.round(minRpmCrit).toLocaleString('it-IT') + ' rpm' : '> ' + rpm + ' (sicuro)');
+                       : (isFinite(minRpmCrit) ? Math.round(minRpmCrit).toLocaleString('it-IT') + ' rpm' : 'nessuno nel calcolo');
         drawKPI(margin + boxW+6, y, 'Distacco valvola',   rpmCritStr,
                 mollaOkPdf ? 'Regime di distacco (calcolo statico)' : 'Molla/masse ai valori di esempio', safetyCol);
         y += boxH + 12;
@@ -6690,7 +6780,7 @@ function exportPDF() {
         setFill(safetyCol); doc.roundedRect(margin, y, pageW - 2 * margin, bannerH, 2, 2, 'F');
         doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
         setText([255, 255, 255]);
-        doc.text('Sicurezza treno valvole', margin + 4, y + 7);
+        doc.text('Margine sul distacco valvola (calcolo statico, molla e masse dichiarate)', margin + 4, y + 7);
         doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
         doc.text(safetyText, margin + 4, y + 14);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
@@ -6791,16 +6881,21 @@ function exportPDF() {
     sectionHeader('Risultati dettagliati');
     var rpmCritInStr = isFinite(R.rpmCritIn) ? Math.round(R.rpmCritIn).toLocaleString('it-IT') + ' rpm' : 'inf';
     var rpmCritExStr = isFinite(R.rpmCritEx) ? Math.round(R.rpmCritEx).toLocaleString('it-IT') + ' rpm' : 'inf';
+    // "*" come nella scheda camma: valore che discende da dichiarazioni non
+    // confermate (gioco, angoli lobo). La nota sta sotto la tabella.
+    var pG = I.giocoConfermato === false ? ' *' : '';
+    var pF = I.fasaturaConfermata === false ? ' *' : '';
+    var pGF = (pG || pF) ? ' *' : '';
     var rows = [
-        ['Durata totale',                      R.durIntake + ' deg',                          R.durExhaust + ' deg'],
+        ['Durata al gioco' + pG,               R.durIntake + ' deg',                          R.durExhaust + ' deg'],
         ['Durata @ rif (' + I.durationRef + 'mm)', R.durRefIn + ' deg',                       R.durRefEx + ' deg'],
         ['Max alzata',                         R.maxLiftIn.toFixed(3) + ' mm',                R.maxLiftEx.toFixed(3) + ' mm'],
-        ['LSA',                                R.LSA.toFixed(1) + ' deg',                     ''],
-        ['Centro lobo',                        R.intakeCenter.toFixed(1) + ' ATDC',           R.exhaustCenter.toFixed(1) + ' BTDC'],
-        ['Apertura',                           fmtNum(R.intakeOpenBTC, 1) + ' BTC',           fmtNum(R.exOpenBBC, 1) + ' BBC'],
-        ['Chiusura',                           fmtNum(R.intakeCloseABC, 1) + ' ABC',          fmtNum(R.exCloseATC, 1) + ' ATC'],
-        ['Overlap',                            fmtNum(R.overlap, 1) + ' deg',                 ''],
-        ['Alzata al PMS',                      R.liftInTDC.toFixed(3) + ' mm',                R.liftExTDC.toFixed(3) + ' mm'],
+        ['LSA (dichiarata)' + pF,              R.LSA.toFixed(1) + ' deg',                     ''],
+        ['Centro lobo (dichiarato)' + pF,      R.intakeCenter.toFixed(1) + ' ATDC',           R.exhaustCenter.toFixed(1) + ' BTDC'],
+        ['Apertura' + pGF,                     fmtNum(R.intakeOpenBTC, 1) + ' BTC',           fmtNum(R.exOpenBBC, 1) + ' BBC'],
+        ['Chiusura' + pGF,                     fmtNum(R.intakeCloseABC, 1) + ' ABC',          fmtNum(R.exCloseATC, 1) + ' ATC'],
+        ['Overlap' + pGF,                      fmtNum(R.overlap, 1) + ' deg',                 ''],
+        ['Alzata al PMS' + pGF,                R.liftInTDC.toFixed(3) + ' mm',                R.liftExTDC.toFixed(3) + ' mm'],
         ['Area sotto curva',                   R.areaIn.toFixed(1) + ' mm*deg',               R.areaEx.toFixed(1) + ' mm*deg'],
         ['Asimmetria lobo',                    R.asymIn.toFixed(1) + ' %',                    R.asymEx.toFixed(1) + ' %'],
         // P1-07: le quattro righe che dipendono da molla e massa seguono il
@@ -6874,6 +6969,14 @@ function exportPDF() {
     }
     y += 6;
 
+    if (pGF) {
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(8); setText(COL.muted);
+        doc.text('* discende da valori DICHIARATI e non confermati dall\'operatore (' +
+                 [pG ? 'gioco valvola' : '', pF ? 'angoli lobo' : ''].filter(Boolean).join(', ') +
+                 '): indicativo, non misurato dal banco.', margin, y);
+        y += 6;
+    }
+
     // ====== Indicatore visivo margine RPM critico ======
     if (y + 26 > pageH - 18) { doc.addPage(); y = margin; }
     sectionHeader('Margine sul distacco valvola');
@@ -6905,14 +7008,14 @@ function exportPDF() {
     doc.text('target ' + (rpm || '?'), targetX - 8, y + barH + 5);
     var safeX = barX + barW * 0.75;
     doc.line(safeX, y - 1, safeX, y + barH + 1);
-    doc.text('+50% (sicuro)', safeX - 12, y + barH + 5);
+    doc.text('+50%', safeX - 4, y + barH + 5);
 
     // Etichetta numerica del rapporto SOPRA la barra. Se saturato (ratio>=2),
     // mostra il vero rapporto per non nascondere "quanto" è sicuro.
     doc.setFontSize(8);
     setText(COL.text);
     var ratioLabel;
-    if (!isFinite(rawRatio)) ratioLabel = 'rapporto: inf (motore sicuro)';
+    if (!isFinite(rawRatio)) ratioLabel = 'rapporto: inf (nessun distacco nel calcolo statico)';
     else if (rawRatio >= 2)  ratioLabel = 'rapporto: ' + rawRatio.toFixed(2) + 'x (oltre saturazione 2x)';
     else                     ratioLabel = 'rapporto: ' + rawRatio.toFixed(2) + 'x';
     doc.text(ratioLabel, barX, y - 2);

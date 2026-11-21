@@ -77,7 +77,9 @@ check('e le celle non convergenti hanno il loro conteggio dichiarato',
 // ---------- 3.5: banner di copertina e barra del margine ----------
 console.log('');
 console.log('--- 3.5: exportPDF con molla ai valori di esempio ---');
-var rBanner = regione("'Sicurezza treno valvole'", 'File analizzati');
+// (il titolo del banner era "Sicurezza treno valvole": dal 2026-11-21 descrive
+//  il conto invece di promettere sicurezza — vedi test_documenti_onesti.js)
+var rBanner = regione("'Margine sul distacco valvola (calcolo statico", 'File analizzati');
 check('trovo il banner di copertina', rBanner.length > 0);
 check('la riga destra del banner passa dal cancello mollaOkPdf',
     /mollaOkPdf/.test(rBanner),

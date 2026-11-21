@@ -73,15 +73,20 @@ var MARCHE = ['renault', 'clio', 'volkswagen', 'vw', 'golf', 'peugeot', 'citroen
     'mercedes', 'audi', 'opel', 'porsche', 'skoda', 'ford', 'chevrolet', 'chevy', 'chrysler', 'dodge', 'jeep',
     'mopar', 'pontiac', 'honda', 'vtec', 'civic', 'yamaha', 'suzuki', 'kawasaki', 'toyota', 'nissan', 'mazda',
     'subaru', 'mitsubishi', 'hyundai', 'kia', 'volvo', 'saab', 'lotus', 'cosworth', 'triumph', 'harley', 'ktm',
+    'panigale', 'cbr', 'gsxr', 'yzf',
     'gti', 'twin cam', 'twincam', 'mini cooper', '16v', '8v', '20v', 'k20', 'b16', 'b18', 'ej20', 'rb26', '2jz',
     'sr20', 'ls1', 'ls3', 'hemi'];
 var RE_MARCHE = new RegExp('(^|[^A-Za-z0-9])(' + MARCHE.join('|') + ')(?![A-Za-z0-9])', 'i');
 // sigle che hanno senso solo in maiuscolo e seguite da una cilindrata/numero
 var RE_SIGLE = /(^|[^A-Za-z0-9])(KR ?\d|R6(?![A-Za-z0-9])|TDI|TSI|JTD|HDI)/;
+// marca abbreviata attaccata al numero del modello, come si scrive nel nome di
+// un file ("duc" + cilindrata): e' sfuggita al setaccio fino al 2026-11-21,
+// dentro l'esempio del fumetto "Nome file" della pagina Alzata
+var RE_ABBREVIATE = /(^|[^A-Za-z0-9])(duc ?\d{3,4})(?![0-9])/i;
 function nomeIn(testo) {
     var m = RE_MARCHE.exec(testo);
     if (m) return m[2];
-    m = RE_SIGLE.exec(testo);
+    m = RE_SIGLE.exec(testo) || RE_ABBREVIATE.exec(testo);
     return m ? m[2] : null;
 }
 
@@ -180,6 +185,8 @@ check('...con le righe giuste', sHtml.length === 2 && sHtml[0].riga === 2 && sHt
 check('parole comuni non sono nomi (tipo, delta, lancia la verifica, Arduino Uno)',
     !nomeIn('Tipo follower') && !nomeIn('delta area') && !nomeIn('lancia la verifica') && !nomeIn('Arduino Uno') && !nomeIn('width:100vw'));
 check('sigle motore in maiuscolo si', nomeIn('es. KR 1.8') === 'KR 1' && nomeIn('motore 1.9 TDI') === 'TDI' && !nomeIn('coppia kr del modello'));
+check('marca abbreviata col numero del modello si, anche dentro il nome di un file',
+    nomeIn("Es: 'duc916_a'") === 'duc916' && !nomeIn("Es: 'albero12_asp'") && !nomeIn('conduce 1200 giri'));
 
 // ---------------------------------------------------------------
 //  I file che l'operatore ha davanti
@@ -258,7 +265,7 @@ var RE_SIGLE_TUTTO = /(^|[^A-Za-z0-9_])(VW|KR|R6|R19|TDI|TSI|JTD|HDI)(?![A-Za-z0
 var RE_VECCHI = /validate_clio|validate_vw|validate_106|REPORT_CAMME_VW|VW-kr|kr1_8|clio1_8|clio_test|cliobench|106-ASP|r19_16v/i;
 var RE_NUMERO_MODELLO = /(^|[^A-Za-z0-9])(la|della|sulla|alla|dalla|nella|una)\s+106(?![0-9A-Za-z]|[.,][0-9])/i;
 function nomeOvunque(testo) {
-    var m = RE_TUTTO.exec(testo) || RE_SIGLE_TUTTO.exec(testo);
+    var m = RE_TUTTO.exec(testo) || RE_SIGLE_TUTTO.exec(testo) || RE_ABBREVIATE.exec(testo);
     if (m) return m[2];
     m = RE_VECCHI.exec(testo) || RE_NUMERO_MODELLO.exec(testo);
     return m ? m[0].trim() : null;

@@ -420,9 +420,10 @@ function partePagina() {
     var iAss = run.indexOf('_assicuraConfigBanco('), iS = run.indexOf("sendSocket.send('S'");
     check('la scansione allinea la configurazione prima di partire', iAss >= 0 && iS >= 0 && iAss < iS, 'assicura@' + iAss + ' S@' + iS);
     var vivo = ALZATA.split('\n').filter(function (r) { return !/^\s*(\/\/|\*|<!--)/.test(r); }).join('\n');
-    var iCrot = vivo.indexOf('sendSocket.send(crot');
+    var rot = estrai('ruota') || '';
+    var iAssR = rot.indexOf('_assicuraConfigBanco('), iSendR = rot.indexOf('sendSocket.send(');
     check('la rotazione (Ruota) allinea la configurazione',
-        iCrot >= 0 && vivo.lastIndexOf('_assicuraConfigBanco(', iCrot) > vivo.lastIndexOf('\nfunction ', iCrot), 'crot@' + iCrot);
+        iAssR >= 0 && iSendR >= 0 && iAssR < iSendR, 'assicura@' + iAssR + ' send@' + iSendR);
     check('il jog +/- allinea la configurazione', /_assicuraConfigBanco/.test(SCANJS));
     var nBlocchi = (vivo.match(/sendSocket\.send\('r' \+ currentMode\.microsteps/g) || []).length;
     check('la configurazione si compone in UN posto solo', nBlocchi === 1, nBlocchi + ' copie');

@@ -1558,6 +1558,20 @@ function averageRuns(runs) {
 // anche #stato=INCOMPLETO nei metadati: un file legacy zero-riempito con
 // 360 righe ha missingCount=0 ma NON è una misura completa.
 // Ritorna { ok, reason } (reason in italiano, mostrabile all'utente).
+// Misura salvata nonostante un avviso del banco (giro non chiuso, slittamento):
+// Alzata lo scrive nei metadati, e chi legge il file lo deve dire — prima
+// finiva solo in una notifica di 10 secondi mentre l'operatore era al banco.
+// Non blocca niente (l'operatore ha scelto di salvarla): la dichiara.
+// La Home, che non carica questa libreria, ha la stessa regola (misuraSospetta).
+function avvisoMisuraSospetta(meta) {
+    if (!meta) return null;
+    var motivi = [];
+    var g = parseFloat(meta.giroNonChiuso);
+    if (isFinite(g) && g > 0) motivi.push('giro non chiuso (' + g.toFixed(3).replace('.', ',') + ' mm)');
+    if (String(meta.slittamento) === '1') motivi.push('possibile slittamento del motore');
+    return motivi.length ? 'MISURA SOSPETTA: ' + motivi.join(', ') : null;
+}
+
 function canProduceOfficialResult(p) {
     if (!p) return { ok: false, reason: 'nessun profilo caricato' };
     if (p.meta && String(p.meta.stato || '').toUpperCase() === 'INCOMPLETO') {
@@ -1868,6 +1882,7 @@ var api = {
     scartoDalNominale: scartoDalNominale,
     averageCompleteRuns: averageCompleteRuns,
     canProduceOfficialResult: canProduceOfficialResult,
+    avvisoMisuraSospetta: avvisoMisuraSospetta,
     benchVerdict: benchVerdict,
     simulateCompliance: simulateCompliance,
     simulateCompliance2DOF: simulateCompliance2DOF,

@@ -63,12 +63,22 @@ function _configPrimaDelMoto() {
     if (typeof _assicuraConfigBanco === 'function') _assicuraConfigBanco();
 }
 
+// Un grado camma in unità di motore: 1 in Veloce (r32), 2 in Race (r16, dove
+// l'unità è mezzo grado). Prima i tasti mandavano sempre '$±001', cioè mezzo
+// grado in Race, mentre il fumetto prometteva "1 grado camma".
+// verso: +1 avanti, -1 indietro, in gradi camma; il senso antiorario lo rovescia.
+function _comandoGrado(verso) {
+    var u = (typeof currentMode !== 'undefined' && currentMode && currentMode.subStepsPerDeg) || 1;
+    var pad = (u < 10) ? '00' + u : (u < 100) ? '0' + u : '' + u;
+    var avanti = (verso > 0) === (rsign == 1);
+    return '$' + (avanti ? '+' : '-') + pad + '\n';
+}
+
 function m1() {
     if (window._scanBusy && window._scanBusy('Il jog manuale')) return;   // audit MOT-02
     _configPrimaDelMoto();
     oldg = Number(oldg) - 1;
-    if (rsign == 1) { sendSocket.send('$-001\n'); }
-    if (rsign == -1) { sendSocket.send('$+001\n'); }
+    sendSocket.send(_comandoGrado(-1));
     document.getElementById("step").value = oldg;
 }
 
@@ -76,8 +86,7 @@ function p1() {
     if (window._scanBusy && window._scanBusy('Il jog manuale')) return;   // audit MOT-02
     _configPrimaDelMoto();
     oldg = Number(oldg) + 1;
-    if (rsign == 1) { sendSocket.send('$+001\n'); }
-    if (rsign == -1) { sendSocket.send('$-001\n'); }
+    sendSocket.send(_comandoGrado(+1));
     document.getElementById("step").value = oldg;
 }
 

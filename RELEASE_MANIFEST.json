@@ -4,7 +4,7 @@
     "name": "CAMMES",
     "version": "3.7.1",
     "channel": "beta-tecnica",
-    "note": "Ogni funzione provata, una per una, col server vero pilotato da un firmware emulato. Il firmware NON cambia (chi ha la 4.1 non riflasha). Corregge una REGRESSIONE della 3.7.0: dopo lo Zero virtuale la pagina poteva restare in sola lettura fino al ricaricamento. Altri difetti chiusi: Zero virtuale interrotto che lasciava il comparatore non letto; configurazione dell Arduino non riallineata dopo un rifiuto; comparatore interrogato piu in fretta di quanto risponde; collaudo su nominale (tolleranza con la virgola ignorata, allineamento solo a gradi interi, verdetto calcolato sulla vista Differenza). ATTENZIONE, CAMBIA COSA SI VEDE E SI MISURA: (1) i profili in modalita Race non sono piu in anticipo di 0,25 gradi: quelli gia in archivio lo restano; (2) la modalita Precisione e stata tolta, restano Veloce e Race; (3) la durata stimata della Race (2 min 20 s) e CALCOLATA, non cronometrata; (4) il collaudo su nominale puo dare un verdetto diverso da prima sugli stessi file; (5) la Scheda camma non nomina piu nessuna automobile e l intestazione dell officina esce su tutti i PDF. Il repository e neutro: nessun nome di auto, motore o azienda terza; le camme di prova si chiamano RIF-1, RIF-2, RIF-3 e i file di riferimento sono gli stessi byte, solo rinominati."
+    "note": "Ogni funzione provata, una per una, col server vero pilotato da un firmware emulato. Il firmware NON cambia (chi ha la 4.1 non riflasha). Corregge una REGRESSIONE della 3.7.0: dopo lo Zero virtuale la pagina poteva restare in sola lettura fino al ricaricamento. Altri difetti chiusi: Zero virtuale interrotto che lasciava il comparatore non letto; configurazione dell Arduino non riallineata dopo un rifiuto; comparatore interrogato piu in fretta di quanto risponde; collaudo su nominale (tolleranza con la virgola ignorata, allineamento solo a gradi interi, verdetto calcolato sulla vista Differenza). ATTENZIONE, CAMBIA COSA SI VEDE E SI MISURA: (1) i profili in modalita Race non sono piu in anticipo di 0,25 gradi: quelli gia in archivio lo restano; (2) la modalita Precisione e stata tolta, restano Veloce e Race; (3) la durata stimata della Race (2 min 20 s) e CALCOLATA, non cronometrata; (4) il collaudo su nominale puo dare un verdetto diverso da prima sugli stessi file; (5) la Scheda camma non nomina piu nessuna automobile e l intestazione dell officina esce su tutti i PDF. Il repository e neutro: nessun nome di auto, motore o azienda terza; le camme di prova si chiamano RIF-1, RIF-2, RIF-3 e i file di riferimento sono gli stessi byte, solo rinominati. Dall analisi di usabilita (stessa release): in Race Ruota e i tasti -/+ muovevano meta dei gradi scritti e un campo non valido ripeteva l ultimo movimento; l esito della misura (giro non chiuso, slittamento) ora resta scritto, chiede conferma al salvataggio e va nel file; lo Zero virtuale dice com e andato e non cambia modalita, ripetizioni e senso; in Home una verifica banco fallita non si legge piu come verificata; la Scheda PDF della singola misura porta la data della misura; gioco valvola da confermare e riserva sui valori dichiarati anche su scheda camma, referto e CSV; niente piu (sicuro) o motore sicuro per un calcolo statico."
   },
   "firmware": {
     "version": "4.1",
@@ -19,7 +19,7 @@
   },
   "commit": "tag v3.7.1 (il commit esatto e il tag coincidono alla release)",
   "gates": {
-    "npmTest": "60 suite verdi (software; incl. mock-seriale, round-trip profili, oracolo puntalino, neutralita dei testi e coerenza dei documenti di release)",
+    "npmTest": "63 suite verdi (software; incl. mock-seriale, round-trip profili, oracolo puntalino, neutralita dei testi e coerenza dei documenti di release)",
     "lint": "0 errori",
     "npmAudit": "1 moderata (pkg, devDep, no fix) — REL-02",
     "exeSigned": false,
@@ -49,7 +49,7 @@
     "SEC-01 auth token LAN / REL-01 jsPDF / REL-02-05 firma exe — decisioni committente",
     "UI Analisi: chiuse nella v3.7.0 le sette segnalazioni dell officina (sei difetti confermati). Restano: residuo RIF-2 asp 10 gradi di durata dopo la correzione del puntalino (usura dell albero o residuo della correzione — decide la ri-scansione al banco); modalita Puntalino senza compensazione della sfera (decisione committente: cambierebbe ogni numero gia esportato col default); accelerazione non convergente fra finestre di lisciatura; verdetto di ripetibilita che esclude il cerchio base.",
     "v3.7.1: durata della modalita Race calcolata e non cronometrata; coda nel buffer seriale ricavata dal sorgente e non osservata sull hardware; verifica funzionale fatta con firmware EMULATO — NEEDS_HARDWARE",
-    "Usabilita: analisi del 2026-11-15 (ANALISI_USABILITA_2026-11-15.md) — proposte in attesa di decisione del committente"
+    "Usabilita: analisi del 2026-11-21 (ANALISI_USABILITA_2026-11-21.md) — difetti veri corretti nella v3.7.1; le proposte di miglioramento aspettano la decisione del committente"
   ],
   "warning": "Beta tecnica: le protezioni software/firmware sono validate al banco, ma la caratterizzazione metrologica non e' completa e l'exe non e' firmato. Non presentare le misure come certificate."
 }

@@ -9,7 +9,7 @@ Sistema di misura profili alberi a camme per motori.
 
 ---
 
-## v3.7.1 — 2026-11-15: ogni funzione provata, una per una (firmware 4.1 INVARIATO)
+## v3.7.1 — 2026-11-21: ogni funzione provata, una per una (firmware 4.1 INVARIATO)
 
 Richiesta dell'officina: *verificare il progetto in ogni sua funzionalità,
 partendo da quale sia l'obiettivo, e correggere*. Con un difetto già indicato: la
@@ -29,7 +29,15 @@ browser come le usa l'officina: scansione, STOP, Zero virtuale, jog,
 ripetizioni, verifica banco, archivio, cestino, backup, export, confronto a 4
 curve, collaudo su nominale, analisi con tutti i moduli, i quattro PDF, CSV,
 salvataggio profilo, confronto A/B, strumenti race. Ogni difetto ha un test che
-fallisce sul codice di prima. Suite: 60, tutte verdi.
+fallisce sul codice di prima. Suite: 63, tutte verdi.
+
+Poi, su domanda dell'officina (*il software è semplice da usare e
+comprensibile?*), un'analisi di usabilità: nove valutatori indipendenti, i
+rilievi gravi ricontrollati da un secondo esame
+(`ANALISI_USABILITA_2026-11-21.md`). I **difetti veri** che ha trovato — il
+programma che fa o dice una cosa sbagliata — sono corretti qui (n. 13-18). Le
+**proposte di miglioramento** (disposizione, linguaggio, archivio) aspettano la
+decisione dell'officina.
 
 ### ⚠ Cosa cambia per chi usa il banco
 
@@ -46,6 +54,14 @@ fallisce sul codice di prima. Suite: 60, tutte verdi.
 | **Durata stimata** della Race | ~4m40s | ~2m20s — **stima calcolata**, vedi sotto |
 | **Intestazione dell'officina** | solo sulla Scheda camma | su tutti i PDF: report di analisi, race report, scheda camma, scheda della singola misura |
 | **Manuale**, follower simulato | «inserisci il raggio base» | «il DIAMETRO del cerchio base» (il campo chiede quello dal 28-07) |
+| **Ruota, − e + in Race** | muovevano metà dei gradi scritti; un angolo con la virgola faceva ripetere il movimento precedente | muovono i gradi scritti, in Veloce e in Race; un valore non eseguibile viene rifiutato senza muovere |
+| **Fine della misura** | «Scansione completata» in verde anche col giro non chiuso; la misura sospetta si salvava senza domande e senza traccia | verde solo se il giro è pulito; giro non chiuso e slittamento chiedono conferma al salvataggio e restano scritti nel file |
+| **Zero virtuale** | finiva ricaricando la pagina senza dire com'era andato, e riportava Veloce, 1 giro, senso orario | dice l'esito (fatto, già in posizione, interrotto, non confermato, senza encoder) e mantiene modalità, ripetizioni e senso |
+| **Verifica banco**, in Home | una verifica fallita si leggeva «banco verificato il …» | «Verifica banco NON SUPERATA il …», in rosso, con residuo RMS e massimo |
+| **Scheda PDF della singola misura** | in testa la data della stampa, senza dirlo; nessun segno di una misura incompleta; la riga dei preferiti | «Misura del …» presa dal file e «Stampata il …»; INCOMPLETA o SOSPETTA in rosso; niente preferiti |
+| **Analisi, gioco valvola** | il segnaposto 0,50 entrava in durate e fasatura senza alcun segno | è «da confermare» come gli angoli lobo, e la nota si vede anche coi moduli spenti |
+| **Scheda camma, referto, CSV** | fasatura e durate da valori non confermati stampate come misure; «OK», «(sicuro)», «motore sicuro» | asterisco e nota sui valori dichiarati non confermati; il margine sul distacco si chiama calcolo statico |
+| **Race report** | valeva per il solo lato aspirazione senza dirlo in copertina | lo dice in testa e in ogni pagina |
 
 **I profili Race già in archivio** restano in anticipo di 0,25°: confrontandone
 uno vecchio con uno nuovo si vede quello scarto. È il difetto di prima, non una
@@ -137,6 +153,74 @@ Ora documenta anche i messaggi di ruolo fra server e pagina.
 portatile. Confronto A/B: «Area asp. +-13.3 %». Ripetibilità: «σ max 0.000 mm
 @ 0°». Dopo una scansione chiusa incompleta i selettori restavano spenti.
 Sblocca motore restava cliccabile in sola lettura.
+
+*Dall'analisi di usabilità:*
+
+**13. Ruota e i tasti −/+ muovevano i gradi sbagliati in Race, e un campo non
+valido ripeteva l'ultimo movimento.** Il campo è in gradi camma, il comando del
+firmware in unità di motore: un grado in Veloce, mezzo grado in Race. Ruota e i
+tasti mandavano i gradi come unità, quindi in Race «Ruota a 180» partendo da 90
+portava a 135 (provato sul banco emulato). E il campo non era controllato: con
+«90,5», «abc» o un decimale non eseguibile il conto non dava un numero, nessun
+comando veniva costruito e partiva quello della rotazione precedente; con il
+campo vuoto l'albero tornava a 0. Ora i gradi si convertono come già facevano
+Zero virtuale e posizioni salvate; un valore non eseguibile (un decimale in
+Veloce, un quarto di grado in Race, oltre il tetto del firmware) è rifiutato
+sul campo, senza voce e senza movimento.
+
+**14. L'esito della misura spariva in pochi secondi.** Giro non chiuso, punti non
+stabilizzati e slittamento li diceva solo una notifica di 8-12 secondi, mentre
+l'operatore è al banco; poi usciva comunque il verde «Scansione completata», e
+una misura che il manuale dice di non usare si salvava senza domande, identica
+a una buona. Ora il verde esce solo se il giro è pulito, altrimenti la notifica
+elenca gli avvisi e resta finché non la si chiude; salvare una misura col giro
+non chiuso o con uno slittamento chiede conferma, come per una incompleta, e il
+file porta `#giroNonChiuso` / `#slittamento`, che Home, Confronto e Analisi
+mostrano quando la riaprono. La scritta «file salvato» si cancella alla misura
+successiva.
+
+**15. Lo Zero virtuale non diceva com'era andato.** Finisce ricaricando la
+pagina, e dopo il ricaricamento i cinque esiti possibili erano identici: fatto,
+già in posizione (la notifica veniva tagliata dopo 1,2 s), spostamento fermato
+con STOP, mai confermato dal motore, encoder mancante. In più modalità,
+ripetizioni e senso tornavano ai valori iniziali: chi aveva scelto l'antiorario
+misurava poi nell'altro verso, col profilo specchiato. Ora esito e scelte
+attraversano il ricaricamento, una volta sola.
+
+**16. Documenti e testi che dicevano più del vero.**
+- In Home una verifica banco **non superata** si leggeva «banco verificato il …».
+- La **Scheda PDF della singola misura** stampava in testa la data della stampa
+  senza dirlo (ristampata un mese dopo sembrava una misura di quel giorno), non
+  segnalava una misura salvata incompleta e metteva sul foglio del cliente la
+  riga «File contrassegnato tra i preferiti».
+- In Analisi il **gioco valvola** nasce a 0,50 mm, che il suo fumetto chiama
+  «segnaposto» (fra 0 e 0,50 la durata cambia di circa 38 gradi), ma non era
+  fra i campi da confermare; e la riserva «da confermare» restava sullo
+  schermo: **scheda camma, referto e CSV** stampavano fasatura e durate come
+  misure del banco. Ora le righe che discendono da valori dichiarati non
+  confermati portano un asterisco e una nota; la nota a schermo sta in testa ai
+  risultati, non più dentro il modulo molla, nascosto in vista Base.
+- Il **referto** diceva «OK», «(sicuro)», «motore sicuro» per un calcolo
+  statico con molla e masse dichiarate; il **Race report**, che simula il solo
+  lato aspirazione, lo diceva in una frase sola. Ora il banner si chiama
+  «Margine sul distacco valvola (calcolo statico)», il Race report lo dichiara
+  in copertina e in ogni pagina, e referto e Race report hanno l'avvertenza di
+  misura indicativa che aveva solo la scheda camma.
+- Fumetti e conferme falsi: «Tipologia» prometteva un rapporto di leva che non
+  viene applicato (è la dicitura del referto; il rapporto sta nel campo
+  Bilanciere); il Reset di Analisi diceva che i parametri restano (tornano ai
+  valori di partenza); il RESET di Alzata prometteva di azzerare l'encoder (non
+  lo fa); «Svuota archivio» diceva «per sempre» per file che vanno nel cestino
+  per 30 giorni.
+
+**17. Un esempio nel fumetto «Nome file» richiamava un modello di moto** (marca
+abbreviata più cilindrata). Il controllo di neutralità cercava i nomi interi e
+non l'aveva visto: ora riconosce anche le sigle abbreviate attaccate al numero
+del modello.
+
+**18. Confronto: il «Raggio base» della vista polare scritto con la virgola
+diventava 16 in silenzio.** Ora passa dallo stesso lettore di numeri della
+tolleranza: virgola o punto, e un valore non valido ferma il disegno dicendolo.
 
 ### Il repository è neutro
 

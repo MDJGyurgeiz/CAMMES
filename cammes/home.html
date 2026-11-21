@@ -1004,7 +1004,8 @@ function promptAddTags(fileName, ev) {
     var current = getTagsForFile(fileName).join(', ');
     var raw = prompt(
         'Tag per "' + fileName + '"\n' +
-        '(separati da virgola, max 20 caratteri ciascuno):',
+        '(separati da virgola, max 20 caratteri ciascuno;\n' +
+        'compaiono anche sulla Scheda PDF della misura):',
         current
     );
     if (raw === null) return;
@@ -1493,7 +1494,7 @@ function confirmDelete(fileName) {
         '  <div class="confirm-modal-title">Elimina file?</div>' +
         '  <div class="confirm-modal-body">' +
         '    Stai per eliminare <code>' + escapeHtml(fileName) + '</code>.<br>' +
-        '    Il file finisce nel <b>cestino</b> e resta recuperabile per <b>30 giorni</b> (Sistema &rarr; Cestino), poi viene eliminato definitivamente.' +
+        '    Il file finisce nel <b>cestino</b> e resta recuperabile per <b>30 giorni</b> (pulsante &#9851; Cestino, nella barra delle Misurazioni), poi viene eliminato definitivamente.' +
         '  </div>' +
         '  <div class="confirm-modal-actions">' +
         '    <button class="btn btn-secondary" onclick="closeConfirm();">Annulla</button>' +
@@ -1565,8 +1566,12 @@ async function clearArchive() {
         if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Archivio già vuoto', body: 'Nessun file di misura da eliminare.', duration: 3000 });
         return;
     }
-    if (!window.confirm('Stai per eliminare TUTTI i ' + files.length + ' file di misura dall\'archivio (cartella prove/), inclusi i file demo.\n\nPrima di continuare: hai scaricato/copiato i file che vuoi conservare?\n\nOK per continuare, Annulla per fermarti.')) return;
-    if (!window.confirm('CONFERMA DEFINITIVA\n\nEliminare per sempre ' + files.length + ' file? L\'operazione NON è reversibile.')) return;
+    // Il testo dice quello che succede davvero: i file vanno nel CESTINO (il
+    // server li sposta in prove/.trash) e si recuperano per 30 giorni; si
+    // perdono subito solo tag e preferiti. Prima diceva "per sempre" e "NON è
+    // reversibile", contraddicendo il fumetto del pulsante.
+    if (!window.confirm('Stai per spostare nel CESTINO tutti i ' + files.length + ' file di misura dell\'archivio.\n\nRestano recuperabili per 30 giorni (pulsante Cestino), poi vengono eliminati definitivamente.\nTag e preferiti di questi file si perdono SUBITO.\n\nOK per continuare, Annulla per fermarti.')) return;
+    if (!window.confirm('CONFERMA\n\nSpostare nel cestino ' + files.length + ' file e cancellare i loro tag e preferiti?')) return;
 
     var okCount = 0, failed = [];
     for (var i = 0; i < files.length; i++) {
@@ -1586,7 +1591,7 @@ async function clearArchive() {
     loadRecents();
     if (window.cammesToast) {
         if (failed.length === 0) {
-            window.cammesToast({ kind: 'success', title: 'Archivio svuotato', body: okCount + ' file eliminati (tag e preferiti ripuliti).', duration: 5000 });
+            window.cammesToast({ kind: 'success', title: 'Archivio svuotato', body: okCount + ' file spostati nel cestino (recuperabili per 30 giorni); tag e preferiti ripuliti.', duration: 5000 });
         } else {
             window.cammesToast({ kind: 'warn', title: 'Svuotato con errori', body: okCount + ' eliminati, ' + failed.length + ' falliti: ' + failed.slice(0, 3).join(', ') + (failed.length > 3 ? '…' : ''), duration: 7000 });
         }
@@ -1602,6 +1607,46 @@ window.closeConfirm  = closeConfirm;
 // definitivamente o aprire la pagina Confronto.
 
 var _quickViewChart = null;
+
+// Metadati in coda al file (#chiave=valore): li scrive Alzata al salvataggio
+// (data della misura, stato, gradi mancanti, modalità...). Vista rapida e Scheda
+// PDF li ignoravano: la scheda stampava in testa la data della STAMPA senza
+// dirlo (ristampata un mese dopo, sembrava una misura di quel giorno) e non
+// segnalava una misura salvata INCOMPLETA.
+function metaDaFile(text) {
+    var meta = {};
+    String(text || '').split(/\r?\n/).forEach(function (r) {
+        r = r.trim();
+        if (r.charAt(0) !== '#') return;
+        var eq = r.indexOf('=');
+        if (eq > 1) meta[r.substring(1, eq).trim()] = r.substring(eq + 1).trim();
+    });
+    return meta;
+}
+// La data scritta nel file; per i file vecchi che non ce l'hanno, quella del
+// file in archivio, dichiarandolo.
+function dataDellaMisura(meta, mtime) {
+    var t = (meta && meta.data) ? Date.parse(meta.data) : NaN;
+    if (isFinite(t)) return 'Misura del ' + new Date(t).toLocaleString('it-IT');
+    if (mtime) return 'Misura del ' + new Date(mtime).toLocaleString('it-IT') + ' (data del file)';
+    return 'Data della misura non registrata';
+}
+function misuraIncompleta(meta) {
+    if (!meta || String(meta.stato || '').toUpperCase() !== 'INCOMPLETO') return null;
+    var n = parseInt(meta.gradiMancanti, 10);
+    return 'MISURA INCOMPLETA: ' + (isFinite(n) ? n + ' gradi su 360 senza lettura' : 'gradi senza lettura') +
+           ' - non usarla per confronti';
+}
+// giro non chiuso e slittamento: li scrive Alzata quando l'operatore salva
+// comunque una misura che il programma giudicava sospetta
+function misuraSospetta(meta) {
+    if (!meta) return null;
+    var motivi = [];
+    var g = parseFloat(meta.giroNonChiuso);
+    if (isFinite(g) && g > 0) motivi.push('giro non chiuso (' + g.toFixed(3).replace('.', ',') + ' mm)');
+    if (String(meta.slittamento) === '1') motivi.push('possibile slittamento del motore');
+    return motivi.length ? 'MISURA SOSPETTA: ' + motivi.join(', ') : null;
+}
 
 // Parser file _alz: righe "grado,valore\r\n"
 // Ritorna { labels: [1..N], data: [v1..vN], max: {lift, deg} }
@@ -1712,11 +1757,17 @@ function _renderQuickView(fileName, fileType, text) {
     }
 
     var safeName = escapeHtml(fileName);
+    var meta = metaDaFile(text);
+    window._qvMeta = { file: fileName, meta: meta };   // la Scheda PDF stampa gli stessi dati
+    var nelElenco = (_cachedFiles || []).filter(function (f) { return f.name === fileName; })[0];
+    var avvisi = [misuraIncompleta(meta), misuraSospetta(meta)].filter(Boolean);
 
     // Tag badges nel modal: il contenitore resta vuoto qui, lo riempie
     // _refreshQuickViewTags() via DOM (SEC-03: niente nome file in onclick
     // inline — stesso motivo della tabella recenti).
     body.innerHTML =
+        '<div class="quickview-stat-label" style="margin-bottom: var(--sp-2);">' + escapeHtml(dataDellaMisura(meta, nelElenco && nelElenco.mtime)) + '</div>' +
+        avvisi.map(function (a) { return '<div style="color: var(--danger); font-weight: 700; margin-bottom: var(--sp-2);">' + escapeHtml(a) + '</div>'; }).join('') +
         '<div style="margin-bottom: var(--sp-3);">' +
         '  <div class="quickview-stat-label">Tag</div>' +
         '  <div class="file-tags" id="qvTagsRow"></div>' +
@@ -2346,6 +2397,12 @@ function exportSinglePDF(fileName, fileType) {
     var pageW = doc.internal.pageSize.getWidth();
     var pageH = doc.internal.pageSize.getHeight();
     var margin = 14;
+    // dati del FILE (non della stampa): li ha letti la vista rapida
+    var metaQv = (window._qvMeta && window._qvMeta.file === fileName) ? window._qvMeta.meta : {};
+    var nelElenco = (typeof _cachedFiles !== 'undefined' && _cachedFiles ? _cachedFiles : [])
+        .filter(function (f) { return f.name === fileName; })[0];
+    var quandoMisura = dataDellaMisura(metaQv, nelElenco && nelElenco.mtime);
+    var avvisiPdf = [misuraIncompleta(metaQv), misuraSospetta(metaQv)].filter(Boolean);
 
     // Header
     doc.setFillColor(22, 28, 40); doc.rect(0, 0, pageW, 36, 'F');
@@ -2363,7 +2420,7 @@ function exportSinglePDF(fileName, fileType) {
     doc.text('Scheda tecnica camma', margin, 25);
     doc.setFontSize(8);
     doc.setTextColor(180, 195, 215);
-    doc.text(new Date().toLocaleString('it-IT'), margin, 30);
+    doc.text(quandoMisura, margin, 30);
 
     // Recupera dati dal chart corrente
     var ds = _quickViewChart.data.datasets[0];
@@ -2386,6 +2443,12 @@ function exportSinglePDF(fileName, fileType) {
 
     // KPI box
     var y = 62;
+    avvisiPdf.forEach(function (a, k) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+        doc.setTextColor(200, 30, 30);
+        doc.text(a, margin, 60 + 5 * k);
+        y = 65 + 5 * k;
+    });
     var boxW = (pageW - 2 * margin - 6) / 3;
     function kpiBox(x, label, value, sub, col) {
         doc.setFillColor(245, 247, 251); doc.roundedRect(x, y, boxW, 22, 2, 2, 'F');
@@ -2477,14 +2540,8 @@ function exportSinglePDF(fileName, fileType) {
         y += 5;
     }
 
-    // Bookmark indicator
-    var isBM = (typeof isBookmarked === 'function') ? isBookmarked(fileName) : false;
-    if (isBM) {
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-        doc.setTextColor(255, 184, 32);
-        doc.text('* File contrassegnato tra i preferiti', margin, y);
-        y += 5;
-    }
+    // (la riga "File contrassegnato tra i preferiti" non c'è più: i preferiti
+    // sono un segno di lavoro dell'officina, non un dato per il cliente)
 
     // Footer
     var fy = pageH - 8;
@@ -2493,7 +2550,7 @@ function exportSinglePDF(fileName, fileType) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
     doc.setTextColor(120, 130, 145);
     doc.text('CAMMES - Scheda tecnica camma singola', margin, fy);
-    var ts = new Date().toLocaleString('it-IT');
+    var ts = 'Stampata il ' + new Date().toLocaleString('it-IT');
     doc.text(ts, pageW - margin - doc.getTextWidth(ts), fy);
 
     var pdfName = 'scheda_' + fileName.replace(/\.(scr|txt|csv)$/i, '') + '_' +
@@ -2602,6 +2659,35 @@ window.flashFirmware = flashFirmware;
 window.addEventListener('DOMContentLoaded', initUpdatesCard);
 
 // ===== Impostazioni officina + badge verifica banco =====
+// L'esito dell'ultima verifica banco, a parole. Prima una verifica NON superata
+// si leggeva "✗ banco verificato il 14/11/2026", in arancio come una soltanto
+// vecchia: chi arrivava dopo leggeva "verificato" e misurava su un banco fuori
+// soglia. Ora l'esito è scritto per esteso e il colore lo ripete; residuo RMS e
+// massimo, che erano salvati ma non si vedevano da nessuna parte, accanto.
+function testoVerificaBanco(vb, adesso) {
+    if (!vb || !vb.date) {
+        return { html: 'Verifica banco: <b>mai fatta</b> (Alzata &rarr; &#9881; Avanzate &rarr; Verifica banco)',
+                 colore: 'var(--warning-text, #8a6a00)' };
+    }
+    var quando = new Date(vb.date);
+    var data = quando.toLocaleDateString('it-IT');
+    var giorni = Math.floor(((adesso || Date.now()) - quando.getTime()) / 86400000);
+    var mm = function (x) { return Number(x).toFixed(3).replace('.', ','); };
+    var residuo = (vb.rms !== null && vb.max !== null && isFinite(Number(vb.rms)) && isFinite(Number(vb.max)))
+        ? ' (residuo RMS ' + mm(vb.rms) + ' mm, massimo ' + mm(vb.max) + ' mm)' : '';
+    if (!vb.pass) {
+        return { html: '&#10007; Verifica banco <b>NON SUPERATA</b> il ' + data + residuo +
+                       ': le misure non sono affidabili finch&eacute; non la rifai e la superi.',
+                 colore: 'var(--danger, #ff3838)' };
+    }
+    if (giorni > 30) {
+        return { html: '&#10003; Verifica banco superata il ' + data + residuo +
+                       ' &mdash; <b>pi&ugrave; di 30 giorni fa: rifalla</b>.',
+                 colore: 'var(--warning-text, #8a6a00)' };
+    }
+    return { html: '&#10003; Verifica banco <b>superata</b> il ' + data + residuo + '.',
+             colore: 'var(--success, #00e676)' };
+}
 function initSettingsUI() {
     fetch('/api/settings').then(function (r) { return r.json(); }).then(function (s) {
         var inp = document.getElementById('setOfficina');
@@ -2609,15 +2695,10 @@ function initSettingsUI() {
         // serve anche qui: la scheda tecnica della singola misura la stampa
         window._officina = (s.officina && s.officina.nome) || '';
         var badge = document.getElementById('benchBadge');
-        if (badge && s.verificaBanco && s.verificaBanco.date) {
-            var days = Math.floor((Date.now() - new Date(s.verificaBanco.date).getTime()) / 86400000);
-            var old = days > 30;
-            badge.innerHTML = (s.verificaBanco.pass ? '&#10003;' : '&#10007;') + ' banco verificato il ' +
-                new Date(s.verificaBanco.date).toLocaleDateString('it-IT') +
-                (old ? ' — <b style="color:var(--warn, orange);">più di 30 giorni fa: rifai la verifica</b>' : '');
-            badge.style.color = s.verificaBanco.pass && !old ? 'var(--success, green)' : 'var(--warn, orange)';
-        } else if (badge) {
-            badge.textContent = 'banco mai verificato (Alzata → ⚙ Avanzate → Verifica banco)';
+        if (badge) {
+            var esito = testoVerificaBanco(s.verificaBanco, Date.now());
+            badge.innerHTML = esito.html;
+            badge.style.color = esito.colore;
         }
     }).catch(function () {});
 }

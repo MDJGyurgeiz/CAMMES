@@ -46,6 +46,18 @@ function mockWrites() {
     });
     return out;
 }
+// Sotto carico (suite completa su disco di rete) 250 ms fissi non bastavano:
+// la scrittura ATTESA arrivava dopo e finiva nel controllo successivo (visto il
+// 2026-11-21: "5 STATUS" -> [] e subito dopo "S+360 respinto" -> ["5 STATUS\n"]).
+// Per le scritture attese si aspetta che arrivino, fino a 3 s, piu' un margine
+// per vedere eventuali scritture in piu'; per quelle che NON devono arrivare
+// resta la finestra fissa di 250 ms.
+async function attendiScritte(base, n) {
+    var fine = Date.now() + 3000;
+    while (Date.now() < fine && mockWrites().length - base < n) await sleep(25);
+    await sleep(80);
+    return mockWrites().slice(base);
+}
 function connect(wsPort) {
     return new Promise(function (resolve, reject) {
         var ws = new WebSocket('ws://127.0.0.1:' + wsPort);
@@ -97,8 +109,7 @@ Promise.all([freePort(), freePort()]).then(async function (ports) {
 
     // A acquisisce il lease con un comando di controllo legittimo
     base = mockWrites().length;
-    A.send('c1\n'); await sleep(250);
-    w = mockWrites().slice(base);
+    A.send('c1\n'); w = await attendiScritte(base, 1);
     check('controller: "c1\\n" inoltrato tale e quale', w.length === 1 && w[0] === 'c1\n', JSON.stringify(w));
 
     // T01: frame concatenato da OBSERVER: "?\nS+360\n" -> ZERO byte
@@ -109,8 +120,7 @@ Promise.all([freePort(), freePort()]).then(async function (ports) {
 
     // T02: "xS+360\n" -> scritto ESATTAMENTE "x", nessun moto successivo
     base = mockWrites().length;
-    B.send('xS+360\n'); await sleep(250);
-    w = mockWrites().slice(base);
+    B.send('xS+360\n'); w = await attendiScritte(base, 1);
     check('T02: "xS+360\\n" -> scritto esattamente "x" una volta', w.length === 1 && w[0] === 'x', JSON.stringify(w));
 
     // T03: v4 concatenato: "0 STATUS\n1 SCAN ..." -> ZERO byte
@@ -142,30 +152,25 @@ Promise.all([freePort(), freePort()]).then(async function (ports) {
 
     // comandi legittimi passano in forma canonica
     base = mockWrites().length;
-    A.send('S+360\n'); await sleep(250);
-    w = mockWrites().slice(base);
+    A.send('S+360\n'); w = await attendiScritte(base, 1);
     check('controller: "S+360\\n" valido -> inoltrato', w.length === 1 && w[0] === 'S+360\n', JSON.stringify(w));
 
     base = mockWrites().length;
-    A.send('$+010\n'); await sleep(250);
-    w = mockWrites().slice(base);
+    A.send('$+010\n'); w = await attendiScritte(base, 1);
     check('controller: "$+010\\n" valido -> inoltrato', w.length === 1 && w[0] === '$+010\n', JSON.stringify(w));
 
     base = mockWrites().length;
-    A.send('t440:500:+:75\n'); await sleep(250);
-    w = mockWrites().slice(base);
+    A.send('t440:500:+:75\n'); w = await attendiScritte(base, 1);
     check('controller: tono Concerto valido -> inoltrato', w.length === 1 && w[0] === 't440:500:+:75\n', JSON.stringify(w));
 
     // query read-only da observer: ammessa, byte esatto
     base = mockWrites().length;
-    B.send('?'); await sleep(250);
-    w = mockWrites().slice(base);
+    B.send('?'); w = await attendiScritte(base, 1);
     check('observer: "?" -> inoltrato esattamente "?"', w.length === 1 && w[0] === '?', JSON.stringify(w));
 
     // v4 read-only da observer: ammesso
     base = mockWrites().length;
-    B.send('5 STATUS\n'); await sleep(250);
-    w = mockWrites().slice(base);
+    B.send('5 STATUS\n'); w = await attendiScritte(base, 1);
     check('observer: "5 STATUS" -> inoltrato', w.length === 1 && w[0] === '5 STATUS\n', JSON.stringify(w));
 
     // comando di CONTROLLO singolo valido da observer -> respinto dal lease
@@ -176,8 +181,7 @@ Promise.all([freePort(), freePort()]).then(async function (ports) {
 
     // STOP esatto da chiunque
     base = mockWrites().length;
-    B.send('x'); await sleep(250);
-    w = mockWrites().slice(base);
+    B.send('x'); w = await attendiScritte(base, 1);
     check('observer: "x" esatto -> scritto "x"', w.length === 1 && w[0] === 'x', JSON.stringify(w));
 
     console.log('');

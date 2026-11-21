@@ -294,6 +294,8 @@ function _commitCmpCurve(cam, label) {
     if (cam.missingCount > 0 || (cam.meta && cam.meta.stato === 'INCOMPLETO')) {
         if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura incompleta', body: cam.missingCount + ' gradi mancanti (riempiti a 0), confronto indicativo', duration: 5000 });
     }
+    var _sosp = avvisoMisuraSospetta(cam.meta);
+    if (_sosp && window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura sospetta', body: _sosp.replace('MISURA SOSPETTA: ', '') + ': al banco il programma aveva chiesto di ripeterla. Confronto indicativo.', duration: 8000 });
     // Picco e grado del picco da cam[1..360] con Number(), senza vmax1.split('.')
     // fragile (lanciava se il valore non aveva il punto decimale).
     var localVmax = 0, localGmax = 0;
@@ -407,7 +409,15 @@ function loadFile2() {
     var file = input.files[0];
     var fr = new FileReader();
     fr.onload = function () {
-        var rBase = Number((document.getElementById('polRBase') || {}).value) || 16;
+        // Con la virgola ("17,5") Number() dava NaN e il raggio diventava 16 in
+        // silenzio: la vista usciva disegnata con un raggio che nessuno ha scritto.
+        var elRB = document.getElementById('polRBase');
+        var vRB = validaNumero(elRB ? elRB.value : '', { min: 0, minEsclusivo: true });
+        if (tfile === 'alz' && !vRB.ok) {
+            if (window.cammesValidate) window.cammesValidate.error(elRB, 'Raggio base non valido: scrivi un numero maggiore di zero, per esempio 16 oppure 17,5.');
+            return;
+        }
+        var rBase = vRB.ok ? vRB.valore : 16;   // i vecchi file _pol il raggio ce l'hanno già
         var perSlot = new Array(361);            // array LOCALE di questa vista
         for (var z = 1; z <= 360; z++) perSlot[z] = 0;
 
@@ -430,6 +440,8 @@ function loadFile2() {
             if (cam.missingCount > 0 || (cam.meta && cam.meta.stato === 'INCOMPLETO')) {
                 if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura incompleta', body: cam.missingCount + ' gradi mancanti (riempiti a 0), vista indicativa', duration: 5000 });
             }
+            var _sospP = avvisoMisuraSospetta(cam.meta);
+            if (_sospP && window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura sospetta', body: _sospP.replace('MISURA SOSPETTA: ', '') + ': vista indicativa.', duration: 8000 });
             for (var j = 1; j <= 360; j++) {
                 var v = Number(cam[j]);
                 perSlot[j] = (rBase + (isFinite(v) ? v : 0)).toFixed(2);
