@@ -7,6 +7,143 @@
     <link rel="stylesheet" href="style.css">
     <script src="cammes-ui.js"></script>
     <script src="cammes-scan.js"></script>
+    <style>
+    /* ===== PAGINA ALZATA: disposizione per il lavoro al banco (v3.8.0) =====
+       Regole di questa pagina sola. Chi misura sta in piedi a un metro dallo
+       schermo: START, STOP, avanzamento, esito e salvataggio stanno in una
+       barra che resta sotto la barra in alto mentre si scorre. Le due altezze
+       le misura la pagina (_misuraBarre); qui i valori di partenza. */
+    :root { --alt-intestazione: 88px; --alt-barra: 132px; }
+
+    /* Spie in alto: dentro il pallino c'e' un segno, cosi' lo stato non si
+       affida al solo colore. Nome (13 px) e pallino (14 px, centrato) li decide
+       style.css per tutte le pagine; qui solo il segno. Il colore del pallino
+       resta quello della spia (l'alone che pulsa lo usa): il segno ha il suo. */
+    .header .status-led .led::after {
+        content: '\2013'; font-family: var(--font-sans); font-size: 10px; font-weight: 800; line-height: 1;
+        color: rgba(255, 255, 255, 0.85);
+    }
+    .header .status-led .led.ok::after   { content: '\2713'; color: #00331a; }
+    .header .status-led .led.warn::after { content: '!';      color: #3a2c00; }
+    .header .status-led .led.err::after  { content: '\2715'; color: #ffffff; }
+    .header .status-led .led.run::after  { content: '\21bb'; color: #002833; }
+
+    /* ---- barra dei comandi, sempre visibile ---- */
+    .barra-comandi {
+        position: sticky;
+        top: var(--alt-intestazione);
+        z-index: 99;                          /* sotto la barra in alto (100) */
+        display: flex; flex-direction: column; gap: 8px;
+        padding: 10px 16px;
+        background: var(--bg-elev-2);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--r-lg);
+        box-shadow: var(--e-3);
+    }
+    .barra-riga { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+    .barra-comandi .btn { min-height: 44px; }
+    .btn-grande { font-size: 16px; padding: 10px 22px; letter-spacing: 1.6px; }
+    /* Zero virtuale: il passo facoltativo PRIMA di START, con la nota scritta
+       sul pulsante (stava in fondo alla pagina, nel riquadro della rotazione) */
+    .barra-comandi .btn-zero { flex-direction: column; gap: 1px; padding: 5px 16px; line-height: 1.15; }
+    .btn-zero .btn-nota {
+        font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+        letter-spacing: 0; text-transform: none; color: var(--text-secondary);
+    }
+    .riassunto-scelte {
+        font-size: 14px; color: var(--text-secondary); white-space: nowrap; cursor: pointer;
+        text-decoration: underline dotted; text-underline-offset: 4px;
+    }
+    .riassunto-scelte:hover, .riassunto-scelte:focus-visible { color: var(--accent-text); }
+    .barra-comandi .scan-progress-wrap { flex: 1 1 300px; min-width: 240px; margin-top: 0; padding: 8px 12px; }
+    .barra-comandi .scan-progress-label { font-size: 13px; color: var(--text-secondary); }
+    .barra-comandi .scan-progress-eta { font-size: 13px; color: var(--text-secondary); }
+    .barra-etichetta {
+        font-family: var(--font-display); font-weight: 700; font-size: 13px;
+        letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-secondary);
+    }
+    .esito-misura {
+        position: relative; flex: 1 1 380px; min-width: 240px;
+        padding: 8px 12px 8px 34px;
+        border: 1px solid var(--border); border-left: 5px solid var(--text-muted);
+        border-radius: var(--r-sm); background: var(--bg-input);
+        color: var(--text-primary); font-size: 15px; line-height: 1.4;
+    }
+    .esito-misura::before { position: absolute; left: 11px; top: 8px; font-weight: 800; content: 'i'; color: var(--text-secondary); }
+    /* segni e scritte coi colori "-text": leggibili anche col tema chiaro */
+    .esito-misura.esito-ok     { border-left-color: var(--success); }
+    .esito-misura.esito-ok::before     { content: '\2713'; color: var(--success-text); }
+    .esito-misura.esito-avviso { border-left-color: var(--warning); background: rgba(255, 215, 64, 0.10); }
+    .esito-misura.esito-avviso::before { content: '!'; color: var(--warning-text); }
+    .esito-misura.esito-errore { border-left-color: var(--danger); background: rgba(255, 56, 56, 0.10); }
+    .esito-misura.esito-errore::before { content: '\2715'; color: var(--danger-text); }
+    .esito-misura.esito-corso  { border-left-color: var(--accent); }
+    .esito-misura.esito-corso::before  { content: '\21bb'; color: var(--accent-text); }
+    .esito-misura a { color: var(--accent-text); }
+    .barra-salva { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .barra-salva #nome { width: 220px; }
+    .barra-salva form { display: inline; margin: 0; }
+    .barra-salva .status-text { background: transparent; border: none; width: 7.5em; }
+    #connBanner { margin: 0; }
+
+    /* ---- letture dal vivo (riquadro compatto) ---- */
+    .gauge-card { gap: 10px; }
+    #microm .gauge-svg { max-width: 170px; }
+    .letture { display: flex; flex-direction: column; gap: 10px; }
+    .lettura { display: flex; flex-direction: column; gap: 4px; }
+    .lettura-etichetta {
+        font-family: var(--font-display); font-weight: 700; font-size: 13px;
+        letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-secondary);
+    }
+    .gauge-card form[name="mas"] { flex: none; min-width: 0; }
+    .gauge-card .max-display { min-width: 0; font-size: 17px; text-align: center; }
+
+    /* ---- grafico, con le scelte della misura in testa ---- */
+    .impostazioni-misura {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+        margin: -4px 0 12px;
+        scroll-margin-top: calc(var(--alt-intestazione) + var(--alt-barra) + 16px);
+    }
+    .grafico-box { position: relative; height: clamp(280px, calc(100vh - 430px), 520px); }
+    .chart-card .grafico-box canvas { width: 100% !important; height: 100% !important; max-height: none; }
+    .verso-scansione .switch input {
+        display: block; position: absolute; inset: 0; width: 100%; height: 100%;
+        margin: 0; opacity: 0; cursor: pointer; z-index: 1;
+    }
+    .verso-scansione .slider,
+    .verso-scansione input:checked + .slider {
+        background: var(--bg-elev-3); border: 1px solid var(--accent); box-shadow: none;
+    }
+    .verso-scansione .slider:before { background: var(--accent); bottom: 2px; }
+    .verso-scansione input:focus-visible + .slider { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .verso-valore { color: var(--accent-text); min-width: 7.5em; }
+
+    /* ---- rotazione manuale ---- */
+    .rotazione-corpo { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+    .meccanismo-box { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .meccanismo-box canvas { width: 200px; height: auto; border-radius: var(--r-md); display: block; }
+    .rotazione-comandi { flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+    .nota-guida { font-size: 14px; line-height: 1.5; color: var(--text-secondary); margin: 0; }
+
+    /* ---- leggibilita' a un metro: etichette e pulsanti piu' grandi ---- */
+    .card-title { font-size: 13px; }
+    .toggle-label { font-size: 13px; }
+    .impostazioni-misura .btn-sm, #rotazioneCard .btn-sm { min-height: 40px; font-size: 13px; padding: 8px 14px; }
+    #rotazioneCard .btn { min-height: 40px; }
+    #m1Btn, #p1Btn { min-width: 44px; font-size: 18px; }
+    .saved-pos-chip { font-size: 13px; padding: 4px 10px; }
+
+    /* (Le notifiche escono in basso a destra, per tutte le pagine: style.css.
+       Non coprono la barra dei comandi, che sta in alto.) */
+
+    /* Schermi stretti (tablet): prima il grafico, poi le letture in riga */
+    @media (max-width: 1024px) {
+        .main-grid > .chart-card { order: -1; }
+        .gauge-card { display: grid; grid-template-columns: minmax(140px, 190px) 1fr; column-gap: 16px; align-items: center; }
+        .gauge-card > .card-title { grid-column: 1 / -1; }
+        .barra-salva #nome { width: 170px; }
+    }
+    </style>
 </head>
 <body>
 
@@ -27,10 +164,12 @@
         </div>
         <div class="header-spacer"></div>
         <div class="status-leds" aria-label="Stato hardware">
-            <span class="status-led" data-tip="<strong>Comparatore</strong><span style='color:var(--success)'>&#9679;</span> verde: misure valide e fresche<br><span style='color:var(--warning)'>&#9679;</span> giallo: risponde ma letture assenti o fuori scala (scollegato/spento)<br><span style='color:var(--danger)'>&#9679;</span> rosso: nessun dato dal firmware"><span id="ledSensor" class="led"></span>Comparatore</span>
-            <span class="status-led" data-tip="<strong>Motore</strong><span style='color:var(--success)'>&#9679;</span> verde: pronto (bloccato in posizione)<br><span style='color:var(--accent)'>&#9679;</span> blu lampeggiante: in movimento (scansione o rotazione)<br><span style='color:var(--warning)'>&#9679;</span> giallo: SBLOCCATO, ruotabile a mano<br><span style='color:var(--danger)'>&#9679;</span> rosso: Arduino non risponde"><span id="ledMotor" class="led"></span>Motore</span>
-            <span class="status-led" data-tip="<strong>Encoder</strong><span style='color:var(--success)'>&#9679;</span> verde: conteggi freschi (e in movimento quando comandato)<br><span style='color:var(--warning)'>&#9679;</span> giallo: nessun dato recente<br><span style='color:var(--danger)'>&#9679;</span> rosso: conteggi FERMI durante una scansione = scollegato o guasto"><span id="ledEncoder" class="led"></span>Encoder</span>
-            <span class="status-led" data-tip="<strong>Server</strong><span style='color:var(--success)'>&#9679;</span> verde: programma CAMMES connesso (WebSocket)<br><span style='color:var(--danger)'>&#9679;</span> rosso: server non raggiungibile — avvia cammes.exe"><span id="ledServer" class="led"></span>Server</span>
+            <!-- Ogni spia: pallino col segno dello stato (&#10003; ! &#10005; &#8635;) e il nome
+                 scritto accanto, cosi' non serve distinguere i colori. -->
+            <span class="status-led" data-tip="<strong>Comparatore</strong><span style='color:var(--success)'>&#10003;</span> verde: letture valide<br><span style='color:var(--warning)'>!</span> giallo: risponde ma senza letture valide (spento o scollegato)<br><span style='color:var(--danger)'>&#10005;</span> rosso: nessun dato dall'Arduino" tabindex="0"><span id="ledSensor" class="led"></span><span class="led-nome">Comparatore</span></span>
+            <span class="status-led" data-tip="<strong>Motore</strong><span style='color:var(--success)'>&#10003;</span> verde: pronto, fermo in posizione<br><span style='color:var(--accent)'>&#8635;</span> blu: in movimento<br><span style='color:var(--warning)'>!</span> giallo: SBLOCCATO, l'albero si gira a mano<br><span style='color:var(--danger)'>&#10005;</span> rosso: l'Arduino non risponde" tabindex="0"><span id="ledMotor" class="led"></span><span class="led-nome">Motore</span></span>
+            <span class="status-led" data-tip="<strong>Encoder</strong><span style='color:var(--success)'>&#10003;</span> verde: angolo letto da poco<br><span style='color:var(--warning)'>!</span> giallo: nessuna lettura recente<br><span style='color:var(--danger)'>&#10005;</span> rosso: angolo FERMO durante una misura (encoder scollegato o guasto)" tabindex="0"><span id="ledEncoder" class="led"></span><span class="led-nome">Encoder</span></span>
+            <span class="status-led" data-tip="<strong>Server</strong><span style='color:var(--success)'>&#10003;</span> verde: programma CAMMES collegato<br><span style='color:var(--danger)'>&#10005;</span> rosso: il programma non risponde, avvia cammes.exe" tabindex="0"><span id="ledServer" class="led"></span><span class="led-nome">Server</span></span>
         </div>
         <button id="help-toggle" class="help-toggle" type="button" aria-label="Guida rapida" title="Apri la guida rapida">?</button>
         <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambia tema" title="Cambia tema chiaro/scuro">
@@ -39,170 +178,176 @@
         </button>
     </div>
 
-    <!-- Banner stato connessione hardware (nascosto se tutto ok) -->
-    <div id="connBanner" role="status" style="display:none; margin:0 0 14px; padding:10px 14px; border-radius:8px; background:rgba(234,179,8,0.12); border:1px solid rgba(234,179,8,0.55); color:var(--text-primary); font-size:13px; line-height:1.45;"></div>
+    <!-- ===== BARRA DEI COMANDI ==================================================
+         Resta sotto la barra in alto mentre si scorre (CSS in testa alla pagina):
+         Zero virtuale (facoltativo), START, STOP, avanzamento, esito della misura
+         e salvataggio si vedono sempre, anche guardando il grafico da un metro.
+         Prima START stava 1,35 schermate piu' in basso e durante la misura STOP
+         non si vedeva. -->
+    <div id="barraComandi" class="barra-comandi" role="region" aria-label="Comandi della misura">
+        <!-- Avvisi che durano (programma, Arduino, sola lettura, arresto, motore
+             sbloccato, comparatore senza letture): dentro la barra, cosi' non
+             scorrono via. Nascosto se tutto e' a posto. -->
+        <div id="connBanner" role="status" style="display:none; padding:8px 12px; border-radius:8px; background:rgba(234,179,8,0.12); border:1px solid rgba(234,179,8,0.55); color:var(--text-primary); font-size:14px; line-height:1.45;"></div>
+        <div class="barra-riga">
+            <!-- Passo facoltativo, prima di START: per questo sta qui e non in fondo -->
+            <button type="button" id="msBtn" class="btn btn-secondary btn-zero" onclick="ms();" data-tip="<strong>Zero virtuale (facoltativo, prima di START)</strong>Un giro di misura trova il picco, poi il motore porta l'albero a 180&deg; dal picco: cos&igrave; ogni albero ha lo stesso riferimento, comunque montato. Dura quanto una misura; alla fine la pagina si ricarica da sola e dice com'&egrave; andata.">
+                <span>&#9678; Zero virtuale</span><span class="btn-nota">facoltativo &middot; picco a 180&deg;</span>
+            </button>
+            <button type="button" id="startBtn" class="btn btn-success btn-grande" onclick="start();" data-tip="<strong>Avvia la misura</strong>Un giro completo dell'albero (360&deg;) leggendo l'alzata grado per grado. Prima: comparatore azzerato sul cerchio base e spie verdi. La durata la scrive la tendina Modalit&agrave;.">&#9654; START</button>
+            <button type="button" id="stopBtn" class="btn btn-danger btn-grande" onclick="stop();" data-tip="<strong>Ferma</strong>Ferma subito il motore, anche durante una rotazione. Una misura fermata a met&agrave; &egrave; incompleta e va ripetuta: i punti raccolti restano sul grafico.">&#10074;&#10074; STOP</button>
+            <span id="riassuntoScelte" class="riassunto-scelte" role="button" tabindex="0" data-tip="<strong>Con che cosa parte START</strong>Modalit&agrave; e verso di scansione si scelgono sopra il grafico, i giri in Avanzate. Un clic qui per andarci.">Veloce &middot; 1 giro &middot; verso orario</span>
+            <!-- Avanzamento (attivato da startflag, gestito da cammesScanProgress.set) -->
+            <div id="scan-progress-wrap" class="scan-progress-wrap" aria-live="polite">
+                <span class="scan-progress-label" id="scan-progress-label">Avanzamento</span>
+                <div class="scan-progress-bar">
+                    <div id="scan-progress-fill" class="scan-progress-fill"></div>
+                </div>
+                <span id="scan-progress-pct" class="scan-progress-pct">0%</span>
+                <span id="scan-progress-eta" class="scan-progress-eta"></span>
+            </div>
+        </div>
+        <div class="barra-riga">
+            <span class="barra-etichetta">Esito</span>
+            <!-- Esito dell'ultima misura: resta scritto fino al prossimo START
+                 (lo scrivono _scriviEsito e _esitoFineMisura) -->
+            <div id="esitoMisura" class="esito-misura esito-info" role="status" aria-live="polite">Nessuna misura: monta l'albero, azzera il comparatore sul cerchio base e premi START.</div>
+            <div class="barra-salva">
+                <input type="text" id="nome" placeholder="nome della misura" class="input" autocomplete="off" data-tip="<strong>Nome della misura</strong>Per esempio albero12_asp: il programma aggiunge _alz e salva albero12_asp_alz.scr. Spazi e simboli diventano _. Invio salva.">
+                <button type="button" id="salvaBtn" class="btn btn-accent" onclick="sav();" data-tip="<strong>Salva misura</strong>Scrive la misura nell'archivio (cartella prove/) col nome scritto a sinistra. Se il nome esiste gi&agrave; chiede prima di sostituire. &laquo;Salvata&raquo; compare solo quando il file &egrave; scritto davvero.">&#128190; Salva misura</button>
+                <form name="salva" onsubmit="return false;">
+                    <input type="text" name="salva" readonly class="status-text" size="11" aria-label="Stato del salvataggio">
+                </form>
+            </div>
+        </div>
+    </div><!-- /barraComandi -->
 
-    <!-- Main content: Gauge + Chart -->
+    <!-- Letture dal vivo + grafico -->
     <div class="main-grid">
 
-        <!-- Left: Gauge -->
+        <!-- Sinistra: letture dal vivo (compatto: il disegno del meccanismo sta
+             nel riquadro della rotazione manuale, dove serve) -->
         <div class="card gauge-card">
             <div class="card-title">Misura in tempo reale</div>
             <div id="microm" class="gauge-svg-host"></div>
-            <form name="cpot">
-                <input type="text" name="cpot" readonly class="gauge-value" data-tip="<strong>Lettura comparatore</strong>Valore live del tastatore in mm. Durante la scansione mostra l'ultima misura acquisita.">
-            </form>
-            <form name="imp2">
-                <input type="text" name="imp2" readonly class="gauge-degrees" data-tip="<strong>Posizione angolare</strong>Grado camma corrente durante la scansione (0-360&deg; dal punto di partenza).">
-            </form>
-            <!-- Meccanismo live: cosa sta facendo la macchina ORA -->
-            <div style="margin-top:10px; text-align:center;">
-                <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:4px;">Meccanismo (live)</div>
-                <canvas id="liveMechCanvas" width="240" height="260" style="max-width:100%;border-radius:var(--r-md);display:block;margin:0 auto;"></canvas>
+            <div class="letture">
+                <div class="lettura">
+                    <span class="lettura-etichetta">Alzata (mm)</span>
+                    <form name="cpot" onsubmit="return false;">
+                        <input type="text" name="cpot" readonly class="gauge-value" aria-label="Alzata in millimetri" data-tip="<strong>Alzata dal vivo</strong>Lettura del comparatore in millimetri. Durante la misura mostra l'ultima lettura.">
+                    </form>
+                </div>
+                <div class="lettura">
+                    <span class="lettura-etichetta">Angolo (gradi camma)</span>
+                    <form name="imp2" onsubmit="return false;">
+                        <input type="text" name="imp2" readonly class="gauge-degrees" aria-label="Angolo in gradi camma" data-tip="<strong>Angolo</strong>Gradi camma dall'inizio della misura (0-360&deg;). A motore sbloccato mostra l'angolo letto dall'encoder.">
+                    </form>
+                </div>
+                <div class="lettura">
+                    <span class="lettura-etichetta">Picco della misura</span>
+                    <form name="mas" onsubmit="return false;">
+                        <input type="text" name="mas" value="" readonly class="max-display" aria-label="Picco della misura" data-tip="<strong>Picco</strong>Alzata massima della misura e grado in cui si trova; con le ripetizioni, quello della media dei giri.">
+                    </form>
+                </div>
             </div>
         </div>
 
-        <!-- Right: Chart -->
+        <!-- Destra: grafico, con in testa le scelte con cui parte START -->
         <div class="card chart-card">
-            <div class="card-title">Profilo Alzata 360°</div>
-            <canvas id="grafico" width="900" height="500"></canvas>
+            <div class="card-title">Profilo alzata 360&deg;</div>
+            <div id="impostazioniMisura" class="impostazioni-misura">
+                <div class="controls-group">
+                    <label class="toggle-label" for="scanMode">Modalit&agrave;</label>
+                    <select id="scanMode" class="input" style="width:230px;" autocomplete="off" onchange="onScanModeChange();" data-tip="<strong>Modalit&agrave; di misura</strong>Passo di lettura (1&deg; o 0,5&deg;) e pausa prima di ogni lettura. Al banco le due modalit&agrave; danno la stessa curva entro 0,05 mm RMS: Veloce basta quasi sempre.">
+                        <!-- Le etichette le scrive popolaModalita() da SCAN_MODES: qui
+                             restano solo i valori, cosi' la durata non si puo' ricopiare -->
+                        <option value="fast" selected>Veloce</option>
+                        <option value="race">Race</option>
+                    </select>
+                    <span class="help-icon" data-tip="<strong>Quale scegliere?</strong><b>Veloce</b>: uso normale, un punto per grado. <b>Race</b>: un punto ogni mezzo grado e pausa di 80 ms invece di 30 prima di ogni lettura, per fianchi molto ripidi. Ogni punto si legge finch&eacute; due letture coincidono entro 5 &micro;m (al massimo 1,5 s)." tabindex="0">?</span>
+                </div>
+                <!-- Il verso decide la misura, non solo la rotazione a mano: sta
+                     accanto alla Modalita', scritto a parole, in un colore solo -->
+                <div class="controls-group toggle-group verso-scansione">
+                    <span class="toggle-label">Verso di scansione:</span>
+                    <label class="switch" data-tip="<strong>Verso di scansione</strong>Il verso in cui gira l'albero durante la misura e coi comandi di rotazione. Cambialo solo se la camma &egrave; montata al contrario: le misure di un lavoro vanno fatte tutte nello stesso verso. Il verso finisce nel file.">
+                        <input type="checkbox" id="versoScansione" autocomplete="off" onchange="rlb();" aria-label="Verso di scansione antiorario">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="toggle-label verso-valore" id="rlabel">orario</span>
+                </div>
+                <!-- Impostazioni avanzate: chiuse di partenza, per l'uso normale
+                     bastano Modalita' e START -->
+                <button type="button" class="btn btn-secondary btn-sm" id="scanAdvBtn" onclick="toggleScanAdvanced();" data-tip="<strong>Avanzate</strong>Ripetizioni (misura la ripetibilit&agrave;) e Verifica banco (salute del banco, con un cilindro rettificato). Per l'uso normale bastano Modalit&agrave; e START.">&#9881; Avanzate</button>
+                <!-- Lontano da STOP: ricarica la pagina -->
+                <button type="button" class="btn btn-secondary btn-sm" id="ricominciaBtn" onclick="safeReload();" data-tip="<strong>Ricomincia da capo</strong>Ferma il banco, svuota il grafico e riporta Modalit&agrave;, Ripetizioni e verso ai valori iniziali (ricarica la pagina). <b>Non</b> azzera l'encoder e non salva niente: se c'&egrave; una misura non salvata te lo chiede.">&#8634; Ricomincia</button>
+                <div id="scanAdvanced" style="display:none; flex-basis:100%; width:100%; padding:10px 14px; border:1px dashed var(--border-card, #2a2a4a); border-radius:8px;">
+                    <div class="adv-row">
+                        <span class="toggle-label">Ripetizioni</span>
+                        <select id="scanRepeat" class="input" style="width:200px;" autocomplete="off" onchange="aggiornaRiassuntoScelte();" data-tip="<strong>Ripetizioni: misura la ripetibilit&agrave;</strong>N giri di fila confrontati punto per punto; si salva la media dei giri completi. Verdetto sul coefficiente di variazione (CV), solo dove l'alzata supera 0,3 mm: &lt;1% eccellente, &lt;3% buona, &lt;7% sufficiente. La &sigma; massima &egrave; in millimetri e comprende il cerchio base."><option value="1" selected>1 (singola)</option><option value="2">2 giri</option><option value="3">3 giri (consigliato)</option><option value="5">5 giri</option></select>
+                        <span class="help-icon" data-tip="<strong>Quando usarla?</strong>Alla prima installazione, dopo un urto o un trasporto del banco, o per una misura da referto importante: 3 giri e guarda il verdetto. Durata: N volte quella di un giro." tabindex="0">?</span>
+                    </div>
+                    <div class="adv-row">
+                        <button type="button" class="btn btn-secondary btn-sm" id="verificaBtn" onclick="benchVerifyStart();" data-tip="<strong>Verifica banco</strong>Controllo periodico: monta un pezzo cilindrico rettificato (alzata attesa 0 ovunque), azzera il comparatore e premi. Entro 0,02 mm RMS il banco &egrave; a posto. L'esito, con la data, compare in Home.">&#129514; Verifica banco</button>
+                    </div>
+                </div><!-- /scanAdvanced -->
+            </div>
+            <div class="grafico-box"><canvas id="grafico" width="900" height="500"></canvas></div>
         </div>
 
     </div>
 
-    <!-- Controls -->
-    <div class="card">
-        <div class="card-title">Controlli scansione</div>
-        <div class="controls-row">
-            <div class="controls-group">
-                <button class="btn btn-success" onclick="start();" data-tip="<strong>Avvia scansione</strong>Esegue una rotazione completa di 360&deg; sull'albero a camme misurando il profilo di alzata. Tempo dipende dalla modalit&agrave; selezionata.">&#9654; START</button>
-                <button class="btn btn-danger" onclick="stop();" data-tip="<strong>Interrompi</strong>Ferma la scansione in corso. Dati parziali non vengono salvati. Il prossimo START riparte da zero.">&#10074;&#10074; STOP</button>
-                <button class="btn btn-secondary" onclick="safeReload();" data-tip="<strong>Ricomincia da capo</strong>Ferma il banco (STOP), poi ricarica la pagina: svuota il grafico e riporta Modalit&agrave;, Ripetizioni e senso ai valori iniziali. <b>Non</b> azzera l'encoder (per quello c'&egrave; Reset zero) e non salva niente.">&#8634; RESET</button>
-            </div>
-
-            <div class="separator"></div>
-
-            <div class="controls-group">
-                <span class="toggle-label">Modalit&agrave;</span>
-                <select id="scanMode" class="input" style="width:230px;" onchange="onScanModeChange();" data-tip="<strong>Modalit&agrave; di scansione</strong>Definisce il passo di campionamento (1&deg; o 0,5&deg;) e la pausa di assestamento dopo ogni movimento, prima di leggere. Al banco le due modalit&agrave; danno la stessa curva entro 0,05 mm RMS: Veloce basta quasi sempre.">
-                    <!-- Le etichette le scrive popolaModalita() da SCAN_MODES: qui
-                         restano solo i valori, cosi' la durata non si puo' ricopiare -->
-                    <option value="fast" selected>Veloce</option>
-                    <option value="race">Race</option>
-                </select>
-                <span class="help-icon" data-tip="<strong>Quale scegliere?</strong><b>Veloce</b>: uso normale, un punto per grado, validata al banco. <b>Race</b>: un punto ogni mezzo grado e pausa pi&ugrave; lunga dopo ogni movimento (80 ms invece di 30) prima di leggere, per fianchi molto ripidi di camme spinte; al banco d&agrave; la stessa curva della Veloce entro 0,05 mm RMS. In entrambe ogni punto si legge finch&eacute; due letture consecutive del comparatore coincidono entro 5 &micro;m; se non succede entro 1,5 s il punto viene segnalato come non stabilizzato. La modalit&agrave; Precisione non c&apos;&egrave; pi&ugrave;: dava la stessa misura della Veloce." tabindex="0">?</span>
-            </div>
-
-            <div class="separator"></div>
-
-            <!-- Impostazioni avanzate di scansione: raccolte e chiuse di default.
-                 I test al banco (07-05 e 07-11) hanno mostrato che per l'uso
-                 normale basta la Modalità: ripetizioni e verifica banco sono
-                 strumenti di controllo qualità. Il pannello occupa una riga
-                 INTERA sotto la toolbar (flex-basis:100%), con etichette a
-                 larghezza fissa: prima si incastrava a destra disallineato. -->
-            <div class="controls-group">
-                <button type="button" class="btn btn-secondary btn-sm" id="scanAdvBtn" onclick="toggleScanAdvanced();" data-tip="<strong>Impostazioni avanzate scansione</strong>Ripetizioni con statistiche di ripetibilit&agrave; e verifica periodica del banco. Per l'uso normale bastano Modalit&agrave; e START.">&#9881; Avanzate</button>
-            </div>
-            <div id="scanAdvanced" style="display:none; flex-basis:100%; width:100%; margin-top:10px; padding:10px 14px; border:1px dashed var(--border-card, #2a2a4a); border-radius:8px;">
-
-            <div class="adv-row">
-                <span class="toggle-label">Ripetizioni</span>
-                <select id="scanRepeat" class="input" style="width:180px;" data-tip="<strong>Scansioni ripetute = misuratore di RIPETIBILIT&Agrave;</strong>Esegue N scansioni identiche di fila e confronta le curve punto per punto.<br>Il <b>verdetto</b> guarda il <b>coefficiente di variazione</b> (CV = &sigma;/alzata, in percentuale): eccellente &lt;1% &middot; buona &lt;3% &middot; sufficiente &lt;7% &middot; oltre, scadente. Il CV viene calcolato <b>solo dove l&apos;alzata supera 0,3 mm</b>: cerchio base e rampe basse non entrano nel verdetto.<br>La <b>&sigma; massima</b> mostrata accanto e&apos; in <b>millimetri</b> ed &egrave; informativa: copre TUTTI i gradi validi, cerchio base compreso. Se la &sigma; &egrave; alta ma il verdetto buono, il ballo sta sul cerchio base &mdash; guardala.<br>Non &egrave; una taratura (per quella c&apos;&egrave; Verifica banco): &egrave; un controllo di stabilit&agrave;. Il file salvato contiene la MEDIA dei soli run COMPLETI, e &sigma; e numero di run finiscono nei metadati e sul referto PDF."><option value="1" selected>1 (singola)</option><option value="2">2 run</option><option value="3">3 run (consigliato)</option><option value="5">5 run</option></select>
-                <span class="help-icon" data-tip="<strong>Quando usarla?</strong>Alla prima installazione, dopo un urto/trasporto del banco, o su una misura che deve andare su un referto importante: 3 run e guardi il verdetto. Tempo totale = N &times; tempo di una scansione." tabindex="0">?</span>
-            </div>
-
-            <div class="adv-row">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="benchVerifyStart();" data-tip="<strong>Verifica banco</strong>Controllo periodico della salute del banco: monta un <b>pezzo cilindrico rettificato</b> (alzata attesa = 0 ovunque), azzera il comparatore e premi. Una scansione Veloce misura il residuo: entro 0,02 mm RMS il banco &egrave; OK. L'esito (con data) compare in Home.">&#129514; Verifica banco</button>
-            </div>
-
-            </div><!-- /scanAdvanced -->
-
-            <div class="separator"></div>
-
-            <form name="mas">
-                <input type="text" name="mas" value=" max" readonly class="max-display" data-tip="<strong>Picco rilevato</strong>Grado camma e alzata mm del punto massimo durante la scansione in corso.">
-            </form>
-
-            <div class="separator"></div>
-
-            <div class="controls-group">
-                <input type="text" id="nome" placeholder="nome file" class="input" data-tip="<strong>Nome file</strong>Il suffisso '_alz' viene aggiunto da solo. Es: 'albero12_asp' &rarr; 'albero12_asp_alz'.">
-                <input type="button" value="Salva" class="btn btn-accent" onclick="sav();" data-tip="<strong>Salva misura</strong>Scrive la scansione nell'archivio (cartella prove/) col nome scelto: il suffisso <code>_alz</code> viene aggiunto da solo. Il messaggio di conferma arriva SOLO dopo che il server ha scritto il file.">
-            </div>
-            <form name="salva" style="display:inline;">
-                <input type="text" name="salva" readonly class="status-text" style="background:transparent;border:none;" size="12">
-            </form>
-        </div>
-
-        <!-- Progress bar scansione (attivata da startflag, gestita da cammesScanProgress.set) -->
-        <div id="scan-progress-wrap" class="scan-progress-wrap" aria-live="polite">
-            <span class="scan-progress-label">Scansione</span>
-            <div class="scan-progress-bar">
-                <div id="scan-progress-fill" class="scan-progress-fill"></div>
-            </div>
-            <span id="scan-progress-pct" class="scan-progress-pct">0%</span>
-            <span id="scan-progress-eta" class="scan-progress-eta"></span>
-        </div>
-    </div>
-
-    <!-- Live trace durante free-spin (auto-hide se motore loccato) -->
+    <!-- Traccia dal vivo: compare da sola quando si sblocca il motore -->
     <div id="liveTraceWrap" class="live-trace-wrap">
         <div class="live-trace-header">
-            <span class="live-trace-title">&#127922; Traccia LIVE &mdash; ruota a mano per disegnare la camma</span>
+            <span class="live-trace-title">&#127922; Traccia dal vivo &mdash; gira l'albero a mano per disegnare la camma</span>
             <span>
                 <span class="live-trace-count" id="liveTraceCount">0 punti</span>
-                <button class="btn btn-secondary btn-sm" style="margin-left:8px;" onclick="clearLiveTrace();" data-tip="<strong>Pulisci traccia</strong>Svuota i punti raccolti nella traccia live. Non tocca le scansioni salvate.">&times; Pulisci</button>
+                <button type="button" class="btn btn-secondary btn-sm" style="margin-left:8px;" onclick="clearLiveTrace();" data-tip="<strong>Pulisci traccia</strong>Svuota i punti della traccia dal vivo. Non tocca le misure salvate.">&times; Pulisci</button>
             </span>
         </div>
         <div class="live-trace-canvas-wrap"><canvas id="liveTraceCanvas"></canvas></div>
     </div>
 
-    <!-- Manual rotation -->
-    <div class="card">
+    <!-- Rotazione manuale -->
+    <div class="card" id="rotazioneCard">
         <div class="card-title">Rotazione manuale e zero</div>
-        <p style="font-size:11px; color:var(--text-muted); margin:0 0 10px; line-height:1.45;">
-            Muovi l'albero a mano o a step di grado. <b>Zero virtuale</b> = porta in automatico il picco di alzata a un riferimento fisso (+180&deg;), così alberi montati in modo diverso restano confrontabili. <b>Sblocca motore</b> = lo liberi per girarlo a mano leggendo encoder e comparatore dal vivo. Passa il mouse su ogni pulsante per la spiegazione completa.
-        </p>
-        <div class="controls-row">
-            <div class="controls-group">
-                <button class="btn btn-secondary btn-sm" onclick="m1();" data-tip="<strong>-1&deg;</strong>Ruota indietro di 1 grado camma.">&#8722;</button>
-                <input type="text" name="step" placeholder="gradi" id="step" class="input" style="width:120px;" data-tip="<strong>Posizione target</strong>Inserisci il grado camma assoluto desiderato, poi premi Ruota.">
-                <button class="btn btn-secondary btn-sm" onclick="p1();" data-tip="<strong>+1&deg;</strong>Ruota avanti di 1 grado camma.">+</button>
-                <button class="btn btn-accent" id="cf" onclick="ruota();" data-tip="<strong>Ruota a target</strong>Sposta l'albero alla posizione angolare scritta nel campo a sinistra.">Ruota</button>
+        <div class="rotazione-corpo">
+            <!-- Meccanismo dal vivo: qui, dove si gira l'albero -->
+            <div class="meccanismo-box">
+                <span class="lettura-etichetta">Meccanismo (dal vivo)</span>
+                <canvas id="liveMechCanvas" width="240" height="260"></canvas>
             </div>
+            <div class="rotazione-comandi">
+                <p class="nota-guida">
+                    Qui si gira l'albero: a gradi, fino a un angolo, oppure a mano. <b>Sblocca motore</b> lascia girare l'albero a mano mentre encoder e comparatore leggono dal vivo. Lo <b>Zero virtuale</b> (facoltativo, prima di START: porta il picco a 180&deg; dallo zero) sta nella barra in alto, accanto a START.
+                </p>
+                <div class="controls-row">
+                    <div class="controls-group">
+                        <button type="button" class="btn btn-secondary btn-sm" id="m1Btn" onclick="m1();" aria-label="Indietro di un grado" data-tip="<strong>&minus;1&deg;</strong>Indietro di un grado camma.">&#8722;</button>
+                        <input type="text" name="step" placeholder="gradi" id="step" class="input" style="width:120px;" autocomplete="off" inputmode="decimal" data-tip="<strong>Vai a</strong>Angolo di arrivo in gradi camma, contati da dove stava l'albero all'apertura della pagina (dopo lo Zero virtuale: dallo zero). Poi Ruota o Invio.">
+                        <button type="button" class="btn btn-secondary btn-sm" id="p1Btn" onclick="p1();" aria-label="Avanti di un grado" data-tip="<strong>+1&deg;</strong>Avanti di un grado camma.">+</button>
+                        <button type="button" class="btn btn-accent" id="cf" onclick="ruota();" data-tip="<strong>Ruota</strong>Porta l'albero all'angolo scritto nel campo a sinistra.">Ruota</button>
+                    </div>
+                </div>
+                <div class="controls-row">
+                    <button type="button" class="btn btn-secondary" id="freeBtn" onclick="toggleMotorFree();" data-tip="<strong>Sblocca motore</strong>Toglie corrente al motore: l'albero si gira a mano mentre encoder e comparatore leggono dal vivo. Premi di nuovo (Blocca motore) prima di misurare.">
+                        &#128275; Sblocca motore
+                    </button>
+                    <span id="motorFreeBadge" class="motor-free-badge" style="display:none;" title="Motore senza corrente: l'albero si gira a mano">&#9679; MOTORE LIBERO</span>
 
-            <div class="separator"></div>
+                    <div class="separator"></div>
 
-            <button class="btn btn-secondary" id="msBtn" onclick="ms();" data-tip="<strong>Zero virtuale</strong>Esegue una scansione completa, trova il picco di alzata e ruota il motore di +180&deg; rispetto al picco. Cos&igrave; il punto di riferimento &egrave; identico per ogni albero misurato, indipendentemente da come l'hai montato. Tempo: pari a una scansione completa nella modalit&agrave; selezionata.">
-                &#9678; Zero virtuale
-            </button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="azzeraBtn" onclick="resetEncoder();" data-tip="<strong>Azzera angolo qui</strong>La posizione attuale dell'albero diventa 0&deg; per l'encoder (per esempio sul PMS o sul cerchio base). Le posizioni memorizzate prima non valgono pi&ugrave;: se ce ne sono, te lo chiede.">
+                        <span aria-hidden="true">0&deg;</span> Azzera angolo qui
+                    </button>
 
-            <div class="separator"></div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="memorizzaBtn" onclick="savePositionMark();" data-tip="<strong>Memorizza posizione</strong>D&agrave; un nome alla posizione attuale (per esempio pms1, picco-asp, cerchio-base). Le posizioni compaiono qui accanto: un clic ci riporta l'albero. Restano in questo browser.">
+                        &#128205; Memorizza posizione
+                    </button>
 
-            <button class="btn btn-secondary" id="freeBtn" onclick="toggleMotorFree();" data-tip="<strong>Sblocca motore</strong>Disattiva la corrente dello stepper: l'albero diventa libero e pu&ograve; essere ruotato a mano. Encoder e comparatore continuano a leggere LIVE, cos&igrave; vedi posizione angolare e alzata in tempo reale mentre giri. Utile per ispezione manuale o posizionamento esatto. Premi di nuovo per riattivare il motore prima di scansionare.">
-                &#128275; Sblocca motore
-            </button>
-            <span id="motorFreeBadge" class="motor-free-badge" style="display:none;" title="Motore disattivato: girare l'albero manualmente">&#9679; MOTORE LIBERO</span>
-
-            <button class="btn btn-secondary btn-sm" onclick="resetEncoder();" data-tip="<strong>Reset encoder zero</strong>Imposta la posizione angolare corrente come 0&deg;. Tutti gli sfasamenti futuri saranno relativi a questo punto. Utile per definire uno <i>zero meccanico</i> di riferimento (es. base circle, PMS).">
-                &#8634; Reset zero
-            </button>
-
-            <button class="btn btn-secondary btn-sm" onclick="savePositionMark();" data-tip="<strong>Salva posizione corrente</strong>Memorizza la posizione angolare attuale dell'encoder come bookmark riferimento con un nome (es. 'pms1', 'picco-asp', 'base-circle'). Le posizioni salvate sono mostrate sotto e cliccabili per ricordare velocemente.">
-                &#128205; Salva pos
-            </button>
-
-            <span id="savedPositions" class="saved-positions"></span>
-
-            <div class="separator"></div>
-
-            <div class="toggle-group">
-                <label class="switch" data-tip="<strong>Senso di rotazione</strong>Inverte il senso del motore. Utile se hai montato la camma al contrario o se vuoi misurare profili in entrambe le direzioni.">
-                    <input type="checkbox" onchange="rlb();">
-                    <span class="slider"></span>
-                </label>
-                <span class="toggle-label" id="rlabel">senso orario</span>
+                    <span id="savedPositions" class="saved-positions"></span>
+                </div>
             </div>
         </div>
     </div>
@@ -240,6 +385,107 @@ Object.defineProperty(gaugemicrom, 'value', {
     set: function (v) { gaugemicrom.setValue(v); },
     get: function () { return 0; }
 });
+
+// ===== NUMERI COME IN OFFICINA ==============================================
+// Tutto cio' che l'operatore LEGGE (display, campo del picco, notifiche, esito)
+// ha la virgola decimale; i dati del file .scr e i comandi al banco restano col
+// punto. Una funzione sola: window.cammesNum (cammes-ui.js), con un ripiego per
+// quando la pagina gira senza (prove automatiche).
+function numero(x, decimali) {
+    var num = window.cammesNum || function (y, d) { return Number(y).toFixed(d).replace('.', ','); };
+    return num(x, decimali);
+}
+// Per i testi composti con toFixed(), dove un controllo automatico ne legge la
+// forma: la virgola va solo fra due cifre, il resto del testo non si tocca.
+function virgolaDecimale(testo) {
+    return String(testo).replace(/(\d)\.(\d)/g, '$1,$2');
+}
+// Il picco come lo legge l'operatore: "9,610 mm a 160°" (con i giri della media).
+function testoPicco(mm, grado, giri) {
+    var num = window.cammesNum || function (y, d) { return Number(y).toFixed(d).replace('.', ','); };
+    return num(mm, 3) + ' mm a ' + grado + '°' + (giri > 1 ? ' (' + giri + ' giri)' : '');
+}
+// L'angolo nel display verde: gradi camma con un decimale (Race va a mezzi gradi).
+function testoAngolo(gradi) {
+    var num = window.cammesNum || function (y, d) { return Number(y).toFixed(d).replace('.', ','); };
+    return num(gradi, 1) + '°';
+}
+// ===== RIGA "ESITO" NELLA BARRA DEI COMANDI =================================
+// L'esito dell'ultima misura (o dello Zero virtuale, o della verifica banco)
+// resta scritto qui fino al prossimo START: le notifiche spariscono dopo pochi
+// secondi, mentre l'operatore e' al banco. livello: ok | avviso | errore |
+// corso | info (colore e segno: verde, giallo, rosso, blu, grigio).
+function _scriviEsito(livello, html) {
+    var el = (typeof document !== 'undefined' && document.getElementById) ? document.getElementById('esitoMisura') : null;
+    if (!el) return false;
+    el.className = 'esito-misura esito-' + livello;
+    el.innerHTML = html;
+    // l'esito dello Zero virtuale (dopo il ricaricamento) vale finche' nella
+    // riga non si scrive com'e' andata un'altra cosa: vedi applicaRuoloBanco
+    if (livello !== 'corso' && typeof window !== 'undefined') window._rigaZeroVirtuale = null;
+    return true;
+}
+// Una misura (o uno Zero virtuale, o una verifica) che non e' arrivata in fondo:
+// le parole per la riga "Esito" e per la notifica, scritte una volta sola, cosi'
+// le due non dicono cose diverse. giri (facoltativo) = { fatti, totali } con le
+// ripetizioni: quanti giri della serie erano arrivati in fondo.
+function _interruzione(tipo, motivo, giri) {
+    var perche = {
+        stop: 'hai premuto STOP', banco: 'il banco ha chiuso il giro prima della fine',
+        guasto: 'guasto segnalato dal banco', comparatore: 'il comparatore non risponde',
+        corto: 'il giro si &egrave; fermato prima della fine', riavvio: 'l\'Arduino si &egrave; riavviato'
+    }[motivo] || 'motivo non noto';
+    var x;
+    if (tipo === 'zero') x = { titolo: 'Zero virtuale interrotto', seguito: 'l\'albero non &egrave; allo zero. Ripetilo prima di misurare.' };
+    else if (tipo === 'verifica') x = { titolo: 'Verifica banco interrotta', seguito: 'nessun esito. Ripetila.' };
+    else {
+        x = { titolo: 'Misura interrotta', seguito: (motivo === 'riavvio'
+            ? 'misura NON valida, da ripetere dopo aver rifatto lo Zero virtuale (se lo usi).'
+            : 'misura incompleta, da ripetere.') + ' I punti raccolti restano sul grafico.' };
+        if (giri && giri.totali > 1) x.seguito += ' Giri completati: ' + giri.fatti + ' di ' + giri.totali + '.';
+    }
+    x.perche = perche;
+    x.riga = '<b>' + x.titolo + '</b> (' + perche + '): ' + x.seguito;
+    x.notifica = perche.charAt(0).toUpperCase() + perche.slice(1) + ': ' + x.seguito;
+    return x;
+}
+function _esitoInterruzione(tipo, motivo, giri) {
+    return _interruzione(tipo, motivo, giri).riga;
+}
+// Con le ripetizioni: a che punto era la serie (null con un giro solo).
+function _giriDellaSerie() {
+    if (typeof repeatRunsTarget === 'undefined' || !(repeatRunsTarget > 1)) return null;
+    return { fatti: repeatRunsDone, totali: repeatRunsTarget };
+}
+// Verifica banco: notifica e riga "Esito" dallo stesso verdetto (benchVerdict,
+// lib/cammes-math.js). Numeri con la virgola, come tutto cio' che si legge.
+function esitoVerificaBanco(bv) {
+    var num = window.cammesNum || function (y, d) { return Number(y).toFixed(d).replace('.', ','); };
+    if (bv.status === 'NON_VALUTABILE') {
+        return { kind: 'err', livello: 'errore', title: 'Verifica banco: NON VALUTABILE',
+            body: bv.missing + ' gradi su 360 senza lettura valida: una verifica con dei buchi non certifica niente (un punto perso conterebbe come perfetto). Controlla comparatore e cavi e ripeti. Nessun esito salvato.',
+            riga: '<b>Verifica banco NON VALUTABILE</b>: ' + bv.missing + ' gradi senza lettura. Controlla comparatore e cavi e ripetila.' };
+    }
+    var ok = bv.status === 'OK';
+    var residuo = 'RMS ' + num(bv.rms, 3) + ' mm, max ' + num(bv.max, 3) + ' mm (soglie: 0,020 / 0,050)';
+    return { kind: ok ? 'success' : 'err', livello: ok ? 'ok' : 'errore',
+        title: ok ? 'Verifica banco: SUPERATA' : 'Verifica banco: NON SUPERATA',
+        body: 'Residuo sul cilindro (tolta l\'eccentricit&agrave;): ' + residuo + '.' +
+              (ok ? '' : ' Controlla il gioco dei supporti, la squadra del comparatore e la corrente del driver.'),
+        riga: '<b>Verifica banco ' + (ok ? 'SUPERATA' : 'NON SUPERATA') + '</b>: residuo ' + residuo };
+}
+
+// Il quadrante scrive il suo numero col punto (cammes-ui.js): qui lo si riscrive
+// con la virgola, come il display rosso accanto.
+(function () {
+    var imposta = gaugemicrom.setValue;
+    var host = document.getElementById('microm');
+    gaugemicrom.setValue = function (v) {
+        imposta(v);
+        var t = host && host.querySelector('.gauge-svg-value');
+        if (t) t.textContent = virgolaDecimale(t.textContent);
+    };
+})();
 </script>
 
 <script>
@@ -278,6 +524,14 @@ function _clearScanTimers() {
     for (var _ti = 0; _ti < _scanTimers.length; _ti++) clearTimeout(_scanTimers[_ti]);
     _scanTimers.length = 0;
 }
+// FRA UN GIRO E L'ALTRO la misura e' ancora in corso. Con le ripetizioni (1,5 s
+// di pausa) e nel passaggio al metodo classico (0,8 s) startflag e
+// autoScanActive valgono gia' "fermo", ma il giro dopo e' programmato e parte da
+// solo: in quella pausa STOP diceva "nessuna misura in corso" lasciando la riga
+// "Esito" ferma su "in corso", e Ruota o Salva misura passavano. Vero da quando
+// il giro dopo e' programmato fino a quando parte (_startSingleRun) o lo STOP
+// lo cancella (_fermaScansioneLocale).
+window._giroInAttesa = false;
 var msg = "";
 var startflag = 0;
 var stepflag = 0;
@@ -316,7 +570,7 @@ function checkEncoderDivergence() {
                 window._encStuck = true;
                 if (window.cammesToast) window.cammesToast({
                     kind: 'err', title: 'Encoder scollegato o fermo',
-                    body: 'Conteggi immobili da ' + Math.round(degAdv) + '° comandati. La scansione continua sui passi motore (misura valida), ma <b>zero virtuale e allarme slittamento non sono disponibili</b>. Controlla il connettore dell\'encoder.',
+                    body: 'L\'encoder non si muove da ' + Math.round(degAdv) + '° di rotazione. La misura continua sui passi del motore ed &egrave; valida, ma <b>Zero virtuale e controllo dello slittamento non sono disponibili</b>. Controlla il connettore dell\'encoder.',
                     duration: 10000
                 });
             }
@@ -333,9 +587,9 @@ function checkEncoderDivergence() {
                 _encAlarmed = true;
                 window._slittamento = true;   // resta: va nei metadati e il salvataggio lo chiede
                 if (window.cammesToast) window.cammesToast({
-                    kind: 'warn', title: 'Possibile slittamento stepper',
-                    body: 'Encoder mosso ' + actual + ' conteggi (~' + (actual/4).toFixed(1) +
-                          '°) su ' + Math.round(degAdv) + '° comandati. Verifica accoppiamento motore/albero e corrente driver.',
+                    kind: 'warn', title: 'Possibile slittamento del motore',
+                    body: 'L\'encoder ha visto circa ' + numero(actual / 4, 1) + '° su ' + Math.round(degAdv) +
+                          '° di rotazione comandata. Controlla il giunto fra motore e albero e la corrente del driver: la misura va ripetuta.',
                     duration: 8000
                 });
             }
@@ -490,6 +744,7 @@ function onScanModeChange() {
     // (socket chiuso) resta segnata da allineare e parte prima del moto
     _configDaAllineare = true;
     if (typeof _sincronizzaConfigBanco === 'function') _sincronizzaConfigBanco();
+    if (typeof aggiornaRiassuntoScelte === 'function') aggiornaRiassuntoScelte();
 }
 
 
@@ -555,8 +810,11 @@ function updateStatusLeds() {
     if (window._encStuck)      ledEnc.className = 'led err';
     else                       ledEnc.className = 'led ' + (encOk ? 'ok' : (lastEncoderRx === 0 ? '' : 'warn'));
 
-    // Banner guida: distingue "server giù" da "server ok ma Arduino assente".
-    // Grazia iniziale per non lampeggiare durante l'handshake WebSocket.
+    // Avviso che dura, dentro la barra dei comandi (non scorre via): distingue
+    // "programma giu'" da "programma ok ma Arduino assente", e dice perche'
+    // START e i comandi di moto sono spenti (sola lettura, arresto, motore
+    // sbloccato) invece di lasciare solo pulsanti grigi dopo una notifica.
+    // Grazia iniziale per non lampeggiare durante il collegamento.
     var banner = document.getElementById('connBanner');
     if (banner) {
         var graceOver = (now - _pageLoadTs) > 2500;
@@ -565,13 +823,27 @@ function updateStatusLeds() {
             ? ((now - _pageLoadTs) > 4500)               // connesso ma mai un frame
             : ((now - lastSensorAnyRx) > SENSOR_DEAD_MS); // frame interrotti
         if (!wsOk && graceOver) {
-            bmsg = '⚠ Server CAMMES non raggiungibile (ws://localhost:8080). Avvia il server e ricarica la pagina. ' +
-                   'Nel frattempo puoi usare Home e Analisi sui file già salvati.';
+            bmsg = '⚠ Il programma CAMMES non risponde: avvia cammes.exe e ricarica la pagina. ' +
+                   'Nel frattempo Home e Analisi funzionano sui file già salvati.';
         } else if (wsOk && noArduino) {
-            bmsg = '⚠ Server connesso, ma nessun dato dall’Arduino. Controlla il cavo USB e che il firmware sia caricato: ' +
-                   'la scansione non produrrà misure finché i LED Comparatore/Motore/Encoder non diventano verdi.';
+            bmsg = '⚠ Il programma è avviato ma l’Arduino non risponde: controlla il cavo USB e che il firmware sia caricato. ' +
+                   'Non si misura finché le spie Comparatore, Motore ed Encoder non diventano verdi.';
+        } else if (wsOk && bancoInSolaLettura()) {
+            bmsg = 'SOLA LETTURA: il banco è comandato da un’altra finestra o da un altro PC. Qui vedi le misure, ' +
+                   'ma START e i comandi di moto sono spenti. Si libera da sé quando l’altra finestra viene chiusa.';
+        } else if (wsOk && bancoInArresto) {
+            bmsg = 'Banco in arresto: il movimento di prima si sta fermando. I comandi tornano da soli fra qualche secondo.';
+        } else if (typeof motorFree !== 'undefined' && motorFree) {
+            bmsg = 'Motore sbloccato: START e i comandi di moto sono spenti. Per misurare premi «Blocca motore» (riquadro Rotazione manuale).';
+        } else if (wsOk && graceOver && senClass === 'warn' && pollAttivo()) {
+            // Il caso piu' frequente: comparatore spento o scollegato (spia
+            // gialla). START resta acceso ma non parte (controllo prima della
+            // misura): qui si dice perche'. Solo a banco fermo, quando la pagina
+            // lo interroga: durante lo spostamento finale dello Zero virtuale
+            // le letture tacciono apposta.
+            bmsg = 'Comparatore: nessuna lettura valida (spento o scollegato). START non parte finché la spia Comparatore non torna verde.';
         }
-        if (bmsg) { banner.textContent = bmsg; banner.style.display = ''; }
+        if (bmsg) { if (banner.textContent !== bmsg) banner.textContent = bmsg; banner.style.display = ''; }
         else      { banner.style.display = 'none'; }
     }
 }
@@ -760,6 +1032,10 @@ function _aggiornaUiMoto() {
     // dire mostrare "Motore sbloccato" per un comando che il server rifiuta.
     var fb = (typeof document !== 'undefined' && document.getElementById) ? document.getElementById('freeBtn') : null;
     if (fb) fb.disabled = nonComandabile;
+    // Azzera angolo qui: un comando al banco anche lui (in sola lettura il server
+    // lo rifiuta), ma a motore sbloccato serve proprio: si gira a mano e si azzera.
+    var az = (typeof document !== 'undefined' && document.getElementById) ? document.getElementById('azzeraBtn') : null;
+    if (az) az.disabled = nonComandabile;
 }
 if (typeof window !== 'undefined' && window.addEventListener) {
     window.addEventListener('load', function () { _aggiornaUiMoto(); });
@@ -818,14 +1094,29 @@ function applicaRuoloBanco(role, motivo) {
         if (avvioAnnullato) {
             // questo l'operatore lo deve leggere SEMPRE: ha premuto START e non è partito niente
             _rifiutoUltimoMs = ora; _rifiutoVistoMs = ora; _rifiutiTaciuti = 0;
+            // che cosa non è partito: una misura, lo Zero virtuale o la verifica banco
+            var tipoA = (typeof window !== 'undefined' && window._tipoScansione) || 'misura';
+            var cosaA = { zero: 'Zero virtuale non avviato', verifica: 'Verifica banco non avviata' }[tipoA] || 'Misura non avviata';
             if (toast) {
                 toast(attesa
-                    ? { kind: 'warn', title: 'Scansione non avviata: banco in arresto',
-                        body: 'Il banco sta ancora fermando il movimento di prima. I comandi tornano disponibili da soli fra qualche secondo: poi premi di nuovo START.',
+                    ? { kind: 'warn', title: cosaA + ': banco in arresto',
+                        body: 'Il banco sta ancora fermando il movimento di prima. I comandi tornano disponibili da soli fra qualche secondo: poi riprova.',
                         duration: 7000 }
-                    : { kind: 'err', title: 'Scansione non avviata: sola lettura',
-                        body: 'Il banco è comandato da un\'altra finestra o da un altro PC: da qui la scansione non può partire.',
+                    : { kind: 'err', title: cosaA + ': sola lettura',
+                        body: 'Il banco è comandato da un\'altra finestra o da un altro PC: da qui non può partire niente.',
                         duration: 7000 });
+            }
+            // e la riga "Esito" lo dice: restava "Misura in corso..." fino al
+            // prossimo START. Dopo il ricaricamento dello Zero virtuale si tiene
+            // anche com'era andato quello (il caso tipico: START premuto mentre
+            // il banco finisce di fermarsi).
+            if (typeof _scriviEsito === 'function') {
+                var zvA = (typeof window !== 'undefined') ? window._rigaZeroVirtuale : null;
+                _scriviEsito(attesa ? 'avviso' : 'errore', '<b>' + cosaA + '</b>: ' +
+                    (attesa ? 'il banco si sta ancora fermando, riprova fra qualche secondo'
+                            : 'sola lettura, il banco &egrave; comandato da un\'altra finestra o da un altro PC') +
+                    (zvA ? ' &middot; ' + zvA : ''));
+                if (typeof window !== 'undefined') window._rigaZeroVirtuale = zvA;
             }
             return;
         }
@@ -981,11 +1272,11 @@ _avviaPollNormale();
 var _engineOnOpen = function(event) {
     if (_everConnected && window.cammesToast) {
         window.cammesToast({ kind: 'success', title: 'Connessione ripristinata',
-            body: 'Server di nuovo raggiungibile.', duration: 2500 });
+            body: 'Il programma CAMMES risponde di nuovo.', duration: 2500 });
     }
     _everConnected = true;
-    document.imp2.imp2.value = "gradi 0";
-    document.cpot.cpot.value = "00.00";
+    document.imp2.imp2.value = testoAngolo(0);
+    document.cpot.cpot.value = "00,00";
     gaugemicrom.value = 0;
     gaugemicrom.draw();
     // AUDIT MOT-03: SOCKET UNICO. Prima qui si apriva un SECONDO WebSocket
@@ -1096,13 +1387,13 @@ var _engineOnMessage = function(event) {
             if (!isNaN(aIdx)) {
                 if (aIdx > _autoLastIdx + 1 && !_autoGapWarned && window.cammesToast) {
                     _autoGapWarned = true;
-                    window.cammesToast({ kind: 'warn', title: 'Campioni persi',
-                        body: 'Salto di sequenza nello streaming (' + _autoLastIdx + '&rarr;' + aIdx + '): possibile riga seriale persa.', duration: 5000 });
+                    window.cammesToast({ kind: 'warn', title: 'Letture perse',
+                        body: 'Sono andate perse le letture fra il punto ' + _autoLastIdx + ' e il ' + aIdx + ' (disturbo sul collegamento USB). A fine giro il programma dice se mancano gradi.', duration: 5000 });
                 }
                 _autoLastIdx = aIdx;
                 i = aIdx;
                 // progresso (nel percorso classico lo fa il ramo '*se')
-                document.imp2.imp2.value = "gradi " + (i / currentMode.subStepsPerDeg).toFixed(2);
+                document.imp2.imp2.value = testoAngolo(i / currentMode.subStepsPerDeg);
                 if (startflag === 1 && window.cammesScanProgress) {
                     var aEta = scanEta.tick(i);
                     window.cammesScanProgress.set(i, currentMode.totalSteps, aEta);
@@ -1126,15 +1417,33 @@ var _engineOnMessage = function(event) {
         return;
     }
 
+    // Risposta del firmware ad "Azzera angolo qui" ('!'): l'encoder vale 0 da
+    // adesso. Prima la pagina diceva "azzerato" appena spedito il comando, anche
+    // se il banco lo rifiutava; e fino alla lettura successiva (5 s) teneva il
+    // conteggio vecchio, che "Memorizza posizione" avrebbe salvato col nuovo zero.
+    if (msg === '*zero') {
+        currentEncoderCount = 0;
+        if (window._attesaZero) {
+            window._attesaZero = 0;
+            if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Angolo azzerato',
+                body: 'La posizione attuale dell\'albero &egrave; 0&deg;. Le posizioni memorizzate prima di ora non sono pi&ugrave; raggiungibili.', duration: 5000 });
+        }
+        return;
+    }
+
     // RESET INATTESO DELL'ARDUINO (brownout, glitch USB, riflash): il firmware
     // stampa "CAMMES Uno ready" al boot. Se arriva a pagina già avviata da un
     // po', encoder e configurazione sono stati azzerati: avvisa forte.
     if (msg.indexOf('CAMMES Uno ready') !== -1 && (Date.now() - _pageLoadTs) > 12000) {
         currentEncoderCount = null;
         if (typeof bumpEncEpoch === 'function') bumpEncEpoch('reboot Arduino');   // MET-05: posizioni salvate non più valide
-        if (startflag === 1 || autoScanActive) { try { stop(); } catch (e) {} }
+        if (startflag === 1 || autoScanActive || window._giroInAttesa) {
+            var giriR = _giriDellaSerie();   // prima dello STOP, che azzera la serie
+            try { stop('riavvio'); } catch (e) {}
+            _scriviEsito('errore', _esitoInterruzione(window._tipoScansione, 'riavvio', giriR));
+        }
         if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Arduino riavviato!',
-            body: 'La scheda si &egrave; resettata: <b>riferimento zero e configurazione persi</b>. Se stavi misurando, la scansione non &egrave; pi&ugrave; valida: rifai lo Zero virtuale e riparti.', duration: 12000 });
+            body: 'La scheda si &egrave; riavviata: <b>zero dell\'angolo e configurazione persi</b>. Se stavi misurando, la misura non vale: rifai lo Zero virtuale e riparti.', duration: 12000 });
         return;
     }
 
@@ -1146,9 +1455,18 @@ var _engineOnMessage = function(event) {
         if (window._lastUnstable > 0 && window.cammesToast) {
             window.cammesToast({
                 kind: 'warn', title: window._lastUnstable + ' punti non stabilizzati',
-                body: 'Il comparatore non si &egrave; assestato entro 1,5 s su ' + window._lastUnstable + ' punti (accettato l\'ultimo valore letto). Possibili vibrazioni o fissaggio lasco: controlla il banco o usa Ripetizioni per verificare. Il conteggio finisce nei metadati del file.',
+                body: 'Il comparatore non si &egrave; assestato entro 1,5 s su ' + window._lastUnstable + ' punti (vale l\'ultima lettura). Possibili vibrazioni o fissaggio lasco: controlla il banco o usa Ripetizioni per verificare. Il conteggio viene scritto nel file della misura.',
                 duration: 10000
             });
+        }
+        // Il firmware manda il conteggio DOPO l'ultimo campione, quando la riga
+        // "Esito" e' gia' scritta (verde): se la misura e' finita la riga lo
+        // aggiunge, e la voce lo ridice. Fra un giro e l'altro delle
+        // ripetizioni, nello Zero virtuale e nella verifica _esitoCorrente e' null.
+        if (window._lastUnstable > 0 && _esitoCorrente) {
+            _esitoCorrente.instabili = window._lastUnstable;
+            var eU = _mostraEsitoMisura();
+            if (eU && eU.livello === 'avviso') speakLocal('misura terminata, con avvisi');
         }
         return;
     }
@@ -1159,11 +1477,11 @@ var _engineOnMessage = function(event) {
     if (msg.indexOf('*fault') === 0) {
         window._scanFaulted = true;
         var faultBody = (msg.indexOf('enc') >= 0)
-            ? 'L\'encoder non ha registrato il movimento del motore: <b>cavo encoder scollegato/rotto o albero bloccato</b>. La scansione &egrave; stata fermata perch&eacute; la posizione non &egrave; affidabile. Controlla il collegamento dell\'encoder e rifai lo Zero virtuale.'
-            : 'Il firmware ha segnalato un guasto (' + msg.substring(6).trim() + '). Scansione fermata per sicurezza.';
+            ? 'L\'encoder non ha registrato il movimento del motore: <b>cavo encoder scollegato/rotto o albero bloccato</b>. La misura &egrave; stata fermata perch&eacute; la posizione non &egrave; affidabile. Controlla il collegamento dell\'encoder e rifai lo Zero virtuale.'
+            : 'Il firmware ha segnalato un guasto (' + msg.substring(6).trim() + '). Misura fermata per sicurezza.';
         currentEncoderCount = null;
         if (typeof bumpEncEpoch === 'function') bumpEncEpoch('fault firmware');
-        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Guasto rilevato — scansione fermata', body: faultBody, duration: 12000 });
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Guasto rilevato: misura fermata', body: faultBody, duration: 12000 });
         return;
     }
 
@@ -1177,8 +1495,11 @@ var _engineOnMessage = function(event) {
             if (scanEta) scanEta.stop();
             var smA = document.getElementById('scanMode');   if (smA) smA.disabled = false;
             var rsA = document.getElementById('scanRepeat'); if (rsA) rsA.disabled = false;
+            // notifica e riga dicono la stessa cosa (misura, Zero virtuale o verifica)
+            var xA = _interruzione(window._tipoScansione, window._scanFaulted ? 'guasto' : 'banco', _giriDellaSerie());
             // Se un *fault ha appena spiegato il motivo, non sovrapporre il toast generico.
-            if (window.cammesToast && !window._scanFaulted) window.cammesToast({ kind: 'warn', title: 'Scansione interrotta', body: 'Scan autonomo fermato.', duration: 3500 });
+            if (window.cammesToast && !window._scanFaulted) window.cammesToast({ kind: 'warn', title: xA.titolo, body: xA.notifica, duration: 5000 });
+            _scriviEsito('errore', xA.riga);
             window._scanFaulted = false;
         } else if (startflag === 1 && i < currentMode.totalSteps) {
             startflag = 0;
@@ -1189,8 +1510,10 @@ var _engineOnMessage = function(event) {
             if (scanEta) scanEta.stop();
             var smI = document.getElementById('scanMode');   if (smI) smI.disabled = false;
             var rsI = document.getElementById('scanRepeat'); if (rsI) rsI.disabled = false;
-            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Scansione incompleta',
-                body: 'Il firmware ha chiuso a ' + i + '/' + currentMode.totalSteps + ' campioni.', duration: 6000 });
+            var xC = _interruzione(window._tipoScansione, 'corto', _giriDellaSerie());
+            if (window.cammesToast) window.cammesToast({ kind: 'err', title: xC.titolo,
+                body: 'Il giro si &egrave; fermato a ' + i + ' punti su ' + currentMode.totalSteps + ': ' + xC.seguito, duration: 8000 });
+            _scriviEsito('errore', xC.riga);
         }
         return;
     }
@@ -1251,7 +1574,9 @@ var _engineOnMessage = function(event) {
         if (motorFree) {
             var mDeg = msg.match(/deg=(-?\d+(\.\d+)?)/);
             if (mDeg) {
-                document.imp2.imp2.value = 'enc ' + parseFloat(mDeg[1]).toFixed(2) + '°';
+                // due decimali come li manda il banco (l'encoder va a 0,25°):
+                // "Memorizza posizione" salva questo numero, non uno arrotondato
+                document.imp2.imp2.value = numero(parseFloat(mDeg[1]), 2) + '° enc.';
             }
         }
     }
@@ -1262,7 +1587,7 @@ var _engineOnMessage = function(event) {
         else { msg2 = msg; }
 
         if (n >= 0 && n < 32) {
-            document.cpot.cpot.value = msg2;
+            document.cpot.cpot.value = msg2.replace('.', ',');
             gaugemicrom.value = msg;
             gaugemicrom.draw();
             window._liveLift = n;   // alzata corrente (mm) per il meccanismo live
@@ -1284,12 +1609,15 @@ var _engineOnMessage = function(event) {
             // ferma anche il firmware ('x' dentro stop()) e lo dice CHIARO.
             if (typeof startflag !== 'undefined' && startflag === 1 && consecutiveNaN >= NAN_TO_AUTOSTOP) {
                 startflag = 0;
+                var fermata = { zero: 'Zero virtuale FERMATO', verifica: 'Verifica banco FERMATA' }[window._tipoScansione] || 'Misura FERMATA';
                 if (window.cammesToast) window.cammesToast({
-                    kind: 'err', title: 'Scansione FERMATA: comparatore non risponde',
+                    kind: 'err', title: fermata + ': comparatore non risponde',
                     body: consecutiveNaN + ' letture invalide consecutive. Controlla cavo e accensione del comparatore, riazzera sul cerchio base e riparti: questa misura NON &egrave; valida.',
                     duration: 12000
                 });
-                if (typeof stop === 'function') { try { stop(); } catch(e) {} }
+                var giriN = _giriDellaSerie();   // prima dello STOP, che azzera la serie
+                if (typeof stop === 'function') { try { stop('comparatore'); } catch(e) {} }
+                _scriviEsito('errore', _esitoInterruzione(window._tipoScansione, 'comparatore', giriN));
                 console.warn('Auto-stop scan: sensore non risponde (' + consecutiveNaN + ' letture invalide consecutive)');
             }
         }
@@ -1308,9 +1636,9 @@ var _engineOnMessage = function(event) {
             // AUDIT MET-01: una lettura invalida non scrive niente: il grado
             // resta senza dato e viene contato come mancante a fine giro.
             var gradiChiusi = _registraCampione(i, Number(msg), msgEncoder);
-            // Formato compatto: i 7 spazi fissi di prima spingevano il valore
-            // mm (il dato più importante) fuori dal campo → troncato (foto banco).
-            document.mas.mas.value = " max " + maxg + " gradi  " + max.toFixed(3) + " mm";
+            // Formato compatto ("9,610 mm a 160°"): il valore in mm, il dato più
+            // importante, viene per primo e non esce dal campo.
+            document.mas.mas.value = testoPicco(max, maxg);
 
             // Update Chart.js solo quando un grado si chiude
             if (gradiChiusi.length) {
@@ -1325,8 +1653,12 @@ var _engineOnMessage = function(event) {
 
     if (i == currentMode.totalSteps) {
         if (startflag == 1) {
-            var x = "sequenza di misura   terminata ";
-            speakLocal(x);   // audit APP-17
+            // La voce (audit APP-17) dice subito la fine dello Zero virtuale,
+            // della verifica e dei giri intermedi; per la misura vera la dice
+            // _esitoFineMisura, insieme all'esito ("con avvisi", "incompleta").
+            if (labms === 1) speakLocal('zero virtuale, giro di ricerca terminato');
+            else if (window._benchVerify) speakLocal('verifica banco terminata');
+            else if (repeatRunsTarget > 1 && repeatRunsDone + 1 < repeatRunsTarget) speakLocal('giro terminato');
             if (window.cammesScanProgress) window.cammesScanProgress.set(currentMode.totalSteps, currentMode.totalSteps, 0);
             if (scanEta) scanEta.stop();
 
@@ -1370,7 +1702,7 @@ var _engineOnMessage = function(event) {
                     if (_drift > SOGLIA_GIRO_NON_CHIUSO && window.cammesToast) {
                         window.cammesToast({
                             kind: 'warn', title: 'Misura sospetta: giro non chiuso',
-                            body: 'Il cerchio base non torna alla stessa quota tra inizio e fine giro (differenza ' + _drift.toFixed(3) + ' mm, attesa ~0): possibile deriva dello zero del comparatore o pezzo mosso. Riazzerare sul cerchio base e ripetere.',
+                            body: 'Il cerchio base non torna alla stessa quota fra inizio e fine giro (differenza ' + numero(_drift, 3) + ' mm, attesa circa 0): lo zero del comparatore si &egrave; spostato o il pezzo si &egrave; mosso. Riazzera sul cerchio base e ripeti.',
                             duration: 10000
                         });
                     }
@@ -1386,30 +1718,23 @@ var _engineOnMessage = function(event) {
             if (labms !== 1 && window._benchVerify) {
                 window._benchVerify = false;
                 var _bv = window.benchVerdict(pdata);
-                if (_bv.status === 'NON_VALUTABILE') {
-                    if (window.cammesToast) window.cammesToast({
-                        kind: 'err', title: 'Verifica banco: NON VALUTABILE',
-                        body: _bv.missing + ' gradi su 360 senza lettura valida: un test di salute con dei buchi non certifica niente (un campione perso conterebbe come "perfetto" proprio dove il banco pu&ograve; essere difettoso). Controlla comparatore e cavi e ripeti. Nessun esito salvato.',
-                        duration: 12000
-                    });
-                } else {
+                // toast e riga "Esito" dicono la stessa cosa: li scrive esitoVerificaBanco
+                var _ev = esitoVerificaBanco(_bv);
+                if (window.cammesToast) window.cammesToast({ kind: _ev.kind, title: _ev.title, body: _ev.body, duration: 12000 });
+                _scriviEsito(_ev.livello, _ev.riga);
+                if (_bv.status !== 'NON_VALUTABILE') {
                     var _bvPass = _bv.status === 'OK';
-                    if (window.cammesToast) window.cammesToast({
-                        kind: _bvPass ? 'success' : 'err',
-                        title: _bvPass ? 'Verifica banco: SUPERATA' : 'Verifica banco: NON SUPERATA',
-                        body: 'Residuo sul cilindro (tolta l\'eccentricit&agrave;): RMS ' + _bv.rms.toFixed(3) + ' mm, max ' + _bv.max.toFixed(3) +
-                              ' mm (soglie: 0,020 / 0,050).' + (_bvPass ? '' : ' Controlla gioco supporti, squadra comparatore, corrente driver.'),
-                        duration: 12000
-                    });
                     fetch('/api/settings', { method: 'POST', body: JSON.stringify({ verificaBanco: {
                         date: new Date().toISOString(), rms: Number(_bv.rms.toFixed(4)), max: Number(_bv.max.toFixed(4)), pass: _bvPass } }) })
                         .then(function (r) {
                             if (r.ok) {
                                 if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Esito archiviato', body: 'La verifica banco con data &egrave; visibile in Home.', duration: 4000 });
+                                _scriviEsito(_ev.livello, _ev.riga + ' &middot; esito archiviato in Home');
                             } else { throw new Error('HTTP ' + r.status); }
                         })
                         .catch(function (eSv) {
                             if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Esito NON archiviato', body: 'Il verdetto qui sopra vale, ma il salvataggio in Home &egrave; fallito (' + eSv.message + ').', duration: 8000 });
+                            _scriviEsito(_ev.livello, _ev.riga + ' &middot; esito NON archiviato in Home');
                         });
                 }
                 startflag = 0;
@@ -1429,12 +1754,14 @@ var _engineOnMessage = function(event) {
                     // Restart automatico dopo 1.5 s (lascia tempo alle vibrazioni)
                     if (window.cammesToast) {
                         window.cammesToast({
-                            kind: 'info', title: 'Run ' + repeatRunsDone + '/' + repeatRunsTarget + ' completato',
-                            body: 'Picco ' + max.toFixed(3) + ' mm a ' + maxg + '&deg;. Avvio prossimo run...',
+                            kind: 'info', title: 'Giro ' + repeatRunsDone + ' di ' + repeatRunsTarget + ' completato',
+                            body: 'Picco ' + numero(max, 3) + ' mm a ' + maxg + '&deg;. Parte il giro successivo&hellip;',
                             duration: 3500
                         });
                     }
                     startflag = 0;
+                    // la misura resta "in corso" anche nella pausa (STOP, Ruota, Salva misura)
+                    window._giroInAttesa = true;
                     // timer registrato + token: STOP lo cancella (audit MOT-01)
                     _scanTimeout(function () { _startSingleRun(false); }, 1500);
                     return;
@@ -1453,6 +1780,12 @@ var _engineOnMessage = function(event) {
                         picco: max, gradoPicco: maxg
                     }));
                 }
+            }
+            if (labms !== 1) {
+                // La misura e' sul grafico ma non nell'archivio: chi la butterebbe
+                // (START, Zero virtuale, verifica, Ricomincia, uscita) prima chiede.
+                window._misuraNonSalvata = true;
+                _esitoFineMisura();   // la riga "Esito" resta fino al prossimo START
             }
             // Riabilita selector modalità a fine scansione
             var sm = document.getElementById('scanMode'); if (sm) sm.disabled = false;
@@ -1514,8 +1847,7 @@ var _engineOnMessage = function(event) {
     // e il terminatore è quello di una misura (*se), non altri (*pos / *zero / *dbg).
     if (msg === '*se') {
         // visualizza progresso in gradi camma reali (i sub-step ÷ subStepsPerDeg)
-        var degShown = (i / currentMode.subStepsPerDeg).toFixed(2);
-        document.imp2.imp2.value = "gradi " + degShown;
+        document.imp2.imp2.value = testoAngolo(i / currentMode.subStepsPerDeg);
         // Aggiorna progress bar + ETA solo durante scansione attiva.
         if (startflag === 1 && window.cammesScanProgress) {
             var etaSec = scanEta.tick(i);
@@ -1542,7 +1874,9 @@ fetch('/api/firmware-info').then(function (r) { return r.json(); })
 
 <script>
 var i = 0;
-function start(daZeroVirtuale) {
+// giaConfermato: chi chiama ha gia' chiesto se buttare la misura non salvata
+// (Zero virtuale, verifica banco, o la risposta "Continua" alla domanda di qui).
+function start(daZeroVirtuale, giaConfermato) {
     // AUDIT MOT-02: un secondo START a scansione attiva riazzerava pdata e
     // l'indice mescolando lo stream in arrivo → misura corrotta in silenzio.
     if (_scanBusy('Un nuovo START')) return;
@@ -1554,8 +1888,8 @@ function start(daZeroVirtuale) {
     // nessuno lo abbia chiesto, misura appena fatta persa.
     if (!daZeroVirtuale && typeof labms !== 'undefined') labms = 0;
     if (!_wsReady()) {
-        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Server non connesso',
-            body: 'Avvia cammes_server.js e collega l’Arduino prima di scansionare.', duration: 4500 });
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Il programma CAMMES non risponde',
+            body: 'Avvia cammes.exe e controlla che l’Arduino sia collegato, poi riprova.', duration: 6000 });
         return;
     }
     // PRE-FLIGHT SENSORE: il probe idle interroga il comparatore a 5 Hz,
@@ -1564,12 +1898,16 @@ function start(daZeroVirtuale) {
     // e arrivava in fondo piena di zeri (visto al banco dall'utente).
     if (Date.now() - lastSensorRx > 2500) {
         if (window.cammesToast) window.cammesToast({
-            kind: 'err', title: 'Comparatore non risponde: scansione NON avviata',
-            body: 'Nessuna misura valida negli ultimi secondi. Controlla che il comparatore sia collegato e acceso: il LED <b>Comparatore</b> in alto deve essere verde, e il display deve mostrare la quota.',
+            kind: 'err', title: 'Comparatore non risponde: misura NON avviata',
+            body: 'Nessuna lettura valida negli ultimi secondi. Controlla che il comparatore sia collegato e acceso: il LED <b>Comparatore</b> in alto deve essere verde, e il display deve mostrare la quota.',
             duration: 9000
         });
         return;
     }
+    // Una misura nuova cancella quella sul grafico: se non e' ancora salvata,
+    // prima si chiede. Senza niente da chiedere START resta immediato.
+    if (!giaConfermato && typeof _chiediPrimaDiPerdere === 'function' &&
+        _chiediPrimaDiPerdere('Una nuova misura cancella quella sul grafico.', function () { start(daZeroVirtuale, true); })) return;
     // Legge target ripetizioni dalla UI all'avvio (poi non cambia per la
     // durata del ciclo completo: l'utente non può cambiarlo mid-sequence
     // perché disabilitiamo lo scanRepeat).
@@ -1592,16 +1930,18 @@ function _showRepeatedRunsStats() {
     // ibrido: gradi con count diversi da run diversi). Gli esclusi vengono
     // dichiarati. Se NESSUN run è completo, niente media ufficiale: resta
     // l'ultimo run (incompleto, marcato #stato=INCOMPLETO al salvataggio).
+    var num = window.cammesNum || function (y, dec) { return Number(y).toFixed(dec).replace('.', ','); };
+    var giri = function (n) { return n === 1 ? '1 giro' : n + ' giri'; };
     var cls = window.averageCompleteRuns(repeatedRuns);
     if (cls.excluded.length > 0 && window.cammesToast) {
-        window.cammesToast({ kind: 'warn', title: cls.excluded.length + ' run esclusi dalla media',
-            body: cls.excluded.map(function (e) { return 'run ' + e.run + ' (' + e.missing + ' gradi mancanti)'; }).join(' &middot; ') +
-                  '. La media ufficiale usa solo i run completi' + (cls.official ? ' (' + cls.included.join(', ') + ')' : '') + '.',
+        window.cammesToast({ kind: 'warn', title: giri(cls.excluded.length) + ' fuori dalla media',
+            body: cls.excluded.map(function (e) { return 'giro ' + e.run + ' (' + e.missing + ' gradi mancanti)'; }).join(' &middot; ') +
+                  '. La media usa solo i giri completi' + (cls.official ? ' (' + cls.included.join(', ') + ')' : '') + '.',
             duration: 10000 });
     }
     if (!cls.official) {
-        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Nessun run completo: media NON calcolata',
-            body: 'Tutti i ' + N + ' run hanno gradi mancanti: nessuna media ufficiale. Resta l\'ultimo run, INCOMPLETO (il salvataggio lo marca #stato=INCOMPLETO). Controlla comparatore/fissaggi e ripeti.', duration: 12000 });
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Nessun giro completo: media NON calcolata',
+            body: 'Tutti i ' + N + ' giri hanno gradi mancanti: nessuna media. Resta l\'ultimo giro, INCOMPLETO (il file verr&agrave; segnato come INCOMPLETO). Controlla comparatore e fissaggi e ripeti.', duration: 12000 });
         window._lastRepeatStats = { runs: N, runsIncluded: 0, sigmaMax: NaN, sigmaPeak: NaN, cvMax: NaN };
         return;
     }
@@ -1635,11 +1975,11 @@ function _showRepeatedRunsStats() {
         else { pdata[dd2] = undefined; }
     }
     if (agg.missingCount > 0 && window.cammesToast) {
-        window.cammesToast({ kind: 'err', title: 'Media run: ' + agg.missingCount + ' gradi senza dato',
-            body: 'Alcuni gradi risultano mancanti in tutti i ' + N + ' run: NON vengono azzerati. Il profilo medio è INCOMPLETO.', duration: 10000 });
+        window.cammesToast({ kind: 'err', title: 'Media dei giri: ' + agg.missingCount + ' gradi senza dato',
+            body: 'Alcuni gradi mancano in tutti i ' + N + ' giri: NON vengono messi a zero. Il profilo medio &egrave; INCOMPLETO.', duration: 10000 });
     }
     max = maxAvg; maxg = maxAvgDeg;
-    document.mas.mas.value = " max " + maxg + " gradi  " + max.toFixed(3) + " mm (n=" + Nused + ")";
+    document.mas.mas.value = num(max, 3) + ' mm a ' + maxg + '° (' + giri(Nused) + ')';
     // LA RIPETIBILITÀ SI GIUDICA SOLO SE ESISTE. Con un solo run in media la
     // sigma di averageRuns è 0 PER COSTRUZIONE (n=1: non misurata, indefinita)
     // e il verdetto usciva "eccellente — σ 0,000 — CV 0,00%": il gate contava i
@@ -1672,10 +2012,10 @@ function _showRepeatedRunsStats() {
     if (!ripetibilitaMisurabile) {
         if (window.cammesToast) {
             window.cammesToast({
-                kind: 'warn', title: Nused + '/' + N + ' run in media &middot; ripetibilit&agrave; NON valutabile',
-                body: 'In media &egrave; entrato un solo run completo: la media &egrave; valida (picco <b>' +
-                      maxAvg.toFixed(3) + ' mm</b> a <b>' + maxAvgDeg + '&deg;</b>) ma il confronto fra run non esiste, ' +
-                      'quindi &sigma; e CV non vengono dichiarati. Per il verdetto servono almeno 2 run completi.',
+                kind: 'warn', title: giri(Nused) + ' su ' + N + ' in media &middot; ripetibilit&agrave; NON valutabile',
+                body: 'In media &egrave; entrato un solo giro completo: la media &egrave; valida (picco <b>' +
+                      num(maxAvg, 3) + ' mm</b> a <b>' + maxAvgDeg + '&deg;</b>) ma il confronto fra giri non esiste, ' +
+                      'quindi &sigma; e CV non vengono dichiarati. Per il verdetto servono almeno 2 giri completi.',
                 duration: 10000
             });
         }
@@ -1686,15 +2026,18 @@ function _showRepeatedRunsStats() {
     else if (maxCv < 3)   { verdict = 'buona';      kind = 'success'; }
     else if (maxCv < 7)   { verdict = 'sufficiente'; kind = 'warn'; }
     else                  { verdict = 'scadente';   kind = 'err'; }
+    window._lastRepeatStats.verdetto = verdict;   // per la riga "Esito" (non va nel file)
     if (window.cammesToast) {
         window.cammesToast({
-            kind: kind, title: Nused + '/' + N + ' run in media &middot; ripetibilit&agrave; ' + verdict,
-            body: 'Picco medio <b>' + maxAvg.toFixed(3) + ' mm</b> a <b>' + maxAvgDeg +
+            kind: kind, title: giri(Nused) + ' su ' + N + ' in media &middot; ripetibilit&agrave; ' + verdict,
+            // i numeri escono da toFixed (la forma la controlla test_etichette.js):
+            // la virgola decimale si mette dopo, solo fra due cifre
+            body: ('Picco medio <b>' + maxAvg.toFixed(3) + ' mm</b> a <b>' + maxAvgDeg +
                   // il grado della sigma massima esiste solo se una sigma c'è: con i
                   // run identici usciva "@ 0°", un grado che sulla camma non esiste
                   '&deg;</b> &middot; &sigma; max <b>' + maxStd.toFixed(3) + ' mm</b>' +
                   (maxStd > 0 && maxStdDeg >= 1 ? ' @ ' + maxStdDeg + '&deg;' : '') +
-                  ' &middot; CV max <b>' + maxCv.toFixed(2) + '%</b>',
+                  ' &middot; CV max <b>' + maxCv.toFixed(2) + '%</b>').replace(/(\d)\.(\d)/g, '$1,$2'),
             duration: 9000
         });
     }
@@ -1706,21 +2049,23 @@ function _showRepeatedRunsStats() {
 // mentre l'operatore è al banco; subito dopo usciva comunque il verde
 // "Scansione completata", e la misura si salvava senza domande e senza traccia
 // del giro non chiuso nel file: una misura che il manuale dice di non usare
-// diventava un file identico a uno buono. Ora la notifica di fine giro dice se
-// ci sono avvisi e resta finché non la si chiude, giro non chiuso e
-// slittamento finiscono nei metadati del file, e salvare una misura sospetta
-// chiede conferma come per una incompleta.
+// diventava un file identico a uno buono. Ora l'esito resta scritto nella riga
+// "Esito" della barra dei comandi fino al prossimo START (la notifica di fine
+// giro dice se ci sono avvisi, ma non resta a coprire la pagina), giro non
+// chiuso e slittamento finiscono nei metadati del file, e salvare una misura
+// sospetta chiede conferma come per una incompleta.
 var SOGLIA_GIRO_NON_CHIUSO = 0.03;   // mm fra i minimi delle due metà del giro
 function riassuntoFineGiro(s) {
+    var num = window.cammesNum || function (y, d) { return Number(y).toFixed(d).replace('.', ','); };
     var avvisi = [];
     if (s.mancanti > 0) avvisi.push(s.mancanti + ' gradi senza lettura');
-    if (s.giroNonChiuso > 0) avvisi.push('giro non chiuso (' + s.giroNonChiuso.toFixed(3).replace('.', ',') + ' mm)');
+    if (s.giroNonChiuso > 0) avvisi.push('giro non chiuso (' + num(s.giroNonChiuso, 3) + ' mm)');
     if (s.slittamento) avvisi.push('possibile slittamento del motore');
     if (s.instabili > 0) avvisi.push(s.instabili + ' punti non stabilizzati');
-    var picco = 'Picco ' + Number(s.picco).toFixed(3) + ' mm a ' + s.gradoPicco + '&deg; camma.';
-    if (!avvisi.length) return { kind: 'success', title: 'Scansione completata', body: picco, duration: 5000 };
-    return { kind: 'warn', title: 'Scansione completata, CON AVVISI', duration: 0,
-             body: picco + ' Avvisi: ' + avvisi.join('; ') + '. Leggili prima di salvare: una misura sospetta va ripetuta.' };
+    var picco = 'Picco ' + num(s.picco, 3) + ' mm a ' + s.gradoPicco + '&deg; camma.';
+    if (!avvisi.length) return { kind: 'success', title: 'Misura completata', body: picco, duration: 5000 };
+    return { kind: 'warn', title: 'Misura completata, CON AVVISI', duration: 12000,
+             body: picco + ' Avvisi: ' + avvisi.join('; ') + '. Restano scritti nella riga Esito: una misura sospetta va ripetuta.' };
 }
 function metadatiAvvisi(s) {
     var out = '';
@@ -1736,6 +2081,161 @@ function domandaMisuraSospetta(s) {
     if (!motivi.length) return null;
     return 'ATTENZIONE: misura SOSPETTA\n\n' + motivi.join('\n') +
            '\n\nIl file verrà marcato con questi avvisi; la misura andrebbe ripetuta.\n\nSalvare comunque?';
+}
+
+// ===== RIGA "ESITO" A FINE MISURA ==========================================
+// Che cosa dice la riga quando una misura arriva in fondo. s = { mancanti,
+// giroNonChiuso, slittamento, instabili, picco, gradoPicco, ripetizioni
+// (window._lastRepeatStats o null), salvataCome (nome del file o null),
+// erroreSalvataggio (testo o null) }. Ritorna { livello, html }: verde se
+// completa, gialla se sospetta, rossa se incompleta; e dice se e' salvata.
+function esitoDellaMisura(s) {
+    var num = window.cammesNum || function (y, d) { return Number(y).toFixed(d).replace('.', ','); };
+    var esc = window.cammesEscape || function (t) { return String(t).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); };
+    var avvisi = [];
+    if (s.giroNonChiuso > 0) avvisi.push('giro non chiuso, ' + num(s.giroNonChiuso, 3) + ' mm');
+    if (s.slittamento) avvisi.push('possibile slittamento del motore');
+    if (s.instabili > 0) avvisi.push(s.instabili + ' punti non stabilizzati');
+    var livello, parti = [];
+    if (s.mancanti > 0) {
+        livello = 'errore';
+        parti.push('<b>Misura INCOMPLETA</b>: ' + s.mancanti + ' gradi senza lettura, non usarla e ripeti la misura');
+    } else if (avvisi.length) {
+        livello = 'avviso';
+        parti.push('<b>Misura sospetta</b> (' + avvisi.join('; ') + '): meglio ripeterla');
+    } else {
+        livello = 'ok';
+        parti.push('<b>Misura completa</b>');
+    }
+    parti.push('picco ' + num(s.picco, 3) + ' mm a ' + s.gradoPicco + '&deg;');
+    var r = s.ripetizioni;
+    if (r && (r.runsTotal || r.runs) > 1) {
+        var tot = r.runsTotal || r.runs, dentro = (r.runsIncluded === 0) ? 0 : r.runs;
+        var g = dentro + (dentro === 1 ? ' giro' : ' giri') + ' su ' + tot + ' in media';
+        if (dentro === 0) parti.push('nessuno dei ' + tot + ' giri &egrave; completo: media non calcolata');
+        else if (isFinite(r.sigmaMax)) parti.push(g + ', &sigma; max ' + num(r.sigmaMax, 3) + ' mm, CV max ' + num(r.cvMax, 2) + ' %' +
+                                                  (r.verdetto ? ': ripetibilit&agrave; ' + r.verdetto : ''));
+        else parti.push(g + ': ripetibilit&agrave; non valutabile');
+    }
+    if (s.salvataCome) {
+        // corta: con le ripetizioni la riga andava su quattro righe e la barra,
+        // che resta in alto, toglieva il grafico alla vista
+        var f = encodeURIComponent(s.salvataCome);
+        parti.push('salvata come <b>' + esc(s.salvataCome) + '</b>');
+        parti.push('apri in Analisi come <a href="analisi.html?asp=' + f + '">aspirazione</a> o <a href="analisi.html?sca=' + f + '">scarico</a>');
+    } else {
+        parti.push('<b>NON ANCORA SALVATA</b>' + (s.erroreSalvataggio ? ' (salvataggio non riuscito: ' + esc(s.erroreSalvataggio) + ')' : ''));
+    }
+    return { livello: livello, html: parti.join(' &middot; ') };
+}
+var _esitoCorrente = null;   // l'ultima misura arrivata in fondo (null da START in poi)
+function _mostraEsitoMisura() {
+    if (!_esitoCorrente) return null;
+    var e = esitoDellaMisura(_esitoCorrente);
+    _scriviEsito(e.livello, e.html);
+    return e;
+}
+// A fine misura: lo stato si prende dal grafico (con le ripetizioni, la media:
+// i gradi mancanti sono quelli che il salvataggio dichiarera' nel file).
+function _esitoFineMisura() {
+    var mancanti = 0;
+    for (var d = 1; d <= 360; d++) if (!isFinite(Number(pdata[d]))) mancanti++;
+    _esitoCorrente = {
+        mancanti: mancanti, giroNonChiuso: window._giroNonChiuso || 0, slittamento: !!window._slittamento,
+        instabili: window._lastUnstable || 0, picco: max, gradoPicco: maxg,
+        ripetizioni: window._lastRepeatStats || null, salvataCome: null, erroreSalvataggio: null
+    };
+    var e = _mostraEsitoMisura();
+    // audit APP-17: la voce dice anche l'esito, per chi e' al banco
+    speakLocal(e.livello === 'errore' ? 'misura incompleta' : e.livello === 'avviso' ? 'misura terminata, con avvisi' : 'misura terminata');
+    return e;
+}
+
+// ===== MISURA NON SALVATA ===================================================
+// Una misura appena fatta si perdeva con un clic: un altro START, Ricomincia,
+// lo Zero virtuale, la verifica banco o l'uscita dalla pagina la buttavano
+// senza dire niente (con 5 giri in Race sono una decina di minuti). Lo stato
+// "non salvata" si accende a fine misura (non dopo Zero virtuale e verifica
+// banco), si spegne quando il salvataggio riesce, e chi butterebbe la misura
+// prima chiede. Senza niente da chiedere i comandi partono subito, come prima.
+window._misuraNonSalvata = false;
+window._uscitaVoluta = false;   // i ricaricamenti fatti dal programma non chiedono niente
+// Ritorna false se non c'e' niente da chiedere (chi chiama prosegue subito);
+// true se ha aperto la domanda: "Continua senza salvare" chiama continua().
+function _chiediPrimaDiPerdere(cosa, continua) {
+    if (!window._misuraNonSalvata || !window.cammesConferma) return false;
+    window.cammesConferma('La misura sul grafico non è salvata',
+        cosa + '<br>Per tenerla premi <b>Annulla</b>, scrivi il nome e premi <b>Salva misura</b>.',
+        'Continua senza salvare', true)
+        .then(function (si) {
+            if (si) { continua(); return; }
+            var n = document.getElementById('nome');
+            if (n && !n.value && n.focus) n.focus();
+        });
+    // un Invio distratto non deve buttare la misura: il fuoco va su Annulla
+    if (typeof _fuocoSulPulsante === 'function') _fuocoSulPulsante('Annulla');
+    return true;
+}
+// Le finestre della pagina (cammes-ui.js) mettono il fuoco sul pulsante
+// dell'azione, cosi' Invio la conferma. Dove l'azione butta via qualcosa il
+// fuoco va sulla scelta prudente. Si prende l'ULTIMA finestra aperta: quella di
+// una domanda appena chiusa resta nella pagina per un attimo mentre sparisce, e
+// prendendo la prima il fuoco finiva su un pulsante che stava per sparire.
+function _fuocoSulPulsante(testo) {
+    setTimeout(function () {   // dopo il fuoco messo dalla finestra stessa (30 ms)
+        if (typeof document === 'undefined' || !document.querySelectorAll) return;
+        var aperte = document.querySelectorAll('.cammes-dialog-backdrop');
+        var ultima = aperte.length ? aperte[aperte.length - 1] : null;
+        var bottoni = ultima ? ultima.querySelectorAll('.cammes-dialog-actions button') : [];
+        for (var k = 0; k < bottoni.length; k++) {
+            if (bottoni[k].textContent === testo && bottoni[k].focus) { bottoni[k].focus(); return; }
+        }
+    }, 80);
+}
+if (typeof window !== 'undefined' && window.addEventListener) {
+    // Chiusura o ricarica della scheda: il browser mostra il suo avviso (il
+    // testo non si puo' scegliere). Per i collegamenti in alto c'e' la domanda vera.
+    window.addEventListener('beforeunload', function (e) {
+        if (!window._misuraNonSalvata || window._uscitaVoluta) return undefined;
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+    });
+}
+if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('click', function (e) {
+        var a = (e.target && e.target.closest) ? e.target.closest('.header a[href]') : null;
+        if (!a || a.target === '_blank' || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+        if (!window._misuraNonSalvata || window._uscitaVoluta) return;
+        var dove = a.href;
+        if (_chiediPrimaDiPerdere('Uscendo dalla pagina la misura appena fatta va persa.',
+                function () { window._uscitaVoluta = true; location.href = dove; })) e.preventDefault();
+    });
+}
+
+// ===== CON CHE COSA PARTE START =============================================
+// Accanto a START: modalita', giri e verso, letti dai comandi veri. Si
+// aggiorna a ogni cambio (e dopo il ricaricamento dello Zero virtuale).
+function descriviScelte(modo, ripetizioni, verso) {
+    var n = parseInt(ripetizioni, 10) || 1;
+    return ((modo && modo.label) || '?') + ' &middot; ' + (n === 1 ? '1 giro' : n + ' giri') +
+           ' &middot; verso ' + (verso === -1 ? 'antiorario' : 'orario');
+}
+function aggiornaRiassuntoScelte() {
+    var el = document.getElementById('riassuntoScelte');
+    if (!el) return;
+    var rs = document.getElementById('scanRepeat');
+    el.innerHTML = descriviScelte(currentMode, rs ? rs.value : 1, rsign);
+}
+function vaiAlleScelte() {
+    // i giri stanno nel pannello Avanzate: con le ripetizioni scelte lo si apre,
+    // cosi' il clic mostra tutte e tre le scelte del riassunto
+    var rsA = document.getElementById('scanRepeat');
+    if (rsA && (parseInt(rsA.value, 10) || 1) > 1 && typeof toggleScanAdvanced === 'function') toggleScanAdvanced(true);
+    var box = document.getElementById('impostazioniMisura');
+    if (box && box.scrollIntoView) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    var sm = document.getElementById('scanMode');
+    if (sm && sm.focus) sm.focus({ preventScroll: true });
 }
 
 // ===== ESITO DELLO ZERO VIRTUALE ===========================================
@@ -1756,20 +2256,23 @@ function _ricaricaDopoZeroVirtuale(esito, dettagli) {
             ripetizioni: rs ? rs.value : '1', verso: rsign
         }));
     } catch (e) {}
+    window._uscitaVoluta = true;   // e' il programma a ricaricare: nessuna domanda d'uscita
     location.reload(true);
 }
+// L'esito attraversa il ricaricamento e resta scritto nella riga "Esito" della
+// barra dei comandi: la notifica non serve piu' che resti a coprire la pagina.
 function testoEsitoZeroVirtuale(st) {
     var d = (st && st.dettagli) || {};
     switch (st && st.esito) {
-    case 'fatto': return { kind: 'success', title: 'Zero virtuale fatto', duration: 0,
+    case 'fatto': return { kind: 'success', title: 'Zero virtuale fatto', duration: 8000,
         body: 'Il picco &egrave; stato portato a 180&deg; dallo zero. Ora puoi misurare con START.' };
-    case 'gia': return { kind: 'success', title: 'Zero virtuale: gi&agrave; in posizione', duration: 0,
+    case 'gia': return { kind: 'success', title: 'Zero virtuale: gi&agrave; in posizione', duration: 8000,
         body: 'Il picco era gi&agrave; a 180&deg; dallo zero (scarto ' + (d.scarto || '?') + '&deg;, sotto il passo): non &egrave; servito muovere. Ora puoi misurare con START.' };
-    case 'interrotto': return { kind: 'err', title: 'Zero virtuale INTERROTTO', duration: 0,
+    case 'interrotto': return { kind: 'err', title: 'Zero virtuale INTERROTTO', duration: 12000,
         body: 'Lo spostamento finale &egrave; stato fermato a met&agrave;: l\'albero NON &egrave; allo zero. Ripeti lo Zero virtuale prima di misurare.' };
-    case 'non-confermato': return { kind: 'err', title: 'Zero virtuale NON confermato', duration: 0,
+    case 'non-confermato': return { kind: 'err', title: 'Zero virtuale NON confermato', duration: 12000,
         body: 'Il motore non ha segnalato la fine dello spostamento entro 8 secondi: lo zero potrebbe non essere quello atteso. Ripeti lo Zero virtuale prima di misurare.' };
-    case 'senza-encoder': return { kind: 'err', title: 'Zero virtuale NON eseguito', duration: 0,
+    case 'senza-encoder': return { kind: 'err', title: 'Zero virtuale NON eseguito', duration: 12000,
         body: 'Manca la posizione dell\'encoder al picco: l\'albero non &egrave; stato spostato e lo zero non &egrave; cambiato. Controlla il LED Encoder e ripeti.' };
     }
     return null;
@@ -1787,16 +2290,23 @@ function _ripristinaDopoZeroVirtuale() {
     var rs = document.getElementById('scanRepeat');
     if (rs && st.ripetizioni) rs.value = st.ripetizioni;
     if (st.verso === -1 && rsign !== -1) {
-        var cb = document.querySelector('.toggle-group input[type="checkbox"]');
+        // la casella del verso (rlb() legge il suo stato, non conta i clic)
+        var cb = document.getElementById('versoScansione') || document.querySelector('.toggle-group input[type="checkbox"]');
         if (cb) cb.checked = true;
         rlb();
     }
+    if (typeof aggiornaRiassuntoScelte === 'function') aggiornaRiassuntoScelte();
     var t = testoEsitoZeroVirtuale(st);
-    if (t && window.cammesToast) {
+    if (t) {
         var n = parseInt(st.ripetizioni, 10) || 1;
         t.body += '<br>Scelte come prima dello Zero virtuale: ' + (SCAN_MODES[st.modo] || SCAN_MODES.fast).label +
-                  ', ' + (n === 1 ? '1 giro' : n + ' giri') + ', senso ' + (st.verso === -1 ? 'antiorario' : 'orario') + '.';
-        window.cammesToast(t);
+                  ', ' + (n === 1 ? '1 giro' : n + ' giri') + ', verso ' + (st.verso === -1 ? 'antiorario' : 'orario') + '.';
+        if (window.cammesToast) window.cammesToast(t);
+        // e resta scritto nella riga "Esito", fino al prossimo START
+        if (typeof _scriviEsito === 'function') _scriviEsito(t.kind === 'success' ? 'ok' : 'errore', '<b>' + t.title + '</b>: ' + t.body);
+        // un START rifiutato dal banco (ancora in arresto dopo il ricaricamento)
+        // non deve far dimenticare com'e' andato lo Zero virtuale
+        window._rigaZeroVirtuale = '<b>' + t.title + '</b>';
     }
     return st;
 }
@@ -1807,8 +2317,11 @@ if (typeof window !== 'undefined' && window.addEventListener) {
 // Avvia un singolo run di scansione. Usato sia dal primo start() che
 // dall'auto-restart dopo che un run è completato in modalità ripetuta.
 function _startSingleRun(firstRun) {
-    var x = "sequenza di misura   iniziata ";
-    speakLocal(x);   // audit APP-17
+    window._giroInAttesa = false;   // il giro programmato e' questo: parte ora
+    // che cosa sta girando: lo dicono voce, avanzamento, riga "Esito" e STOP
+    window._tipoScansione = (labms === 1) ? 'zero' : (window._benchVerify ? 'verifica' : 'misura');
+    speakLocal(window._tipoScansione === 'zero' ? 'zero virtuale iniziato'
+             : window._tipoScansione === 'verifica' ? 'verifica banco iniziata' : 'misura iniziata');   // audit APP-17
     var sm = document.getElementById('scanMode'); if (sm) sm.disabled = true;
     if (firstRun) {
         // una misura nuova: gli avvisi della precedente non valgono più, e la
@@ -1816,12 +2329,24 @@ function _startSingleRun(firstRun) {
         window._giroNonChiuso = 0;
         window._slittamento = false;
         if (document.salva && document.salva.salva) document.salva.salva.value = '';
+        // la misura di prima esce dal grafico (la domanda, se serviva, e' gia' stata fatta)
+        window._misuraNonSalvata = false;
+        _esitoCorrente = null;
     }
+    var etichetta = document.getElementById('scan-progress-label');
+    if (etichetta) etichetta.textContent = { zero: 'Zero virtuale', verifica: 'Verifica banco' }[window._tipoScansione] || 'Misura';
+    _scriviEsito('corso', window._tipoScansione === 'zero'
+        ? '<b>Zero virtuale in corso</b>: giro di ricerca del picco; alla fine il motore porta il picco a 180&deg; e la pagina si ricarica da sola.'
+        : window._tipoScansione === 'verifica' ? '<b>Verifica banco in corso</b>&hellip;'
+        : '<b>Misura in corso</b>' + (repeatRunsTarget > 1 ? ': giro ' + (repeatRunsDone + 1) + ' di ' + repeatRunsTarget : '') + '&hellip;');
     i = 0;
     consecutiveNaN = 0;
     subVal = []; subEnc = [];
     pdata.length = 0; pdindex.length = 0;
     max = 0; maxg = 0; maxg_encoder = null;
+    // il picco della misura di prima esce col grafico (qui, e solo qui: se
+    // START o lo Zero virtuale non partono, la misura sul grafico resta intera)
+    if (document.mas && document.mas.mas) document.mas.mas.value = '';
     window._lastRepeatStats = null;   // le statistiche valgono solo per il run corrente
     window._lastUnstable = 0;         // audit stabilità del run corrente
     window._invalidTotal = 0;         // letture invalide scartate (audit MET-01)
@@ -1841,7 +2366,7 @@ function _startSingleRun(firstRun) {
         // Direzione coerente col percorso classico: rsign 1 → 'p' (dir −).
         autoScanActive = true; _autoLastIdx = 0; _autoGapWarned = false;
         i = 0;
-        document.imp2.imp2.value = "gradi 0.00";
+        document.imp2.imp2.value = testoAngolo(0);
         // il numero di passi che segue vale solo coi micropassi di QUESTA modalità
         _assicuraConfigBanco();
         sendSocket.send('S' + (rsign == 1 ? '-' : '+') + currentMode.totalSteps + '\n');
@@ -1854,14 +2379,15 @@ function _startSingleRun(firstRun) {
                 autoScanActive = false;
                 startflag = 0;
                 window._engineFallback = true;
-                if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Firmware senza scan autonomo',
-                    body: 'Nessun campione in 6 s: passo al metodo classico (pi&ugrave; lento ma compatibile) e riparto. Consiglio: aggiorna il firmware dalla Home (&#9889; Aggiorna firmware Arduino).', duration: 9000 });
+                if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Firmware senza misura automatica',
+                    body: 'Nessun punto in 6 s: passo al metodo classico (pi&ugrave; lento ma compatibile) e riparto. Consiglio: aggiorna il firmware dalla Home (&#9889; Aggiorna firmware Arduino).', duration: 9000 });
+                window._giroInAttesa = true;   // riparte da solo fra 0,8 s: la misura e' ancora in corso
                 _scanTimeout(function () { _startSingleRun(true); }, 800);
             }
         }, 6000);
     } else {
         i = i + 1;
-        document.imp2.imp2.value = "gradi " + (i / currentMode.subStepsPerDeg).toFixed(2);
+        document.imp2.imp2.value = testoAngolo(i / currentMode.subStepsPerDeg);
         _assicuraConfigBanco();   // anche il passo 'p'/'q' dipende dai micropassi della modalità
         if (rsign == 1) { sendSocket.send('p'); }
         if (rsign == -1) { sendSocket.send('q'); }
@@ -1872,15 +2398,16 @@ function _startSingleRun(firstRun) {
     if (window.cammesScanProgress) window.cammesScanProgress.set(0, currentMode.totalSteps, currentMode.timeSec);
     if (window.cammesToast) {
         var runLabel = repeatRunsTarget > 1
-            ? 'Run ' + (repeatRunsDone + 1) + '/' + repeatRunsTarget + ' &middot; ' + currentMode.label
-            : 'Modalit&agrave; ' + currentMode.label + ' &middot; ' + etaModalita(currentMode);
+            ? 'Giro ' + (repeatRunsDone + 1) + ' di ' + repeatRunsTarget + ' &middot; ' + currentMode.label
+            : 'Modalit&agrave; ' + currentMode.label + ' &middot; ' + etaModalita(currentMode) +
+              ' &middot; verso ' + (rsign === -1 ? 'antiorario' : 'orario');
         window.cammesToast(labms === 1 ? {
             kind: 'info', title: 'Zero virtuale in corso',
             body: 'Giro di ricerca del picco (' + currentMode.label + '). Alla fine il motore porta il picco a 180&deg; e la pagina si ricarica da sola.',
             duration: 5000
         } : {
             kind: 'info',
-            title: firstRun ? 'Scansione avviata' : 'Prossimo run avviato',
+            title: window._tipoScansione === 'verifica' ? 'Verifica banco avviata' : (firstRun ? 'Misura avviata' : 'Giro successivo avviato'),
             body: runLabel,
             duration: 2500
         });
@@ -1892,20 +2419,35 @@ function _startSingleRun(firstRun) {
 var stepflag = 0;
 // Verifica banco: scansione Veloce su un cilindro rettificato, il residuo
 // (tolta l'eccentricità di montaggio) misura la salute del banco.
+// La conferma e' una finestra della pagina (prima: "localhost dice..."), e se
+// sul grafico c'e' una misura non salvata lo dice nella stessa domanda.
 function benchVerifyStart() {
-    if (startflag === 1 || autoScanActive) {
-        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Scansione in corso', body: 'Aspetta la fine (o premi STOP) prima della verifica banco.', duration: 4000 });
+    if (startflag === 1 || autoScanActive || window._giroInAttesa) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura in corso', body: 'Aspetta la fine (o premi STOP) prima della verifica banco.', duration: 4000 });
         return;
     }
-    if (!confirm('VERIFICA BANCO\n\n1. Monta un pezzo CILINDRICO rettificato (no camma)\n2. Porta il tastatore a contatto e AZZERA il comparatore\n\nParte una scansione ' + SCAN_MODES.fast.label + ' (' + etaModalita(SCAN_MODES.fast) + '). Procedere?')) return;
-    var sm = document.getElementById('scanMode');
-    if (sm) { sm.value = 'fast'; if (typeof onScanModeChange === 'function') onScanModeChange(); }
-    window._benchVerify = true;
-    start();
+    var testo = '<ol style="margin:0 0 8px 18px; padding:0;"><li>Monta un pezzo <b>cilindrico rettificato</b> (non una camma).</li>' +
+                '<li>Porta il tastatore a contatto e <b>azzera il comparatore</b>.</li></ol>' +
+                'Parte una misura ' + SCAN_MODES.fast.label + ' (' + etaModalita(SCAN_MODES.fast) + ').' +
+                (window._misuraNonSalvata ? '<br><b>La misura sul grafico non &egrave; salvata e andr&agrave; persa.</b>' : '');
+    var avvia = function () {
+        var sm = document.getElementById('scanMode');
+        if (sm) { sm.value = 'fast'; if (typeof onScanModeChange === 'function') onScanModeChange(); }
+        window._benchVerify = true;
+        start(false, true);   // la misura non salvata e' gia' nella domanda qui sopra
+        if (startflag !== 1) window._benchVerify = false;   // non partita: non resta armata
+    };
+    if (!window.cammesConferma) return;
+    window.cammesConferma('Verifica banco', testo, 'Avvia la verifica', !!window._misuraNonSalvata)
+        .then(function (si) { if (si) avvia(); });
+    // con una misura da perdere, come nelle altre domande: il fuoco su Annulla
+    if (window._misuraNonSalvata && typeof _fuocoSulPulsante === 'function') _fuocoSulPulsante('Annulla');
 }
 window.benchVerifyStart = benchVerifyStart;
 
-function stop() {
+// motivo (facoltativo): chi chiama per un suo motivo ('comparatore', 'riavvio',
+// 'ricomincia') scrive da se' notifica ed esito; il pulsante STOP non lo passa.
+function stop(motivo) {
     // Ferma definitivamente la scansione: il prossimo START riparte da zero.
     // Niente più toggle implicito: per riprendere dallo stesso punto va
     // creato in futuro un bottone RIPRENDI dedicato.
@@ -1913,11 +2455,29 @@ function stop() {
     // firmware 3.1 interrompe anche i movimenti lunghi in corso ($±NNN,
     // p/q a metà passo) — è lo STOP software del banco (REL-03: nessun
     // sistema di emergenza fisica richiesto dal perimetro prodotto).
+    // Anche la pausa fra un giro e l'altro (window._giroInAttesa) e' una misura
+    // in corso: il giro dopo e' gia' programmato e lo STOP lo annulla.
+    var eraAttiva = (startflag === 1 || autoScanActive || labms === 1 || !!window._waiting_mv || !!window._giroInAttesa);
+    // tipo e giri si leggono PRIMA: _fermaScansioneLocale azzera la serie
+    var tipo = window._tipoScansione;
+    var giri = (typeof _giriDellaSerie === 'function') ? _giriDellaSerie() : null;
     if (typeof sendSocket !== 'undefined' && sendSocket && sendSocket.readyState === 1) {
         try { sendSocket.send('x'); } catch (e) {}
     }
     _fermaScansioneLocale();
-    if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Scansione interrotta', body: 'I dati parziali non sono stati salvati.', duration: 3000 });
+    if (motivo) return;
+    if (eraAttiva) {
+        // notifica e riga con le stesse parole: misura, Zero virtuale o verifica
+        var x = (typeof _interruzione === 'function') ? _interruzione(tipo, 'stop', giri)
+            : { titolo: 'Misura interrotta', notifica: 'Hai premuto STOP: la misura &egrave; incompleta e va ripetuta.', riga: null };
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: x.titolo, body: x.notifica, duration: 5000 });
+        if (x.riga && typeof _scriviEsito === 'function') _scriviEsito('errore', x.riga);
+    } else if (window.cammesToast) {
+        // STOP a banco fermo: parte lo stesso (ferma anche una rotazione), ma
+        // non deve far credere persa la misura che e' sul grafico
+        window.cammesToast({ kind: 'info', title: 'STOP inviato',
+            body: 'Nessuna misura in corso' + (window._misuraNonSalvata ? ': quella sul grafico &egrave; ancora l&igrave; e si pu&ograve; salvare.' : '.'), duration: 4000 });
+    }
 }
 
 // La parte di STOP che riguarda SOLO questa pagina: nessun byte verso il banco.
@@ -1929,6 +2489,7 @@ function _fermaScansioneLocale() {
     // ripetuto, fallback firmware) e invalida il generation token — senza
     // questo il motore poteva ripartire da solo ~8 s dopo lo STOP.
     _clearScanTimers();
+    window._giroInAttesa = false;   // il giro programmato non parte piu'
     autoScanActive = false;   // niente *sabort se il firmware era già idle
     stepflag  = 1;
     startflag = 0;
@@ -1953,9 +2514,12 @@ function _fermaScansioneLocale() {
 function _scanBusy(cosa) {
     // (labms escluso apposta: lo Zero virtuale imposta labms=1 e POI chiama
     // start() — durante la sua scansione vale comunque startflag===1)
-    if (startflag === 1 || autoScanActive) {
+    // La pausa fra un giro e l'altro conta come misura in corso: un Ruota
+    // li' spostava l'albero prima del giro dopo, un Salva misura salvava un
+    // giro solo della serie.
+    if (startflag === 1 || autoScanActive || window._giroInAttesa) {
         if (window.cammesToast) window.cammesToast({
-            kind: 'warn', title: 'Scansione in corso',
+            kind: 'warn', title: 'Misura in corso',
             body: (cosa || 'Questo comando') + ' &egrave; bloccato durante la misura: premi STOP prima, oppure aspetta la fine.',
             duration: 4000
         });
@@ -1965,11 +2529,17 @@ function _scanBusy(cosa) {
 }
 window._scanBusy = _scanBusy;   // usata anche dal jog condiviso (cammes-scan.js)
 
-// AUDIT MOT-05: il RESET ricaricava la pagina SENZA fermare il firmware —
-// uno scan autonomo continuava a girare a pagina nuova. Ora: STOP reale,
-// poi reload (piccolo ritardo per lasciar partire la 'x' sul socket).
-function safeReload() {
-    try { stop(); } catch (e) {}
+// "Ricomincia" (era RESET). AUDIT MOT-05: ricaricava la pagina SENZA fermare il
+// firmware — uno scan autonomo continuava a girare a pagina nuova. Ora: STOP
+// reale, poi reload (piccolo ritardo per lasciar partire la 'x' sul socket).
+// Prima chiede, se sul grafico c'e' una misura non salvata. In sola lettura
+// ricarica soltanto: lo STOP fermerebbe la misura dell'altra finestra.
+function safeReload(giaConfermato) {
+    if (!giaConfermato && typeof _chiediPrimaDiPerdere === 'function' &&
+        _chiediPrimaDiPerdere('Ricominciando da capo la misura sul grafico va persa.', function () { safeReload(true); })) return;
+    if (typeof bancoInSolaLettura === 'function' && bancoInSolaLettura()) _fermaScansioneLocale();
+    else { try { stop('ricomincia'); } catch (e) {} }
+    window._uscitaVoluta = true;   // domanda gia' fatta (o niente da perdere)
     setTimeout(function () { location.reload(true); }, 250);
 }
 window.safeReload = safeReload;
@@ -2009,6 +2579,7 @@ var config = {
         responsive: true,
         maintainAspectRatio: false,
         animation: { duration: 0 },  // scan veloce: niente animazione
+        locale: 'it-IT',             // numeri sugli assi e nel fumetto con la virgola
         plugins: {
             legend: { labels: { color: alzColors().text } },
             tooltip: { mode: 'index', intersect: false }
@@ -2016,10 +2587,15 @@ var config = {
         interaction: { mode: 'nearest', intersect: false },
         scales: {
             x: {
-                display: false,
-                title: { display: true, text: 'gradi', color: alzColors().text },
+                // l'asse dei gradi c'e': si legge a colpo d'occhio dove sta il picco
+                display: true,
+                title: { display: true, text: 'gradi camma', color: alzColors().text },
                 grid:  { color: alzColors().grid },
-                ticks: { color: alzColors().text }
+                ticks: {
+                    color: alzColors().text, autoSkip: false, maxRotation: 0,
+                    // una tacca ogni 30 gradi (null = niente tacca, niente riga)
+                    callback: function (v) { var g = Number(this.getLabelForValue(v)); return (g % 30 === 0) ? g + '°' : null; }
+                }
             },
             y: {
                 display: true,
@@ -2054,30 +2630,32 @@ window.onload = function() {
 };
 </script>
 
-<script>
-function reset() {
-    while (config.data.labels.length > 0) {
-        config.data.labels.pop();
-        config.data.datasets.forEach((dataset) => {
-            dataset.data.pop();
-        });
-    }
-    window.myLine.update();
-}
-</script>
+<!-- (reset(), che svuotava il grafico per lo Zero virtuale, non c'e' piu':
+     il grafico lo svuota _startSingleRun, solo quando il giro parte davvero) -->
 
 <script>
 var stringa = "";
+// SALVA MISURA. Le domande (misura incompleta, misura sospetta, nome gia' usato)
+// sono finestre della pagina (prima: "localhost dice..."), quindi il salvataggio
+// prosegue quando l'operatore risponde. Il contenuto del file si compone PRIMA
+// delle domande: si salva esattamente la misura su cui si e' risposto.
 function sav() {
+    // le domande ora non bloccano la pagina: un secondo clic (o Invio) mentre il
+    // primo salvataggio e' ancora in corso non ne fa partire un altro
+    if (window._salvataggioInCorso) return;
+    // Durante la misura (anche fra un giro e l'altro) non si salva: il nome si
+    // scrive mentre il banco gira e un Invio nel campo chiedeva di salvare un
+    // file parziale come INCOMPLETO. Dopo uno STOP si salva come sempre.
+    if (typeof _scanBusy === 'function' && _scanBusy('Salva misura')) return;
     var nameEl = document.getElementById("nome");
     var rawName = (nameEl && nameEl.value || '').trim();
     if (!rawName) {
-        if (window.cammesValidate) window.cammesValidate.error(nameEl, 'Inserisci un nome file prima di salvare.');
-        else alert('Inserisci un nome file');
+        if (window.cammesValidate) window.cammesValidate.error(nameEl, 'Scrivi il nome della misura prima di salvare, per esempio albero12_asp.');
+        else if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Manca il nome', body: 'Scrivi il nome della misura prima di salvare.', duration: 5000 });
         return;
     }
     if (!pdindex || pdindex.length < 2) {
-        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Nessun dato', body: 'Esegui una scansione prima di salvare.', duration: 3000 });
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Niente da salvare', body: 'Fai prima una misura con START.', duration: 4000 });
         return;
     }
     // Sanifica nome (no spazi/caratteri non sicuri per filesystem)
@@ -2099,20 +2677,9 @@ function sav() {
         if (isFinite(_svv)) { stringa = stringa + t + "," + pdata[t] + "\r\n"; }
         else { _missingSave++; }
     }
-    if (_missingSave > 0) {
-        if (!confirm('ATTENZIONE: misura INCOMPLETA\n\n' + _missingSave + ' gradi su 360 sono senza lettura valida.\n' +
-                     'Il file verrà marcato #stato=INCOMPLETO e NON va usato per confronti.\n\nSalvare comunque?')) {
-            document.salva.salva.value = " annullato";
-            return;
-        }
-    }
     // giro non chiuso / slittamento: stessa barriera della misura incompleta
     var _sospetta = { giroNonChiuso: window._giroNonChiuso || 0, slittamento: !!window._slittamento };
     var _domandaSosp = domandaMisuraSospetta(_sospetta);
-    if (_domandaSosp && !confirm(_domandaSosp)) {
-        document.salva.salva.value = " annullato";
-        return;
-    }
     var fname = safeName + "_alz";
     // Salvataggio via HTTP POST con ACK REALE dal server: il vecchio invio
     // WebSocket era fire-and-forget e il toast "salvato" mentiva se la
@@ -2152,33 +2719,76 @@ function sav() {
         metaTail += '#lettureInvalide=' + window._invalidTotal + '\r\n';
     }
     var body = "_pline\r\n" + stringa + metaTail;
-    var doSave = function () {
-        document.salva.salva.value = " salvataggio…";
-        fetch('/api/file/' + encodeURIComponent(fname + '.scr'), { method: 'POST', body: body })
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                if (d && d.ok) {
-                    document.salva.salva.value = " file salvato";
-                    if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'File salvato', body: fname + '.scr scritto in prove/ (confermato dal server).', duration: 4000 });
-                } else {
-                    document.salva.salva.value = " ERRORE!";
-                    if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Salvataggio FALLITO', body: (d && (d.error || d.detail)) || 'risposta inattesa dal server', duration: 9000 });
-                }
-            })
-            .catch(function (e) {
-                document.salva.salva.value = " ERRORE!";
-                if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Salvataggio FALLITO', body: 'Server non raggiungibile: ' + e.message, duration: 9000 });
-            });
-    };
-    // Guardia sovrascrittura: se esiste già una misura con questo nome, chiedi
-    fetch('/api/files').then(function (r) { return r.json(); }).then(function (d) {
+    // Le domande, una dopo l'altra: misura incompleta, poi misura sospetta.
+    var domande = Promise.resolve(true);
+    if (_missingSave > 0) domande = domande.then(function (ok) {
+        return ok && _domandaSalvataggio('Misura INCOMPLETA', _missingSave + ' gradi su 360 sono senza lettura valida.<br>' +
+            'Il file verr&agrave; segnato come <b>INCOMPLETO</b> e NON va usato per confronti.<br>Salvare comunque?');
+    });
+    if (_domandaSosp) domande = domande.then(function (ok) {
+        return ok && _domandaSalvataggio('Attenzione', _testoInHtml(_domandaSosp));
+    });
+    window._salvataggioInCorso = true;
+    var fine = function () { window._salvataggioInCorso = false; };
+    domande.then(function (ok) {
+        if (!ok) { document.salva.salva.value = " annullato"; return; }
+        return _salvaSeIlNomeELibero(fname, body, _missingSave);
+    }).then(fine, fine);
+}
+// Testo semplice (con gli a capo) dentro una finestra della pagina.
+function _testoInHtml(t) {
+    var esc = window.cammesEscape || function (s) { return String(s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); };
+    return esc(t).replace(/\n/g, '<br>');
+}
+function _domandaSalvataggio(titolo, testoHtml) {
+    // senza le finestre della pagina non si salva alla cieca una misura da dichiarare
+    if (!window.cammesConferma) return Promise.resolve(false);
+    return window.cammesConferma(titolo, testoHtml, 'Salva comunque', true);
+}
+// Esiste gia' una misura con questo nome? Prima di sostituirla si chiede, e il
+// fuoco va su "Cambia nome": un Invio distratto non cancella la misura vecchia.
+function _salvaSeIlNomeELibero(fname, body, mancanti) {
+    return fetch('/api/files').then(function (r) { return r.json(); }).then(function (d) {
         var exists = (d.files || []).some(function (f) { return f.name === fname + '.scr'; });
-        if (exists && !confirm('Esiste già una misura "' + fname + '.scr".\n\nSovrascriverla?')) {
-            document.salva.salva.value = " annullato";
-            return;
-        }
-        doSave();
-    }).catch(function () { doSave(); });
+        if (!exists) return true;
+        if (!window.cammesDialog) return false;
+        var risposta = window.cammesDialog({
+            titolo: 'Esiste già una misura con questo nome', tipo: 'danger',
+            testo: 'Nell&apos;archivio c&apos;&egrave; gi&agrave; <b>' + fname + '.scr</b>. Sostituirla cancella quella di prima.',
+            pulsanti: [{ testo: 'Cambia nome', valore: false, stile: 'secondary', annulla: true },
+                       { testo: 'Sostituisci', valore: true, stile: 'danger' }]
+        }).then(function (r) { return r.scelta === true; });
+        if (typeof _fuocoSulPulsante === 'function') _fuocoSulPulsante('Cambia nome');
+        return risposta;
+    }, function () { return true; }).then(function (ok) {
+        if (ok) return _scriviMisura(fname, body, mancanti);
+        document.salva.salva.value = " annullato";
+        var n = document.getElementById('nome');
+        if (n && n.focus) { n.focus(); if (n.select) n.select(); }
+    });
+}
+// Salvataggio via HTTP POST con conferma VERA dal server: "salvata" solo se il
+// file c'e' davvero (il vecchio invio WebSocket mentiva a disco pieno).
+function _scriviMisura(fname, body, mancanti) {
+    var stato = document.salva.salva;
+    var nomeFile = fname + '.scr';
+    var fallito = function (motivo) {
+        stato.value = " ERRORE";
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Salvataggio NON riuscito', body: motivo, duration: 9000 });
+        if (_esitoCorrente) { _esitoCorrente.erroreSalvataggio = motivo; _mostraEsitoMisura(); }
+    };
+    stato.value = " in corso…";
+    return fetch('/api/file/' + encodeURIComponent(nomeFile), { method: 'POST', body: body })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (!(d && d.ok)) { fallito((d && (d.error || d.detail)) || 'risposta inattesa dal programma'); return; }
+            stato.value = " salvata";
+            window._misuraNonSalvata = false;
+            if (_esitoCorrente) { _esitoCorrente.salvataCome = nomeFile; _esitoCorrente.erroreSalvataggio = null; _mostraEsitoMisura(); }
+            else _scriviEsito(mancanti > 0 ? 'errore' : 'ok', 'Salvata come <b>' + nomeFile + '</b>' + (mancanti > 0 ? ' (segnata INCOMPLETA)' : ''));
+            if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Misura salvata', body: nomeFile + ' &egrave; nell&apos;archivio (cartella prove/).', duration: 4000 });
+        })
+        .catch(function (e) { fallito('il programma CAMMES non risponde (' + e.message + ')'); });
 }
 </script>
 
@@ -2217,7 +2827,7 @@ function ruota() {
         if (window.cammesValidate) window.cammesValidate.error(campo, a.messaggio);
         return;
     }
-    speakLocal("rotazione a   " + a.gradi + " gradi  attivata");   // audit APP-17
+    speakLocal("rotazione a   " + String(a.gradi).replace('.', ',') + " gradi  attivata");   // audit APP-17
     if (a.delta !== 0) {
         var avanti = (a.delta > 0) === (rsign == 1);   // il senso antiorario rovescia il comando
         var n = Math.abs(a.delta);
@@ -2242,13 +2852,18 @@ function ruota() {
 
 <script>
 var labms = 0;
-function ms() {
+// giaConfermato: la domanda sulla misura non salvata e' gia' stata fatta.
+function ms(giaConfermato) {
     if (_scanBusy('Lo Zero virtuale')) return;   // audit MOT-02
     if (typeof _wsReady === 'function' && !_wsReady()) {
-        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Server non connesso',
-            body: 'Lo Zero virtuale richiede server e Arduino attivi.', duration: 4500 });
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Il programma CAMMES non risponde',
+            body: 'Lo Zero virtuale ha bisogno del programma e dell’Arduino: avvia cammes.exe e controlla il cavo USB.', duration: 6000 });
         return;
     }
+    // Il giro dello Zero virtuale cancella la misura sul grafico: se non e'
+    // salvata si chiede PRIMA di armare lo Zero virtuale (labms).
+    if (!giaConfermato && typeof _chiediPrimaDiPerdere === 'function' &&
+        _chiediPrimaDiPerdere('Lo Zero virtuale fa un giro nuovo e cancella la misura sul grafico.', function () { ms(true); })) return;
     // I polling NON si spengono qui (lo si faceva con clearInterval, e chi li
     // riaccendeva era solo il ricaricamento finale: vedi pollAttivo). Tacciono
     // da soli per tutta la scansione (startflag) e durante lo spostamento
@@ -2258,13 +2873,12 @@ function ms() {
     // scansione cambierebbe currentMode.subStepsPerDeg e farebbe
     // calcolare un 'units' sbagliato a fine scansione.
     var sm = document.getElementById('scanMode'); if (sm) sm.disabled = true;
-    i = 0;
     labms = 1;
-    max = 0;
-    maxg = 0;
-    document.mas.mas.value = " max " + maxg + " gradi  " + max.toFixed(3) + " mm";
-    reset();
-    start(true);
+    // Grafico, picco e dati li svuota _startSingleRun, e solo se il giro parte
+    // davvero. Prima si svuotavano qui: se start() poi si rifiutava (comparatore
+    // muto) il grafico restava vuoto mentre la misura di prima era ancora in
+    // memoria e "da salvare", e un Salva misura scriveva i dati vecchi col picco a 0.
+    start(true, true);
     // start() può rifiutarsi di partire (comparatore non pronto, server
     // scollegato): in quel caso lo Zero virtuale NON è in corso e non deve
     // restare armato, né lasciare spento il selettore della modalità.
@@ -2315,8 +2929,8 @@ function toggleMotorFree() {
 
         if (window.cammesToast) window.cammesToast({
             kind: 'info', title: 'Motore sbloccato',
-            body: 'Puoi ruotare l\'albero a mano. Encoder e comparatore leggono live. La curva si forma sotto al grafico!',
-            duration: 4000
+            body: 'Puoi girare l\'albero a mano: encoder e comparatore leggono dal vivo e la curva si disegna nel riquadro &laquo;Traccia dal vivo&raquo;. Per misurare premi Blocca motore.',
+            duration: 5000
         });
     } else {
         // BLOCCA
@@ -2335,42 +2949,60 @@ function toggleMotorFree() {
 
         if (window.cammesToast) window.cammesToast({
             kind: 'success', title: 'Motore bloccato',
-            body: 'Stepper in tenuta. Puoi avviare scansioni e rotazioni.',
-            duration: 2000
+            body: 'Il motore tiene la posizione: puoi misurare e ruotare.',
+            duration: 2500
         });
     }
 }
 
-// Disabilita/abilita bottoni che muoverebbero il motore (Start, Ruota, +/-, 0V).
-// Quando motorFree=true, qualsiasi pulso PUL sarebbe ignorato dal driver e
-// scollazerebbe il contatore di scansione.
+// Disabilita/abilita i pulsanti che muoverebbero il motore (START, verifica
+// banco, Ruota, -/+, Zero virtuale). Quando motorFree=true, qualsiasi impulso
+// sarebbe ignorato dal driver e scollerebbe il contatore di scansione.
 function _setMotionUiDisabled(disabled) {
-    var ids = ['cf', 'msBtn'];
-    ids.forEach(function (id) {
+    ['startBtn', 'verificaBtn', 'cf', 'm1Btn', 'p1Btn', 'msBtn'].forEach(function (id) {
         var el = document.getElementById(id); if (el) el.disabled = disabled;
-    });
-    // Start button (no id) - cerco per testo
-    Array.prototype.forEach.call(document.querySelectorAll('button.btn-success'), function (b) {
-        if (/START/i.test(b.textContent)) b.disabled = disabled;
-    });
-    // +/- buttons
-    Array.prototype.forEach.call(document.querySelectorAll('.btn-secondary.btn-sm'), function (b) {
-        var t = b.textContent.trim();
-        if (t === '−' || t === '-' || t === '+' || t === '−') b.disabled = disabled;
     });
 }
 window.toggleMotorFree = toggleMotorFree;
 
-// ===== Reset encoder + posizioni salvate (zero meccanico) =====
-function resetEncoder() {
-    if (_scanBusy('Il reset encoder')) return;   // audit MOT-02: perderebbe lo zero della misura
-    if (!sendSocket || sendSocket.readyState !== 1) return;
+// ===== Azzera angolo qui (era "Reset zero") + posizioni memorizzate =====
+// L'encoder conta dalla posizione attuale: le posizioni memorizzate prima
+// diventano inutilizzabili, quindi se ce ne sono si chiede. "Angolo azzerato"
+// lo dice la risposta del banco ('*zero'), non l'invio del comando.
+function resetEncoder(giaConfermato) {
+    if (_scanBusy('Azzera angolo qui')) return;   // audit MOT-02: perderebbe lo zero della misura
+    if (!sendSocket || sendSocket.readyState !== 1) {
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Il programma CAMMES non risponde',
+            body: 'Senza il programma l\'angolo non si pu&ograve; azzerare: avvia cammes.exe.', duration: 6000 });
+        return;
+    }
+    if (!giaConfermato && window.cammesConferma) {
+        var epoca = currentEncEpoch();
+        var valide = loadSavedPositions().filter(function (p) { return (p.epoch || 0) === epoca; });
+        if (valide.length) {
+            var esc = window.cammesEscape || function (s) { return String(s); };
+            var nomi = valide.slice(0, 4).map(function (p) { return '<b>' + esc(p.label) + '</b>'; }).join(', ') + (valide.length > 4 ? '&hellip;' : '');
+            window.cammesConferma('Azzerare l\'angolo qui?',
+                'La posizione attuale dell\'albero diventa 0&deg;.<br>' +
+                (valide.length === 1
+                    ? 'La posizione memorizzata ' + nomi + ' diventa inutilizzabile: va memorizzata di nuovo.'
+                    : 'Le ' + valide.length + ' posizioni memorizzate (' + nomi + ') diventano inutilizzabili: vanno memorizzate di nuovo.'),
+                'Azzera angolo qui', true)
+                .then(function (si) { if (si) resetEncoder(true); });
+            return;
+        }
+    }
     try { sendSocket.send('!'); } catch (e) {}
-    if (typeof bumpEncEpoch === 'function') bumpEncEpoch('reset zero encoder');   // MET-05
-    if (window.cammesToast) window.cammesToast({
-        kind: 'success', title: 'Encoder azzerato',
-        body: 'Posizione corrente impostata come 0&deg;. Le posizioni salvate prima di ora non sono pi&ugrave; raggiungibili (zero cambiato).', duration: 4000
-    });
+    // le posizioni si invalidano SUBITO, anche se la risposta non arrivasse:
+    // meglio rimemorizzarle che mandare l'albero nel posto sbagliato
+    if (typeof bumpEncEpoch === 'function') bumpEncEpoch('azzera angolo qui');   // MET-05
+    window._attesaZero = Date.now();
+    setTimeout(function () {
+        if (!window._attesaZero) return;
+        window._attesaZero = 0;
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Azzeramento non confermato',
+            body: 'Il banco non ha risposto entro 3 secondi: l\'angolo potrebbe non essere stato azzerato. Le posizioni memorizzate prima non valgono pi&ugrave; comunque. Riprova.', duration: 8000 });
+    }, 3000);
 }
 window.resetEncoder = resetEncoder;
 
@@ -2410,40 +3042,50 @@ function loadSavedPositions() {
 function saveSavedPositions(arr) {
     try { localStorage.setItem(SAVED_POS_KEY, JSON.stringify(arr)); } catch (e) {}
 }
+// "Memorizza posizione" (era "Salva pos"). Il nome si chiede in una finestra
+// della pagina (prima: prompt del browser). La posizione e' quella del CLIC:
+// mentre l'operatore scrive il nome l'albero potrebbe muoversi.
 function savePositionMark() {
     if (currentEncoderCount == null) {
         if (window.cammesToast) window.cammesToast({
             kind: 'warn', title: 'Posizione sconosciuta',
-            body: 'Encoder non ancora letto. Muovi un po\' l\'albero o aspetta il prossimo polling.',
-            duration: 3000
+            body: 'L\'angolo non &egrave; ancora stato letto: aspetta qualche secondo e riprova.',
+            duration: 4000
         });
         return;
     }
-    var deg = (currentEncoderCount / 4).toFixed(2);
-    var label = prompt('Nome del riferimento (es. "pms1", "base-circle", "picco-asp"):', '');
-    if (label === null) return;
-    label = String(label).trim().replace(/[^A-Za-z0-9_\-]/g, '').substring(0, 24);
+    var enc = currentEncoderCount, epoca = currentEncEpoch();
+    if (!window.cammesChiedi) return;
+    window.cammesChiedi('Memorizza posizione',
+        'Nome della posizione, per esempio <b>pms1</b>, <b>picco-asp</b>, <b>cerchio-base</b>: lettere, numeri, _ e -, al massimo 24 caratteri.',
+        '', 'Memorizza')
+        .then(function (testo) { if (testo !== null && testo !== undefined) _memorizzaPosizione(testo, enc, epoca); });
+}
+function _memorizzaPosizione(testo, enc, epoca) {
+    var label = String(testo).trim().replace(/[^A-Za-z0-9_\-]/g, '').substring(0, 24);
     if (!label) {
         if (window.cammesToast) window.cammesToast({
             kind: 'warn', title: 'Nome non valido',
             body: 'Solo lettere, numeri, _ e -. Massimo 24 caratteri.',
-            duration: 3000
+            duration: 4000
         });
-        return;
+        return false;
     }
+    var deg = enc / 4;
     var arr = loadSavedPositions();
     // Sostituisci se label già esiste
     var idx = arr.findIndex(function (p) { return p.label === label; });
-    var entry = { label: label, deg: parseFloat(deg), encoderCount: currentEncoderCount, ts: Date.now(), epoch: currentEncEpoch() };
+    var entry = { label: label, deg: parseFloat(deg.toFixed(2)), encoderCount: enc, ts: Date.now(), epoch: epoca };
     if (idx >= 0) arr[idx] = entry;
     else arr.push(entry);
     saveSavedPositions(arr);
     renderSavedPositions();
     if (window.cammesToast) window.cammesToast({
-        kind: 'success', title: 'Posizione salvata',
-        body: '<b>' + label + '</b> = ' + deg + '&deg; (encoder ' + currentEncoderCount + ')',
-        duration: 2500
+        kind: 'success', title: 'Posizione memorizzata',
+        body: '<b>' + label + '</b> a ' + numero(deg, 2) + '&deg;',
+        duration: 3000
     });
+    return true;
 }
 function gotoSavedPosition(label) {
     if (_scanBusy('Vai a posizione')) return;   // audit MOT-02
@@ -2455,14 +3097,14 @@ function gotoSavedPosition(label) {
     if ((p.epoch || 0) !== currentEncEpoch()) {
         if (window.cammesToast) window.cammesToast({
             kind: 'err', title: 'Posizione non più valida',
-            body: 'Lo zero encoder è cambiato (reset, riavvio o zero virtuale) dopo il salvataggio di <b>' + label + '</b>: non è più raggiungibile in modo affidabile. Riazzera e risalva la posizione.',
+            body: 'Lo zero dell\'angolo è cambiato (Azzera angolo qui, riavvio dell\'Arduino o guasto dell\'encoder) dopo che hai memorizzato <b>' + label + '</b>: non è più raggiungibile in modo affidabile. Memorizzala di nuovo.',
             duration: 9000 });
         return;
     }
     if (motorFree) {
         if (window.cammesToast) window.cammesToast({
             kind: 'warn', title: 'Motore libero',
-            body: 'Riblocca il motore prima di muoverlo a target.', duration: 3000
+            body: 'Blocca il motore prima di portare l\'albero a una posizione.', duration: 4000
         });
         return;
     }
@@ -2488,7 +3130,7 @@ function gotoSavedPosition(label) {
     try { sendSocket.send(cmd); } catch (e) {}
     if (window.cammesToast) window.cammesToast({
         kind: 'info', title: 'Vado a ' + p.label,
-        body: 'Sfasamento ' + (sign === '+' ? '+' : '-') + absUnits + ' units (' + deltaDeg.toFixed(2) + '&deg;)',
+        body: 'Mi sposto di ' + numero(deltaDeg, 2) + '&deg;.',
         duration: 3000
     });
 }
@@ -2512,7 +3154,7 @@ function renderSavedPositions() {
         var stale = (p.epoch || 0) !== epoch;   // MET-05: zero cambiato dopo il salvataggio
         var chip = document.createElement('span');
         chip.className = 'saved-pos-chip';
-        chip.title = stale ? 'Zero encoder cambiato: non più raggiungibile, riazzera e risalva' : 'Vai a ' + p.deg + '°';
+        chip.title = stale ? 'Lo zero dell\'angolo è cambiato: non più raggiungibile, memorizzala di nuovo' : 'Vai a ' + numero(p.deg, 2) + '°';
         if (stale) { chip.style.opacity = '.45'; chip.style.textDecoration = 'line-through'; }
         chip.addEventListener('click', function () { gotoSavedPosition(p.label); });
         chip.appendChild(document.createTextNode(p.label + ' '));
@@ -2566,10 +3208,11 @@ function initLiveTraceChart() {
             responsive: true,
             maintainAspectRatio: false,
             animation: { duration: 0 },
+            locale: 'it-IT',   // numeri con la virgola, come nel resto della pagina
             plugins: { legend: { display: false } },
             scales: {
                 x: {
-                    title: { display: true, text: 'Encoder (gradi)', color: c.text },
+                    title: { display: true, text: 'Angolo encoder (gradi)', color: c.text },
                     grid: { color: c.grid }, ticks: { color: c.text },
                     min: 0, max: 360
                 },
@@ -2623,6 +3266,52 @@ window.showLiveTrace = showLiveTrace;
 
 var rot = 0;
 var rsign = 1;
+
+// ===== AVVIO DELLA PAGINA: comandi da tastiera e altezze delle barre ======
+// Le due barre in alto (intestazione e comandi) restano agganciate mentre si
+// scorre: le loro altezze vere decidono dove si aggancia la barra dei comandi
+// e da dove partono le notifiche (CSS --alt-intestazione e --alt-barra).
+function _misuraBarre() {
+    var root = document.documentElement;
+    var h = document.querySelector('.header'), b = document.getElementById('barraComandi');
+    if (h && window.getComputedStyle) {
+        var top = parseFloat(window.getComputedStyle(h).top);
+        root.style.setProperty('--alt-intestazione', Math.round((isFinite(top) ? top : 12) + h.offsetHeight + 8) + 'px');
+    }
+    if (b) root.style.setProperty('--alt-barra', Math.round(b.offsetHeight) + 'px');
+}
+// Al caricamento i comandi visibili e il programma devono dire la stessa cosa:
+// se il browser ha rimesso una scelta di prima (tendina o casella), vale quella.
+function _allineaScelte() {
+    var sm = document.getElementById('scanMode');
+    if (sm && SCAN_MODES[sm.value] && SCAN_MODES[sm.value] !== currentMode) onScanModeChange();
+    var cb = document.getElementById('versoScansione');
+    if (cb && cb.checked !== (rsign === -1)) rlb();
+    aggiornaRiassuntoScelte();
+}
+(function () {
+    function conInvio(id, fn) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); fn(); } });
+    }
+    conInvio('nome', function () { sav(); });     // Invio nel nome = Salva misura
+    conInvio('step', function () { ruota(); });   // Invio nei gradi = Ruota
+    var r = document.getElementById('riassuntoScelte');
+    if (r) {
+        r.addEventListener('click', vaiAlleScelte);
+        r.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vaiAlleScelte(); } });
+    }
+    _allineaScelte();
+    _misuraBarre();
+    window.addEventListener('load', _misuraBarre);
+    window.addEventListener('resize', _misuraBarre);
+    if (typeof ResizeObserver === 'function') {
+        try {
+            var ro = new ResizeObserver(function () { _misuraBarre(); });
+            ['.header', '#barraComandi'].forEach(function (s) { var el = document.querySelector(s); if (el) ro.observe(el); });
+        } catch (e) {}
+    }
+})();
 
 </script>
 

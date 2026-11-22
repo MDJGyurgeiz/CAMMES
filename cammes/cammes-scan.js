@@ -3,7 +3,7 @@
 // =============================================================
 //  Contiene ciò che le due pagine di scansione avevano in copia identica:
 //  stato/connessione WebSocket con auto-reconnect, invio profilo movimento
-//  al firmware, jog manuale (m1/p1) e inversione senso (rlb).
+//  al firmware, jog manuale (m1/p1) e verso di scansione (rlb).
 //
 //  CONTRATTO: la pagina definisce PRIMA i propri gestori
 //    _engineOnOpen(event)     — apertura socket (init display specifici)
@@ -74,32 +74,42 @@ function _comandoGrado(verso) {
     return '$' + (avanti ? '+' : '-') + pad + '\n';
 }
 
+// Il campo "gradi" mostra la posizione con la virgola decimale (in Race si va a
+// mezzi gradi: "91,5"), come tutto cio' che l'operatore legge; Ruota la rilegge
+// con la virgola o col punto.
 function m1() {
-    if (window._scanBusy && window._scanBusy('Il jog manuale')) return;   // audit MOT-02
+    if (window._scanBusy && window._scanBusy('Il comando di un grado')) return;   // audit MOT-02
     _configPrimaDelMoto();
     oldg = Number(oldg) - 1;
     sendSocket.send(_comandoGrado(-1));
-    document.getElementById("step").value = oldg;
+    document.getElementById("step").value = String(oldg).replace('.', ',');
 }
 
 function p1() {
-    if (window._scanBusy && window._scanBusy('Il jog manuale')) return;   // audit MOT-02
+    if (window._scanBusy && window._scanBusy('Il comando di un grado')) return;   // audit MOT-02
     _configPrimaDelMoto();
     oldg = Number(oldg) + 1;
     sendSocket.send(_comandoGrado(+1));
-    document.getElementById("step").value = oldg;
+    document.getElementById("step").value = String(oldg).replace('.', ',');
 }
 
+// VERSO DI SCANSIONE. Lo decide lo STATO della casella (spuntata = antiorario),
+// non il numero di clic: prima rlb() alternava un contatore, e bastava che la
+// casella e il contatore si separassero una volta (un clic durante la misura,
+// rifiutato, che pero' spuntava la casella; il browser che ricarica la pagina
+// con la casella com'era) perche' schermo e banco girassero in versi opposti.
 function rlb() {
-    if (window._scanBusy && window._scanBusy('Il cambio di direzione')) return;   // audit MOT-02
-    rot = rot + 1;
-    if (rot == 2) { rot = 0; }
-    if (rot == 0) {
-        document.getElementById("rlabel").innerHTML = "senso orario";
-        rsign = 1;
+    var casella = document.getElementById('versoScansione') ||
+                  document.querySelector('.toggle-group input[type="checkbox"]');
+    if (window._scanBusy && window._scanBusy('Il cambio del verso di scansione')) {   // audit MOT-02
+        // la casella e' gia' scattata: torna a mostrare il verso vero
+        if (casella) casella.checked = (rsign === -1);
+        return;
     }
-    if (rot == 1) {
-        document.getElementById("rlabel").innerHTML = "senso antiorario";
-        rsign = -1;
-    }
+    var antiorario = !!(casella && casella.checked);
+    rsign = antiorario ? -1 : 1;
+    rot = antiorario ? 1 : 0;   // il vecchio contatore, tenuto allineato per chi lo legge ancora
+    var etichetta = document.getElementById('rlabel');
+    if (etichetta) etichetta.textContent = antiorario ? 'antiorario' : 'orario';
+    if (typeof aggiornaRiassuntoScelte === 'function') aggiornaRiassuntoScelte();
 }

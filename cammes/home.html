@@ -9,123 +9,47 @@
     <script src="lib/chart.umd.min.js"></script>
     <script src="jspdf.umd.min.js"></script>
     <style>
-    .home-hero {
+    /* Riga di stato in cima: come sta il banco e il primo gesto (Nuova misura).
+       Prima la prima schermata era benvenuto, quattro tessere di conteggi e tre
+       tessere che ripetevano la barra in alto: l'archivio stava due schermate
+       piu' sotto. */
+    .stato-banco {
         display: grid;
-        grid-template-columns: 1fr;
-        gap: var(--sp-3);
-        padding: var(--sp-6);
-        background: linear-gradient(135deg, var(--bg-elev-1) 0%, var(--bg-elev-2) 100%);
-        border-radius: var(--r-lg);
-        border: 1px solid var(--border);
-        margin-bottom: var(--sp-5);
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: var(--sp-3) var(--sp-6);
+        align-items: center;
     }
-    .home-hero-title {
-        font-family: var(--font-display);
-        font-weight: 700;
-        font-size: 28px;
-        letter-spacing: -0.5px;
-        color: var(--text-primary);
+    .stato-righe {
+        display: flex; flex-direction: column; gap: 6px;
+        font-size: 14px; line-height: 1.45; color: var(--text-primary);
+        min-width: 0;
     }
-    .home-hero-sub {
-        font-size: 14px;
-        color: var(--text-muted);
-    }
-    .home-stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: var(--sp-3);
-        margin-top: var(--sp-4);
-    }
-    .home-stat {
-        background: var(--bg-input);
-        padding: var(--sp-3) var(--sp-4);
-        border-radius: var(--r-md);
-        border: 1px solid var(--border);
-    }
-    .home-stat-label {
-        font-size: 10px;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        color: var(--text-muted);
-        font-family: var(--font-display);
-        margin-bottom: 4px;
-    }
-    .home-stat-value {
-        font-family: var(--font-mono);
-        font-size: 24px;
-        font-weight: 700;
-        color: var(--accent);
-        font-variant-numeric: tabular-nums;
-    }
-    .home-stat-sub {
-        font-size: 11px;
-        color: var(--text-muted);
-        margin-top: 2px;
-    }
-
-    .home-tiles {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: var(--sp-4);
-        margin-bottom: var(--sp-5);
-    }
-    .home-tile {
-        position: relative;
-        display: flex;
-        flex-direction: column;
-        gap: var(--sp-2);
-        padding: var(--sp-5);
-        background: var(--bg-elev-2);
-        border: 1px solid var(--border);
-        border-radius: var(--r-lg);
+    .stato-riga a { color: var(--accent-text, var(--accent)); }
+    .nuova-misura {
+        font-size: 17px; padding: 16px 30px; min-height: 56px;
         text-decoration: none;
-        color: var(--text-primary);
-        transition: all var(--t-base) var(--ease);
-        overflow: hidden;
     }
-    .home-tile::before {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: var(--tile-accent, var(--accent));
-        opacity: 0;
-        transition: opacity var(--t-base) var(--ease);
+    .link-misura {
+        background: none; border: none; padding: 0; cursor: pointer;
+        font-family: var(--font-mono); font-size: 14px;
+        color: var(--accent-text, var(--accent)); text-decoration: underline;
     }
-    .home-tile:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--e-3);
-        border-color: var(--tile-accent, var(--accent));
-    }
-    .home-tile:hover::before { opacity: 0.04; }
-    .home-tile-icon {
-        width: 48px; height: 48px;
-        display: flex; align-items: center; justify-content: center;
-        border-radius: var(--r-md);
-        background: color-mix(in oklab, var(--tile-accent, var(--accent)) 18%, transparent);
-        color: var(--tile-accent, var(--accent));
-    }
-    .home-tile-icon svg { width: 26px; height: 26px; }
-    .home-tile-title {
-        font-family: var(--font-display);
-        font-weight: 600;
-        font-size: 18px;
-        color: var(--text-primary);
-    }
-    .home-tile-desc {
+    /* Le tre pagine in una riga, con una descrizione corta per chi non ricorda
+       quale serve a che cosa (prima erano tre tessere grandi, doppioni della
+       barra in alto). */
+    .home-tiles {
+        grid-column: 1 / -1;
+        display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-6);
+        padding-top: var(--sp-3);
+        border-top: 1px dashed var(--border);
         font-size: 13px;
-        color: var(--text-muted);
-        line-height: 1.45;
     }
-    .home-tile-arrow {
-        position: absolute;
-        top: var(--sp-4); right: var(--sp-4);
-        font-size: 22px;
-        color: var(--text-muted);
-        transition: transform var(--t-base) var(--ease);
-    }
-    .home-tile:hover .home-tile-arrow {
-        transform: translateX(4px);
-        color: var(--tile-accent, var(--accent));
+    .home-tile { color: var(--text-secondary); text-decoration: none; }
+    .home-tile b { color: var(--accent-text, var(--accent)); }
+    .home-tile:hover { color: var(--text-primary); }
+    .home-tile:hover b { text-decoration: underline; }
+    @media (max-width: 760px) {
+        .stato-banco { grid-template-columns: 1fr; }
     }
 
     .home-recents-table {
@@ -136,25 +60,42 @@
     .home-recents-table th {
         font-family: var(--font-display);
         font-weight: 600;
-        font-size: 11px;
+        font-size: 12px;
         text-transform: uppercase;
         letter-spacing: 1.2px;
-        color: var(--text-muted);
+        color: var(--text-secondary);
         text-align: left;
         padding: var(--sp-2) var(--sp-3);
         border-bottom: 1px solid var(--border);
     }
     .home-recents-table td {
-        padding: var(--sp-3);
+        padding: var(--sp-2) var(--sp-3);
         border-bottom: 1px solid var(--border);
-        font-size: 13.5px;
+        font-size: 14px;
+        vertical-align: middle;
     }
     .home-recents-table tr:hover td { background: var(--bg-stripe); }
+    .home-recents-table tr.selezionata td { background: color-mix(in oklab, var(--accent) 9%, transparent); }
+    .home-recents-table .col-sel, .home-recents-table .col-star { width: 36px; text-align: center; padding-left: 4px; padding-right: 4px; }
+    .home-recents-table .col-azioni { text-align: right; white-space: nowrap; }
+    .home-recents-table .col-azioni .home-action-btn { margin-left: 6px; }
+    /* La casella si prende in tutta la cella (circa 36x44 px), non solo nei
+       suoi pochi pixel: chi lavora in piedi la manca facilmente. */
+    .home-recents-table td.col-sel { padding: 0; }
+    .sel-area {
+        display: flex; align-items: center; justify-content: center;
+        min-width: 36px; min-height: 44px; padding: 4px; cursor: pointer;
+    }
+    .sel-riga { width: 20px; height: 20px; cursor: pointer; accent-color: var(--accent); vertical-align: middle; }
+    .righe-altre {
+        display: flex; align-items: center; justify-content: center; gap: var(--sp-3);
+        padding: var(--sp-3); color: var(--text-secondary); font-size: 13px;
+    }
     .home-recents-table .type-pill {
         display: inline-block;
         padding: 2px 8px;
         font-family: var(--font-mono);
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 700;
         text-transform: uppercase;
         border-radius: var(--r-full);
@@ -162,36 +103,43 @@
     }
     .type-pill.alz { background: color-mix(in oklab, var(--accent) 20%, transparent); color: var(--accent); }
     .type-pill.pol { background: color-mix(in oklab, var(--accent-2) 20%, transparent); color: var(--accent-2); }
-    .type-pill.other { background: var(--bg-input); color: var(--text-muted); }
+    .type-pill.other { background: var(--bg-input); color: var(--text-secondary); }
     .home-recents-table .fname {
         font-family: var(--font-mono);
-        font-size: 13px;
+        font-size: 14px;
         color: var(--text-primary);
         font-weight: 500;
+        /* un nome lungo va a capo invece di allargare la tabella oltre la
+           scheda (con lo zoom del browser al 125-150% succedeva) */
+        overflow-wrap: anywhere; word-break: break-word;
     }
-    .home-recents-table .fsize, .home-recents-table .fdate {
+    .home-recents-table .fdate {
         font-family: var(--font-mono);
-        font-size: 12px;
-        color: var(--text-muted);
-        text-align: right;
+        font-size: 13px;
+        color: var(--text-secondary);
         white-space: nowrap;
     }
     .home-recents-empty {
         text-align: center;
         padding: var(--sp-8);
-        color: var(--text-muted);
-        font-style: italic;
+        color: var(--text-secondary);
         font-size: 14px;
     }
+    /* Comandi con la parola accanto all'icona e alti almeno 32 px: prima erano
+       segni da 11 px (freccia, icona, x) spiegati solo passando il mouse. */
     .home-action-btn {
-        display: inline-flex; align-items: center; gap: 4px;
-        font-family: var(--font-mono); font-size: 11px;
-        padding: 2px 8px; border-radius: var(--r-sm);
-        background: transparent; color: var(--text-muted);
+        display: inline-flex; align-items: center; gap: 6px;
+        font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+        min-height: 32px; padding: 5px 12px; border-radius: var(--r-sm);
+        background: var(--bg-input); color: var(--text-primary);
         border: 1px solid var(--border-strong); cursor: pointer;
+        text-decoration: none; white-space: nowrap;
         transition: all var(--t-fast) var(--ease);
     }
-    .home-action-btn:hover { background: var(--accent); color: #06121b; border-color: var(--accent); }
+    .home-action-btn:hover:not(:disabled) { background: var(--accent); color: #06121b; border-color: var(--accent); }
+    .home-action-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .home-action-btn.pericolo { color: var(--danger-text, var(--danger)); border-color: color-mix(in oklab, var(--danger) 55%, var(--border-strong)); }
+    .home-action-btn.pericolo:hover:not(:disabled) { background: var(--danger); color: #fff; border-color: var(--danger); }
 
     /* Activity bar chart (SVG inline, ultimi 14 giorni) */
     .activity-chart {
@@ -225,7 +173,7 @@
         position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%) translateY(-4px);
         background: var(--bg-elev-3); color: var(--text-primary);
         border: 1px solid var(--border-strong); border-radius: var(--r-sm);
-        font-family: var(--font-mono); font-size: 11px;
+        font-family: var(--font-mono); font-size: 12px;
         padding: 3px 7px; white-space: nowrap;
         opacity: 0; pointer-events: none; transition: opacity var(--t-fast) var(--ease);
     }
@@ -233,14 +181,14 @@
     .activity-labels {
         display: flex;
         justify-content: space-between;
-        font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+        font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary);
         padding: 0 4px;
     }
 
     /* Star bookmark button */
     .star-btn {
         background: none; border: none; cursor: pointer;
-        color: var(--text-muted); font-size: 16px; padding: 0 4px;
+        color: var(--text-muted); font-size: 20px; padding: 4px 6px;
         transition: all var(--t-fast) var(--ease);
         line-height: 1;
     }
@@ -248,26 +196,26 @@
     .star-btn.active { color: var(--accent-2); text-shadow: 0 0 6px var(--accent-2-glow); }
     .home-recents-table tr.bookmarked td:first-child { border-left: 2px solid var(--accent-2); }
     .filter-toggle {
-        display: inline-flex; align-items: center; gap: 5px;
-        font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
-        padding: 4px 10px; border-radius: var(--r-full);
+        display: inline-flex; align-items: center; gap: 6px;
+        font-family: var(--font-sans); font-size: 13px; font-weight: 600; color: var(--text-secondary);
+        min-height: 32px; padding: 5px 12px; border-radius: var(--r-full);
         background: var(--bg-input); border: 1px solid var(--border);
         cursor: pointer; user-select: none;
-        margin-left: var(--sp-2);
         transition: all var(--t-fast) var(--ease);
     }
     .filter-toggle.active { background: var(--accent-2); color: #1a1a0a; border-color: var(--accent-2); }
     .filter-toggle:hover:not(.active) { color: var(--text-primary); border-color: var(--border-strong); }
 
     /* Delete (cestino) button + confirm modal */
+    /* Elimina staccato dagli altri comandi della riga (prima stava a 4 px da Excel) */
     .delete-btn {
-        display: inline-flex; align-items: center; gap: 3px;
-        font-family: var(--font-mono); font-size: 11px;
-        padding: 2px 8px; border-radius: var(--r-sm);
-        background: transparent; color: var(--text-muted);
-        border: 1px solid var(--border-strong); cursor: pointer;
+        display: inline-flex; align-items: center; gap: 6px;
+        font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+        min-height: 32px; padding: 5px 12px; border-radius: var(--r-sm);
+        background: transparent; color: var(--danger-text, var(--danger));
+        border: 1px solid color-mix(in oklab, var(--danger) 55%, var(--border-strong)); cursor: pointer;
         transition: all var(--t-fast) var(--ease);
-        margin-left: 4px;
+        margin-left: 22px;
     }
     .delete-btn:hover { background: var(--danger); color: white; border-color: var(--danger); }
 
@@ -286,7 +234,8 @@
         border: 1px solid var(--border);
         border-radius: var(--r-md);
         color: var(--text-primary);
-        font-family: var(--font-mono); font-size: 13px;
+        font-family: var(--font-sans); font-size: 14px;
+        min-height: 36px;
         transition: border-color var(--t-fast) var(--ease);
     }
     .recents-search-input:focus {
@@ -313,8 +262,8 @@
         border-radius: var(--r-full); border: 1px solid var(--border);
     }
     .chip-filter {
-        padding: 4px 12px; font-family: var(--font-display);
-        font-size: 11px; font-weight: 600; text-transform: uppercase;
+        padding: 5px 12px; font-family: var(--font-display);
+        font-size: 13px; font-weight: 600; text-transform: uppercase;
         letter-spacing: 1px; color: var(--text-muted);
         border: none; background: transparent;
         border-radius: var(--r-full); cursor: pointer;
@@ -326,7 +275,7 @@
     .chip-filter[data-filter="other"].active { background: var(--accent-3); color: white; }
 
     .recents-count {
-        font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
+        font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary);
         margin-left: auto; align-self: center; white-space: nowrap;
     }
 
@@ -382,81 +331,46 @@
         color: var(--accent); text-decoration: underline;
     }
 
-    /* Tag stats bar chart orizzontale (card "Tag più usati") */
-    .tag-stats-bars {
-        display: flex; flex-direction: column; gap: var(--sp-2);
-        margin-top: var(--sp-2);
-    }
-    .tag-stats-row {
-        display: grid; grid-template-columns: 130px 1fr 50px;
-        gap: var(--sp-3); align-items: center;
-        cursor: pointer; padding: 4px 6px;
-        border-radius: var(--r-sm);
-        transition: background var(--t-fast) var(--ease);
-    }
-    .tag-stats-row:hover { background: var(--bg-stripe); }
-    .tag-stats-row.active { background: var(--bg-stripe); }
-    .tag-stats-row.active .tag-stats-label { color: var(--accent-3); font-weight: 700; }
-    .tag-stats-label {
-        font-family: var(--font-mono); font-size: 12px;
-        color: var(--text-primary);
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .tag-stats-bar-wrap {
-        height: 14px;
-        background: var(--bg-input);
-        border-radius: var(--r-full);
-        overflow: hidden;
-        position: relative;
-    }
-    .tag-stats-bar {
-        height: 100%;
-        background: linear-gradient(90deg, var(--accent-3) 0%, var(--accent) 100%);
-        border-radius: var(--r-full);
-        transition: width var(--t-base) var(--ease);
-    }
-    .tag-stats-count {
-        font-family: var(--font-mono); font-size: 12px; font-weight: 700;
-        color: var(--accent-2); text-align: right;
-        font-variant-numeric: tabular-nums;
-    }
-
-    /* Tag badge sui file */
+    /* Tag sulle misure. Un clic sull'etichetta filtra l'elenco (come nella riga
+       "Tag:"); per togliere un tag c'e' la x, che chiede conferma. Prima il clic
+       sull'etichetta la cancellava subito, senza dire niente. */
     .file-tags {
-        display: inline-flex; flex-wrap: wrap; gap: 4px;
-        margin-top: 3px; vertical-align: middle;
+        display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px;
+        margin-top: 4px; vertical-align: middle;
+        max-width: 100%; overflow-wrap: anywhere;
     }
     .tag-badge {
-        display: inline-flex; align-items: center;
-        font-family: var(--font-mono); font-size: 10px;
-        padding: 1px 7px 1px 8px;
+        display: inline-flex; align-items: center; gap: 2px;
+        font-family: var(--font-mono); font-size: 12px;
+        padding: 1px 3px 1px 9px;
         border-radius: var(--r-full);
         background: var(--bg-input); color: var(--text-secondary);
         border: 1px solid var(--border);
         cursor: pointer; user-select: none;
         transition: all var(--t-fast) var(--ease);
     }
-    .tag-badge:hover {
-        background: var(--danger); color: white; border-color: var(--danger);
+    .tag-badge:hover { color: var(--text-primary); border-color: var(--accent-3); }
+    .tag-badge.statico { cursor: default; }
+    .tag-x {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 20px; height: 20px; border-radius: 50%;
+        background: none; border: none; cursor: pointer;
+        color: var(--text-muted); font-size: 15px; line-height: 1;
     }
-    .tag-badge::after {
-        content: '×'; margin-left: 4px; opacity: 0; font-weight: bold;
-        transition: opacity var(--t-fast) var(--ease);
-    }
-    .tag-badge:hover::after { opacity: 1; }
+    .tag-x:hover { background: var(--danger); color: #fff; }
     .tag-add-btn {
         display: inline-flex; align-items: center; justify-content: center;
-        font-family: var(--font-mono); font-size: 11px; font-weight: 700;
-        width: 18px; height: 18px;
-        border-radius: 50%;
-        background: transparent; color: var(--text-muted);
+        font-family: var(--font-sans); font-size: 12px; font-weight: 600;
+        min-height: 24px; padding: 1px 10px;
+        border-radius: var(--r-full);
+        background: transparent; color: var(--text-secondary);
         border: 1px dashed var(--border-strong); cursor: pointer;
         transition: all var(--t-fast) var(--ease);
         line-height: 1;
     }
     .tag-add-btn:hover {
         background: var(--accent); color: #06121b; border-color: var(--accent);
-        border-style: solid; transform: scale(1.1);
+        border-style: solid;
     }
 
     /* Filtri tag (chip dinamici sotto i filtri tipo/date) */
@@ -466,14 +380,14 @@
         border-top: 1px dashed var(--border);
     }
     .tag-filter-label {
-        font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px;
-        color: var(--text-muted); font-family: var(--font-display);
+        font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px;
+        color: var(--text-secondary); font-family: var(--font-display);
         margin-right: 4px;
     }
     .tag-filter-chip {
         display: inline-flex; align-items: center; gap: 4px;
-        font-family: var(--font-mono); font-size: 11px;
-        padding: 3px 9px; border-radius: var(--r-full);
+        font-family: var(--font-mono); font-size: 13px;
+        min-height: 28px; padding: 3px 10px; border-radius: var(--r-full);
         background: var(--bg-input); color: var(--text-secondary);
         border: 1px solid var(--border); cursor: pointer;
         transition: all var(--t-fast) var(--ease);
@@ -483,7 +397,7 @@
         background: var(--accent-3); color: white; border-color: var(--accent-3);
     }
     .tag-filter-count {
-        font-size: 9px; opacity: 0.7; margin-left: 2px;
+        font-size: 12px; font-weight: 700; margin-left: 2px;
     }
 
     /* Concerto col motore - tile delle canzoni */
@@ -524,7 +438,7 @@
     }
     .concert-tile-sub {
         font-family: var(--font-mono);
-        font-size: 10px;
+        font-size: 12px;
         color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 1.2px;
@@ -556,9 +470,9 @@
     }
     .concert-volume-label {
         font-family: var(--font-display);
-        font-size: 11px; font-weight: 600;
+        font-size: 12px; font-weight: 600;
         text-transform: uppercase; letter-spacing: 1.5px;
-        color: var(--text-muted);
+        color: var(--text-secondary);
         min-width: 80px;
     }
     .concert-volume-slider {
@@ -588,7 +502,7 @@
         font-variant-numeric: tabular-nums;
     }
     .concert-volume-hint {
-        font-size: 11px; color: var(--text-muted);
+        font-size: 12px; color: var(--text-secondary);
         text-align: center; margin-top: var(--sp-2);
         font-style: italic;
     }
@@ -624,7 +538,7 @@
         color: var(--text-primary); word-break: break-all;
     }
     .quickview-subtitle {
-        font-size: 11px; color: var(--text-muted); text-transform: uppercase;
+        font-size: 12px; color: var(--text-secondary); text-transform: uppercase;
         letter-spacing: 1.5px; margin-top: 4px; font-family: var(--font-display);
     }
     .quickview-close {
@@ -643,23 +557,141 @@
         border-radius: var(--r-md); padding: var(--sp-3);
     }
     .quickview-stat-label {
-        font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+        font-size: 12px; color: var(--text-secondary); text-transform: uppercase;
         letter-spacing: 1.2px; font-family: var(--font-display);
     }
     .quickview-stat-value {
-        font-family: var(--font-mono); font-size: 16px; font-weight: 700;
-        color: var(--accent); margin-top: 2px;
+        font-family: var(--font-mono); font-size: 18px; font-weight: 700;
+        color: var(--accent-text, var(--accent)); margin-top: 2px;
     }
+    .quickview-stat-nota { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+    /* il grafico si accorcia sugli schermi bassi (a 1366x768 la finestra era
+       alta circa 750 px e Scheda PDF e Chiudi restavano sotto) */
     .quickview-chart-wrap {
         background: var(--bg-input); border-radius: var(--r-md);
-        padding: var(--sp-3); height: 320px; margin-bottom: var(--sp-4);
+        padding: var(--sp-3); height: clamp(200px, 34vh, 320px); margin-bottom: var(--sp-4);
     }
     .quickview-loading {
         text-align: center; color: var(--text-muted); padding: 60px 0;
         font-style: italic;
     }
     .quickview-actions {
-        display: flex; gap: var(--sp-2); justify-content: flex-end; flex-wrap: wrap;
+        display: flex; gap: var(--sp-2); justify-content: flex-end; align-items: center; flex-wrap: wrap;
+    }
+    .quickview-actions + .quickview-actions { margin-top: var(--sp-2); }
+    /* I comandi restano in fondo alla finestra anche quando questa scorre:
+       Scheda PDF (il foglio per il cliente) e Chiudi sempre in vista. */
+    .quickview-piede {
+        position: sticky; bottom: calc(-1 * var(--sp-5)); z-index: 2;
+        margin: 0 calc(-1 * var(--sp-5)) calc(-1 * var(--sp-5));
+        padding: var(--sp-3) var(--sp-5) var(--sp-5);
+        background: var(--bg-elev-2);
+        border-top: 1px solid var(--border);
+    }
+    .qv-apri { margin-right: auto; font-size: 14px; color: var(--text-secondary); }
+
+    /* Titolo dell'archivio col conteggio e i comandi di tutti i giorni */
+    .archivio-titolo {
+        display: flex; justify-content: space-between; align-items: center;
+        flex-wrap: wrap; gap: 8px;
+    }
+    .archivio-conteggio { color: var(--accent-text, var(--accent)); margin-left: 4px; }
+    .archivio-comandi {
+        display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;
+        text-transform: none; letter-spacing: normal;
+    }
+
+    /* Barra della selezione: compare quando si spunta almeno una misura e resta
+       in vista (in fondo allo schermo) mentre si scorre l'elenco. */
+    .barra-selezione {
+        position: sticky; bottom: var(--sp-3); z-index: 5;
+        display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3);
+        margin-top: var(--sp-3); padding: var(--sp-3) var(--sp-4);
+        background: var(--bg-elev-3); border: 1px solid var(--accent);
+        border-radius: var(--r-md); box-shadow: var(--e-3);
+    }
+    .barra-selezione[hidden] { display: none; }
+    .sel-testo {
+        flex: 1 1 260px; min-width: 0;
+        font-size: 14px; font-weight: 600; color: var(--text-primary);
+        word-break: break-word;
+    }
+    .sel-nota { flex-basis: 100%; font-size: 13px; color: var(--text-secondary); }
+    .sel-nota:empty { display: none; }
+
+    /* Pannelli in fondo, chiusi finche' non servono */
+    .home-details > summary {
+        cursor: pointer; list-style: none;
+        display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap;
+        font-family: var(--font-display); font-size: 15px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 2px; color: var(--text-secondary);
+    }
+    .home-details > summary::-webkit-details-marker { display: none; }
+    .home-details > summary::before {
+        content: '\25B8'; color: var(--accent); font-size: 15px;
+        transition: transform var(--t-fast) var(--ease);
+    }
+    .home-details[open] > summary::before { transform: rotate(90deg); }
+    .home-details[open] > summary {
+        margin-bottom: var(--sp-3); padding-bottom: var(--sp-3);
+        border-bottom: 1px solid var(--border);
+    }
+    .home-details > summary:hover { color: var(--text-primary); }
+    .details-sommario {
+        font-family: var(--font-sans); font-size: 13px; font-weight: 400;
+        text-transform: none; letter-spacing: normal; color: var(--text-secondary);
+    }
+    .sistema-sezione { padding: var(--sp-3) 0; border-bottom: 1px dashed var(--border); }
+    .sistema-sezione:last-child { border-bottom: none; padding-bottom: 0; }
+    .sistema-sezione h3 {
+        font-family: var(--font-display); font-size: 14px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-secondary);
+        margin-bottom: var(--sp-2);
+    }
+    .sistema-riga {
+        display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3);
+        font-size: 14px;
+    }
+    .sistema-etichetta { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; }
+    .sistema-nota { font-size: 13px; line-height: 1.5; color: var(--text-secondary); margin-top: var(--sp-2); }
+    .sistema-nota code, .sistema-riga code, .procedura code {
+        font-family: var(--font-mono); color: var(--accent-text, var(--accent)); word-break: break-all;
+    }
+    .procedura {
+        list-style: decimal; padding-left: 24px; margin-top: var(--sp-2);
+        font-size: 14px; line-height: 1.55; color: var(--text-primary);
+    }
+    .procedura li { margin: 3px 0; }
+    .sha-riga { font-size: 12px; color: var(--text-muted); word-break: break-all; }
+    .separa { flex: 0 0 18px; }
+    .scarica-versione { color: var(--success-text, var(--success)); border-color: var(--success); }
+    .cestino-box {
+        margin-top: var(--sp-3); padding: var(--sp-3) var(--sp-4);
+        border: 1px solid var(--border-strong); border-radius: var(--r-md);
+        background: var(--bg-input);
+    }
+    .cestino-titolo { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; font-weight: 700; margin-bottom: var(--sp-2); }
+    .cestino-riga { display: flex; align-items: center; gap: 10px; padding: 4px 0; font-size: 14px; flex-wrap: wrap; }
+    .cestino-riga .nome { flex: 1 1 240px; font-family: var(--font-mono); word-break: break-all; }
+    .cestino-riga .quando { color: var(--text-secondary); font-size: 13px; }
+    /* Nelle finestre della Home i pulsanti portano nomi di file: niente
+       maiuscolo, e un nome lungo va a capo invece di essere tagliato (la parte
+       che distingue due misure di solito e' in fondo al nome) */
+    .cammes-dialog-actions .btn {
+        text-transform: none; letter-spacing: 0.3px;
+        white-space: normal; overflow-wrap: anywhere; text-align: left;
+    }
+    /* il pulsante del firmware in risalto quando la scheda va aggiornata */
+    .home-action-btn.in-evidenza { background: var(--accent); color: #06121b; border-color: var(--accent); }
+    /* "come aggiornare" e "Sistema e manutenzione" portano qui: il titolo
+       non deve finire sotto la barra in alto */
+    #updatesCard { scroll-margin-top: 96px; }
+    /* finestra stretta o zoom del browser: i comandi della riga vanno a capo
+       invece di far scorrere la pagina di lato */
+    @media (max-width: 1150px) {
+        .home-recents-table .col-azioni { white-space: normal; }
+        .home-recents-table .col-azioni .home-action-btn,
+        .home-recents-table .col-azioni .delete-btn { margin-top: 3px; margin-bottom: 3px; }
     }
     </style>
 </head>
@@ -678,7 +710,6 @@
             <a href="analisi.html">Analisi</a>
         </div>
         <div class="header-spacer"></div>
-        <button id="concert-toggle" class="help-toggle" type="button" onclick="openHomeConcert();" aria-label="Concerto col motore" title="Concerto col motore" data-tip="<strong>Concerto col motore</strong>Lo stepper esegue brani modulando la frequenza dei pulsi. 7 brani curati (Inno di Mameli, Per Elisa, Tetris, La Primavera, Bella Ciao, 'O Sole Mio, Va' pensiero) pi&ugrave; il <b>compositore custom</b> per scrivere melodie tue.">&#127932;</button>
         <button id="help-toggle" class="help-toggle" type="button" aria-label="Guida rapida" title="Apri la guida rapida">?</button>
         <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambia tema" title="Cambia tema chiaro/scuro">
             <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -686,150 +717,51 @@
         </button>
     </div>
 
-    <!-- Hero + Stats -->
-    <div class="card">
-        <div class="home-hero">
-            <div>
-                <div class="home-hero-title">Benvenuto in CAMMES</div>
-                <div class="home-hero-sub" id="homeWelcomeSub">Sistema di misura, confronto e analisi profili alberi a camme.</div>
-            </div>
-            <div class="home-stats" id="homeStats">
-                <div class="home-stat">
-                    <div class="home-stat-label">Misure totali</div>
-                    <div class="home-stat-value" id="statTotal">--</div>
-                    <div class="home-stat-sub">file in <code>prove/</code></div>
-                </div>
-                <div class="home-stat">
-                    <div class="home-stat-label">Alzata (.scr)</div>
-                    <div class="home-stat-value" id="statAlz">--</div>
-                    <div class="home-stat-sub">profili cartesiani</div>
-                </div>
-                <div class="home-stat">
-                    <div class="home-stat-label">Polari (.scr)</div>
-                    <div class="home-stat-value" id="statPol">--</div>
-                    <div class="home-stat-sub">profili polari</div>
-                </div>
-                <div class="home-stat">
-                    <div class="home-stat-label">Ultimo file</div>
-                    <div class="home-stat-value" id="statLast" style="font-size:13px;color:var(--text-primary);font-weight:600;">--</div>
-                    <div class="home-stat-sub" id="statLastDate">&nbsp;</div>
-                </div>
-            </div>
+    <!-- Riga di stato: come sta il banco, e il primo gesto (Nuova misura).
+         L'esito della verifica banco prima stava in piccolo in fondo alla riga
+         dell'intestazione dell'officina, oltre la prima schermata. -->
+    <div class="card stato-banco" id="statoBanco">
+        <div class="stato-righe">
+            <div class="stato-riga" id="benchBadge">Verifica banco: lettura in corso&hellip;</div>
+            <div class="stato-riga" id="statoArduino">Arduino: controllo in corso&hellip;</div>
+            <div class="stato-riga" id="statoProgramma">Programma: controllo in corso&hellip;</div>
+            <div class="stato-riga" id="homeStats">Archivio: lettura in corso&hellip;</div>
         </div>
+        <a href="alzata.html" class="btn btn-accent nuova-misura" id="nuovaMisuraBtn" data-tip="<strong>Nuova misura</strong>Apre Alzata. Prima di START: monta l'albero, porta il tastatore sul cerchio base e azzera il comparatore.">+ Nuova misura</a>
+        <nav class="home-tiles" aria-label="Le pagine del programma">
+            <a href="alzata.html" class="home-tile"><b>Alzata:</b> misura una camma, grado per grado</a>
+            <a href="grafici.html" class="home-tile"><b>Confronto:</b> fino a 4 misure sovrapposte, collaudo su un profilo nominale</a>
+            <a href="analisi.html" class="home-tile"><b>Analisi:</b> fasatura, durate e referto PDF di un cilindro</a>
+        </nav>
     </div>
 
-    <!-- Tiles (3 funzionalità principali) -->
-    <div class="card">
-        <div class="card-title">Funzionalit&agrave;</div>
-        <div class="home-tiles">
-            <a href="alzata.html" class="home-tile" style="--tile-accent: var(--accent);">
-                <div class="home-tile-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>
-                </div>
-                <div class="home-tile-title">Alzata</div>
-                <div class="home-tile-desc">Scansione del profilo di alzata in tempo reale. La vista polare della camma &egrave; in Confronto.</div>
-                <span class="home-tile-arrow">&rarr;</span>
-            </a>
-            <a href="grafici.html" class="home-tile" style="--tile-accent: var(--accent-3);">
-                <div class="home-tile-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
-                </div>
-                <div class="home-tile-title">Confronto</div>
-                <div class="home-tile-desc">Sovrapponi fino a 4 misurazioni per verificare ripetibilit&agrave;, prima/dopo usura, o camme diverse.</div>
-                <span class="home-tile-arrow">&rarr;</span>
-            </a>
-            <a href="analisi.html" class="home-tile" style="--tile-accent: var(--success);">
-                <div class="home-tile-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg>
-                </div>
-                <div class="home-tile-title">Analisi</div>
-                <div class="home-tile-desc">Cinematica completa, fasatura 720&deg;, forze inerziali, limite di distacco valvola, export CSV/PDF.</div>
-                <span class="home-tile-arrow">&rarr;</span>
-            </a>
-        </div>
-    </div>
-
-    <!-- Sistema & aggiornamenti: versione software (GitHub) + firmware Arduino -->
-    <div class="card" id="updatesCard">
-        <div class="card-title">Sistema &amp; aggiornamenti
-            <span class="help-icon" data-tip="<strong>Aggiornamenti</strong>Il software controlla da solo le nuove versioni sulle <b>GitHub Releases</b> del progetto (serve internet). Il <b>firmware Arduino</b> incluso nella build si carica sulla scheda direttamente da qui: nessun Arduino IDE necessario." tabindex="0">?</span>
-        </div>
-        <div class="flex items-center gap-8" style="flex-wrap:wrap;">
-            <div style="min-width:230px;">
-                <div style="font-size:12px;color:var(--text-muted);">Software</div>
-                <div id="updSwStatus" style="font-size:13px;">versione installata: <b id="updSwCurrent">&ndash;</b></div>
-            </div>
-            <button class="home-action-btn" id="updCheckBtn" onclick="checkUpdatesNow();" data-tip="<strong>Controlla ora</strong>Interroga GitHub Releases e confronta con la versione installata.">&#8635; Controlla aggiornamenti</button>
-            <a class="home-action-btn" id="updDownloadLink" href="#" target="_blank" rel="noopener" style="display:none;color:var(--success);font-weight:600;">&#8595; Scarica nuova versione</a>
-            <div class="separator" style="height:28px;"></div>
-            <div style="min-width:230px;">
-                <div style="font-size:12px;color:var(--text-muted);">Firmware Arduino</div>
-                <div style="font-size:13px;">sull'Arduino: <b id="fwDevice">&ndash;</b> &middot; incluso: <b id="fwBundled">&ndash;</b> &middot; porta: <b id="fwPort">&ndash;</b></div>
-            </div>
-            <button class="home-action-btn" id="fwFlashBtn" onclick="flashFirmware();" data-tip="<strong>Aggiorna firmware</strong>Scrive il firmware incluso in questa versione sull'Arduino collegato (via avrdude, ~15 s). La seriale viene chiusa e riaperta da sola. Rifiutato se c'&egrave; una scansione in corso. <b>Non scollegare l'USB durante la scrittura.</b>">&#9889; Aggiorna firmware Arduino</button>
-            <span id="fwFlashStatus" style="font-size:12px;color:var(--text-muted);"></span>
-            <div class="separator" style="height:28px;"></div>
-            <a class="home-action-btn" href="/api/diagnostics" data-tip="<strong>Scarica diagnostica</strong>File di testo con versioni, stato seriale e la coda del log del server: &egrave; quello da mandare all'assistenza quando qualcosa non va.">&#129658; Diagnostica</a>
-            <a class="home-action-btn" href="/manuale" target="_blank" data-tip="<strong>Manuale operatore</strong>La guida in una pagina: misurare, analizzare, backup, problemi frequenti. Stampabile.">&#128214; Manuale</a>
-        </div>
-        <div class="flex items-center gap-8 mt-8" style="flex-wrap:wrap;">
-            <div style="min-width:230px;">
-                <div style="font-size:12px;color:var(--text-muted);">La mia officina <span class="help-icon" data-tip="<strong>Intestazione referti</strong>Il nome compare in testa a <b>tutti i PDF</b> che consegni al cliente: report di analisi, race report, scheda camma e scheda tecnica della singola misura. Salvato sul server (non nel browser)." tabindex="0">?</span></div>
-                <input type="text" id="setOfficina" class="input" style="width:280px;" placeholder="Ragione sociale (per i referti PDF)">
-            </div>
-            <button class="home-action-btn" onclick="saveOfficina();">&#128190; Salva intestazione</button>
-            <span id="benchBadge" style="font-size:12px;color:var(--text-muted);"></span>
-        </div>
-    </div>
-
-    <!-- Activity (ultimi 14 giorni) -->
-    <div class="card" id="activityCard" style="display:none;">
-        <div class="card-title">Attivit&agrave; ultimi 14 giorni</div>
-        <div class="activity-chart" id="activityChart"></div>
-        <div class="activity-labels" id="activityLabels"></div>
-    </div>
-
-    <!-- Tag più usati (auto-hide se nessun tag) -->
-    <div class="card" id="tagStatsCard" style="display:none;">
-        <div class="card-title">Tag pi&ugrave; usati
-            <span class="help-icon" data-tip="<strong>Bar chart orizzontale</strong>Distribuzione dei tag su tutti i file salvati. Click su una barra per applicare il filtro tag corrispondente alla tabella sotto." tabindex="0">?</span>
-        </div>
-        <div id="tagStatsBars" class="tag-stats-bars"></div>
-    </div>
-
-    <!-- Recenti -->
-    <div class="card">
-        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-            <span>Misurazioni</span>
-            <span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                <label class="filter-toggle" id="filterBookmarkedLabel" onclick="toggleBookmarkFilter();" data-tip="<strong>Solo preferiti</strong>Mostra soltanto i file contrassegnati con la stella. Riclicca per tornare a vedere tutto.">
+    <!-- Archivio delle misure: subito sotto la riga di stato -->
+    <div class="card" id="archivioCard">
+        <div class="card-title archivio-titolo">
+            <span>Misurazioni <span class="archivio-conteggio" id="archivioConteggio"></span></span>
+            <span class="archivio-comandi">
+                <button type="button" class="filter-toggle" id="filterBookmarkedLabel" aria-pressed="false" onclick="toggleBookmarkFilter();" data-tip="<strong>Solo preferiti</strong>Mostra soltanto le misure segnate con la stella. Premi di nuovo per vederle tutte.">
                     <span id="filterBookmarkedIcon">&#9734;</span> Solo preferiti
-                </label>
-                <button class="home-action-btn" onclick="openBookmarksInCompare();" title="Apre Confronto coi primi 4 file alzata fra i preferiti">&#9733; Confronta preferiti</button>
-                <a class="home-action-btn" href="/api/backup-zip" data-tip="<strong>Backup ZIP</strong>Scarica TUTTO l'archivio misure (i file .scr di prove/) in un unico ZIP. Da fare prima di formattare o cambiare PC; per tag e preferiti usa anche Export.">&#128230; Backup ZIP</a>
-                <button class="home-action-btn" onclick="exportMetadata();" title="Scarica un backup JSON dei tuoi tag, bookmark e posizioni salvate" data-tip="<strong>Export metadati</strong>Scarica un file JSON con tutti i tuoi tag, bookmark, posizioni salvate e impostazioni preferenze. Utile per backup periodico o spostare le tue etichette su un altro PC. NON contiene i file .scr: per quelli usa <b>Backup ZIP</b>.">&#128190; Export</button>
-                <button class="home-action-btn" onclick="document.getElementById('importMetaInput').click();" title="Ripristina tag/bookmark da un file JSON" data-tip="<strong>Import metadati</strong>Carica un file JSON di backup esportato precedentemente. Ripristina tag, bookmark e posizioni salvate (sovrascrive quelli correnti).">&#128229; Import</button>
-                <input type="file" id="importMetaInput" accept=".json,application/json" style="display:none;" onchange="importMetadataFile(event);">
-                <button class="home-action-btn" onclick="loadRecents();" title="Ricarica lista">&#8634; Aggiorna</button>
-                <button class="home-action-btn" onclick="clearArchive();" title="Sposta TUTTI i file di misura nel cestino (doppia conferma)" style="color:var(--danger);" data-tip="<strong>Svuota archivio</strong>Sposta tutti i file di misura (.scr) nel <b>cestino</b>, da cui restano ripristinabili per 30 giorni. Chiede doppia conferma e ripulisce anche tag e preferiti associati.">&#128465; Svuota archivio</button>
-                <button class="home-action-btn" id="trashBtn" onclick="toggleTrash();" data-tip="<strong>Cestino</strong>I file eliminati restano qui per 30 giorni e si possono ripristinare con un click. Dopo 30 giorni vengono eliminati definitivamente.">&#9851; Cestino</button>
+                </button>
+                <button type="button" class="home-action-btn" onclick="openBookmarksInCompare();" data-tip="<strong>Confronta preferiti</strong>Apre Confronto con le misure di alzata segnate con la stella (al massimo 4, le pi&ugrave; recenti). Per sceglierle una per una usa le caselle delle righe.">&#9733; Confronta preferiti</button>
+                <button type="button" class="home-action-btn" onclick="loadRecents();" data-tip="<strong>Aggiorna elenco</strong>Rilegge l'archivio, per esempio dopo una misura salvata da un altro PC.">&#8634; Aggiorna elenco</button>
             </span>
         </div>
 
-        <!-- Toolbar search + chip filtri tipo + filtri date -->
+        <!-- Ricerca (nome e tag) + filtri per tipo (solo se servono) e per data -->
         <div class="recents-toolbar">
             <div class="recents-search">
                 <span class="recents-search-icon">&#128269;</span>
-                <input type="text" id="recentsSearch" class="recents-search-input" placeholder="Cerca per nome file&hellip;" oninput="onSearchInput();" autocomplete="off">
-                <button class="recents-search-clear" id="recentsSearchClear" onclick="clearSearch();" title="Cancella" type="button">&times;</button>
+                <input type="text" id="recentsSearch" class="recents-search-input" placeholder="Cerca per nome o tag&hellip;" oninput="onSearchInput();" autocomplete="off">
+                <button class="recents-search-clear" id="recentsSearchClear" onclick="clearSearch();" title="Cancella la ricerca" type="button">&times;</button>
             </div>
-            <div class="chip-filters" id="typeFilters" role="tablist" aria-label="Filtra per tipo file">
-                <button class="chip-filter active" data-filter="all"   onclick="setTypeFilter('all');"   type="button" title="Mostra tutti i file">Tutti</button>
-                <button class="chip-filter"        data-filter="alz"   onclick="setTypeFilter('alz');"   type="button" title="Solo profili alzata (_alz)">Alzata</button>
-                <button class="chip-filter"        data-filter="pol"   onclick="setTypeFilter('pol');"   type="button" title="Solo vecchi file polari (_pol)">Polare</button>
-                <button class="chip-filter"        data-filter="other" onclick="setTypeFilter('other');" type="button" title="File senza suffisso _alz/_pol">Altri</button>
+            <div class="chip-filters" id="typeFilters" role="tablist" aria-label="Filtra per tipo di file" style="display:none;">
+                <button class="chip-filter active" data-filter="all"   onclick="setTypeFilter('all');"   type="button" title="Tutte le misure">Tutti</button>
+                <button class="chip-filter"        data-filter="alz"   onclick="setTypeFilter('alz');"   type="button" title="Solo misure di alzata (_alz nel nome)">Alzata</button>
+                <button class="chip-filter"        data-filter="pol"   onclick="setTypeFilter('pol');"   type="button" title="Solo vecchi file polari (_pol nel nome)" style="display:none;">Polare</button>
+                <button class="chip-filter"        data-filter="other" onclick="setTypeFilter('other');" type="button" title="File senza _alz o _pol nel nome" style="display:none;">Altri</button>
             </div>
-            <div class="chip-filters" id="dateFilters" role="tablist" aria-label="Filtra per intervallo date">
+            <div class="chip-filters" id="dateFilters" role="tablist" aria-label="Filtra per data">
                 <button class="chip-filter active" data-date="all"     onclick="setDateFilter('all');"   type="button" title="Qualsiasi data">Sempre</button>
                 <button class="chip-filter"        data-date="today"   onclick="setDateFilter('today');" type="button" title="Solo misure di oggi">Oggi</button>
                 <button class="chip-filter"        data-date="week"    onclick="setDateFilter('week');"  type="button" title="Ultimi 7 giorni">7 g</button>
@@ -844,7 +776,98 @@
         <div id="recentsWrap">
             <div class="home-recents-empty">Caricamento&hellip;</div>
         </div>
+
+        <!-- Barra della selezione: Confronto e Analisi partono dall'archivio -->
+        <div class="barra-selezione" id="barraSelezione" hidden>
+            <span class="sel-testo" id="selTesto"></span>
+            <button type="button" class="btn btn-accent btn-sm" id="selConfrontaBtn" onclick="confrontaSelezionate();">Confronta i selezionati (max 4)</button>
+            <button type="button" class="btn btn-accent btn-sm" id="selAnalizzaBtn" onclick="analizzaSelezionate();">Analizza (aspirazione + scarico)</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="selNessunaBtn" onclick="deselezionaTutte();">Togli la selezione</button>
+            <span class="sel-nota" id="selNota"></span>
+        </div>
     </div>
+
+    <!-- Sistema e manutenzione: cose di una volta al mese, chiuse finche' non
+         servono (aperto/chiuso si ricorda su questo PC). L'id resta updatesCard:
+         lo usa il giro guidato. -->
+    <details class="card home-details" id="updatesCard">
+        <summary>Sistema e manutenzione <span class="details-sommario">aggiornamenti, firmware, intestazione dei PDF, backup, cestino, assistenza</span></summary>
+
+        <div class="sistema-sezione">
+            <h3>Programma <span class="help-icon" data-tip="<strong>Aggiornamenti</strong>Il programma controlla da solo se c'&egrave; una versione nuova (serve internet). Il firmware dell'Arduino incluso nel programma si carica sulla scheda da qui sotto, senza altri programmi." tabindex="0">?</span></h3>
+            <div class="sistema-riga">
+                <div id="updSwStatus">versione installata: <b id="updSwCurrent">&ndash;</b></div>
+                <button type="button" class="home-action-btn" id="updCheckBtn" onclick="checkUpdatesNow();" data-tip="<strong>Controlla ora</strong>Chiede al sito del programma se c'&egrave; una versione pi&ugrave; nuova di quella installata (serve internet).">&#8635; Controlla aggiornamenti</button>
+                <a class="home-action-btn scarica-versione" id="updDownloadLink" href="#" target="_blank" rel="noopener" style="display:none;">&#8595; Scarica nuova versione</a>
+            </div>
+            <div class="sha-riga" id="updSha" style="display:none;"></div>
+            <div class="sistema-nota"><b>Come aggiornare il programma</b> (le misure non si perdono):</div>
+            <ol class="procedura" id="proceduraAggiornamento">
+                <li>Scarica il nuovo <b>cammes.exe</b> (il pulsante verde qui sopra compare quando c'&egrave; una versione nuova).</li>
+                <li>Chiudi CAMMES: chiudi la finestra di cammes.exe.</li>
+                <li>Metti il file scaricato al posto del vecchio cammes.exe, nella <b>STESSA cartella</b> (quella che contiene la cartella <b>prove</b>), e riavvialo.</li>
+            </ol>
+            <div class="sistema-nota">Se dopo l'aggiornamento la riga <b>Firmware</b> qui sotto &egrave; arancione, premi <b>Aggiorna firmware Arduino</b>. Prima di aggiornare conviene scaricare il <b>Backup completo</b>.</div>
+            <div class="sistema-nota">Le misure sono nella cartella <code id="cartellaArchivioPercorso">&hellip;</code>; intestazione, tag, preferiti ed esito della verifica banco stanno nel file settings.json accanto a cammes.exe. Avviato da un'altra cartella (per esempio Download), il programma parte con l'archivio vuoto.</div>
+        </div>
+
+        <div class="sistema-sezione">
+            <h3>Firmware dell'Arduino</h3>
+            <div class="sistema-riga">
+                <div id="fwRiga">Firmware sull'Arduino: <b id="fwDevice">&ndash;</b> &middot; incluso nel programma: <b id="fwBundled">&ndash;</b> &middot; porta: <b id="fwPort">&ndash;</b></div>
+                <button type="button" class="home-action-btn" id="fwFlashBtn" onclick="flashFirmware();" data-tip="<strong>Firmware dell'Arduino</strong>Scrive sull'Arduino collegato il firmware incluso in questa versione del programma (circa 15 secondi). Serve dopo un aggiornamento del programma o se la scheda non risponde. Non parte se c'&egrave; una misura in corso. <b>Non scollegare il cavo USB durante la scrittura.</b>">&#9889; Aggiorna firmware Arduino</button>
+                <span id="fwFlashStatus" class="sistema-nota" style="margin-top:0;"></span>
+            </div>
+        </div>
+
+        <div class="sistema-sezione">
+            <h3>Intestazione dei PDF</h3>
+            <div class="sistema-riga">
+                <div>
+                    <div class="sistema-etichetta">La mia officina <span class="help-icon" data-tip="<strong>Intestazione referti</strong>Il nome compare in testa a <b>tutti i PDF</b> che consegni al cliente: report di analisi, race report, scheda camma e scheda tecnica della singola misura. Resta salvato nel programma: vale anche dagli altri PC." tabindex="0">?</span></div>
+                    <input type="text" id="setOfficina" class="input" style="width:280px;max-width:100%;" placeholder="Ragione sociale (per i referti PDF)">
+                </div>
+                <button type="button" class="home-action-btn" onclick="saveOfficina();">&#128190; Salva intestazione</button>
+            </div>
+        </div>
+
+        <div class="sistema-sezione">
+            <h3>Archivio e backup</h3>
+            <div class="sistema-riga">
+                <a class="home-action-btn" href="/api/backup-zip" data-tip="<strong>Backup completo</strong>Un file ZIP con tutte le misure, l'intestazione, i tag, i preferiti e l'esito della verifica banco. Per ripristinare: scompatta lo ZIP nella cartella di cammes.exe (quella che contiene prove) e riavvia.">&#128230; Backup completo (ZIP)</a>
+                <button type="button" class="home-action-btn" id="trashBtn" onclick="toggleTrash();" data-tip="<strong>Cestino</strong>Le misure eliminate restano qui 30 giorni e si ripristinano con un clic. Dopo 30 giorni vengono eliminate definitivamente.">&#9851; Cestino</button>
+                <button type="button" class="home-action-btn" onclick="exportMetadata();" data-tip="<strong>Esporta etichette</strong>Salva in un file tag, preferiti, posizioni memorizzate in Alzata e preferenze di questo PC. Tag e preferiti sono gi&agrave; nel Backup completo: questo serve soprattutto per le posizioni memorizzate.">&#128190; Esporta etichette</button>
+                <button type="button" class="home-action-btn" onclick="document.getElementById('importMetaInput').click();" data-tip="<strong>Ripristina etichette</strong>Rimette tag, preferiti, posizioni memorizzate e preferenze da un file salvato con Esporta etichette. Sostituisce quelli di adesso; prima chiede conferma.">&#128229; Ripristina etichette</button>
+                <input type="file" id="importMetaInput" accept=".json,application/json" style="display:none;" onchange="importMetadataFile(event);">
+                <span class="separa"></span>
+                <button type="button" class="home-action-btn pericolo" onclick="clearArchive();" data-tip="<strong>Svuota archivio</strong>Sposta <b>tutte</b> le misure nel <b>cestino</b>, da cui restano recuperabili per 30 giorni. I tag e i preferiti di quelle misure si perdono subito. Chiede due conferme.">&#128465; Svuota archivio</button>
+            </div>
+            <div id="trashArea"></div>
+        </div>
+
+        <div class="sistema-sezione">
+            <h3>Assistenza</h3>
+            <div class="sistema-riga">
+                <a class="home-action-btn" href="/api/diagnostics" data-tip="<strong>Diagnostica</strong>File di testo con versioni, stato del collegamento e registro del programma: &egrave; quello da mandare all'assistenza quando qualcosa non va.">&#129658; Diagnostica</a>
+                <a class="home-action-btn" href="/manuale" target="_blank" data-tip="<strong>Manuale operatore</strong>La guida in una pagina: misurare, analizzare, backup, problemi frequenti. Si pu&ograve; stampare.">&#128214; Manuale</a>
+            </div>
+        </div>
+
+        <div class="sistema-sezione">
+            <h3>Extra</h3>
+            <div class="sistema-riga">
+                <button type="button" id="concert-toggle" class="home-action-btn" onclick="openHomeConcert();" data-tip="<strong>Concerto col motore</strong>Un passatempo: il motore del banco suona dei brani (sette famosi, pi&ugrave; uno scritto da te). Fa girare l'albero avanti e indietro: tienilo d'occhio.">&#127932; Concerto col motore</button>
+                <span class="sistema-nota" style="margin-top:0;">Un passatempo: fa girare il motore del banco.</span>
+            </div>
+        </div>
+    </details>
+
+    <!-- Attivita': chiusa finche' non serve (compare solo se ci sono misure) -->
+    <details class="card home-details" id="activityCard" style="display:none;">
+        <summary>Attivit&agrave; degli ultimi 14 giorni</summary>
+        <div class="activity-chart" id="activityChart"></div>
+        <div class="activity-labels" id="activityLabels"></div>
+    </details>
 
 </div>
 
@@ -853,6 +876,15 @@ function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
         return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
     });
+}
+// Numeri come in officina: virgola decimale (cammes-ui.js); riserva se manca.
+var num = window.cammesNum || function (x, d) { return Number(x).toFixed(d).replace('.', ','); };
+// Gradi: interi senza decimali, mezzi gradi (modalita' Race) con uno.
+// Prima la vista rapida arrotondava 160,5 a 161.
+function testoGradi(g) {
+    var n = Number(g);
+    if (g === null || g === undefined || !isFinite(n)) return 'n.d.';
+    return num(n, n % 1 ? 1 : 0) + '&deg;';
 }
 
 // ===== Bookmark (preferiti) =====
@@ -907,26 +939,24 @@ function toggleBookmark(name, ev) {
     var i = list.indexOf(name);
     if (i === -1) {
         list.push(name);
-        if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Aggiunto ai preferiti', body: name, duration: 2000 });
+        if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Aggiunta ai preferiti', body: escapeHtml(name), duration: 2000 });
     } else {
         list.splice(i, 1);
     }
     saveBookmarks(list);
-    loadRecents();
+    renderRecentsTable();
 }
 var filterOnlyBookmarks = false;
 function toggleBookmarkFilter() {
     filterOnlyBookmarks = !filterOnlyBookmarks;
     var label = document.getElementById('filterBookmarkedLabel');
     var icon  = document.getElementById('filterBookmarkedIcon');
-    if (filterOnlyBookmarks) {
-        label.classList.add('active');
-        icon.innerHTML = '&#9733;';
-    } else {
-        label.classList.remove('active');
-        icon.innerHTML = '&#9734;';
+    if (label) {
+        label.classList.toggle('active', filterOnlyBookmarks);
+        label.setAttribute('aria-pressed', filterOnlyBookmarks ? 'true' : 'false');
     }
-    renderRecentsTable();
+    if (icon) icon.innerHTML = filterOnlyBookmarks ? '&#9733;' : '&#9734;';
+    nuovoFiltro();
 }
 
 // ===== Tag/etichette sui file (persistente in localStorage) =====
@@ -999,91 +1029,62 @@ var selectedTagFilters = [];  // Array di tag selezionati (AND filter)
 // Non si e' perso nulla: il tag veniva al 100% dal nome file, che e' gia'
 // ricercabile a testo libero. Il tagging MANUALE resta, qui sotto.
 
+// Finestra della pagina al posto del prompt() del browser ("localhost dice...").
+// Ritorna una Promise: true se i tag sono stati salvati.
 function promptAddTags(fileName, ev) {
     if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    if (!window.cammesChiedi) return Promise.resolve(false);
     var current = getTagsForFile(fileName).join(', ');
-    var raw = prompt(
-        'Tag per "' + fileName + '"\n' +
-        '(separati da virgola, max 20 caratteri ciascuno;\n' +
-        'compaiono anche sulla Scheda PDF della misura):',
-        current
-    );
-    if (raw === null) return;
-    // Sostituisce completamente i tag del file
-    var newTags = raw.split(',').map(function (t) { return normalizeTag(t); })
-                     .filter(function (t) { return t.length > 0; });
-    var all = loadAllTags();
-    if (newTags.length === 0) delete all[fileName];
-    else all[fileName] = newTags;
-    saveAllTags(all);
-    if (window.cammesToast) window.cammesToast({
-        kind: 'success', title: 'Tag aggiornati',
-        body: newTags.length === 0 ? 'Tutti i tag rimossi.' : newTags.join(', '),
-        duration: 2500
+    var usati = Object.keys(getAllTagsWithCount()).sort();
+    var testo = 'Misura <code>' + escapeHtml(fileName) + '</code><br>' +
+        'Scrivi i tag separati da virgola, al massimo 20 caratteri ciascuno: vengono salvati in minuscolo, ' +
+        'col trattino al posto degli spazi. ' +
+        '<b>I tag compaiono anche sulla Scheda PDF della misura</b>, quella che consegni al cliente.' +
+        (usati.length ? '<br>Tag gi&agrave; usati: ' + usati.map(escapeHtml).join(', ') : '');
+    return window.cammesChiedi('Tag della misura', testo, current, 'Salva i tag').then(function (raw) {
+        if (raw === null || raw === undefined) return false;
+        // Sostituisce completamente i tag del file (doppioni tolti)
+        var newTags = String(raw).split(',').map(function (t) { return normalizeTag(t); })
+                         .filter(function (t, k, arr) { return t.length > 0 && arr.indexOf(t) === k; });
+        var all = loadAllTags();
+        if (newTags.length === 0) delete all[fileName];
+        else all[fileName] = newTags;
+        saveAllTags(all);
+        if (window.cammesToast) window.cammesToast({
+            kind: 'success', title: 'Tag aggiornati',
+            body: newTags.length === 0 ? 'Tutti i tag tolti.' : escapeHtml(newTags.join(', ')),
+            duration: 2500
+        });
+        renderRecentsTable();
+        return true;
     });
-    renderRecentsTable();
 }
 
+// Togliere un tag chiede conferma. Prima un clic sull'etichetta la cancellava
+// subito e senza dirlo, mentre lo stesso clic nella riga "Tag:" filtrava.
+// Ritorna una Promise: true se il tag e' stato tolto.
 function clickRemoveTag(fileName, tag, ev) {
     if (ev) { ev.preventDefault(); ev.stopPropagation(); }
-    removeTagFromFile(fileName, tag);
-    renderRecentsTable();
+    if (!window.cammesConferma) return Promise.resolve(false);
+    return window.cammesConferma('Togliere il tag?',
+        'Togli il tag <b>' + escapeHtml(tag) + '</b> dalla misura <code>' + escapeHtml(fileName) + '</code>?',
+        'Togli il tag', false).then(function (si) {
+        if (!si) return false;
+        removeTagFromFile(fileName, tag);
+        renderRecentsTable();
+        return true;
+    });
 }
 
 function toggleTagFilter(tag) {
     var i = selectedTagFilters.indexOf(tag);
     if (i === -1) selectedTagFilters.push(tag);
     else selectedTagFilters.splice(i, 1);
-    renderRecentsTable();
+    nuovoFiltro();
 }
 
-// Render della card "Tag più usati" come bar chart orizzontale.
-// Auto-hide se non ci sono tag. Click su una barra applica il filtro tag.
-function renderTagStats() {
-    var counts = getAllTagsWithCount();
-    var card = document.getElementById('tagStatsCard');
-    var bars = document.getElementById('tagStatsBars');
-    if (!card || !bars) return;
-    var entries = Object.keys(counts).map(function (k) { return { tag: k, n: counts[k] }; });
-    if (entries.length === 0) {
-        card.style.display = 'none';
-        bars.innerHTML = '';
-        return;
-    }
-    entries.sort(function (a, b) { return b.n - a.n; });
-    var top = entries.slice(0, 8);
-    var maxN = top[0].n;
-    // SEC-03: righe costruite via DOM con textContent + addEventListener.
-    // Il nome del tag è contenuto utente e prima finiva sia nel markup che
-    // dentro onclick inline: escapeHtml non basta nel contesto onclick,
-    // perché il parser HTML ri-decodifica le entità prima dell'esecuzione JS.
-    bars.innerHTML = '';
-    top.forEach(function (e) {
-        var pct = maxN > 0 ? (e.n / maxN) * 100 : 0;
-        var active = selectedTagFilters.indexOf(e.tag) !== -1 ? ' active' : '';
-        var row = document.createElement('div');
-        row.className = 'tag-stats-row' + active;
-        row.title = 'Click per filtrare per ' + e.tag;
-        row.addEventListener('click', function () { toggleTagFilter(e.tag); });
-        var label = document.createElement('div');
-        label.className = 'tag-stats-label';
-        label.textContent = e.tag;
-        var barWrap = document.createElement('div');
-        barWrap.className = 'tag-stats-bar-wrap';
-        var bar = document.createElement('div');
-        bar.className = 'tag-stats-bar';
-        bar.style.width = pct.toFixed(1) + '%';
-        barWrap.appendChild(bar);
-        var count = document.createElement('div');
-        count.className = 'tag-stats-count';
-        count.textContent = e.n;
-        row.appendChild(label);
-        row.appendChild(barWrap);
-        row.appendChild(count);
-        bars.appendChild(row);
-    });
-    card.style.display = '';
-}
+// (Il riquadro "Tag piu' usati" non c'e' piu': era un secondo filtro per tag,
+// uguale alla riga "Tag:" dell'archivio, e spingeva l'archivio piu' in basso.)
 
 // Render dei chip filtro tag in cima alla tabella. Mostra solo tag
 // esistenti in almeno un file.
@@ -1125,14 +1126,14 @@ function renderTagFilters() {
         clr.className = 'tag-filter-chip';
         clr.style.background = 'transparent';
         clr.style.borderStyle = 'dashed';
-        clr.textContent = '× azzera';
+        clr.textContent = '× togli i filtri per tag';
         clr.addEventListener('click', clearTagFilters);
         row.appendChild(clr);
     }
 }
 function clearTagFilters() {
     selectedTagFilters = [];
-    renderRecentsTable();
+    nuovoFiltro();
 }
 window.promptAddTags = promptAddTags;
 window.clickRemoveTag = clickRemoveTag;
@@ -1148,6 +1149,19 @@ var searchQuery = '';
 var typeFilter = 'all';       // 'all' | 'alz' | 'pol' | 'other'
 var dateFilter = 'all';       // 'all' | 'today' | 'week' | 'month'
 var _searchDebounce = null;
+// Righe mostrate: le piu' recenti, poi "Mostra altre 50". Prima oltre le 50
+// righe le altre non si vedevano ("Affina i filtri per vedere gli altri").
+var PASSO_RIGHE = 50;
+var _limiteRighe = PASSO_RIGHE;
+// Un filtro cambiato riparte dalle prime righe.
+function nuovoFiltro() {
+    _limiteRighe = PASSO_RIGHE;
+    renderRecentsTable();
+}
+function mostraAltreRighe() {
+    _limiteRighe += PASSO_RIGHE;
+    renderRecentsTable();
+}
 
 function onSearchInput() {
     var el = document.getElementById('recentsSearch');
@@ -1155,68 +1169,208 @@ function onSearchInput() {
     var clear = document.getElementById('recentsSearchClear');
     if (clear) clear.classList.toggle('visible', searchQuery.length > 0);
     clearTimeout(_searchDebounce);
-    _searchDebounce = setTimeout(renderRecentsTable, 100);
+    _searchDebounce = setTimeout(nuovoFiltro, 100);
 }
 function clearSearch() {
     var el = document.getElementById('recentsSearch');
     if (el) el.value = '';
     searchQuery = '';
-    document.getElementById('recentsSearchClear').classList.remove('visible');
-    renderRecentsTable();
+    var clear = document.getElementById('recentsSearchClear');
+    if (clear) clear.classList.remove('visible');
+    nuovoFiltro();
 }
-function setTypeFilter(t) {
-    typeFilter = t;
+function segnaFiltroTipo(t) {
     Array.prototype.forEach.call(document.querySelectorAll('#typeFilters .chip-filter'), function (el) {
         el.classList.toggle('active', el.getAttribute('data-filter') === t);
     });
-    renderRecentsTable();
+}
+function setTypeFilter(t) {
+    typeFilter = t;
+    segnaFiltroTipo(t);
+    nuovoFiltro();
 }
 function setDateFilter(t) {
     dateFilter = t;
     Array.prototype.forEach.call(document.querySelectorAll('#dateFilters .chip-filter'), function (el) {
         el.classList.toggle('active', el.getAttribute('data-date') === t);
     });
-    renderRecentsTable();
+    nuovoFiltro();
+}
+// I filtri "Polare" e "Altri" compaiono solo se in archivio ci sono file di
+// quel tipo (la misura polare e' una funzione dismessa); senza, "Tutti" e
+// "Alzata" sono la stessa cosa e il gruppo non si mostra.
+function aggiornaFiltriTipo(files) {
+    var ci = { pol: false, other: false };
+    (files || []).forEach(function (f) {
+        if (f.type === 'pol') ci.pol = true;
+        else if (f.type === 'other') ci.other = true;
+    });
+    var gruppo = document.getElementById('typeFilters');
+    if (gruppo) {
+        gruppo.style.display = (ci.pol || ci.other) ? '' : 'none';
+        Array.prototype.forEach.call(gruppo.querySelectorAll('.chip-filter'), function (el) {
+            var t = el.getAttribute('data-filter');
+            if (t === 'pol' || t === 'other') el.style.display = ci[t] ? '' : 'none';
+        });
+    }
+    // un filtro rimasto acceso su un tipo che non c'e' piu' nasconderebbe tutto
+    if ((typeFilter === 'pol' && !ci.pol) || (typeFilter === 'other' && !ci.other) ||
+        (typeFilter === 'alz' && !ci.pol && !ci.other)) {
+        typeFilter = 'all';
+        segnaFiltroTipo('all');
+    }
+    return ci;
+}
+// Sempre per data, la piu' recente in cima. Prima i preferiti salivano sopra
+// tutto: la misura appena salvata poteva non essere la prima riga.
+function ordinaMisure(files) {
+    return (files || []).slice().sort(function (a, b) { return (b.mtime || 0) - (a.mtime || 0); });
+}
+// La ricerca guarda il nome della misura e i suoi tag (prima solo il nome).
+function corrispondeRicerca(nome, tags, q) {
+    q = String(q || '').trim().toLowerCase();
+    if (!q) return true;
+    if (String(nome || '').toLowerCase().indexOf(q) !== -1) return true;
+    var qTag = q.replace(/\s+/g, '-');   // nei tag gli spazi diventano trattini
+    return (tags || []).some(function (t) {
+        t = String(t).toLowerCase();
+        return t.indexOf(q) !== -1 || t.indexOf(qTag) !== -1;
+    });
 }
 window.toggleBookmark = toggleBookmark;
 window.toggleBookmarkFilter = toggleBookmarkFilter;
 
-// Apri preferiti (max 4 file _alz) in pagina Confronto via URL loader.
-// Filtra solo i file tipo 'alz' perché grafici.html supporta solo line
-// chart cartesiani (polare ha pagina dedicata).
+// ===== Dall'archivio alle altre pagine =====
+// Confronto legge ?files=a,b,c (al massimo 4), Analisi ?asp=...&sca=...
+var MAX_CONFRONTO = 4;
+function urlConfronto(nomi) {
+    return 'grafici.html?files=' + encodeURIComponent((nomi || []).slice(0, MAX_CONFRONTO).join(','));
+}
+function urlAnalisi(asp, sca) {
+    var p = [];
+    if (asp) p.push('asp=' + encodeURIComponent(asp));
+    if (sca) p.push('sca=' + encodeURIComponent(sca));
+    return 'analisi.html' + (p.length ? '?' + p.join('&') : '');
+}
+function vaiA(url) { window.location.href = url; }
+
+// ===== Selezione delle misure (casella su ogni riga) =====
+// Prima Analisi prendeva i file solo dalla finestra di Windows (dal secondo PC
+// la cartella dell'archivio non c'e') e "Confronta preferiti" apriva i primi 4
+// senza farli scegliere. Ora si spuntano le righe e si sceglie che cosa fare.
+var _selezionate = [];
+function statoSelezione(n) {
+    var nota = '';
+    if (n > MAX_CONFRONTO) nota = 'Confronto apre al massimo ' + MAX_CONFRONTO + ' misure: togli la spunta a ' + (n - MAX_CONFRONTO) + '.';
+    else if (n !== 2) nota = 'Per Analisi spunta 2 misure: l\'aspirazione e lo scarico dello stesso cilindro.';
+    return { visibile: n > 0, confronta: n >= 1 && n <= MAX_CONFRONTO, analizza: n === 2, nota: nota };
+}
+// el = la casella cliccata: se c'e' si aggiorna solo la sua riga (la tabella
+// non si ridisegna e la casella non perde il fuoco).
+function toggleSelezione(nome, si, el) {
+    // un vecchio file polare non si seleziona (non ha la casella: qui per sicurezza)
+    if (si && (_cachedFiles || []).some(function (f) { return f.name === nome && f.type === 'pol'; })) return;
+    var i = _selezionate.indexOf(nome);
+    if (si && i === -1) _selezionate.push(nome);
+    if (!si && i !== -1) _selezionate.splice(i, 1);
+    var riga = el && el.closest ? el.closest('tr') : null;
+    if (riga) {
+        riga.classList.toggle('selezionata', !!si);
+        aggiornaBarraSelezione();
+    } else {
+        renderRecentsTable();
+    }
+}
+function aggiornaBarraSelezione() {
+    var bar = document.getElementById('barraSelezione');
+    if (!bar) return;
+    var n = _selezionate.length, s = statoSelezione(n);
+    bar.hidden = !s.visibile;
+    var testo = document.getElementById('selTesto');
+    if (testo) testo.textContent = n === 1 ? '1 misura selezionata: ' + _selezionate[0]
+                                           : n + ' misure selezionate: ' + _selezionate.join(', ');
+    var conf = document.getElementById('selConfrontaBtn');
+    if (conf) conf.disabled = !s.confronta;
+    var an = document.getElementById('selAnalizzaBtn');
+    if (an) an.disabled = !s.analizza;
+    var nota = document.getElementById('selNota');
+    if (nota) nota.textContent = s.nota;
+}
+function confrontaSelezionate() {
+    if (!statoSelezione(_selezionate.length).confronta) return null;
+    var url = urlConfronto(_selezionate);
+    vaiA(url);
+    return url;
+}
+// Due misure spuntate: quale e' l'aspirazione lo dice l'operatore (il banco e'
+// universale: nessuna regola sul nome del file).
+function analizzaSelezionate() {
+    if (_selezionate.length !== 2 || !window.cammesDialog) return Promise.resolve(null);
+    var a = _selezionate[0], b = _selezionate[1];
+    return window.cammesDialog({
+        titolo: 'Quale delle due è l\'aspirazione?',
+        testo: 'Analisi studia un cilindro: una misura di <b>aspirazione</b> e una di <b>scarico</b>.<br>' +
+               'Scegli l\'aspirazione: l\'altra sar&agrave; lo scarico.',
+        tipo: 'info',
+        pulsanti: [
+            { testo: 'Aspirazione: ' + a, valore: 'a', stile: 'secondary' },
+            { testo: 'Aspirazione: ' + b, valore: 'b', stile: 'secondary' },
+            { testo: 'Annulla', valore: null, stile: 'secondary', annulla: true }
+        ]
+    }).then(function (r) {
+        var url = null;
+        if (r && r.scelta === 'a') url = urlAnalisi(a, b);
+        else if (r && r.scelta === 'b') url = urlAnalisi(b, a);
+        if (url) vaiA(url);
+        return url;
+    });
+}
+function deselezionaTutte() {
+    _selezionate = [];
+    renderRecentsTable();
+}
+window.confrontaSelezionate = confrontaSelezionate;
+window.analizzaSelezionate = analizzaSelezionate;
+window.deselezionaTutte = deselezionaTutte;
+
+// Scorciatoia: Confronto con le misure di alzata fra i preferiti (Confronto
+// lavora solo su quelle). Con piu' di 4 prima partiva un avviso nello stesso
+// istante del cambio pagina, che non si faceva in tempo a leggere: ora chiede.
 function openBookmarksInCompare() {
     var bookmarks = loadBookmarks();
     if (!bookmarks.length) {
         if (window.cammesToast) window.cammesToast({
             kind: 'warn', title: 'Nessun preferito',
-            body: 'Marca prima dei file con la <span style="color:var(--accent-2);">stella</span> per aggiungerli ai preferiti.',
+            body: 'Segna prima delle misure con la <span style="color:var(--accent-2);">stella</span>.',
             duration: 3500
         });
-        return;
+        return Promise.resolve(null);
     }
-    // Filtra solo _alz fra i preferiti (intersezione con archivio noto)
     var alzNames = [];
-    (_cachedFiles || []).forEach(function (f) {
+    ordinaMisure(_cachedFiles).forEach(function (f) {   // la piu' recente prima
         if (f.type === 'alz' && bookmarks.indexOf(f.name) !== -1) alzNames.push(f.name);
     });
     if (alzNames.length === 0) {
         if (window.cammesToast) window.cammesToast({
-            kind: 'warn', title: 'Nessun preferito alzata',
-            body: 'I preferiti non contengono file alzata (.scr). La pagina Confronto supporta solo profili cartesiani.',
+            kind: 'warn', title: 'Nessuna misura di alzata fra i preferiti',
+            body: 'Confronto lavora sulle misure di alzata (_alz nel nome).',
             duration: 4000
         });
-        return;
+        return Promise.resolve(null);
     }
-    var picked = alzNames.slice(0, 4);
-    if (alzNames.length > 4) {
-        if (window.cammesToast) window.cammesToast({
-            kind: 'info', title: 'Carico i primi 4 preferiti',
-            body: alzNames.length + ' preferiti totali, la pagina Confronto ne supporta max 4.',
-            duration: 3500
-        });
+    var url = urlConfronto(alzNames);
+    if (alzNames.length <= MAX_CONFRONTO || !window.cammesConferma) {
+        vaiA(url);
+        return Promise.resolve(url);
     }
-    var url = 'grafici.html?files=' + picked.map(encodeURIComponent).join(',');
-    window.location.href = url;
+    return window.cammesConferma('Troppi preferiti per Confronto',
+        'Fra i preferiti ci sono <b>' + alzNames.length + '</b> misure di alzata: Confronto ne apre al massimo ' + MAX_CONFRONTO + '.<br>' +
+        'Apro le ' + MAX_CONFRONTO + ' pi&ugrave; recenti? Per sceglierle tu, spunta le caselle delle righe e premi <b>Confronta i selezionati</b>.',
+        'Apri le ' + MAX_CONFRONTO + ' più recenti', false).then(function (si) {
+        if (!si) return null;
+        vaiA(url);
+        return url;
+    });
 }
 window.openBookmarksInCompare = openBookmarksInCompare;
 window.onSearchInput = onSearchInput;
@@ -1246,7 +1400,7 @@ function renderActivityChart(files) {
         var pct = (buckets[i] / maxVal) * 100;
         var dayDate = new Date(today.getTime() - (DAYS - 1 - i) * 86400000);
         var dayLabel = dayDate.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
-        var countLabel = buckets[i] === 0 ? 'nessuna' : buckets[i] + (buckets[i] === 1 ? ' scansione' : ' scansioni');
+        var countLabel = buckets[i] === 0 ? 'nessuna misura' : buckets[i] + (buckets[i] === 1 ? ' misura' : ' misure');
         barsHTML += '<div class="activity-bar" title="' + dayLabel + ': ' + countLabel + '">' +
                       '<span style="height:' + pct.toFixed(1) + '%"></span>' +
                       '<span class="activity-tip">' + dayLabel + ' &middot; ' + countLabel + '</span>' +
@@ -1265,64 +1419,82 @@ function renderActivityChart(files) {
 function fmtBytes(b) {
     if (b == null) return '--';
     if (b < 1024) return b + ' B';
-    if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
-    return (b / 1024 / 1024).toFixed(1) + ' MB';
+    if (b < 1024 * 1024) return num(b / 1024, 1) + ' KB';
+    return num(b / 1024 / 1024, 1) + ' MB';
 }
 function fmtDate(ms) {
     if (!ms) return '--';
     var d = new Date(ms);
     var now = new Date();
     var diffSec = (now - d) / 1000;
+    var ore = Math.floor(diffSec / 3600), giorni = Math.floor(diffSec / 86400);
     if (diffSec < 60)     return 'adesso';
     if (diffSec < 3600)   return Math.floor(diffSec / 60)  + ' min fa';
-    if (diffSec < 86400)  return Math.floor(diffSec / 3600) + ' h fa';
-    if (diffSec < 604800) return Math.floor(diffSec / 86400) + ' g fa';
+    if (diffSec < 86400)  return ore === 1 ? '1 ora fa' : ore + ' ore fa';
+    if (diffSec < 604800) return giorni === 1 ? '1 giorno fa' : giorni + ' giorni fa';
     return d.toLocaleDateString('it-IT') + ' ' + d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 }
 
 function loadRecents() {
     var wrap = document.getElementById('recentsWrap');
-    wrap.innerHTML = '<div class="home-recents-empty">Caricamento&hellip;</div>';
-    fetch('/api/files', { cache: 'no-store' })
+    // "Caricamento" solo la prima volta: dopo un'eliminazione o un ripristino
+    // l'elenco resta al suo posto finche' non arriva quello nuovo
+    if (wrap && !_cachedFiles.length) wrap.innerHTML = '<div class="home-recents-empty">Caricamento&hellip;</div>';
+    return fetch('/api/files', { cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (data) {
-            var files = data.files || [];
+            var files = ordinaMisure(data.files || []);
             _cachedFiles = files;   // popola la cache letta da renderRecentsTable/activity/count
-
-            // Stats
-            var nAlz = files.filter(function (f) { return f.type === 'alz'; }).length;
-            var nPol = files.filter(function (f) { return f.type === 'pol'; }).length;
-            document.getElementById('statTotal').textContent = files.length;
-            document.getElementById('statAlz').textContent   = nAlz;
-            document.getElementById('statPol').textContent   = nPol;
-            if (files.length > 0) {
-                document.getElementById('statLast').textContent = files[0].name;
-                document.getElementById('statLastDate').textContent = fmtDate(files[0].mtime);
-            } else {
-                document.getElementById('statLast').textContent = 'nessuno';
-                document.getElementById('statLastDate').textContent = ' ';
-            }
-
-            // Welcome message dinamico
-            var welcome = document.getElementById('homeWelcomeSub');
-            if (files.length === 0) {
-                welcome.innerHTML = 'Nessuna misurazione ancora salvata. Inizia da <a href="alzata.html" style="color:var(--accent);">Alzata</a> per scansionare la tua prima camma.';
-            } else {
-                welcome.textContent = files.length + ' misurazion' + (files.length === 1 ? 'e' : 'i') + ' salvat' + (files.length === 1 ? 'a' : 'e') + '. Ultima: ' + fmtDate(files[0].mtime) + '.';
-            }
-
-            // Activity chart + tabella (filtrata client-side)
+            // una misura spuntata e poi eliminata non resta selezionata
+            _selezionate = _selezionate.filter(function (n) {
+                return files.some(function (f) { return f.name === n && f.type !== 'pol'; });
+            });
+            renderHomeStats(files);
+            aggiornaFiltriTipo(files);
             renderActivityChart(files);
             renderRecentsTable();
+            return files;
         })
-        .catch(function (err) {
-            wrap.innerHTML = '<div class="home-recents-empty">Errore caricamento: ' + err.message + '</div>';
+        .catch(function () {
+            if (wrap) wrap.innerHTML = '<div class="home-recents-empty">Elenco non disponibile: il programma non risponde. ' +
+                'Controlla che CAMMES sia aperto (cammes.exe) e premi <b>Aggiorna elenco</b>.</div>';
+            var st = document.getElementById('homeStats');
+            if (st) st.textContent = 'Archivio: non disponibile (il programma non risponde).';
             if (window.cammesToast) {
-                window.cammesToast({ kind: 'err', title: 'Errore', body: 'Impossibile contattare il server.', duration: 3500 });
+                window.cammesToast({ kind: 'err', title: 'Il programma non risponde', body: 'Elenco delle misure non disponibile.', duration: 3500 });
             }
+            return null;
         });
 }
-window.addEventListener('DOMContentLoaded', loadRecents);
+window.addEventListener('DOMContentLoaded', function () { loadRecents(); });
+
+// Riga "Archivio" della riga di stato: quante misure e l'ultima, cliccabile
+// (apre la vista rapida). Vecchi file polari e altri file solo se ce ne sono.
+function renderHomeStats(files) {
+    files = files || [];
+    var conta = document.getElementById('archivioConteggio');
+    if (conta) conta.textContent = '· ' + files.length;
+    var el = document.getElementById('homeStats');
+    if (!el) return;
+    if (!files.length) {
+        el.innerHTML = 'Archivio vuoto: premi <b>Nuova misura</b> per misurare la prima camma.';
+        return;
+    }
+    var nPol = files.filter(function (f) { return f.type === 'pol'; }).length;
+    var nAltri = files.filter(function (f) { return f.type === 'other'; }).length;
+    var ultima = files[0];
+    el.innerHTML = 'In archivio: <b>' + files.length + '</b> ' + (files.length === 1 ? 'misura' : 'misure') + ' &middot; ultima: ';
+    var link = document.createElement('button');
+    link.type = 'button';
+    link.className = 'link-misura';
+    link.textContent = ultima.name;          // nome file: solo come testo
+    link.title = 'Apri la vista rapida di questa misura';
+    link.addEventListener('click', function () { openQuickView(ultima.name, ultima.type); });
+    el.appendChild(link);
+    el.appendChild(document.createTextNode(' (' + fmtDate(ultima.mtime) + ')' +
+        (nPol ? ' · vecchi file polari: ' + nPol : '') +
+        (nAltri ? ' · altri file: ' + nAltri : '')));
+}
 
 // renderRecentsTable: applica i filtri (search + tipo + date + bookmarks)
 // e disegna la tabella. Chiamato sia da loadRecents() che dai toggle dei
@@ -1347,11 +1519,15 @@ function renderRecentsTable() {
             if (!el) return;
             var name = el.getAttribute('data-name');
             switch (el.getAttribute('data-act')) {
-                case 'star':    toggleBookmark(name, e); break;
-                case 'open':    openQuickView(name, el.getAttribute('data-type')); break;
-                case 'del':     confirmDelete(name); break;
-                case 'tag-del': clickRemoveTag(name, el.getAttribute('data-tag'), e); break;
-                case 'tag-add': promptAddTags(name, e); break;
+                case 'star':       toggleBookmark(name, e); break;
+                case 'open':       openQuickView(name, el.getAttribute('data-type')); break;
+                case 'del':        confirmDelete(name); break;
+                case 'tag-filter': toggleTagFilter(el.getAttribute('data-tag')); break;
+                case 'tag-del':    clickRemoveTag(name, el.getAttribute('data-tag'), e); break;
+                case 'tag-add':    promptAddTags(name, e); break;
+                case 'sel':        toggleSelezione(name, el.checked, el); break;
+                case 'altre':      mostraAltreRighe(); break;
+                case 'azzera':     resetAllFilters(); break;
             }
         });
     }
@@ -1370,64 +1546,58 @@ function renderRecentsTable() {
     else if (dateFilter === 'month')   { dateThreshold = now - 30 * 86400000; }
 
     var allTags = loadAllTags();
-    var filtered = files.filter(function (f) {
+    // sempre per data (la piu' recente in cima): i preferiti hanno la stella ma
+    // non salgono sopra le altre
+    var filtered = ordinaMisure(files.filter(function (f) {
+        var fileTags = allTags[f.name] || [];
         if (filterOnlyBookmarks && !bookmarkSet[f.name]) return false;
         if (typeFilter !== 'all' && f.type !== typeFilter) return false;
         if (dateThreshold > 0 && f.mtime < dateThreshold) return false;
-        if (searchQuery && f.name.toLowerCase().indexOf(searchQuery) === -1) return false;
-        if (selectedTagFilters.length > 0) {
-            var fileTags = allTags[f.name] || [];
-            for (var k = 0; k < selectedTagFilters.length; k++) {
-                if (fileTags.indexOf(selectedTagFilters[k]) === -1) return false;
-            }
+        if (searchQuery && !corrispondeRicerca(f.name, fileTags, searchQuery)) return false;
+        for (var k = 0; k < selectedTagFilters.length; k++) {
+            if (fileTags.indexOf(selectedTagFilters[k]) === -1) return false;
         }
         return true;
-    });
+    }));
     renderTagFilters();
-    renderTagStats();
-    filtered.sort(function (a, b) {
-        var aMark = bookmarkSet[a.name] ? 1 : 0;
-        var bMark = bookmarkSet[b.name] ? 1 : 0;
-        if (aMark !== bMark) return bMark - aMark;
-        return b.mtime - a.mtime;
-    });
+    aggiornaBarraSelezione();
 
     if (countEl) {
-        if (filtered.length === files.length) countEl.textContent = files.length + ' tot';
-        else countEl.textContent = filtered.length + ' / ' + files.length + ' file';
+        if (filtered.length === files.length) countEl.textContent = files.length + (files.length === 1 ? ' misura' : ' misure');
+        else countEl.textContent = filtered.length + ' di ' + files.length;
     }
 
     if (filtered.length === 0) {
         var emptyMsg;
         if (files.length === 0) {
-            emptyMsg = 'Nessun file misura ancora salvato. Salva la prima scansione dalla pagina <a href="alzata.html">Alzata</a>.';
-        } else if (searchQuery || typeFilter !== 'all' || dateFilter !== 'all' || filterOnlyBookmarks) {
-            emptyMsg = 'Nessun file corrisponde ai filtri correnti. <a href="javascript:void(0)" onclick="resetAllFilters();" style="color:var(--accent);">Azzera tutti i filtri</a>.';
+            emptyMsg = 'Nessuna misura salvata. Premi <b>Nuova misura</b>, in alto, per misurare la prima camma.';
         } else {
-            emptyMsg = 'Nessun file da mostrare.';
+            // anche quando e' acceso solo un filtro per tag (prima: "Nessun file
+            // da mostrare.", senza modo di azzerare)
+            emptyMsg = 'Nessuna misura corrisponde alla ricerca o ai filtri. ' +
+                '<button type="button" class="link-misura" data-act="azzera">Azzera tutti i filtri</button>';
         }
         wrap.innerHTML = '<div class="home-recents-empty">' + emptyMsg + '</div>';
         return;
     }
 
-    // Limite di rendering (50 righe). Avviso se truncato.
-    var truncatedNote = '';
-    var displayed = filtered;
-    if (filtered.length > 50) {
-        displayed = filtered.slice(0, 50);
-        truncatedNote = '<div style="text-align:center;padding:8px;color:var(--text-muted);font-size:12px;">' +
-            'Mostrati primi 50 di ' + filtered.length + ' file. Affina i filtri per vedere gli altri.</div>';
-    }
+    // Le righe piu' recenti, poi "Mostra altre 50"
+    var displayed = filtered.slice(0, _limiteRighe);
+    var altre = filtered.length - displayed.length;
+    var piede = altre > 0
+        ? '<div class="righe-altre">Mostrate le ' + displayed.length + ' pi&ugrave; recenti di ' + filtered.length + '.' +
+          '<button type="button" class="home-action-btn" data-act="altre">Mostra altre ' + Math.min(PASSO_RIGHE, altre) + '</button></div>'
+        : '';
 
     var rows = displayed.map(function (f) {
-        var typeLabel = f.type === 'alz' ? 'alzata'
-                      : f.type === 'pol' ? 'polare'
-                      : 'altro';
         var safeName = escapeHtml(f.name);
         var safeType = escapeHtml(f.type);
         var bm = bookmarkSet[f.name];
-        var starChar = bm ? '&#9733;' : '&#9734;';
-        var starTitle = bm ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti';
+        var sel = _selezionate.indexOf(f.name) !== -1;
+        // il tipo si scrive solo quando non e' una misura di alzata (prima una
+        // colonna "Tipo" diceva sempre ALZATA)
+        var tipo = f.type === 'pol' ? ' <span class="type-pill pol">vecchio polare</span>'
+                 : f.type === 'other' ? ' <span class="type-pill other">altro file</span>' : '';
         // SEC-03: niente nomi file in stringhe JS inline — solo attributi
         // data-* (escapati con escapeHtml, che copre anche " e '); le azioni
         // le gestisce il listener delegato su #recentsWrap qui sopra.
@@ -1435,45 +1605,61 @@ function renderRecentsTable() {
         var tagsHtml = '<div class="file-tags">';
         fileTags.forEach(function (t) {
             var safeTag = escapeHtml(t);
-            tagsHtml += '<span class="tag-badge" title="Click per rimuovere il tag" data-act="tag-del" data-name="' + safeName + '" data-tag="' + safeTag + '">' + safeTag + '</span>';
+            tagsHtml += '<span class="tag-badge" data-act="tag-filter" data-tag="' + safeTag + '" title="Mostra solo le misure con questo tag">' + safeTag +
+                '<button type="button" class="tag-x" data-act="tag-del" data-name="' + safeName + '" data-tag="' + safeTag + '" title="Togli questo tag" aria-label="Togli il tag ' + safeTag + '">&times;</button></span>';
         });
-        tagsHtml += '<button class="tag-add-btn" title="Aggiungi/modifica tag" data-act="tag-add" data-name="' + safeName + '">+</button>';
+        tagsHtml += '<button type="button" class="tag-add-btn" title="Aggiungi o modifica i tag" data-act="tag-add" data-name="' + safeName + '">+ tag</button>';
         tagsHtml += '</div>';
-        return '<tr class="' + (bm ? 'bookmarked' : '') + '">' +
-            '<td><button class="star-btn' + (bm ? ' active' : '') + '" title="' + starTitle + '" data-act="star" data-name="' + safeName + '">' + starChar + '</button></td>' +
-            '<td><span class="type-pill ' + safeType + '">' + typeLabel + '</span></td>' +
+        // data completa e peso del file nel fumetto della colonna "Quando"
+        // (la colonna "Dim." in KB non serviva a chi misura)
+        var quando = new Date(f.mtime);
+        var dettaglio = (f.mtime && isFinite(quando.getTime()) ? quando.toLocaleString('it-IT') + ' · ' : '') + 'file di ' + fmtBytes(f.size);
+        // I vecchi file polari non vanno ne' in Confronto ne' in Analisi (li
+        // leggerebbero come alzate): niente casella, come nella vista rapida.
+        // Per le altre la casella sta in un'etichetta grande quanto la cella.
+        var cellaSel = f.type === 'pol'
+            ? '<td class="col-sel" title="I vecchi file polari non si mandano a Confronto n&eacute; ad Analisi"></td>'
+            : '<td class="col-sel"><label class="sel-area" title="Seleziona per Confronto o Analisi">' +
+              '<input type="checkbox" class="sel-riga" data-act="sel" data-name="' + safeName + '"' + (sel ? ' checked' : '') +
+              ' aria-label="Seleziona ' + safeName + '"></label></td>';
+        var apriTitolo = f.type === 'pol' ? 'Grafico, raggio massimo e Scheda PDF'
+                                          : 'Grafico, alzata massima, Scheda PDF, invio ad Analisi e a Confronto';
+        return '<tr class="' + (bm ? 'bookmarked' : '') + (sel ? ' selezionata' : '') + '">' +
+            cellaSel +
+            '<td class="col-star"><button type="button" class="star-btn' + (bm ? ' active' : '') + '" title="' + (bm ? 'Togli dai preferiti' : 'Aggiungi ai preferiti') + '" data-act="star" data-name="' + safeName + '">' + (bm ? '&#9733;' : '&#9734;') + '</button></td>' +
             '<td>' +
-              '<span class="fname" title="Click per anteprima" data-act="open" data-name="' + safeName + '" data-type="' + safeType + '">' + safeName + '</span>' +
+              '<span class="fname" title="Apri la vista rapida" data-act="open" data-name="' + safeName + '" data-type="' + safeType + '">' + safeName + '</span>' + tipo +
               tagsHtml +
             '</td>' +
-            '<td class="fsize">' + fmtBytes(f.size) + '</td>' +
-            '<td class="fdate">' + escapeHtml(fmtDate(f.mtime)) + '</td>' +
-            '<td style="text-align:right;white-space:nowrap;">' +
-              '<a class="home-action-btn" href="/api/file/' + encodeURIComponent(f.name) + '" target="_blank" download="' + safeName + '" title="Scarica il file .scr originale">&darr;</a>' +
-              '<a class="home-action-btn" href="/api/export-xlsx/' + encodeURIComponent(f.name) + '" title="Esporta in Excel (.xlsx): gradi e alzate + foglio Info. Comodo perché Windows tratta .scr come screensaver.">&#128202;</a>' +
-              '<button class="delete-btn" title="Elimina" data-act="del" data-name="' + safeName + '">&times;</button>' +
+            '<td class="fdate" title="' + escapeHtml(dettaglio) + '">' + escapeHtml(fmtDate(f.mtime)) + '</td>' +
+            '<td class="col-azioni">' +
+              '<button type="button" class="home-action-btn" data-act="open" data-name="' + safeName + '" data-type="' + safeType + '" title="' + apriTitolo + '">&#128065; Apri</button>' +
+              '<a class="home-action-btn" href="/api/file/' + encodeURIComponent(f.name) + '" download="' + safeName + '" title="Scarica il file della misura (.scr)">&darr; Scarica</a>' +
+              '<a class="home-action-btn" href="/api/export-xlsx/' + encodeURIComponent(f.name) + '" title="Gradi e alzate in un file Excel (.xlsx) che si apre con un doppio clic (Windows scambia il .scr per un salvaschermo)">&#128202; Excel</a>' +
+              '<button type="button" class="delete-btn" data-act="del" data-name="' + safeName + '" title="Sposta la misura nel cestino (recuperabile per 30 giorni)">&times; Elimina</button>' +
             '</td>' +
             '</tr>';
     }).join('');
     wrap.innerHTML = '<table class="home-recents-table">' +
-        '<thead><tr><th></th><th>Tipo</th><th>Nome file</th><th>Dim.</th><th>Quando</th><th></th></tr></thead>' +
-        '<tbody>' + rows + '</tbody></table>' + truncatedNote;
+        '<thead><tr><th class="col-sel" title="Seleziona per Confronto o Analisi">&#10003;</th><th class="col-star" title="Preferiti">&#9733;</th>' +
+        '<th>Misura</th><th>Quando</th><th class="col-azioni">Azioni</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table>' + piede;
 }
 window.renderRecentsTable = renderRecentsTable;
 
 function resetAllFilters() {
     searchQuery = ''; typeFilter = 'all'; dateFilter = 'all'; filterOnlyBookmarks = false;
+    selectedTagFilters = [];   // prima i filtri per tag restavano accesi
     var s = document.getElementById('recentsSearch'); if (s) s.value = '';
     var clear = document.getElementById('recentsSearchClear'); if (clear) clear.classList.remove('visible');
-    Array.prototype.forEach.call(document.querySelectorAll('#typeFilters .chip-filter'), function (el) {
-        el.classList.toggle('active', el.getAttribute('data-filter') === 'all');
-    });
+    segnaFiltroTipo('all');
     Array.prototype.forEach.call(document.querySelectorAll('#dateFilters .chip-filter'), function (el) {
         el.classList.toggle('active', el.getAttribute('data-date') === 'all');
     });
-    var lb = document.getElementById('filterBookmarkedLabel'); if (lb) lb.classList.remove('active');
+    var lb = document.getElementById('filterBookmarkedLabel');
+    if (lb) { lb.classList.remove('active'); lb.setAttribute('aria-pressed', 'false'); }
     var li = document.getElementById('filterBookmarkedIcon'); if (li) li.innerHTML = '&#9734;';
-    renderRecentsTable();
+    nuovoFiltro();
 }
 window.resetAllFilters = resetAllFilters;
 
@@ -1483,7 +1669,7 @@ function confirmDelete(fileName) {
     back.className = 'confirm-backdrop';
     back.innerHTML =
         // audit APP-13: dialogo modale annunciato agli screen reader
-        '<div class="confirm-modal" role="dialog" aria-modal="true" aria-label="Conferma eliminazione file">' +
+        '<div class="confirm-modal" role="dialog" aria-modal="true" aria-label="Eliminare la misura?">' +
         '  <div class="confirm-modal-icon">' +
         '    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
         '      <polyline points="3 6 5 6 21 6"/>' +
@@ -1491,14 +1677,14 @@ function confirmDelete(fileName) {
         '      <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>' +
         '    </svg>' +
         '  </div>' +
-        '  <div class="confirm-modal-title">Elimina file?</div>' +
+        '  <div class="confirm-modal-title">Eliminare la misura?</div>' +
         '  <div class="confirm-modal-body">' +
         '    Stai per eliminare <code>' + escapeHtml(fileName) + '</code>.<br>' +
-        '    Il file finisce nel <b>cestino</b> e resta recuperabile per <b>30 giorni</b> (pulsante &#9851; Cestino, nella barra delle Misurazioni), poi viene eliminato definitivamente.' +
+        '    La misura va nel <b>cestino</b> e resta recuperabile per <b>30 giorni</b> (pulsante &#9851; Cestino in <b>Sistema e manutenzione</b>, in fondo alla pagina), poi viene eliminata definitivamente.' +
         '  </div>' +
         '  <div class="confirm-modal-actions">' +
         '    <button class="btn btn-secondary" onclick="closeConfirm();">Annulla</button>' +
-        '    <button class="btn btn-danger" id="confirmDeleteBtn">Elimina</button>' +
+        '    <button class="btn btn-danger" id="confirmDeleteBtn">Sposta nel cestino</button>' +
         '  </div>' +
         '</div>';
     document.body.appendChild(back);
@@ -1510,7 +1696,8 @@ function confirmDelete(fileName) {
     back.onclick = function (e) { if (e.target === back) closeConfirm(); };
     document.addEventListener('keydown', escCloseConfirm);
 }
-function escCloseConfirm(e) { if (e.key === 'Escape') closeConfirm(); }
+// (un Esc gia' usato da una finestra della pagina aperta sopra non chiude anche questa)
+function escCloseConfirm(e) { if (e.key === 'Escape' && !e.defaultPrevented) closeConfirm(); }
 function closeConfirm() {
     var back = window._currentConfirm;
     if (!back) return;
@@ -1531,47 +1718,64 @@ function doDelete(fileName) {
                 var list = loadBookmarks();
                 var i = list.indexOf(fileName);
                 if (i !== -1) { list.splice(i, 1); saveBookmarks(list); }
+                // il cestino ora sta in "Sistema e manutenzione", chiuso: il
+                // messaggio dice dove e lo apre con un clic
                 if (window.cammesToast) window.cammesToast({
-                    kind: 'success', title: 'File eliminato', body: fileName, duration: 3000
+                    kind: 'success', title: 'Misura spostata nel cestino',
+                    body: escapeHtml(fileName) + ': recuperabile per 30 giorni. ' +
+                          '<a href="javascript:void(0)" onclick="window.apriCestino && apriCestino();">Apri il cestino</a>',
+                    duration: 8000
                 });
                 loadRecents();
+                aggiornaConteggioCestino();
             } else {
                 if (window.cammesToast) window.cammesToast({
-                    kind: 'err', title: 'Errore eliminazione',
-                    body: (res.body && res.body.error) || 'Risposta inattesa dal server', duration: 4000
+                    kind: 'err', title: 'Eliminazione non riuscita',
+                    body: escapeHtml((res.body && res.body.error) || 'risposta inattesa del programma'), duration: 5000
                 });
             }
         })
-        .catch(function (err) {
+        .catch(function () {
             if (window.cammesToast) window.cammesToast({
-                kind: 'err', title: 'Errore di rete', body: err.message, duration: 4000
+                kind: 'err', title: 'Il programma non risponde', body: 'La misura non è stata eliminata. Controlla che CAMMES sia aperto e riprova.', duration: 5000
             });
         });
 }
 
-// ===== SVUOTA ARCHIVIO: elimina TUTTI i file di misura (doppia conferma) =====
-// Cancella ogni .scr in prove/ via l'API DELETE già esistente, poi ripulisce
-// tag e preferiti dei file eliminati. Irreversibile: per questo chiede due
-// conferme esplicite con il conteggio reale.
+// ===== SVUOTA ARCHIVIO: sposta TUTTE le misure nel cestino (doppia conferma) =====
+// Sposta ogni file di prove/ nel cestino via l'API DELETE gia' esistente, poi
+// ripulisce tag e preferiti di quelle misure. Chiede due conferme con il
+// conteggio reale, in finestre della pagina (prima: finestre del browser).
 async function clearArchive() {
     var files = [];
     try {
         var resp = await fetch('/api/files', { cache: 'no-store' });
         files = ((await resp.json()).files || []).map(function (f) { return f.name; });
     } catch (e) {
-        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Errore di rete', body: e.message, duration: 4000 });
-        return;
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Il programma non risponde', body: 'Archivio non svuotato: controlla che CAMMES sia aperto e riprova.', duration: 5000 });
+        return false;
     }
     if (files.length === 0) {
-        if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Archivio già vuoto', body: 'Nessun file di misura da eliminare.', duration: 3000 });
-        return;
+        if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Archivio già vuoto', body: 'Nessuna misura da spostare nel cestino.', duration: 3000 });
+        return false;
     }
-    // Il testo dice quello che succede davvero: i file vanno nel CESTINO (il
-    // server li sposta in prove/.trash) e si recuperano per 30 giorni; si
+    if (!window.cammesConferma) return false;
+    // Il testo dice quello che succede davvero: le misure vanno nel CESTINO (il
+    // server le sposta in prove/.trash) e si recuperano per 30 giorni; si
     // perdono subito solo tag e preferiti. Prima diceva "per sempre" e "NON è
     // reversibile", contraddicendo il fumetto del pulsante.
-    if (!window.confirm('Stai per spostare nel CESTINO tutti i ' + files.length + ' file di misura dell\'archivio.\n\nRestano recuperabili per 30 giorni (pulsante Cestino), poi vengono eliminati definitivamente.\nTag e preferiti di questi file si perdono SUBITO.\n\nOK per continuare, Annulla per fermarti.')) return;
-    if (!window.confirm('CONFERMA\n\nSpostare nel cestino ' + files.length + ' file e cancellare i loro tag e preferiti?')) return;
+    var n = files.length, misure = n === 1 ? '1 misura' : n + ' misure';
+    var primo = await window.cammesConferma('Svuotare l\'archivio?',
+        'Stai per spostare nel <b>CESTINO</b> ' + (n === 1 ? 'l\'unica misura' : 'tutte le <b>' + n + '</b> misure') + ' dell\'archivio.<br>' +
+        'Restano recuperabili per 30 giorni (pulsante Cestino, qui in Sistema e manutenzione), poi vengono eliminate definitivamente.<br>' +
+        '<b>I tag e i preferiti di queste misure si perdono subito</b> e non tornano col ripristino.<br>' +
+        'Prima conviene scaricare il Backup completo (ZIP).',
+        'Continua', true);
+    if (!primo) return false;
+    var secondo = await window.cammesConferma('Conferma',
+        'Spostare nel cestino ' + misure + ' e cancellare i loro tag e preferiti?',
+        'Sposta nel cestino', true);
+    if (!secondo) return false;
 
     var okCount = 0, failed = [];
     for (var i = 0; i < files.length; i++) {
@@ -1589,13 +1793,16 @@ async function clearArchive() {
         saveBookmarks(bm);
     } catch (e3) {}
     loadRecents();
+    aggiornaConteggioCestino();
     if (window.cammesToast) {
+        var spostati = okCount === 1 ? '1 file di misura spostato nel cestino' : okCount + ' file di misura spostati nel cestino';
         if (failed.length === 0) {
-            window.cammesToast({ kind: 'success', title: 'Archivio svuotato', body: okCount + ' file spostati nel cestino (recuperabili per 30 giorni); tag e preferiti ripuliti.', duration: 5000 });
+            window.cammesToast({ kind: 'success', title: 'Archivio svuotato', body: spostati + ', recuperabili per 30 giorni. Tag e preferiti di queste misure sono stati tolti.', duration: 6000 });
         } else {
-            window.cammesToast({ kind: 'warn', title: 'Svuotato con errori', body: okCount + ' eliminati, ' + failed.length + ' falliti: ' + failed.slice(0, 3).join(', ') + (failed.length > 3 ? '…' : ''), duration: 7000 });
+            window.cammesToast({ kind: 'warn', title: 'Archivio svuotato solo in parte', body: spostati + '; ' + failed.length + ' non spostati: ' + escapeHtml(failed.slice(0, 3).join(', ')) + (failed.length > 3 ? '…' : ''), duration: 8000 });
         }
     }
+    return failed.length === 0;
 }
 window.confirmDelete = confirmDelete;
 window.closeConfirm  = closeConfirm;
@@ -1706,12 +1913,12 @@ function openQuickView(fileName, fileType) {
     var back = document.createElement('div');
     back.className = 'quickview-backdrop';
     var safeName = escapeHtml(fileName);
-    var subtitle = fileType === 'alz' ? 'Profilo alzata cartesiano'
-                  : fileType === 'pol' ? 'Profilo polare'
-                  : 'File misurazione';
+    var subtitle = fileType === 'alz' ? 'Misura di alzata'
+                  : fileType === 'pol' ? 'Vecchio file polare'
+                  : 'File di misura';
     back.innerHTML =
         // audit APP-13: dialogo modale annunciato agli screen reader
-        '<div class="quickview-modal" role="dialog" aria-modal="true" aria-label="Anteprima file">' +
+        '<div class="quickview-modal" role="dialog" aria-modal="true" aria-label="Vista rapida della misura">' +
         '  <div class="quickview-header">' +
         '    <div>' +
         '      <div class="quickview-subtitle">' + escapeHtml(subtitle) + '</div>' +
@@ -1720,7 +1927,7 @@ function openQuickView(fileName, fileType) {
         '    <button class="quickview-close" onclick="closeQuickView();" aria-label="Chiudi">&times;</button>' +
         '  </div>' +
         '  <div id="quickviewBody">' +
-        '    <div class="quickview-loading">Caricamento file&hellip;</div>' +
+        '    <div class="quickview-loading">Caricamento della misura&hellip;</div>' +
         '  </div>' +
         '</div>';
     document.body.appendChild(back);
@@ -1739,12 +1946,15 @@ function openQuickView(fileName, fileType) {
         .catch(function (err) {
             var body = document.getElementById('quickviewBody');
             if (body) {
-                body.innerHTML = '<div class="quickview-loading" style="color:var(--danger);">Errore caricamento: ' + escapeHtml(err.message) + '</div>';
+                body.innerHTML = '<div class="quickview-loading" style="color:var(--danger);">Misura non leggibile: ' +
+                    (/404/.test(err.message) ? 'il file non c&rsquo;&egrave; pi&ugrave; nell&rsquo;archivio.' : 'il programma non risponde.') + '</div>';
             }
         });
 }
 
-function _qvEscClose(e) { if (e.key === 'Escape') closeQuickView(); }
+// (un Esc gia' usato da una finestra della pagina aperta sopra, per esempio
+// quella dei tag, non chiude anche la vista rapida)
+function _qvEscClose(e) { if (e.key === 'Escape' && !e.defaultPrevented) closeQuickView(); }
 
 function _renderQuickView(fileName, fileType, text) {
     var body = document.getElementById('quickviewBody');
@@ -1752,7 +1962,7 @@ function _renderQuickView(fileName, fileType, text) {
 
     var parsed = fileType === 'pol' ? parsePolFile(text) : parseAlzFile(text);
     if (parsed.count === 0) {
-        body.innerHTML = '<div class="quickview-loading" style="color:var(--danger);">File vuoto o formato non riconosciuto.</div>';
+        body.innerHTML = '<div class="quickview-loading" style="color:var(--danger);">Il file della misura &egrave; vuoto o non si riconosce.</div>';
         return;
     }
 
@@ -1769,21 +1979,34 @@ function _renderQuickView(fileName, fileType, text) {
         '<div class="quickview-stat-label" style="margin-bottom: var(--sp-2);">' + escapeHtml(dataDellaMisura(meta, nelElenco && nelElenco.mtime)) + '</div>' +
         avvisi.map(function (a) { return '<div style="color: var(--danger); font-weight: 700; margin-bottom: var(--sp-2);">' + escapeHtml(a) + '</div>'; }).join('') +
         '<div style="margin-bottom: var(--sp-3);">' +
-        '  <div class="quickview-stat-label">Tag</div>' +
+        '  <div class="quickview-stat-label">Tag (compaiono sulla Scheda PDF)</div>' +
         '  <div class="file-tags" id="qvTagsRow"></div>' +
         '</div>' +
         '<div class="quickview-stats">' +
-        '  <div class="quickview-stat"><div class="quickview-stat-label">N. punti</div><div class="quickview-stat-value">' + parsed.count + '</div></div>' +
-        '  <div class="quickview-stat"><div class="quickview-stat-label">Max ' + (fileType === 'pol' ? 'raggio' : 'alzata') + '</div><div class="quickview-stat-value">' + parsed.max.lift.toFixed(3) + ' mm</div></div>' +
-        '  <div class="quickview-stat"><div class="quickview-stat-label">Grado picco</div><div class="quickview-stat-value">' + parsed.max.deg.toFixed(0) + '&deg;</div></div>' +
+        '  <div class="quickview-stat"><div class="quickview-stat-label">Punti misurati</div><div class="quickview-stat-value">' + parsed.count + '</div></div>' +
+        '  <div class="quickview-stat"><div class="quickview-stat-label">' + (fileType === 'pol' ? 'Raggio massimo' : 'Alzata massima') + '</div><div class="quickview-stat-value">' + num(parsed.max.lift, 3) + ' mm</div></div>' +
+        '  <div class="quickview-stat"><div class="quickview-stat-label">Posizione del picco sul banco</div><div class="quickview-stat-value">' + testoGradi(parsed.max.deg) + '</div>' +
+        '    <div class="quickview-stat-nota">non &egrave; la fasatura</div></div>' +
         '</div>' +
         '<div class="quickview-chart-wrap"><canvas id="quickviewCanvas"></canvas></div>' +
+        // Comandi in fondo, sempre in vista anche quando la finestra scorre.
+        // Dall'archivio ad Analisi e Confronto senza ripescare il file dal
+        // disco: etichette corte, per stare su una riga sola. I vecchi file
+        // polari non ci vanno (li leggerebbero come alzate).
+        '<div class="quickview-piede">' +
+        (fileType === 'pol' ? '' :
         '<div class="quickview-actions">' +
+        '  <span class="qv-apri">Apri in</span>' +
+        '  <a class="btn btn-accent" href="' + escapeHtml(urlAnalisi(fileName, null)) + '" title="Apre Analisi con questa misura come aspirazione; lo scarico lo scegli in Analisi">Analisi: aspirazione</a>' +
+        '  <a class="btn btn-accent" href="' + escapeHtml(urlAnalisi(null, fileName)) + '" title="Apre Analisi con questa misura come scarico; l&rsquo;aspirazione la scegli in Analisi">Analisi: scarico</a>' +
+        '  <a class="btn btn-accent" href="' + escapeHtml(urlConfronto([fileName])) + '" title="Apre Confronto con questa misura gi&agrave; caricata">Confronto</a>' +
+        '</div>') +
+        '<div class="quickview-actions">' +
+        '  <button type="button" class="btn btn-secondary" id="qvPdfBtn" title="Scheda tecnica PDF di questa misura, da consegnare al cliente">&#128196; Scheda PDF</button>' +
+        '  <a class="btn btn-secondary" href="/api/export-xlsx/' + encodeURIComponent(fileName) + '" title="Gradi e alzate in un file Excel (.xlsx), con un foglio dei dati della misura">&#128202; Excel</a>' +
         '  <a class="btn btn-secondary" href="/api/file/' + encodeURIComponent(fileName) + '" download="' + safeName + '">&darr; Scarica</a>' +
-        '  <a class="btn btn-secondary" href="/api/export-xlsx/' + encodeURIComponent(fileName) + '" title="Esporta gradi e alzate in un file Excel (.xlsx) con foglio Info">&#128202; Excel</a>' +
-        '  <button class="btn btn-secondary" id="qvPdfBtn" title="Esporta scheda tecnica PDF di questo file">&#128196; Scheda PDF</button>' +
-        '  <a class="btn btn-accent" href="grafici.html?files=' + encodeURIComponent(fileName) + '" title="Apri pagina Confronto con questo file già caricato">Apri in Confronto</a>' +
-        '  <button class="btn btn-secondary" onclick="closeQuickView();">Chiudi</button>' +
+        '  <button type="button" class="btn btn-secondary" onclick="closeQuickView();">Chiudi</button>' +
+        '</div>' +
         '</div>';
 
     _refreshQuickViewTags(fileName);
@@ -1812,12 +2035,14 @@ function _renderQuickView(fileName, fileType, text) {
         },
         options: fileType === 'pol' ? {
             responsive: true, maintainAspectRatio: false,
+            locale: 'it-IT',   // numeri con la virgola anche sugli assi e nei fumetti
             animation: { animateRotate: false, duration: 0 },
             plugins: { legend: { display: false } },
             scales: { r: { ticks: { color: text, backdropColor: 'transparent' },
                            grid: { color: grid }, angleLines: { color: grid }, startAngle: 0 } }
         } : {
             responsive: true, maintainAspectRatio: false,
+            locale: 'it-IT',   // numeri con la virgola anche sugli assi e nei fumetti
             animation: { duration: 400 },
             plugins: { legend: { labels: { color: text } }, tooltip: { mode: 'index', intersect: false } },
             interaction: { mode: 'nearest', intersect: false },
@@ -1852,22 +2077,28 @@ function _refreshQuickViewTags(fileName) {
     row.innerHTML = '';
     getTagsForFile(fileName).forEach(function (t) {
         var badge = document.createElement('span');
-        badge.className = 'tag-badge';
-        badge.title = 'Rimuovi';
-        badge.textContent = t;
-        badge.addEventListener('click', function (ev) {
-            clickRemoveTag(fileName, t, ev);
-            _refreshQuickViewTags(fileName);
+        badge.className = 'tag-badge statico';
+        badge.appendChild(document.createTextNode(t));
+        // la x toglie il tag dopo una conferma (l'etichetta da sola non fa niente)
+        var x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'tag-x';
+        x.title = 'Togli questo tag';
+        x.setAttribute('aria-label', 'Togli il tag ' + t);
+        x.innerHTML = '&times;';
+        x.addEventListener('click', function (ev) {
+            clickRemoveTag(fileName, t, ev).then(function () { _refreshQuickViewTags(fileName); });
         });
+        badge.appendChild(x);
         row.appendChild(badge);
     });
     var add = document.createElement('button');
+    add.type = 'button';
     add.className = 'tag-add-btn';
-    add.title = 'Aggiungi/modifica tag';
-    add.textContent = '+';
+    add.title = 'Aggiungi o modifica i tag';
+    add.textContent = '+ tag';
     add.addEventListener('click', function (ev) {
-        promptAddTags(fileName, ev);
-        _refreshQuickViewTags(fileName);
+        promptAddTags(fileName, ev).then(function () { _refreshQuickViewTags(fileName); });
     });
     row.appendChild(add);
 }
@@ -2045,7 +2276,7 @@ var HOME_SONGS = {
         ]
     },
     custom: {
-        title: "Custom (scrivi tu)",
+        title: "Scrivi tu",
         emoji: "✏️",
         sub: "Compositore",
         color: "#b14cff",
@@ -2103,17 +2334,17 @@ function openHomeConcert() {
         '  </div>' +
         '  <div class="confirm-modal-title">Concerto col motore</div>' +
         '  <div class="confirm-modal-body">' +
-        '    Lo stepper esegue brani modulando la frequenza dei pulsi PUL.<br>' +
-        '    Scegli un brano e ascolta il motore suonarlo. <b>Tieni d\'occhio l\'albero</b> &mdash; alterna direzione automaticamente per non scappare.' +
+        '    Il motore del banco suona dei brani cambiando la velocit&agrave; dei passi.<br>' +
+        '    Scegli un brano. <b>Tieni d\'occhio l\'albero</b>: il motore cambia verso ogni poche note per non girare troppo.' +
         '  </div>' +
-        '  <div id="concertWarn" class="concert-disconnect-warn">Server offline o motore non connesso.</div>' +
+        '  <div id="concertWarn" class="concert-disconnect-warn">Il programma non risponde o l\'Arduino non &egrave; collegato.</div>' +
         '  <div class="concert-grid">' + tiles + '</div>' +
         '  <div class="concert-volume">' +
         '    <span class="concert-volume-label">&#128266; Volume</span>' +
         '    <input type="range" min="50" max="90" step="5" id="concertVolume" class="concert-volume-slider" oninput="onConcertVolumeChange();">' +
         '    <span class="concert-volume-value" id="concertVolumeVal">70%</span>' +
         '  </div>' +
-        '  <div class="concert-volume-hint">Pi&ugrave; alto = pi&ugrave; vibrazione meccanica (e suono). Oltre 80% scalda il driver: usare a brevi raffiche.</div>' +
+        '  <div class="concert-volume-hint">Pi&ugrave; alto = pi&ugrave; vibrazione (e suono). Oltre l\'80% scalda l\'elettronica del motore: solo per poco.</div>' +
         '  <div class="concert-now-playing" id="concertNowPlaying">&nbsp;</div>' +
         '  <div class="confirm-modal-actions">' +
         '    <button class="btn btn-secondary" onclick="closeHomeConcert();">Chiudi</button>' +
@@ -2143,7 +2374,7 @@ function openHomeConcert() {
         var w = document.getElementById('concertWarn'); if (w) w.style.display = 'block';
     }
 }
-function _concertEsc(e) { if (e.key === 'Escape') closeHomeConcert(); }
+function _concertEsc(e) { if (e.key === 'Escape' && !e.defaultPrevented) closeHomeConcert(); }
 function closeHomeConcert() {
     stopHomeConcert();
     var m = document.getElementById('concertModal');
@@ -2195,36 +2426,35 @@ async function playHomeSong(key) {
     var song = HOME_SONGS[key];
     if (!song) return;
 
-    // Caso speciale "custom": chiedi all'utente le note
+    // Caso speciale "Scrivi tu": chiedi all'utente le note (finestra della
+    // pagina al posto del prompt() del browser)
     if (key === 'custom') {
         var saved = '';
         try { saved = localStorage.getItem('cammes-concert-custom') || ''; } catch (e) {}
-        var raw = prompt(
-            'Compositore — scrivi le note separate da spazio:\n' +
-            'Esempio semplice:  C4 E4 G4 C5\n' +
-            'Con durate:        C4:1 E4:1 G4:2 _:0.5 C5:2\n' +
-            'Note disponibili: C3..B5 + diesis (C#4, D#4, F#4, G#4, A#4 e ottava 5)\n' +
-            '_ = pausa, durata 1 = quarter (~350 ms)',
-            saved || 'C4 D4 E4 F4 G4 A4 B4 C5:2'
-        );
+        var raw = window.cammesChiedi ? await window.cammesChiedi('Scrivi la tua melodia',
+            'Note separate da spazio, per esempio <code>C4 E4 G4 C5</code>.<br>' +
+            'Con la durata dopo i due punti: <code>C4:1 E4:1 G4:2 _:0.5 C5:2</code>.<br>' +
+            'Note da C3 a B5, con i diesis (C#4, D#4, F#4, G#4, A#4 e gli stessi nell\'ottava 5). ' +
+            '<code>_</code> &egrave; una pausa; durata 1 = circa 350 ms.',
+            saved || 'C4 D4 E4 F4 G4 A4 B4 C5:2', 'Suona') : null;
         if (raw === null) return;  // utente ha annullato
         try { localStorage.setItem('cammes-concert-custom', raw); } catch (e) {}
         var parsed = _parseCustomNotes(raw);
         if (parsed.length === 0) {
             if (window.cammesToast) window.cammesToast({
                 kind: 'warn', title: 'Nessuna nota valida',
-                body: 'Verifica la sintassi: nome nota + ottava (es. C4) separati da spazio.',
+                body: 'Scrivi il nome della nota con l\'ottava (per esempio C4), separate da spazio.',
                 duration: 4000
             });
             return;
         }
-        song = { title: 'Composizione custom', baseMs: 350, notes: parsed };
+        song = { title: 'La tua melodia', baseMs: 350, notes: parsed };
     }
 
     if (!concertWs || concertWs.readyState !== 1) {
         if (window.cammesToast) window.cammesToast({
-            kind: 'err', title: 'Server non connesso',
-            body: 'WebSocket verso il motore non disponibile. Verifica che cammes_server.js sia in esecuzione.',
+            kind: 'err', title: 'Banco non collegato',
+            body: 'Il collegamento col banco non è disponibile: controlla che CAMMES sia aperto e riprova.',
             duration: 4000
         });
         return;
@@ -2279,10 +2509,11 @@ window.closeHomeConcert = closeHomeConcert;
 window.playHomeSong     = playHomeSong;
 window.stopHomeConcert  = stopHomeConcert;
 
-// ===== Backup/Restore metadati =====
-// Esporta i contenuti di localStorage (tag, bookmark, posizioni, prefs)
-// come file JSON unico. Restore inverso: legge un JSON e li ripristina.
-// Non tocca i file .scr — per quelli si fa backup manuale della cartella prove/.
+// ===== Esporta / Ripristina etichette (prima "Export / Import metadati") =====
+// Esporta i contenuti di localStorage (tag, preferiti, posizioni memorizzate,
+// preferenze) come file JSON unico. Il ripristino legge quel file. Non tocca le
+// misure: per quelle c'e' il Backup completo (ZIP), che contiene anche tag e
+// preferiti (settings.json).
 function exportMetadata() {
     var data = {
         cammes_backup_version: 1,
@@ -2309,16 +2540,16 @@ function exportMetadata() {
     data.stats_at_export = stats;
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     var ts = new Date().toISOString().substring(0, 16).replace(/[T:]/g, '-');
-    var fname = 'cammes-backup-' + ts + '.json';
+    var fname = 'cammes-etichette-' + ts + '.json';
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url; a.download = fname;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(url); }, 200);
     if (window.cammesToast) window.cammesToast({
-        kind: 'success', title: 'Backup esportato',
-        body: fname + ' &middot; ' + stats.tagsCount + ' file taggati, ' +
-              stats.bookmarksCount + ' preferiti, ' + stats.savedPositionsCount + ' posizioni',
+        kind: 'success', title: 'Etichette esportate',
+        body: fname + ' &middot; ' + stats.tagsCount + ' misure con tag, ' +
+              stats.bookmarksCount + ' preferiti, ' + stats.savedPositionsCount + ' posizioni memorizzate',
         duration: 5000
     });
 }
@@ -2329,57 +2560,72 @@ function importMetadataFile(ev) {
     var file = input.files[0];
     var reader = new FileReader();
     reader.onload = function (e) {
+        var data;
         try {
-            var data = JSON.parse(e.target.result);
-            if (!data.cammes_backup_version) throw new Error('Non sembra un file di backup CAMMES');
-            // Conferma sovrascrittura
-            var msg = 'Stai per ripristinare:\n' +
-                      '• ' + Object.keys(data.tags || {}).length + ' file taggati\n' +
-                      '• ' + (data.bookmarks || []).length + ' preferiti\n' +
-                      '• ' + (data.savedPositions || []).length + ' posizioni salvate\n' +
-                      '• preferenze (tema, wizard, volume concerto...)\n\n' +
-                      'Sovrascrivi i metadati correnti?';
-            if (!confirm(msg)) { input.value = ''; return; }
-
-            if (data.tags) localStorage.setItem('cammes-tags-v1', JSON.stringify(data.tags));
-            if (data.bookmarks) localStorage.setItem('cammes-bookmarks-v1', JSON.stringify(data.bookmarks));
-            if (data.savedPositions) localStorage.setItem('cammes-saved-positions', JSON.stringify(data.savedPositions));
-            if (data.preferences) {
-                var p = data.preferences;
-                if (p.theme)         localStorage.setItem('cammes-theme', p.theme);
-                if (p.onboarded)     localStorage.setItem('cammes-onboarded-v1', p.onboarded);
-                if (p.concertVolume) localStorage.setItem('cammes-concert-volume', p.concertVolume);
-                if (p.concertCustom) localStorage.setItem('cammes-concert-custom', p.concertCustom);
-                if (p.theme) document.documentElement.setAttribute('data-theme', p.theme);
-            }
+            data = JSON.parse(e.target.result);
+        } catch (err) { data = null; }
+        if (!data || !data.cammes_backup_version) {
             input.value = '';
             if (window.cammesToast) window.cammesToast({
-                kind: 'success', title: 'Metadati ripristinati',
-                body: 'Aggiornamento UI in corso&hellip;', duration: 2500
+                kind: 'err', title: 'File non valido',
+                body: 'Il file scelto non &egrave; un file di etichette di CAMMES (si crea con Esporta etichette).', duration: 5000
             });
-            // Aggiorna la UI senza reload completo
-            setTimeout(function () { loadRecents(); }, 300);
-        } catch (err) {
-            if (window.cammesToast) window.cammesToast({
-                kind: 'err', title: 'Errore lettura backup', body: err.message, duration: 5000
-            });
-            input.value = '';
+            return;
         }
+        // Conferma in una finestra della pagina (prima: confirm() del browser)
+        var testo = 'Il file contiene <b>' + Object.keys(data.tags || {}).length + '</b> misure con tag, ' +
+            '<b>' + (data.bookmarks || []).length + '</b> preferiti, ' +
+            '<b>' + (data.savedPositions || []).length + '</b> posizioni memorizzate e le preferenze dello schermo.<br>' +
+            'Sostituiscono quelli di adesso.';
+        var chiedi = window.cammesConferma
+            ? window.cammesConferma('Ripristinare le etichette?', testo, 'Ripristina', false)
+            : Promise.resolve(false);
+        chiedi.then(function (si) {
+            input.value = '';
+            if (!si) return;
+            try {
+                if (data.tags) localStorage.setItem('cammes-tags-v1', JSON.stringify(data.tags));
+                if (data.bookmarks) localStorage.setItem('cammes-bookmarks-v1', JSON.stringify(data.bookmarks));
+                if (data.savedPositions) localStorage.setItem('cammes-saved-positions', JSON.stringify(data.savedPositions));
+                if (data.preferences) {
+                    var p = data.preferences;
+                    if (p.theme)         localStorage.setItem('cammes-theme', p.theme);
+                    if (p.onboarded)     localStorage.setItem('cammes-onboarded-v1', p.onboarded);
+                    if (p.concertVolume) localStorage.setItem('cammes-concert-volume', p.concertVolume);
+                    if (p.concertCustom) localStorage.setItem('cammes-concert-custom', p.concertCustom);
+                    if (p.theme) document.documentElement.setAttribute('data-theme', p.theme);
+                }
+            } catch (err2) {
+                if (window.cammesToast) window.cammesToast({
+                    kind: 'err', title: 'Ripristino non riuscito',
+                    body: 'Il browser non ha permesso di salvare le etichette.', duration: 5000
+                });
+                return;
+            }
+            // anche sul programma: prima tag e preferiti ripristinati restavano
+            // solo in questo browser e gli altri PC non li vedevano
+            scheduleMetaSync();
+            if (window.cammesToast) window.cammesToast({
+                kind: 'success', title: 'Etichette ripristinate',
+                body: 'Ricarico l&rsquo;elenco delle misure.', duration: 2500
+            });
+            setTimeout(function () { loadRecents(); }, 300);
+        });
     };
     reader.readAsText(file);
 }
 window.exportMetadata = exportMetadata;
 window.importMetadataFile = importMetadataFile;
 
-// ===== Scheda tecnica PDF camma singola (1 pagina) =====
-// Genera PDF compatto con header, stats principali, grafico inline,
-// tag/bookmark, timestamp. Riusa il chart già caricato nel Quick View
-// (toBase64Image) — funziona solo se il modal è aperto.
+// ===== Scheda tecnica PDF della singola misura (1 pagina) =====
+// Genera PDF compatto con intestazione, dati principali, grafico, tag e date
+// (della misura e della stampa). Riusa il grafico gia' caricato nella vista
+// rapida: funziona solo se la vista rapida e' aperta.
 function exportSinglePDF(fileName, fileType) {
     if (!window.jspdf || !window.jspdf.jsPDF) {
         if (window.cammesToast) window.cammesToast({
-            kind: 'err', title: 'Libreria PDF non caricata',
-            body: 'jspdf.umd.min.js non disponibile. Ricarica la pagina.',
+            kind: 'err', title: 'PDF non disponibile',
+            body: 'La parte del programma che crea i PDF non si è caricata. Ricarica la pagina.',
             duration: 5000
         });
         return;
@@ -2397,6 +2643,15 @@ function exportSinglePDF(fileName, fileType) {
     var pageW = doc.internal.pageSize.getWidth();
     var pageH = doc.internal.pageSize.getHeight();
     var margin = 14;
+    // Numeri come in officina, sul foglio del cliente come a schermo: virgola
+    // decimale e il simbolo dei gradi (prima "9.610 mm" e "160 deg"). Qui una
+    // riserva per quando la funzione gira da sola.
+    var num = window.cammesNum || function (x, d) { return Number(x).toFixed(d).replace('.', ','); };
+    var gradi = function (g) {
+        var n = Number(g);
+        if (g === null || g === undefined || !isFinite(n)) return '-';
+        return num(n, n % 1 ? 1 : 0) + '°';
+    };
     // dati del FILE (non della stampa): li ha letti la vista rapida
     var metaQv = (window._qvMeta && window._qvMeta.file === fileName) ? window._qvMeta.meta : {};
     var nelElenco = (typeof _cachedFiles !== 'undefined' && _cachedFiles ? _cachedFiles : [])
@@ -2417,7 +2672,9 @@ function exportSinglePDF(fileName, fileType) {
     }
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
     doc.setTextColor(0, 212, 255);
-    doc.text('Scheda tecnica camma', margin, 25);
+    // stesso nome del piede (prima "Scheda tecnica camma", che si confondeva
+    // con la Scheda camma prodotta da Analisi)
+    doc.text('Scheda tecnica della singola misura', margin, 25);
     doc.setFontSize(8);
     doc.setTextColor(180, 195, 215);
     doc.text(quandoMisura, margin, 30);
@@ -2439,7 +2696,7 @@ function exportSinglePDF(fileName, fileType) {
     doc.text(fileName, margin, 48);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
     doc.setTextColor(120, 130, 145);
-    doc.text(fileType === 'pol' ? 'Profilo polare' : 'Profilo alzata cartesiano', margin, 54);
+    doc.text(fileType === 'pol' ? 'Vecchio file polare' : 'Misura di alzata', margin, 54);
 
     // KPI box
     var y = 62;
@@ -2466,13 +2723,15 @@ function exportSinglePDF(fileName, fileType) {
             doc.text(sub, x + 4, y + 19);
         }
     }
-    kpiBox(margin,                'N. punti',            data.length + '',
-           'campioni grado camma', [0, 212, 255]);
-    kpiBox(margin + boxW + 3,     fileType === 'pol' ? 'Max raggio' : 'Max alzata',
-           (isFinite(maxVal) ? maxVal.toFixed(3) : '-') + ' mm',
-           'picco rilevato',       [255, 184, 32]);
-    kpiBox(margin + 2*(boxW+3),   'Grado picco', maxDeg + ' deg',
-           'posizione max',        [177, 76, 255]);
+    kpiBox(margin,                'Punti misurati',      data.length + '',
+           'letture salvate nella misura', [0, 212, 255]);
+    kpiBox(margin + boxW + 3,     fileType === 'pol' ? 'Raggio massimo' : 'Alzata massima',
+           (isFinite(maxVal) ? num(maxVal, 3) : '-') + ' mm',
+           'la lettura più alta',  [255, 184, 32]);
+    // la posizione del picco sul banco dipende da come e' montato l'albero:
+    // letta dal cliente sembrava un dato di fasatura
+    kpiBox(margin + 2*(boxW+3),   'Posizione del picco sul banco', gradi(maxDeg),
+           '(non è la fasatura)',  [177, 76, 255]);
     y += 30;
 
     // Tag (se presenti)
@@ -2492,7 +2751,7 @@ function exportSinglePDF(fileName, fileType) {
     doc.setFillColor(0, 212, 255); doc.rect(margin, y - 1, 1.5, 5, 'F');
     doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
     doc.setTextColor(40, 46, 60);
-    doc.text(fileType === 'pol' ? 'Profilo polare 360 deg' : 'Profilo alzata 360 deg', margin + 4, y + 3);
+    doc.text(fileType === 'pol' ? 'Profilo polare, 360°' : 'Profilo di alzata, 360°', margin + 4, y + 3);
     y += 6;
     try {
         // Cattura su fondo BIANCO opaco a 2x, mantenendo l'aspect ratio reale
@@ -2549,7 +2808,7 @@ function exportSinglePDF(fileName, fileType) {
     doc.line(margin, fy - 3, pageW - margin, fy - 3);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
     doc.setTextColor(120, 130, 145);
-    doc.text('CAMMES - Scheda tecnica camma singola', margin, fy);
+    doc.text('CAMMES - Scheda tecnica della singola misura', margin, fy);
     var ts = 'Stampata il ' + new Date().toLocaleString('it-IT');
     doc.text(ts, pageW - margin - doc.getTextWidth(ts), fy);
 
@@ -2564,99 +2823,373 @@ function exportSinglePDF(fileName, fileType) {
 window.exportSinglePDF = exportSinglePDF;
 </script>
 
-<!-- ===== Sistema & aggiornamenti: check GitHub + flash firmware ===== -->
+<!-- ===== Riga di stato + Sistema e manutenzione: aggiornamenti, firmware,
+     verifica banco, intestazione, cestino ===== -->
 <script>
-// Popola la card all'avvio: versione software + info firmware incluso.
-// retry: al primo avvio il probe 'v' del server impiega ~2-4 s, quindi se la
-// seriale è connessa ma la versione non è ancora arrivata si riprova.
-function initUpdatesCard(attempt) {
-    attempt = attempt || 0;
+// Una riga della riga di stato: testo e colore.
+function mostraStato(id, esito) {
+    var el = document.getElementById(id);
+    if (!el || !esito) return;
+    el.innerHTML = esito.html;
+    el.style.color = esito.colore;
+}
+
+// L'Arduino a parole, per la riga di stato in cima. inAttesa = la versione del
+// firmware non e' ancora arrivata ma il controllo si ripete da solo: appena
+// collegato (al primo avvio ci vogliono alcuni secondi) e dopo un aggiornamento
+// del firmware, mentre il programma riapre la porta. Quando il controllo non si
+// ripete piu', "Ricontrolla" lo rifa' con un clic: prima la riga diceva "il
+// programma lo trova da solo" e poi non cambiava piu'. Se c'e' un problema,
+// accanto c'e' anche la Diagnostica da mandare all'assistenza.
+function testoStatoArduino(d, inAttesa) {
+    var sistema = '<a href="#updatesCard" onclick="apriSistema(); return false;">Sistema e manutenzione</a>';
+    var ricontrolla = ' &middot; <a href="#statoBanco" onclick="ricontrollaArduino(); return false;">Ricontrolla</a>';
+    var diagnostica = ' &middot; <a href="/api/diagnostics">Diagnostica</a>';
+    if (!d) {
+        return { html: 'Arduino: stato non disponibile (il programma non risponde)' + ricontrolla, colore: 'var(--warning-text, #8a6a00)' };
+    }
+    if (d.serialModule === false) {
+        return { html: '&#10007; Arduino non utilizzabile: modalit&agrave; demo (vedi la striscia rossa in alto)' + diagnostica, colore: 'var(--danger-text, #ff3838)' };
+    }
+    if (d.flashInProgress) {
+        return { html: '&#9888; Aggiornamento del firmware in corso: <b>non scollegare il cavo USB</b>', colore: 'var(--warning-text, #8a6a00)' };
+    }
+    if (!d.serialConnected) {
+        return inAttesa
+            ? { html: '&#9675; Arduino: in attesa che si ricolleghi&hellip;', colore: 'var(--text-secondary, #a4afc1)' }
+            : { html: '&#9675; Arduino non collegato: collega il cavo USB' + ricontrolla, colore: 'var(--text-secondary, #a4afc1)' };
+    }
+    var porta = d.port ? ' (' + escapeHtml(d.port) + ')' : '';
+    if (!d.deviceFirmware) {
+        return inAttesa
+            ? { html: '&#9679; Arduino collegato' + porta + ' &middot; firmware: in attesa di risposta&hellip;', colore: 'var(--text-secondary, #a4afc1)' }
+            : { html: '&#9679; Arduino collegato' + porta + ' &middot; il firmware <b>non risponde</b>: prova <b>Aggiorna firmware Arduino</b> in ' + sistema +
+                      ricontrolla + diagnostica,
+                colore: 'var(--warning-text, #8a6a00)' };
+    }
+    var incluso = d.bundled && d.bundled.firmware;
+    if (incluso && d.deviceFirmware !== incluso) {
+        return { html: '&#9679; Arduino collegato' + porta + ' &middot; firmware v' + escapeHtml(d.deviceFirmware) +
+                       ': <b>da aggiornare alla v' + escapeHtml(incluso) + '</b> (' + sistema + ' &rarr; Aggiorna firmware Arduino)',
+                 colore: 'var(--warning-text, #8a6a00)' };
+    }
+    return { html: '&#9679; Arduino collegato' + porta + ' &middot; firmware v' + escapeHtml(d.deviceFirmware) + (incluso ? ' (aggiornato)' : ''),
+             colore: 'var(--success-text, #00e676)' };
+}
+
+// Il programma a parole: versione installata e se ce n'e' una nuova.
+// { nonRisponde: true } = non ha risposto il programma stesso (non internet):
+// la riga dice la stessa causa della sezione Programma qui sotto.
+function testoStatoProgramma(d, installata) {
+    var v = function (x) { return 'v' + escapeHtml(String(x || '?').replace(/^v/i, '')); };
+    var tua = (d && d.current) ? v(d.current) : v(installata);
+    if (!d) {
+        return { html: 'Programma ' + tua + ' &middot; controllo degli aggiornamenti in corso&hellip;', colore: 'var(--text-secondary, #a4afc1)' };
+    }
+    if (d.nonRisponde) {
+        return { html: 'Programma ' + tua + ' &middot; controllo non riuscito: il programma non risponde', colore: 'var(--warning-text, #8a6a00)' };
+    }
+    if (d.error) {
+        return { html: 'Programma ' + tua + ' &middot; aggiornamenti non controllati (serve internet)', colore: 'var(--text-secondary, #a4afc1)' };
+    }
+    if (d.updateAvailable) {
+        return { html: '&#11014; Nuova versione <b>' + v(d.latest) + '</b> disponibile (hai la ' + tua + '): ' +
+                       '<a href="#updatesCard" onclick="apriSistema(); return false;">come aggiornare</a>',
+                 colore: 'var(--accent-text, #00d4ff)' };
+    }
+    return { html: '&#10003; Programma aggiornato (' + tua + ')', colore: 'var(--success-text, #00e676)' };
+}
+
+// Il pulsante del firmware dice che cosa fara'. Con la scheda gia' alla
+// versione inclusa nel programma e' un "Riscrivi" senza risalto; con una
+// versione diversa porta le due versioni ed e' in evidenza, come quando la
+// scheda collegata non risponde. Resta attivo anche se la scheda non risponde:
+// serve proprio a riprogrammarla. Spento solo senza firmware incluso, senza una
+// porta nota o durante una scrittura.
+function pulsanteFirmware(d, inAttesa) {
+    d = d || {};
+    var incluso = d.bundled && d.bundled.firmware;
+    var esito = { testo: '&#9889; Aggiorna firmware Arduino', evidenza: false,
+                  attivo: !!(d.bundled && d.port) && d.flashInProgress !== true };
+    if (incluso && d.deviceFirmware && d.deviceFirmware === incluso) {
+        esito.testo = '&#8635; Riscrivi il firmware';
+    } else if (incluso && d.deviceFirmware) {
+        esito.testo = '&#9889; Aggiorna firmware Arduino: v' + escapeHtml(d.deviceFirmware) + ' &rarr; v' + escapeHtml(incluso);
+        esito.evidenza = true;
+    } else if (incluso && d.serialConnected && !inAttesa) {
+        esito.evidenza = true;   // collegato ma muto
+    }
+    return esito;
+}
+
+// Firmware: riga di stato in cima + riga Firmware in Sistema e manutenzione.
+// Riprova da solo, senza interrogare il programma di continuo:
+//  - al primo avvio la versione dell'Arduino arriva dopo 2-4 s: se e'
+//    collegato ma la versione non c'e' ancora, fino a 3 volte ogni 4 s;
+//  - dopoScrittura (dopo un aggiornamento del firmware) e durante una
+//    scrittura: il programma chiude la porta, la riapre circa 2 s dopo la fine
+//    e solo dopo chiede la versione, quindi fino a 5 volte ogni 3 s anche con
+//    l'Arduino non ancora ricollegato.
+// Un controllo nuovo (attempt 0, per esempio "Ricontrolla") ferma i vecchi.
+var _ultimoFw = null, _controlloFw = 0;
+function initUpdatesCard(attempt, dopoScrittura) {
+    // (prima riceveva l'evento DOMContentLoaded al posto del numero e non
+    // riprovava mai)
+    attempt = typeof attempt === 'number' ? attempt : 0;
+    if (attempt === 0) _controlloFw++;
+    var mio = _controlloFw;
     var cur = document.getElementById('updSwCurrent');
     if (cur && window.CAMMES_VERSION) cur.textContent = window.CAMMES_VERSION;
-    fetch('/api/firmware-info').then(function (r) { return r.json(); }).then(function (d) {
-        if (!d.deviceFirmware && d.serialConnected && attempt < 3) {
-            setTimeout(function () { initUpdatesCard(attempt + 1); }, 4000);
-        }
+    return fetch('/api/firmware-info').then(function (r) { return r.json(); }).then(function (d) {
+        if (mio !== _controlloFw) return d;   // nel frattempo e' partito un controllo piu' recente
+        _ultimoFw = d;
+        var lungo = dopoScrittura === true || d.flashInProgress === true;
+        var riprova = d.serialModule !== false && attempt < (lungo ? 5 : 3) &&
+                      (d.flashInProgress === true || (!d.deviceFirmware && (d.serialConnected || lungo)));
+        if (riprova) setTimeout(function () {
+            if (mio === _controlloFw) initUpdatesCard(attempt + 1, lungo);
+        }, lungo ? 3000 : 4000);
+        mostraStato('statoArduino', testoStatoArduino(d, riprova));
         // MODALITÀ DEMO: driver seriali non caricati → banner rosso ben visibile
         if (d.serialModule === false && !document.getElementById('demoModeBanner')) {
             var bn = document.createElement('div');
             bn.id = 'demoModeBanner';
             bn.style.cssText = 'position:sticky;top:0;z-index:200;background:#c0392b;color:#fff;' +
                 'padding:10px 16px;font-size:14px;font-weight:600;border-radius:8px;margin:8px 0;';
-            bn.innerHTML = '&#9888; MODALIT&Agrave; DEMO: driver seriali non disponibili, l\'Arduino non pu&ograve; essere collegato. ' +
-                'Riavvia il programma; se il problema resta, scarica la <b>Diagnostica</b> e contatta l\'assistenza.';
+            bn.innerHTML = '&#9888; MODALIT&Agrave; DEMO: il programma non riesce a usare le porte USB, quindi l\'Arduino non pu&ograve; essere collegato. ' +
+                'Riavvia il programma; se il problema resta, scarica la <a href="/api/diagnostics" style="color:#fff;">Diagnostica</a> e contatta l\'assistenza.';
             var hdr = document.querySelector('.header');
-            hdr.parentNode.insertBefore(bn, hdr.nextSibling);
+            if (hdr) hdr.parentNode.insertBefore(bn, hdr.nextSibling);
         }
         var b = document.getElementById('fwBundled'), p = document.getElementById('fwPort'), dv = document.getElementById('fwDevice');
         if (b) b.textContent = (d.bundled && d.bundled.firmware) ? 'v' + d.bundled.firmware + ' (' + d.bundled.builtAt + ')' : 'non incluso';
         if (p) p.textContent = d.port || 'nessuna';
         if (dv) {
-            dv.textContent = d.deviceFirmware ? 'v' + d.deviceFirmware
-                           : (d.serialConnected ? 'non risponde (pre-v3?)' : 'non collegato');
-            if (d.deviceFirmware && d.bundled && d.bundled.firmware && d.deviceFirmware !== d.bundled.firmware) {
-                dv.style.color = 'var(--warn, orange)';
-                dv.title = 'Diverso dal firmware incluso: considera "Aggiorna firmware Arduino"';
-            }
+            var incluso = d.bundled && d.bundled.firmware;
+            var diverso = d.deviceFirmware && incluso && d.deviceFirmware !== incluso;
+            dv.textContent = d.deviceFirmware ? 'v' + d.deviceFirmware + (incluso && !diverso ? ' (aggiornato)' : '')
+                           : d.flashInProgress ? 'scrittura in corso…'
+                           : d.serialConnected ? (riprova ? 'in attesa di risposta…' : 'non risponde (firmware troppo vecchio?)')
+                           : (riprova ? 'in attesa che si ricolleghi…' : 'Arduino non collegato');
+            dv.style.color = diverso ? 'var(--warning-text, orange)' : (d.deviceFirmware && incluso ? 'var(--success-text, green)' : '');
+            dv.title = diverso ? 'Diverso da quello incluso nel programma: premi «Aggiorna firmware Arduino»' : '';
         }
         var btn = document.getElementById('fwFlashBtn');
-        if (btn && (!d.bundled || !d.port)) btn.disabled = true;
-    }).catch(function () {});
+        if (btn) {
+            var pf = pulsanteFirmware(d, riprova);
+            btn.innerHTML = pf.testo;
+            btn.classList.toggle('in-evidenza', pf.evidenza);
+            btn.disabled = !pf.attivo;
+        }
+        return d;
+    }).catch(function () {
+        if (mio === _controlloFw) mostraStato('statoArduino', testoStatoArduino(null));
+        return null;
+    });
+}
+// "Ricontrolla" della riga Arduino: una lettura sola, a richiesta.
+function ricontrollaArduino() {
+    var el = document.getElementById('statoArduino');
+    if (el) { el.innerHTML = 'Arduino: controllo in corso&hellip;'; el.style.color = ''; }
+    return initUpdatesCard(0);
 }
 
-// Bottone "Controlla aggiornamenti": interroga il server (cache GitHub 1h).
-function checkUpdatesNow() {
+// "Controlla aggiornamenti": chiede al programma (che tiene la risposta del
+// sito per un'ora). silenzioso = all'apertura della pagina, senza notifica:
+// aggiorna solo la riga di stato e la sezione Programma.
+function checkUpdatesNow(silenzioso) {
+    silenzioso = silenzioso === true;
     var st = document.getElementById('updSwStatus');
     var link = document.getElementById('updDownloadLink');
+    var sha = document.getElementById('updSha');
+    var installata = escapeHtml(window.CAMMES_VERSION || '?');
     if (st) st.innerHTML = 'controllo in corso&hellip;';
-    fetch('/api/update-check').then(function (r) { return r.json(); }).then(function (d) {
+    return fetch('/api/update-check').then(function (r) { return r.json(); }).then(function (d) {
+        mostraStato('statoProgramma', testoStatoProgramma(d, window.CAMMES_VERSION));
+        var corrente = escapeHtml(String(d.current || window.CAMMES_VERSION || '?').replace(/^v/i, ''));
         if (d.error) {
-            if (st) st.innerHTML = 'versione installata: <b>' + (d.current || '?') + '</b> &middot; <span style="color:var(--warn,orange);">controllo non riuscito (' + d.error + ')</span>';
-            return;
+            if (st) {
+                st.innerHTML = 'versione installata: <b>v' + corrente + '</b> &middot; <span style="color:var(--warning-text, orange);">controllo non riuscito: serve internet</span>';
+                st.title = String(d.error);   // il dettaglio, per l'assistenza
+            }
+            return d;
         }
+        if (st) st.title = '';
         if (d.updateAvailable) {
-            if (st) st.innerHTML = 'installata <b>v' + d.current + '</b> &rarr; disponibile <b style="color:var(--success);">v' + d.latest + '</b>';
+            var nuova = escapeHtml(d.latest);
+            if (st) st.innerHTML = 'installata <b>v' + corrente + '</b> &rarr; disponibile <b style="color:var(--success-text, var(--success));">v' + nuova + '</b>';
             if (link) {
                 link.href = d.downloadUrl || d.url;
-                link.textContent = d.downloadUrl ? ('↓ Scarica ' + (d.downloadName || 'cammes.exe') + ' v' + d.latest + (d.downloadSizeMB ? ' (' + d.downloadSizeMB + ' MB)' : '')) : '↓ Apri pagina release v' + d.latest;
+                link.textContent = d.downloadUrl
+                    ? ('↓ Scarica ' + (d.downloadName || 'cammes.exe') + ' v' + d.latest + (d.downloadSizeMB ? ' (' + num(d.downloadSizeMB, 1) + ' MB)' : ''))
+                    : '↓ Apri la pagina della versione v' + d.latest;
                 link.style.display = '';
             }
-            if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Aggiornamento disponibile: v' + d.latest, body: 'Scaricalo dal link nella card Sistema.', duration: 6000 });
+            // l'impronta del file resta, ma in piccolo: serve all'assistenza
+            if (sha) {
+                if (d.downloadSha256) {
+                    sha.innerHTML = 'Per l&rsquo;assistenza, impronta SHA-256 del file scaricato: <code>' + escapeHtml(d.downloadSha256) +
+                        '</code> (si controlla con <code>certutil -hashfile ' + escapeHtml(d.downloadName || 'cammes.exe') + ' SHA256</code>)';
+                    sha.style.display = '';
+                } else {
+                    sha.style.display = 'none';
+                }
+            }
+            if (!silenzioso && window.cammesToast) window.cammesToast({ kind: 'info', title: 'Aggiornamento disponibile: v' + nuova, body: 'Scaricalo col pulsante verde e segui i tre passi scritti sotto.', duration: 6000 });
         } else {
-            if (st) st.innerHTML = 'versione installata: <b>v' + d.current + '</b> &middot; <span style="color:var(--success);">&#10003; aggiornato (ultima: v' + d.latest + ')</span>';
+            if (st) st.innerHTML = 'versione installata: <b>v' + corrente + '</b> &middot; <span style="color:var(--success-text, var(--success));">&#10003; aggiornato (ultima: v' + escapeHtml(d.latest) + ')</span>';
             if (link) link.style.display = 'none';
+            if (sha) sha.style.display = 'none';
         }
-    }).catch(function (e) {
-        if (st) st.innerHTML = 'versione installata: <b>' + (window.CAMMES_VERSION || '?') + '</b> &middot; <span style="color:var(--warn,orange);">server non raggiungibile</span>';
+        return d;
+    }).catch(function () {
+        // qui non ha risposto il programma (non internet): la riga in cima dice
+        // la stessa causa della sezione Programma
+        mostraStato('statoProgramma', testoStatoProgramma({ nonRisponde: true }, window.CAMMES_VERSION));
+        if (st) st.innerHTML = 'versione installata: <b>' + installata + '</b> &middot; <span style="color:var(--warning-text, orange);">il programma non risponde</span>';
+        return null;
     });
 }
 
-// Flash del firmware incluso sull'Arduino collegato. Doppia conferma; durante
-// la scrittura (~15 s) la seriale è di avrdude: non scollegare l'USB.
+// Perche' l'aggiornamento della scheda non e' andato, a parole. Con exitCode la
+// scrittura e' partita e non e' riuscita (cavo, scheda); con il solo error il
+// programma l'ha rifiutata prima di cominciare e il motivo e' la frase
+// principale (prima ogni rifiuto, anche "c'e' una misura in corso", diceva
+// "Controlla il cavo USB"). Il testo del programma resta come dettaglio per
+// l'assistenza.
+function motivoFlash(d) {
+    d = d || {};
+    var grezzo = String(d.error || '');
+    if (d.exitCode !== undefined && d.exitCode !== null) {
+        return { partita: true, dettaglio: 'codice ' + d.exitCode + (grezzo ? ', ' + grezzo : ''),
+                 frase: 'Scrittura non riuscita: controlla il cavo USB e riprova. Se non riesce ancora, scarica la Diagnostica e contatta l\'assistenza.' };
+    }
+    // gia' in italiano piano: restano come sono
+    if (/^(Scansione in corso|La porta |Nessuna porta)/.test(grezzo)) return { partita: false, frase: grezzo, dettaglio: '' };
+    var frase = /^Flash gi/i.test(grezzo) ? 'C\'è già un aggiornamento del firmware in corso: attendi che finisca.'
+              : /^Run v4/i.test(grezzo) ? 'C\'è una misura in corso: attendi la fine e riprova.'
+              : /build|avrdude|Estrazione/i.test(grezzo) ? 'Il programma non riesce a preparare l\'aggiornamento: scarica la Diagnostica e contatta l\'assistenza.'
+              : 'Aggiornamento non avviato: riprova. Se succede ancora, scarica la Diagnostica e contatta l\'assistenza.';
+    return { partita: false, frase: frase, dettaglio: grezzo };
+}
+
+// Scrive sull'Arduino collegato il firmware incluso nel programma. Durante la
+// scrittura (~15 s) la porta USB e' occupata: non scollegare il cavo.
 function flashFirmware() {
-    if (!confirm('Aggiornare il firmware dell\'Arduino collegato?\n\nLa scrittura dura circa 15 secondi. NON scollegare l\'USB.')) return;
-    var btn = document.getElementById('fwFlashBtn');
-    var st = document.getElementById('fwFlashStatus');
-    if (btn) btn.disabled = true;
-    if (st) { st.textContent = 'scrittura in corso… non scollegare'; st.style.color = 'var(--warn, orange)'; }
-    fetch('/api/flash-firmware', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (d) {
-        if (btn) btn.disabled = false;
-        if (d.ok) {
-            if (st) { st.textContent = '✓ firmware scritto e verificato in ' + (d.durationMs / 1000).toFixed(1) + ' s su ' + d.port; st.style.color = 'var(--success, green)'; }
-            if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Firmware aggiornato', body: 'Scritto e verificato su ' + d.port + ' in ' + (d.durationMs / 1000).toFixed(1) + ' s. La connessione seriale si ripristina da sola.', duration: 7000 });
-        } else {
-            if (st) { st.textContent = '✗ flash fallito: ' + (d.error || 'exit ' + d.exitCode); st.style.color = 'var(--danger, red)'; }
-            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Flash fallito', body: (d.error || 'avrdude exit ' + d.exitCode) + '. Controlla il cavo USB e riprova.', duration: 9000 });
-            console.warn('avrdude output:', d.output);
-        }
-    }).catch(function (e) {
-        if (btn) btn.disabled = false;
-        if (st) { st.textContent = '✗ errore di rete: ' + e.message; st.style.color = 'var(--danger, red)'; }
+    // con la scheda gia' alla versione inclusa la domanda lo dice
+    var fw = _ultimoFw || {};
+    var incluso = fw.bundled && fw.bundled.firmware;
+    var uguale = !!(incluso && fw.deviceFirmware === incluso);
+    var chiedi = window.cammesConferma
+        ? window.cammesConferma(uguale ? 'Riscrivere il firmware dell\'Arduino?' : 'Aggiornare il firmware dell\'Arduino?',
+            (uguale ? 'La scheda ha gi&agrave; la versione inclusa nel programma (v' + escapeHtml(incluso) + '): riscriverla serve solo se il banco non risponde come dovrebbe.<br>' : '') +
+            'Scrive sull\'Arduino collegato il firmware incluso in questa versione del programma.<br>' +
+            'Dura circa 15 secondi: <b>non scollegare il cavo USB</b> finch&eacute; non compare l\'esito.',
+            uguale ? 'Riscrivi il firmware' : 'Aggiorna firmware', false)
+        : Promise.resolve(false);
+    return chiedi.then(function (si) {
+        if (!si) return null;
+        var btn = document.getElementById('fwFlashBtn');
+        var st = document.getElementById('fwFlashStatus');
+        if (btn) btn.disabled = true;
+        if (st) { st.textContent = 'scrittura in corso: non scollegare il cavo USB…'; st.title = ''; st.style.color = 'var(--warning-text, orange)'; }
+        return fetch('/api/flash-firmware', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (d) {
+            if (btn) btn.disabled = false;
+            if (d.ok) {
+                var sec = num(d.durationMs / 1000, 1);
+                if (st) { st.textContent = '✓ firmware scritto e verificato in ' + sec + ' s su ' + d.port; st.style.color = 'var(--success-text, green)'; }
+                if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Firmware aggiornato', body: 'Scritto e verificato su ' + escapeHtml(d.port) + ' in ' + sec + ' s. Il collegamento col banco riparte da solo.', duration: 7000 });
+                // rilegge la versione sulla scheda, riprovando finche' la porta non e' riaperta
+                setTimeout(function () { initUpdatesCard(0, true); }, 3000);
+            } else {
+                var m = motivoFlash(d);
+                // sulla riga solo la frase piana; il testo del programma nel fumetto
+                if (st) { st.textContent = '✗ ' + m.frase; st.title = m.dettaglio; st.style.color = 'var(--danger-text, red)'; }
+                if (window.cammesToast) window.cammesToast({ kind: 'err',
+                    title: m.partita ? 'Aggiornamento della scheda non riuscito' : 'Aggiornamento della scheda non avviato',
+                    body: escapeHtml(m.frase) + (m.dettaglio ? '<br><small>Dettaglio per l&rsquo;assistenza: ' + escapeHtml(m.dettaglio) + '</small>' : ''),
+                    duration: 9000 });
+                if (d.output) console.warn('avrdude output:', d.output);
+                // la scrittura era partita: porta e scheda vanno rilette
+                if (m.partita) setTimeout(function () { initUpdatesCard(0, true); }, 3000);
+            }
+            return d;
+        }).catch(function () {
+            if (btn) btn.disabled = false;
+            if (st) { st.textContent = '✗ il programma non risponde: firmware non scritto'; st.title = ''; st.style.color = 'var(--danger-text, red)'; }
+            return null;
+        });
     });
 }
 window.checkUpdatesNow = checkUpdatesNow;
 window.flashFirmware = flashFirmware;
-window.addEventListener('DOMContentLoaded', initUpdatesCard);
+window.apriSistema = apriSistema;
+window.ricontrollaArduino = ricontrollaArduino;
+window.addEventListener('DOMContentLoaded', function () {
+    initPannelli();
+    initUpdatesCard(0);
+    checkUpdatesNow(true);
+    aggiornaConteggioCestino();
+});
+
+// ===== Pannelli in fondo (Sistema e manutenzione, Attivita') =====
+// Chiusi finche' non servono; aperto/chiuso si ricorda su questo PC.
+var PANNELLI_KEY = 'cammes-home-pannelli-v1';
+function leggiPannelli() {
+    try { return JSON.parse(localStorage.getItem(PANNELLI_KEY)) || {}; } catch (e) { return {}; }
+}
+function ricordaPannello(id, aperto) {
+    try {
+        var s = leggiPannelli();
+        s[id] = !!aperto;
+        localStorage.setItem(PANNELLI_KEY, JSON.stringify(s));
+    } catch (e) {}
+}
+function initPannelli() {
+    var stato = leggiPannelli();
+    ['updatesCard', 'activityCard'].forEach(function (id) {
+        var d = document.getElementById(id);
+        if (!d) return;
+        if (stato[id] === true) d.open = true;
+        d.addEventListener('toggle', function () {
+            ricordaPannello(id, d.open);
+            if (d.open && id === 'updatesCard') caricaCartellaArchivio();
+        });
+        if (d.open && id === 'updatesCard') caricaCartellaArchivio();
+    });
+}
+// Apre "Sistema e manutenzione" e ci porta lo schermo (link della riga di stato).
+function apriSistema() {
+    var d = document.getElementById('updatesCard');
+    if (!d) return;
+    d.open = true;
+    caricaCartellaArchivio();
+    if (d.scrollIntoView) d.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Dove stanno le misure: lo dice la Diagnostica ("cartella archivio: ...").
+// Serve per aggiornare senza "perdere" l'archivio: il file nuovo avviato dalla
+// cartella Download parte con archivio e impostazioni vuoti.
+function cartellaDaDiagnostica(testo) {
+    var m = /^cartella archivio:\s*(.+?)\s*$/m.exec(String(testo || ''));
+    return m ? m[1] : null;
+}
+var _cartellaLetta = false;
+function caricaCartellaArchivio() {
+    if (_cartellaLetta) return Promise.resolve(null);
+    _cartellaLetta = true;
+    return fetch('/api/diagnostics', { cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (t) {
+        var c = cartellaDaDiagnostica(t);
+        var el = document.getElementById('cartellaArchivioPercorso');
+        if (el) el.textContent = c || 'non indicata dal programma';
+        return c;
+    }).catch(function () {
+        _cartellaLetta = false;   // si riprova alla prossima apertura
+        var el = document.getElementById('cartellaArchivioPercorso');
+        if (el) el.textContent = 'non disponibile (il programma non risponde)';
+        return null;
+    });
+}
 
 // ===== Impostazioni officina + badge verifica banco =====
 // L'esito dell'ultima verifica banco, a parole. Prima una verifica NON superata
@@ -2664,10 +3197,14 @@ window.addEventListener('DOMContentLoaded', initUpdatesCard);
 // vecchia: chi arrivava dopo leggeva "verificato" e misurava su un banco fuori
 // soglia. Ora l'esito è scritto per esteso e il colore lo ripete; residuo RMS e
 // massimo, che erano salvati ma non si vedevano da nessuna parte, accanto.
+// Sta nella riga di stato in cima alla Home (prima in piccolo in fondo alla
+// riga dell'intestazione dell'officina, come se riguardasse quella).
 function testoVerificaBanco(vb, adesso) {
+    var dove = ' (<a href="alzata.html">Alzata</a> &rarr; &#9881; Avanzate &rarr; Verifica banco)';
     if (!vb || !vb.date) {
-        return { html: 'Verifica banco: <b>mai fatta</b> (Alzata &rarr; &#9881; Avanzate &rarr; Verifica banco)',
-                 colore: 'var(--warning-text, #8a6a00)' };
+        // uno stato, non un guasto: testo normale, non un avviso sempre acceso
+        return { html: 'Verifica banco: <b>mai fatta</b>' + dove,
+                 colore: 'var(--text-primary, #e9edf5)' };
     }
     var quando = new Date(vb.date);
     var data = quando.toLocaleDateString('it-IT');
@@ -2677,19 +3214,19 @@ function testoVerificaBanco(vb, adesso) {
         ? ' (residuo RMS ' + mm(vb.rms) + ' mm, massimo ' + mm(vb.max) + ' mm)' : '';
     if (!vb.pass) {
         return { html: '&#10007; Verifica banco <b>NON SUPERATA</b> il ' + data + residuo +
-                       ': le misure non sono affidabili finch&eacute; non la rifai e la superi.',
-                 colore: 'var(--danger, #ff3838)' };
+                       ': le misure non sono affidabili finch&eacute; non la rifai e la superi' + dove + '.',
+                 colore: 'var(--danger-text, #ff3838)' };
     }
     if (giorni > 30) {
         return { html: '&#10003; Verifica banco superata il ' + data + residuo +
-                       ' &mdash; <b>pi&ugrave; di 30 giorni fa: rifalla</b>.',
+                       ' &mdash; <b>pi&ugrave; di 30 giorni fa: rifalla</b>' + dove + '.',
                  colore: 'var(--warning-text, #8a6a00)' };
     }
     return { html: '&#10003; Verifica banco <b>superata</b> il ' + data + residuo + '.',
-             colore: 'var(--success, #00e676)' };
+             colore: 'var(--success-text, #00e676)' };
 }
 function initSettingsUI() {
-    fetch('/api/settings').then(function (r) { return r.json(); }).then(function (s) {
+    return fetch('/api/settings').then(function (r) { return r.json(); }).then(function (s) {
         var inp = document.getElementById('setOfficina');
         if (inp && s.officina && s.officina.nome) inp.value = s.officina.nome;
         // serve anche qui: la scheda tecnica della singola misura la stampa
@@ -2700,51 +3237,96 @@ function initSettingsUI() {
             badge.innerHTML = esito.html;
             badge.style.color = esito.colore;
         }
-    }).catch(function () {});
+        return s;
+    }).catch(function () {
+        var badge = document.getElementById('benchBadge');
+        if (badge) badge.textContent = 'Verifica banco: esito non disponibile (il programma non risponde).';
+        return null;
+    });
 }
 function saveOfficina() {
     var nome = (document.getElementById('setOfficina') || {}).value || '';
-    fetch('/api/settings', { method: 'POST', body: JSON.stringify({ officina: { nome: nome.trim() } }) })
+    return fetch('/api/settings', { method: 'POST', body: JSON.stringify({ officina: { nome: nome.trim() } }) })
         .then(function (r) { return r.json(); })
         .then(function (d) {
             if (d.ok) window._officina = nome.trim();   // vale subito, senza ricaricare
-            if (window.cammesToast) window.cammesToast({ kind: d.ok ? 'success' : 'err', title: d.ok ? 'Intestazione salvata' : 'Errore', body: d.ok ? 'Compare in testa a tutti i prossimi PDF.' : (d.error || '?'), duration: 4000 });
-        }).catch(function () {});
+            if (window.cammesToast) window.cammesToast({ kind: d.ok ? 'success' : 'err', title: d.ok ? 'Intestazione salvata' : 'Intestazione non salvata', body: d.ok ? 'Compare in testa a tutti i prossimi PDF.' : escapeHtml(d.error || 'risposta inattesa del programma'), duration: 4000 });
+            return d;
+        }).catch(function () {
+            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Intestazione non salvata', body: 'Il programma non risponde: controlla che CAMMES sia aperto e riprova.', duration: 5000 });
+            return null;
+        });
 }
 window.saveOfficina = saveOfficina;
 window.addEventListener('DOMContentLoaded', initSettingsUI);
 
 // ===== Cestino: lista + ripristino =====
-function toggleTrash() {
+// Il numero sul pulsante: "Cestino (3)". Se l'elenco del cestino e' aperto si
+// ridisegna anche quello (prima, dopo un'eliminazione, il pulsante diceva
+// "Cestino (4)" e l'elenco aperto restava a 3).
+function aggiornaConteggioCestino() {
+    if (document.getElementById('trashBox')) return toggleTrash(true);
+    return fetch('/api/trash').then(function (r) { return r.json(); }).then(function (d) {
+        var n = (d.files || []).length;
+        var btn = document.getElementById('trashBtn');
+        if (btn) btn.innerHTML = '&#9851; Cestino' + (n ? ' (' + n + ')' : '');
+        return n;
+    }).catch(function () { return null; });
+}
+// La data di eliminazione arriva in ora UTC ("2026-11-14 09:32:00"): si
+// mostra nell'ora di questo PC.
+function dataCestino(s) {
+    var t = Date.parse(String(s || '').replace(' ', 'T') + 'Z');
+    return isFinite(t) ? new Date(t).toLocaleString('it-IT') : String(s || '');
+}
+// Apre (o chiude) l'elenco del cestino sotto il suo pulsante, dentro "Sistema e
+// manutenzione" (prima compariva sopra la scheda, anche fuori vista).
+// aperto = true: lo apre o lo ridisegna, senza chiuderlo.
+function toggleTrash(aperto) {
     var box = document.getElementById('trashBox');
-    if (box) { box.remove(); return; }
-    fetch('/api/trash').then(function (r) { return r.json(); }).then(function (d) {
+    if (box && aperto !== true) { box.remove(); return Promise.resolve(false); }
+    return fetch('/api/trash').then(function (r) { return r.json(); }).then(function (d) {
+        var vecchio = document.getElementById('trashBox');
+        if (vecchio) vecchio.remove();
         box = document.createElement('div');
         box.id = 'trashBox';
-        box.className = 'card';
+        box.className = 'cestino-box';
         var files = d.files || [];
-        box.innerHTML = '<div class="card-title">&#9851; Cestino (' + files.length + ')' +
-            '<span style="font-size:11px;color:var(--text-muted);font-weight:normal;margin-left:10px;">i file si eliminano da soli dopo 30 giorni</span></div>';
+        var btnCestino = document.getElementById('trashBtn');
+        if (btnCestino) btnCestino.innerHTML = '&#9851; Cestino' + (files.length ? ' (' + files.length + ')' : '');
+        box.innerHTML = '<div class="cestino-titolo">&#9851; Cestino (' + files.length + ')' +
+            '<span class="sistema-nota" style="margin-top:0;font-weight:normal;">le misure si eliminano da sole dopo 30 giorni</span></div>';
         // SEC-03: righe costruite via DOM. f.original arrivava in innerHTML
         // senza escape e f.trashName finiva in onclick inline: i nomi nel
         // cestino possono derivare da file piazzati a mano in prove/, quindi
         // vanno trattati come testo (textContent + listener in closure).
         if (files.length === 0) {
             var empty = document.createElement('div');
-            empty.style.cssText = 'font-size:13px;color:var(--text-muted);';
-            empty.textContent = 'Vuoto.';
+            empty.className = 'sistema-nota';
+            empty.textContent = 'Il cestino è vuoto.';
             box.appendChild(empty);
         } else {
+            if (files.length > 1) {
+                // dopo uno svuotamento fatto per sbaglio, un clic invece di uno per misura
+                var tutte = document.createElement('button');
+                tutte.type = 'button';
+                tutte.className = 'home-action-btn';
+                tutte.style.marginBottom = '6px';
+                tutte.innerHTML = '&#8617; Ripristina tutte (' + files.length + ')';
+                tutte.addEventListener('click', function () { ripristinaTutte(files); });
+                box.appendChild(tutte);
+            }
             files.forEach(function (f) {
                 var row = document.createElement('div');
-                row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:4px 0;font-size:13px;';
+                row.className = 'cestino-riga';
                 var name = document.createElement('span');
-                name.style.cssText = 'flex:1;';
+                name.className = 'nome';
                 name.textContent = f.original;
                 var when = document.createElement('span');
-                when.style.cssText = 'color:var(--text-muted);font-size:11px;';
-                when.textContent = 'eliminato ' + f.deletedAt;
+                when.className = 'quando';
+                when.textContent = 'eliminata il ' + dataCestino(f.deletedAt);
                 var btn = document.createElement('button');
+                btn.type = 'button';
                 btn.className = 'home-action-btn';
                 btn.innerHTML = '&#8617; Ripristina';   // testo statico, nessun dato utente
                 btn.addEventListener('click', function () { restoreTrash(f.trashName); });
@@ -2754,26 +3336,71 @@ function toggleTrash() {
                 box.appendChild(row);
             });
         }
-        var anchor = document.getElementById('trashBtn').closest('.card');
-        anchor.parentNode.insertBefore(box, anchor);
-    }).catch(function () {});
+        var area = document.getElementById('trashArea');
+        (area || document.body).appendChild(box);
+        return true;
+    }).catch(function () {
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Cestino non disponibile', body: 'Il programma non risponde: controlla che CAMMES sia aperto e riprova.', duration: 5000 });
+        return false;
+    });
+}
+// Dal messaggio "Misura spostata nel cestino": apre Sistema e manutenzione e il cestino.
+function apriCestino() {
+    apriSistema();
+    return toggleTrash(true).then(function () {
+        var b = document.getElementById('trashBox');
+        if (b && b.scrollIntoView) b.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
 }
 function restoreTrash(tname) {
-    fetch('/api/trash/restore', { method: 'POST', body: JSON.stringify({ name: tname }) })
+    return fetch('/api/trash/restore', { method: 'POST', body: JSON.stringify({ name: tname }) })
         .then(function (r) { return r.json(); })
         .then(function (d) {
             if (d.ok) {
-                if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'File ripristinato', body: d.restored + ' &egrave; tornato nell\'archivio.', duration: 4000 });
-                var box = document.getElementById('trashBox'); if (box) box.remove();
-                toggleTrash();
+                if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Misura ripristinata', body: escapeHtml(d.restored) + ' &egrave; tornata nell\'archivio.', duration: 4000 });
+                toggleTrash(true);
                 if (typeof loadRecents === 'function') loadRecents();
             } else if (window.cammesToast) {
-                window.cammesToast({ kind: 'err', title: 'Ripristino fallito', body: d.error || '?', duration: 6000 });
+                window.cammesToast({ kind: 'err', title: 'Ripristino non riuscito', body: escapeHtml(d.error || 'risposta inattesa del programma'), duration: 6000 });
             }
-        }).catch(function () {});
+            return d;
+        }).catch(function () {
+            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Ripristino non riuscito', body: 'Il programma non risponde: controlla che CAMMES sia aperto e riprova.', duration: 5000 });
+            return null;
+        });
+}
+// Tutte le misure del cestino tornano nell'archivio, una dopo l'altra.
+function ripristinaTutte(files) {
+    var nomi = (files || []).map(function (f) { return f.trashName; });
+    if (!nomi.length || !window.cammesConferma) return Promise.resolve(0);
+    return window.cammesConferma('Ripristinare tutte le misure del cestino?',
+        'Tornano nell\'archivio <b>' + nomi.length + '</b> misure. I tag e i preferiti tolti quando sono state eliminate non tornano.',
+        'Ripristina tutte', false).then(function (si) {
+        if (!si) return 0;
+        var ok = 0, falliti = 0;
+        return nomi.reduce(function (p, n) {
+            return p.then(function () {
+                return fetch('/api/trash/restore', { method: 'POST', body: JSON.stringify({ name: n }) })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) { if (d && d.ok) ok++; else falliti++; })
+                    .catch(function () { falliti++; });
+            });
+        }, Promise.resolve()).then(function () {
+            if (window.cammesToast) window.cammesToast({
+                kind: falliti ? 'warn' : 'success',
+                title: falliti ? 'Ripristino riuscito solo in parte' : 'Misure ripristinate',
+                body: ok + ' tornate nell\'archivio' + (falliti ? ', ' + falliti + ' non riuscite' : '') + '.',
+                duration: 5000
+            });
+            toggleTrash(true);
+            loadRecents();
+            return ok;
+        });
+    });
 }
 window.toggleTrash = toggleTrash;
 window.restoreTrash = restoreTrash;
+window.apriCestino = apriCestino;
 </script>
 
 </body>

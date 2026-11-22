@@ -65,7 +65,8 @@ console.log('--- 3.4: mappa molla nel PDF ---');
 var rMappa = regione("sect('Mappa molla", '===== 5.');
 check('trovo la sezione mappa molla del report', rMappa.length > 0);
 check('il PDF ha una legenda dei colori (il DOM non entra nell immagine)',
-    /Colore = float max/.test(rMappa) && /Grigio = solver NON convergente/.test(rMappa),
+    // (testo in italiano dal 2026-11-22: "distacco massimo", "simulazione")
+    /Colore = distacco massimo/.test(rMappa) && /Grigio = simulazione NON convergente/.test(rMappa),
     'sul documento il colore non deve essere l unico dato');
 check('la legenda usa le soglie condivise, non numeri ricopiati',
     /SOGLIE_FLOAT\.attenzione/.test(rMappa) && /SOGLIE_FLOAT\.grave/.test(rMappa),
@@ -85,7 +86,9 @@ check('la riga destra del banner passa dal cancello mollaOkPdf',
     /mollaOkPdf/.test(rBanner),
     'il titolo era gated, il dettaglio accanto no');
 check('e senza molla confermata NON stampa "Critico N rpm"',
-    /inserisci k, F0 e masse/i.test(rBanner),
+    // (dal 2026-11-22 il motivo e' detto senza ordini al cliente:
+    //  "molla e masse non inserite: margine non calcolato")
+    /molla e masse non inserite/i.test(rBanner),
     'al posto del numero, il motivo');
 
 var rBarra = regione("sectionHeader('Margine sul distacco valvola')", 'GRAFICI (uno per riga');

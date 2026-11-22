@@ -177,7 +177,9 @@ check('ms() non spegne piu i polling con clearInterval',
     !/clearInterval\s*\(\s*poll(Sensor|Encoder)Id\s*\)/.test(corpoMs.split('\n').filter(function (r) { return !/^\s*\/\//.test(r); }).join('\n')));
 var ramoAbort = /if \(wasAborted\) \{[\s\S]{0,1500}?\n {8}\} else if/.exec(VIVO);
 check('*sabort dal firmware disarma lo Zero virtuale', !!ramoAbort && /labms\s*=\s*0/.test(ramoAbort[0]));
-var ramoIncompleta = /else if \(startflag === 1 && i < currentMode\.totalSteps\) \{[\s\S]{0,900}?Scansione incompleta/.exec(VIVO);
+// (il ramo finisce dove scrive l'interruzione col motivo 'corto': v3.8.0, la
+//  notifica non dice piu' "Scansione incompleta" ma usa le parole della riga Esito)
+var ramoIncompleta = /else if \(startflag === 1 && i < currentMode\.totalSteps\) \{[\s\S]{0,900}?_interruzione\(window\._tipoScansione, 'corto'/.exec(VIVO);
 check('scansione chiusa incompleta: disarma lo Zero virtuale', !!ramoIncompleta && /labms\s*=\s*0/.test(ramoIncompleta[0]));
 check('...e riabilita i selettori (restavano spenti fino al ricaricamento)',
     !!ramoIncompleta && /scanMode[\s\S]{0,80}disabled = false/.test(ramoIncompleta[0]) && /scanRepeat[\s\S]{0,80}disabled = false/.test(ramoIncompleta[0]));

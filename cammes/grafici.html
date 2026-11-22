@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="it">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,15 +12,74 @@
         -webkit-user-select: none;
         -ms-user-select: none;
     }
+    /* ---- Confronto (v3.8.0): pannello a passi, verdetto in alto ---------- */
+    .cmp-istruzione { font-size: 13px; line-height: 1.5; color: var(--text-secondary); margin: 0 0 4px; }
+    .cmp-passo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 14px 0 4px; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .cmp-passo .num { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 22px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #07090d; font-size: 13px; font-weight: 700; }
+    .cmp-passo .facoltativo { font-weight: 400; color: var(--text-secondary); }
+    .cmp-riga { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .cmp-riga > label { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+    .cmp-riga select.input, .cmp-riga .file-input { flex: 1 1 170px; min-width: 0; }
+    .cmp-unita { font-size: 13px; color: var(--text-secondary); }
+    .cmp-vuoto { font-size: 13px; color: var(--text-secondary); padding: 6px 0; }
+    .cmp-check { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-sans); font-size: 13px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-primary); cursor: pointer; }
+    .cmp-check input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+    .cmp-tag { display: inline-block; margin-left: 6px; padding: 0 7px; border: 1px solid currentColor; border-radius: 9px; font-family: var(--font-sans); font-size: 13px; font-weight: 700; color: var(--warning-text); }
+    .cmp-tag.info { color: var(--accent-text); }
+    .color-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    #tabellaMisure td.cmp-nome { font-family: var(--font-sans); word-break: break-word; }
+    #tabellaMisure .cmp-dettaglio { margin-top: 2px; font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); }
+    #tabellaMisure td.cmp-azione { width: 1%; white-space: nowrap; text-align: right; }
+    #nominaleCaricato { font-size: 13px; color: var(--text-primary); word-break: break-word; }
+    /* il collaudo: la prima cosa del pannello, compatto (una misura = parola e
+       nome su una riga, lo scarto sotto), con la sua stampa dentro il riquadro */
+    .collaudo-box { margin: 0 0 10px; padding: 8px 10px 10px; background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: var(--r-md); }
+    .collaudo-testa { font-size: 13px; line-height: 1.4; color: var(--text-secondary); word-break: break-word; }
+    .collaudo-avviso { margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--warning-text); }
+    .collaudo-attesa { margin-top: 6px; font-size: 13px; color: var(--text-primary); }
+    .collaudo-azioni { margin-top: 10px; }
+    .verdetto-riga { margin-top: 6px; padding: 1px 0 1px 9px; border-left: 4px solid var(--border-strong); }
+    .verdetto-riga.ok { border-left-color: var(--success); }
+    .verdetto-riga.ko { border-left-color: var(--danger); }
+    .verdetto-riga.nv { border-left-color: var(--warning); }
+    .verdetto-testa { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; }
+    .verdetto-parola { font-family: var(--font-display); font-size: 20px; font-weight: 700; line-height: 1.2; letter-spacing: 0.5px; white-space: nowrap; }
+    .verdetto-riga.ok .verdetto-parola { color: var(--success-text); }
+    .verdetto-riga.ko .verdetto-parola { color: var(--danger-text); }
+    .verdetto-riga.nv .verdetto-parola { color: var(--warning-text); font-size: 17px; }
+    .verdetto-nome { min-width: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); word-break: break-word; }
+    .verdetto-dettaglio { font-size: 13px; line-height: 1.4; color: var(--text-secondary); }
+    .cmp-divisore { margin: 14px 0 0; border-top: 1px solid var(--border); }
+    /* vista Differenza: testata su una riga, numeri leggibili anche sul tema
+       chiaro, tutti dello stesso colore (niente soglie fisse) */
+    #diffStats { display: block; }
+    #diffStats .diff-stat-label { font-size: 12px; color: var(--text-secondary); }
+    #diffStats .diff-stat-value { color: var(--accent-text); }
+    .diff-testa { margin-bottom: 8px; font-size: 13px; line-height: 1.4; color: var(--text-secondary); word-break: break-word; }
+    .diff-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    .diff-sotto { margin-top: 2px; font-size: 12px; color: var(--text-secondary); }
+    .diff-riga { margin-top: 6px; font-size: 13px; line-height: 1.4; color: var(--text-primary); }
+    /* invito dentro il grafico finche' non c'e' nessuna misura */
+    .grafico-vuoto { position: absolute; left: 24px; right: 24px; top: 50%; transform: translateY(-50%); text-align: center; font-size: 15px; line-height: 1.5; color: var(--text-secondary); pointer-events: none; }
+    /* vista polare. Ogni tela sta da sola nel suo contenitore (posizione
+       relativa), come chiede Chart.js: se la tela divide il contenitore con
+       didascalia e nota, a ogni ridimensionamento prende anche la loro altezza
+       e il riquadro cresce senza fine. */
+    .polar-cap { display: flex; align-items: center; gap: 8px; width: 100%; margin-bottom: 4px; font-size: 13px; color: var(--text-primary); }
+    .polar-cap .polar-nome { flex: 1; min-width: 0; font-weight: 600; word-break: break-word; }
+    .polar-nota { width: 100%; margin-bottom: 4px; font-size: 12px; color: var(--text-secondary); }
+    .polar-tela { position: relative; width: 100%; }
     </style>
 </head>
 <body>
 
 <script src="lib/chart.umd.min.js"></script>
-<!-- APP-08/APP-09: espone parseCamFile (parser robusto condiviso) come globale.
-     Sostituisce i due parser fatti a mano che assumevano riga i == grado i e
-     si rompevano sulla coda di metadati #chiave=valore dei file .scr attuali. -->
+<!-- APP-08/APP-09: parseCamFile (lettore robusto condiviso), validaNumero,
+     scartoDalNominale, canProduceOfficialResult, avvisoMisuraSospetta. -->
 <script src="lib/cammes-math.js"></script>
+<!-- Stampa del collaudo: la libreria PDF sta nella cartella del programma
+     (funziona senza internet), come in Home e in Analisi. -->
+<script src="jspdf.umd.min.js"></script>
 
 <div class="app-container">
 
@@ -42,633 +101,1498 @@
         </button>
     </div>
 
-    <!-- Line chart + Data table -->
     <!-- audit APP-12: layout via classe (style.css) invece di style inline, che
          annullava le media query facendo saltare il collasso a colonna singola. -->
     <div class="main-grid cols-confronto">
 
-        <!-- Left: Line chart -->
+        <!-- Sinistra: il grafico -->
         <div class="card chart-card">
             <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-                <span>Confronto profili (fino a 4 alberi)</span>
-                <span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                    <select id="viewMode" class="input" style="width:auto;font-size:12px;padding:4px 8px;" onchange="switchViewMode();" data-tip="<strong>Modalit&agrave; vista</strong><b>Sovrapposto</b>: tutte le curve sovrapposte (come ora).<br><b>Differenza</b>: con 2+ file, calcola (file N − file 1) per ogni grado. Curva positiva = file pi&ugrave; alto del baseline. Mostra stats max/media/RMSE in fondo.">
-                        <option value="overlay" selected>Sovrapposto</option>
-                        <option value="diff">Differenza vs file 1</option>
+                <span>Confronto misure (fino a 4)</span>
+                <span style="display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                    <select id="viewMode" class="input" style="width:auto;font-size:13px;padding:4px 8px;" autocomplete="off" onchange="switchViewMode();" data-tip="<strong>Vista</strong><b>Curve sovrapposte</b>: le misure come sono.<br><b>Differenza</b>: con 2 o più misure, ogni curva meno la prima, grado per grado; sopra il grafico lo scarto massimo, medio e quadratico medio.">
+                        <option value="overlay" selected>Curve sovrapposte</option>
+                        <option value="diff">Differenza dalla prima misura</option>
                     </select>
-                    <button id="replayBtn" class="btn btn-secondary btn-sm" onclick="replayAnimation();" data-tip="<strong>Replay animazione</strong>Ridipinge le curve caricate da 0&deg; a 360&deg; in 4 secondi.">&#9658; Replay</button>
-                    <button id="replayStopBtn" class="btn btn-secondary btn-sm" onclick="stopReplay();" style="display:none;" title="Ferma il replay e mostra subito le curve complete">&#10074;&#10074; Stop</button>
+                    <label id="allineaFaseBox" class="cmp-check" style="display:none;" data-tip="<strong>Allinea la fase</strong>Acceso: prima di sottrarre, ogni curva viene fatta combaciare con la prima (anche a frazioni di grado) e lo spostamento è scritto sopra il grafico: resta la differenza di forma. Spento: differenza grezza, grado per grado."><input type="checkbox" id="allineaFase" checked autocomplete="off" onchange="_aggiornaGrafico(false);"> Allinea la fase</label>
                 </span>
             </div>
             <div id="diffStats" class="diff-stats" style="display:none;"></div>
             <canvas id="canvas"></canvas>
+            <div id="graficoVuoto" class="grafico-vuoto">Nessuna misura caricata.<br>Scegli fino a 4 misure al passo <b>1</b> del pannello «Misure e collaudo»: dall'archivio o dal disco.</div>
         </div>
 
-        <!-- Right: Data table + File inputs -->
+        <!-- Destra: misure e collaudo -->
         <div class="card">
-            <div class="card-title">Dati misurazione
-                <span class="help-icon" data-tip="<strong>Come usare il confronto</strong>Carica fino a 4 file '.scr' salvati dalla pagina Alzata. Il grafico li sovrappone con colori diversi; la <b>Vista polare</b> in basso disegna la camma a 360&deg; (raggio base + alzata). Utile per: <ul><li>verificare ripetibilit&agrave; sulla stessa camma</li><li>confrontare camme diverse (race vs stradale)</li><li>misurare usura tra prima e dopo</li></ul>" tabindex="0">?</span>
-            </div>
-            <p style="font-size:11px; color:var(--text-muted); margin:4px 0 0; line-height:1.45;">
-                Scegli fino a 4 file <code>_alz</code> salvati da Alzata: le curve si sovrappongono nel grafico e le righe <b>grafico&nbsp;1–4</b> qui sotto si riempiono man mano. La <b>Vista polare</b> accetta gli stessi <code>_alz</code> (e i vecchi <code>_pol</code>). Finch&eacute; non carichi nulla restano a 0.
-            </p>
-
-            <div class="flex items-center gap-8 mt-8">
-                <label style="font-size:13px;color:var(--text-muted);">File alzata:</label>
-                <input type="file" id="fileinput1" class="file-input" onchange="loadFile();" data-tip="<strong>File alzata cartesiano</strong>Carica file .scr salvato dalla pagina Alzata (suffisso _alz). Fino a 4 file simultaneamente.">
+            <div class="card-title">Misure e collaudo
+                <span class="help-icon" data-tip="<strong>Come usare il confronto</strong>Scegli fino a 4 misure: le curve si sovrappongono, ognuna col suo colore. Serve per la ripetibilità sulla stessa camma, per confrontare camme diverse e per l'usura prima e dopo. Con un profilo nominale (passo 2) ogni misura riceve il verdetto, qui in alto, da stampare." tabindex="0">?</span>
             </div>
 
-            <table class="data-table mt-16">
+            <!-- Il collaudo: verdetto in alto, si ricalcola da solo; compare col
+                 nominale, e la sua stampa compare con le righe da stampare -->
+            <div id="collaudoBox" class="collaudo-box" style="display:none;">
+                <div id="verdictBox" aria-live="polite"></div>
+                <div id="collaudoAzioni" class="collaudo-azioni" style="display:none;">
+                    <button id="stampaCollaudoBtn" class="btn btn-accent btn-sm" type="button" onclick="stampaCollaudo();" data-tip="<strong>Stampa collaudo</strong>Crea un PDF da consegnare: intestazione dell'officina, misure e nominale, tolleranza, verdetto con scarto massimo e grado, riallineamento e grafico.">Stampa collaudo</button>
+                </div>
+            </div>
+
+            <p class="cmp-istruzione">Sovrapponi fino a 4 misure (passo 1). Con il nominale (passo 2) ognuna riceve il verdetto del collaudo.</p>
+
+            <div class="cmp-passo"><span class="num">1</span>Misure da confrontare</div>
+            <div class="cmp-riga">
+                <select id="archivioMisure" class="input" data-vuoto="Scegli dall'archivio…" onchange="_daArchivio(this, 'misura');" data-tip="<strong>Scegli dall'archivio</strong>Le misure salvate da Alzata, dalla più recente. Funziona anche dal secondo PC in rete.">
+                    <option value="">Scegli dall'archivio…</option>
+                </select>
+            </div>
+            <div class="cmp-riga">
+                <label for="fileinput1">oppure dal disco:</label>
+                <input type="file" id="fileinput1" class="file-input" multiple onchange="loadFile();" data-tip="<strong>Dal disco</strong>Una misura salvata da Alzata, oppure un CSV con righe grado, alzata. Puoi sceglierne più di una insieme, fino a 4 in tutto.">
+            </div>
+            <table class="data-table mt-8" id="tabellaMisure" style="display:none;">
                 <thead>
                     <tr>
-                        <th>Nome</th>
-                        <th>Gradi</th>
-                        <th>Massimo</th>
+                        <th>Misura e alzata massima</th>
+                        <th></th>
                     </tr>
                 </thead>
-                <tbody>
-                    <tr>
-                        <td><span class="color-dot" style="background:#ff0000;"></span><span id="lb1">grafico1</span></td>
-                        <td><span id="g1g">0</span></td>
-                        <td><span id="g1v">0</span></td>
-                    </tr>
-                    <tr>
-                        <td><span class="color-dot" style="background:#0000c8;"></span><span id="lb2">grafico2</span></td>
-                        <td><span id="g2g">0</span></td>
-                        <td><span id="g2v">0</span></td>
-                    </tr>
-                    <tr>
-                        <td><span class="color-dot" style="background:#009600;"></span><span id="lb3">grafico3</span></td>
-                        <td><span id="g3g">0</span></td>
-                        <td><span id="g3v">0</span></td>
-                    </tr>
-                    <tr>
-                        <td><span class="color-dot" style="background:#ffffff;"></span><span id="lb4">grafico4</span></td>
-                        <td><span id="g4g">0</span></td>
-                        <td><span id="g4v">0</span></td>
-                    </tr>
-                </tbody>
+                <tbody id="corpoMisure"></tbody>
             </table>
+            <div id="tabellaVuota" class="cmp-vuoto">Nessuna misura caricata.</div>
 
-            <div class="flex items-center gap-8 mt-16">
-                <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;">Vista polare:</label>
-                <input type="file" id="fileinput2" class="file-input" onchange="loadFile2();" style="flex:1;min-width:0;">
+            <div class="cmp-divisore"></div>
+
+            <div class="cmp-passo"><span class="num">2</span>Collaudo sul profilo nominale <span class="facoltativo">(facoltativo)</span>
+                <span class="help-icon" data-tip="<strong>Collaudo: conforme o non conforme</strong>Carica il nominale (camma nuova o CSV di progetto) e scrivi la tolleranza. Ogni misura è fatta combaciare col nominale (si giudica la forma, non la fase): CONFORME se lo scarto massimo resta entro la tolleranza. Il verdetto esce in alto, con «Stampa collaudo»." tabindex="0">?</span>
             </div>
-            <div class="flex items-center gap-8 mt-8">
-                <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;">Raggio base</label>
-                <input type="text" id="polRBase" class="input" style="width:64px;" value="16" data-tip="<strong>Raggio base (mm)</strong>Usato solo per i file <code>_alz</code>: la vista polare disegna raggio = raggio base + alzata. Per i vecchi file <code>_pol</code> il raggio &egrave; gi&agrave; nel file e questo campo viene ignorato.">
-                <span style="font-size:13px;color:var(--text-muted);">mm</span>
+            <div class="cmp-riga">
+                <select id="archivioNominale" class="input" data-vuoto="Scegli il nominale dall'archivio…" onchange="_daArchivio(this, 'nominale');" data-tip="<strong>Nominale dall'archivio</strong>Per esempio la misura di una camma nuova, salvata da Alzata.">
+                    <option value="">Scegli il nominale dall'archivio…</option>
+                </select>
             </div>
-
-            <div class="separator" style="margin-top:14px;"></div>
-
-            <div style="margin-top:10px;">
-                <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Collaudo su profilo nominale
-                    <span class="help-icon" data-tip="<strong>Collaudo: conforme o non conforme</strong>Carica il profilo <b>nominale</b> (di progetto o di una camma nuova) e scrivi la tolleranza, per esempio 0,05. Ogni misura caricata sopra viene fatta combaciare col nominale &mdash; si giudica la <b>forma</b> del profilo, non la fase &mdash; e confrontata grado per grado: <b>CONFORME</b> se lo scarto massimo resta entro la tolleranza, altrimenti <b>NON CONFORME</b>. La riga del verdetto dice lo scarto, a che grado, e di quanto la curva &egrave; stata riallineata. La banda grigia sul grafico mostra nominale &plusmn; tolleranza." tabindex="0">?</span>
-                </div>
-                <div class="flex items-center gap-8">
-                    <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;">Nominale:</label>
-                    <input type="file" id="fileNominal" class="file-input" onchange="loadNominal();" style="flex:1;min-width:0;">
-                </div>
-                <div class="flex items-center gap-8 mt-8">
-                    <label style="font-size:13px;color:var(--text-muted);white-space:nowrap;">Tolleranza &plusmn;</label>
-                    <input type="text" id="tolMm" class="input" style="width:64px;" value="0,10" onchange="evalNominal();">
-                    <span style="font-size:13px;color:var(--text-muted);">mm</span>
-                    <button class="btn btn-secondary btn-sm" onclick="evalNominal();" data-tip="<strong>Rivaluta</strong>Ricalcola i verdetti (da usare dopo aver caricato altre curve).">&#8635; Rivaluta</button>
-                </div>
-                <div id="verdictBox" class="mt-8"></div>
+            <div class="cmp-riga">
+                <label for="fileNominal">oppure dal disco:</label>
+                <input type="file" id="fileNominal" class="file-input" onchange="loadNominal();" data-tip="<strong>Nominale dal disco</strong>Una misura salvata da Alzata oppure un CSV di progetto con righe grado, alzata (senza la riga dei titoli).">
+            </div>
+            <div id="nominaleCaricato" class="cmp-riga" style="display:none;"></div>
+            <div class="cmp-riga">
+                <label for="tolMm">Tolleranza &plusmn;</label>
+                <input type="text" id="tolMm" class="input" style="width:72px;" value="0,10" inputmode="decimal" autocomplete="off" oninput="_programmaCollaudo();" onchange="_collaudoSubito();" data-tip="<strong>Tolleranza (mm)</strong>Lo scarto massimo ammesso fra misura e nominale, per esempio 0,05. Il verdetto si aggiorna da solo mentre scrivi.">
+                <span class="cmp-unita">mm</span>
             </div>
 
-            <div class="mt-16">
-                <button class="btn btn-secondary" onclick="document.location.reload(true)" data-tip="<strong>Reset confronto</strong>Ricarica la pagina e scarica tutte le curve e le viste polari caricate: il confronto in corso va perso. I file sul disco non vengono toccati.">&#8634; Reset</button>
+            <!-- comandi secondari -->
+            <div class="cmp-divisore"></div>
+            <div class="cmp-riga" style="margin-top:12px;">
+                <button id="replayBtn" class="btn btn-secondary btn-sm" type="button" onclick="replayAnimation();" data-tip="<strong>Ridisegna</strong>Ridisegna le curve da 0° a 360° in 4 secondi, per seguirle grado per grado. Solo un'animazione: i dati non cambiano.">&#9658; Ridisegna</button>
+                <button id="replayStopBtn" class="btn btn-secondary btn-sm" type="button" onclick="stopReplay();" style="display:none;" title="Ferma e mostra subito le curve intere">&#10074;&#10074; Ferma</button>
+                <button class="btn btn-secondary btn-sm" type="button" onclick="svuotaTutto();" data-tip="<strong>Svuota tutto</strong>Toglie dalla pagina misure, nominale e viste polari (chiede conferma). La tolleranza resta; i file in archivio non vengono toccati.">Svuota tutto</button>
             </div>
         </div>
 
     </div>
 
-    <!-- Polar charts section title -->
-    <div class="card" style="padding:12px 20px;">
-        <div class="card-title" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">Grafici Polari</div>
+    <!-- Vista polare -->
+    <div class="card" id="polarHead">
+        <div class="card-title">Vista polare: la sagoma della camma
+            <span class="help-icon" data-tip="<strong>Vista polare</strong>Disegna la camma vista di fronte, in scala: raggio = metà del diametro del cerchio base + alzata, grado per grado. I vecchi file polari hanno già il raggio dentro." tabindex="0">?</span>
+        </div>
+        <p class="cmp-istruzione">Scrivi il diametro del cerchio base misurato col calibro, poi scegli la misura (fino a 4 viste).</p>
+        <div class="cmp-riga">
+            <label for="polRBase">&Oslash; cerchio base</label>
+            <input type="text" id="polRBase" class="input" style="width:96px;" value="" placeholder="da scrivere" inputmode="decimal" autocomplete="off" onchange="_cambiaCerchioBase();" data-tip="<strong>&Oslash; cerchio base (mm)</strong>Il DIAMETRO misurato col calibro, come in Analisi: il programma lo dimezza da solo. Vale per tutte le viste polari di questa pagina.">
+            <span class="cmp-unita">mm</span>
+            <select id="archivioPolare" class="input" style="flex:1 1 200px;min-width:0;" data-vuoto="Scegli dall'archivio…" onchange="_daArchivio(this, 'polare');">
+                <option value="">Scegli dall'archivio…</option>
+            </select>
+            <label for="fileinput2">oppure dal disco:</label>
+            <input type="file" id="fileinput2" class="file-input" style="flex:1 1 200px;min-width:0;" onchange="loadFile2();">
+        </div>
     </div>
 
-    <!-- Polar charts grid -->
-    <div class="polar-grid">
-        <div class="card">
-            <canvas id="birdsChart" width="450" height="300"></canvas>
+    <div class="polar-grid" id="polarGrid">
+        <div class="card" id="polCard1" style="display:none;">
+            <div class="polar-cap"><span class="color-dot" id="polPunto1"></span><span class="polar-nome" id="polNome1"></span><button class="btn btn-secondary btn-sm" type="button" title="Toglie questa vista (il file non viene toccato)" onclick="rimuoviPolare(1);">Rimuovi</button></div>
+            <div class="polar-nota" id="polMsg1"></div>
+            <div class="polar-tela"><canvas id="birdsChart" width="300" height="300"></canvas></div>
         </div>
-        <div class="card">
-            <canvas id="birdsChart2" width="450" height="300"></canvas>
+        <div class="card" id="polCard2" style="display:none;">
+            <div class="polar-cap"><span class="color-dot" id="polPunto2"></span><span class="polar-nome" id="polNome2"></span><button class="btn btn-secondary btn-sm" type="button" title="Toglie questa vista (il file non viene toccato)" onclick="rimuoviPolare(2);">Rimuovi</button></div>
+            <div class="polar-nota" id="polMsg2"></div>
+            <div class="polar-tela"><canvas id="birdsChart2" width="300" height="300"></canvas></div>
         </div>
-        <div class="card">
-            <canvas id="birdsChart3" width="450" height="300"></canvas>
+        <div class="card" id="polCard3" style="display:none;">
+            <div class="polar-cap"><span class="color-dot" id="polPunto3"></span><span class="polar-nome" id="polNome3"></span><button class="btn btn-secondary btn-sm" type="button" title="Toglie questa vista (il file non viene toccato)" onclick="rimuoviPolare(3);">Rimuovi</button></div>
+            <div class="polar-nota" id="polMsg3"></div>
+            <div class="polar-tela"><canvas id="birdsChart3" width="300" height="300"></canvas></div>
         </div>
-        <div class="card">
-            <canvas id="birdsChart4" width="450" height="300"></canvas>
+        <div class="card" id="polCard4" style="display:none;">
+            <div class="polar-cap"><span class="color-dot" id="polPunto4"></span><span class="polar-nome" id="polNome4"></span><button class="btn btn-secondary btn-sm" type="button" title="Toglie questa vista (il file non viene toccato)" onclick="rimuoviPolare(4);">Rimuovi</button></div>
+            <div class="polar-nota" id="polMsg4"></div>
+            <div class="polar-tela"><canvas id="birdsChart4" width="300" height="300"></canvas></div>
         </div>
     </div>
 
 </div>
 
-<!-- ============================================
-     JavaScript - Logica invariata
-     ============================================ -->
-
 <script>
-// Chart.js v4 — confronto fino a 4 alzate (theme-aware)
-var chartColors = {
-    red:   'rgb(255, 0, 0)',
-    blue:  'rgb(0, 0, 200)',
-    green: 'rgb(0, 150, 0)',
-    black: 'rgb(200, 200, 200)'
-};
+// =====================================================================
+//  CONFRONTO: fino a 4 misure sovrapposte, differenza, collaudo sul
+//  profilo nominale (con stampa), vista polare.
+// =====================================================================
+//  Le misure stanno in 4 posti fissi (1..4), ognuno col suo colore: togliendo
+//  una misura le altre non cambiano colore. Colori leggibili (almeno 3:1) sul
+//  fondo scuro, su quello chiaro e sulla carta, lontani dal rosso e dal verde
+//  del verdetto (tools/test_usabilita_confronto.js misura il contrasto). Le
+//  curve 3 e 4 sono tratteggiate: si distinguono anche stampate in bianco e nero.
+var COLORI_CURVE = ['#e8590c', '#1c7ed6', '#be4bdb', '#0c8599'];
+var TRATTI_CURVE = [[], [], [7, 4], [2, 3]];
+
+// Lo stato della pagina. Grafico, tabella e verdetto si ridisegnano da qui:
+// mai leggere le misure dal grafico, che in vista Differenza contiene le
+// differenze (APP-08: ogni posto ha il PROPRIO array, niente curve mescolate).
+window._cmpData = window._cmpData || [];   // [1..4]: misura (array di parseCamFile) oppure null
+window._cmpNomi = window._cmpNomi || [];   // [1..4]: nome mostrato, senza .scr e senza _alz
+window._cmpFile = window._cmpFile || [];   // [1..4]: nome del file, com'e' in archivio o sul disco
+window._polData = window._polData || [];   // [1..4]: vista polare { nome, file, tipo, cam | raggi }
+var _nominal = null;                        // profilo nominale [1..360] (array di parseCamFile)
+var _timerCollaudo = null;
+var _replayRaf = null, _replayCancelled = false, _replayBackup = null, _replaySafetyTimer = null;
 
 function grfColors() {
-    var css = window.cammesGetCssVar || function(){ return ''; };
+    var css = window.cammesGetCssVar || function () { return ''; };
     return {
-        grid: css('--grid')       || '#2a2a4a',
-        text: css('--text-muted') || '#8888aa'
+        grid: css('--grid')           || '#2a2a4a',
+        text: css('--text-secondary') || '#a4afc1'
     };
 }
 
-var lineChartData = {
-    labels: [],
-    datasets: [
-        { label: 'grafico1', borderColor: chartColors.red,   backgroundColor: chartColors.red,   fill: false, pointHoverRadius: 5, pointRadius: 1, borderWidth: 2, tension: 0.15, data: [] },
-        { label: 'grafico2', borderColor: chartColors.blue,  backgroundColor: chartColors.blue,  fill: false, pointHoverRadius: 5, pointRadius: 1, borderWidth: 2, tension: 0.15, data: [] },
-        { label: 'grafico3', borderColor: chartColors.green, backgroundColor: chartColors.green, fill: false, pointHoverRadius: 5, pointRadius: 1, borderWidth: 2, tension: 0.15, data: [] },
-        { label: 'grafico4', borderColor: chartColors.black, backgroundColor: chartColors.black, fill: false, pointHoverRadius: 5, pointRadius: 1, borderWidth: 2, tension: 0.15, data: [] }
-    ]
-};
-
-window.onload = function() {
-    var ctx = document.getElementById('canvas').getContext('2d');
-    window.myLine = new Chart(ctx, {
-        type: 'line',
-        data: lineChartData,
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: { duration: 250 },
-            plugins: {
-                legend:  { labels: { color: grfColors().text } },
-                tooltip: { mode: 'index', intersect: false }
-            },
-            interaction: { mode: 'index', intersect: false },
-            scales: {
-                x: {
-                    display: false,
-                    title: { display: true, text: 'gradi', color: grfColors().text },
-                    grid:  { color: grfColors().grid }
-                },
-                y: {
-                    type: 'linear',
-                    title: { display: true, text: 'valore (mm)', color: grfColors().text },
-                    grid:  { color: grfColors().grid, drawOnChartArea: true },
-                    ticks: { color: grfColors().text }
-                }
-            }
-        }
-    });
-};
-
-document.addEventListener('cammes:theme:change', function () {
-    if (!window.myLine) return;
-    var c = grfColors();
-    var o = window.myLine.options;
-    o.plugins.legend.labels.color = c.text;
-    o.scales.x.grid.color = c.grid;  o.scales.x.title.color = c.text;
-    o.scales.y.grid.color = c.grid;  o.scales.y.title.color = c.text;  o.scales.y.ticks.color = c.text;
-    window.myLine.update('none');
-});
-</script>
-
-<script type="text/javascript">
-var index = 0;
-var vmax = 0;
-var gmax = 0;
-// APP-08 (anti-contaminazione): ogni slot 1..4 ha il PROPRIO array cam[1..360].
-// update() legge da qui, NON più da un array globale `valori` condiviso: prima,
-// caricando un file più corto del precedente, gli indici alti restavano quelli
-// del file vecchio → curve mescolate. Ora ogni file vive nel suo slot.
-window._cmpData = window._cmpData || [];
-
-function loadFile() {
-    var input = document.getElementById('fileinput1');
-    if (!input) { bodyAppend("p", "non riesco a trovare questo file"); return; }
-    if (!input.files || !input.files[0]) { bodyAppend("p", "il browser non supporta la proprieta' file"); return; }
-
-    var nom = input.files[0].name.split('.');
-    var nomes = nom[0].split('_');
-    var tfile = nomes[nomes.length - 1];
-    if (tfile != "alz") { alert('tipologia file non valida'); return; }
-
-    var file = input.files[0];
-    var fr = new FileReader();
-    fr.onload = function () { showResult(fr, nom[0]); };
-    fr.readAsText(file);
+// Numeri sugli assi: virgola decimale, senza zeri inutili (0,5 - 2 - 10).
+function _tickMm(v) {
+    var n = Math.round(Number(v) * 1000) / 1000;
+    if (!isFinite(n)) return '';
+    return String(n === 0 ? 0 : n).replace('.', ',');
 }
 
-// APP-08/APP-09: usa il parser robusto parseCamFile (colonna-grado, tollerante a
-// \n/\r\n, metadati #k=v, ';'+virgola decimale) invece dello split posizionale
-// fragile. `cam` è un array [1..360] di numeri con .validCount/.missingCount/.meta.
-function showResult(fr, fileLabel) {
-    var cam = parseCamFile(fr.result);
-    _commitCmpCurve(cam, fileLabel);
+// "9,612 mm", oppure "n.d." se il valore non c'e'.
+function _mm(x, dec) {
+    var num = window.cammesNum || function (y, d) { return Number(y).toFixed(d).replace('.', ','); };
+    if (x === null || x === undefined || x === '' || !isFinite(Number(x))) return 'n.d.';
+    return num(x, dec == null ? 3 : dec) + ' mm';
 }
 
-// Registra la curva nello slot corrente, aggiorna tabella + grafico.
-// Ritorna true se caricata, false se scartata (guardie APP-09 / max 4 file).
-// Condiviso tra il picker (showResult) e il loader da URL (_loadAlzFromText):
-// così le guardie APP-08/APP-09 restano allineate in un solo punto.
-function _commitCmpCurve(cam, label) {
-    // GUARDIA APP-09: file irriconoscibile → non caricare lo slot.
-    if (!cam || cam.validCount < 30) {
-        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'File non riconosciuto', body: 'solo ' + (cam ? cam.validCount : 0) + ' righe valide', duration: 6000 });
-        return false;
-    }
-    if (index >= 4) {
-        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Massimo 4 file', body: 'Limite Confronto raggiunto. Reset per caricarne altri.', duration: 3000 });
-        return false;
-    }
-    // Misura incompleta: si procede ma si avvisa (i buchi restano 0 nell'array).
-    if (cam.missingCount > 0 || (cam.meta && cam.meta.stato === 'INCOMPLETO')) {
-        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura incompleta', body: cam.missingCount + ' gradi mancanti (riempiti a 0), confronto indicativo', duration: 5000 });
-    }
-    var _sosp = avvisoMisuraSospetta(cam.meta);
-    if (_sosp && window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura sospetta', body: _sosp.replace('MISURA SOSPETTA: ', '') + ': al banco il programma aveva chiesto di ripeterla. Confronto indicativo.', duration: 8000 });
-    // Picco e grado del picco da cam[1..360] con Number(), senza vmax1.split('.')
-    // fragile (lanciava se il valore non aveva il punto decimale).
-    var localVmax = 0, localGmax = 0;
-    for (var i = 1; i <= 360; i++) {
-        var v = Number(cam[i]);
-        if (isFinite(v) && v > localVmax) { localVmax = v; localGmax = i; }
-    }
-    index = index + 1;
-    window._cmpData[index] = cam;      // ogni slot il PROPRIO array
-    vmax = localVmax; gmax = localGmax;
-
-    // SEC-03: textContent, non innerHTML — label è il nome del file (arbitrario,
-    // mai sanificato). gmax/vmax sono numerici ma si uniforma a textContent.
-    var prefix = ['g1', 'g2', 'g3', 'g4'][index - 1];
-    document.getElementById(prefix + 'g').textContent = localGmax;
-    document.getElementById(prefix + 'v').textContent = localVmax.toFixed(2);
-    document.getElementById('lb' + index).textContent = label;
-    update();
-    return true;
+// "1 grado", "3 gradi": singolare e plurale giusti nei messaggi.
+function _conta(n, uno, tanti) {
+    return n + ' ' + (Number(n) === 1 ? uno : tanti);
 }
-</script>
 
-<script>
-function update() {
-    var mylabel = "grafico" + index;
-    // Legge la curva DELLO SLOT corrente (per-slot, APP-08), non più `valori`
-    // globale. Limite 1..360 (NON 361: la 361ª riga era una riga di metadati).
-    var cam = window._cmpData[index] || [];
-    for (var k = 1; k <= 360; k++) {
-        if (index == 1) {
-            lineChartData.labels.push(k);
-        }
-        lineChartData.datasets.forEach(function (dataset) {
-            if (dataset.label == mylabel) {
-                var v = Number(cam[k]);
-                dataset.data.push(isFinite(v) ? v : null);   // buco → null (gap nel grafico)
-            }
-        });
-    }
-    window.myLine.update();
+function _bandaVuota() {
+    return { label: '', data: [], borderColor: 'rgba(140,140,140,0.75)', borderDash: [5, 4], borderWidth: 1, pointRadius: 0, fill: false, tension: 0 };
 }
-</script>
 
-<!-- 4 Polar Charts (Chart.js v4) -->
-<script>
-function polChartOptions() {
+// Opzioni del grafico principale. Asse orizzontale acceso, una tacca ogni 30
+// gradi: il verdetto dice "a 206°" e il punto si deve poter trovare a occhio.
+function _opzioniGrafico() {
     var c = grfColors();
     return {
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 250 },
+        locale: 'it-IT',
+        plugins: {
+            legend: {
+                labels: {
+                    color: c.text,
+                    // in legenda solo cio' che c'e': niente voci vuote
+                    filter: function (voce, dati) {
+                        var d = dati.datasets[voce.datasetIndex];
+                        return !!(d && d.label && d.data && d.data.length);
+                    }
+                }
+            },
+            tooltip: {
+                mode: 'index',
+                intersect: false,
+                filter: function (v) { return v.datasetIndex < 4; },
+                callbacks: {
+                    title: function (voci) { return voci.length ? voci[0].label + '°' : ''; },
+                    label: function (v) { return (v.dataset.label || '') + ': ' + _mm(v.parsed.y, 3); }
+                }
+            }
+        },
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+            x: {
+                display: true,
+                title: { display: true, text: 'gradi camma', color: c.text },
+                grid:  { color: c.grid },
+                ticks: {
+                    color: c.text, autoSkip: false, maxRotation: 0,
+                    callback: function (valore) {
+                        var g = Number(this.getLabelForValue(valore));
+                        return g % 30 === 0 ? g + '°' : null;
+                    }
+                }
+            },
+            y: {
+                type: 'linear',
+                title: { display: true, text: 'alzata (mm)', color: c.text },
+                grid:  { color: c.grid, drawOnChartArea: true },
+                ticks: { color: c.text, callback: function (v) { return _tickMm(v); } }
+            }
+        }
+    };
+}
+
+var lineChartData = { labels: [], datasets: [] };
+for (var _c = 0; _c < 4; _c++) {
+    lineChartData.datasets.push({ label: '', data: [], borderColor: COLORI_CURVE[_c], backgroundColor: COLORI_CURVE[_c],
+        borderDash: TRATTI_CURVE[_c], fill: false, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2, tension: 0.15 });
+}
+lineChartData.datasets.push(_bandaVuota(), _bandaVuota());
+for (var _g = 1; _g <= 360; _g++) lineChartData.labels.push(_g);
+
+function _creaGrafico() {
+    var cv = document.getElementById('canvas');
+    if (!cv || window.myLine || typeof Chart === 'undefined') return;
+    window.myLine = new Chart(cv.getContext('2d'), { type: 'line', data: lineChartData, options: _opzioniGrafico() });
+}
+_creaGrafico();
+
+// ---------------------------------------------------------------------
+//  Le misure
+// ---------------------------------------------------------------------
+// Nome da mostrare: il nome del file senza estensione e senza _alz finale.
+// (Prima si tagliava al primo punto: "camma_bicch33.34_alz.scr" diventava
+// "camma_bicch33" e veniva respinta come "tipologia file non valida".)
+function _nomeDaFile(nomeFile) {
+    return String(nomeFile || '').replace(/\.(scr|txt|csv)$/i, '').replace(/_alz$/i, '');
+}
+
+function _misureCaricate() {
+    var out = [];
+    for (var k = 1; k <= 4; k++) if (window._cmpData && window._cmpData[k]) out.push(k);
+    return out;
+}
+
+function _postoLibero() {
+    for (var k = 1; k <= 4; k++) if (!window._cmpData[k]) return k;
+    return 0;
+}
+
+function _nomeMisura(k) {
+    var n = window._cmpNomi && window._cmpNomi[k];
+    if (n) return String(n);
+    var el = document.getElementById('lb' + k);
+    return (el && el.textContent) || ('misura ' + k);
+}
+
+// Perche' una misura non si puo' giudicare: gradi senza lettura, oppure file
+// segnato INCOMPLETO al salvataggio (i vecchi file zero-riempiti hanno 360
+// righe ma non sono completi). Stringa vuota = misura completa.
+function _misuraIncompleta(cam) {
+    if (!cam) return 'nessuna misura';
+    if (cam.missingCount > 0) return _conta(cam.missingCount, 'grado', 'gradi') + ' senza lettura nella misura';
+    if (cam.meta && String(cam.meta.stato || '').toUpperCase() === 'INCOMPLETO') return 'misura segnata come incompleta al salvataggio';
+    return '';
+}
+
+// Alzata massima e grado, solo sui gradi letti.
+function _picco(cam) {
+    var vMax = -Infinity, gMax = 0, cov = cam && cam.covered;
+    for (var d = 1; d <= 360; d++) {
+        if (cov && !cov[d]) continue;
+        var v = Number(cam[d]);
+        if (isFinite(v) && v > vMax) { vMax = v; gMax = d; }
+    }
+    return { valore: gMax ? vMax : NaN, grado: gMax };
+}
+
+// Registra una misura nel primo posto libero e ridisegna. Ritorna true se
+// caricata. Unico punto di ingresso (disco, archivio, indirizzo da Home):
+// le guardie APP-08/APP-09 restano in un posto solo.
+function _commitCmpCurve(cam, label, file) {
+    var esc = window.cammesEscape || function (s) { return String(s); };
+    var nomeFile = file || label;
+    // Decide il CONTENUTO, non il nome: un file con meno di 30 righe
+    // "grado,alzata" non e' una misura (GUARDIA APP-09).
+    if (!cam || cam.validCount < 30) {
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Questo file non è una misura',
+            body: esc(nomeFile) + ': servono righe «grado,alzata» (trovate ' + (cam ? cam.validCount : 0) + '). Scegli una misura salvata da Alzata, per esempio dalla tendina «Scegli dall\'archivio».', duration: 9000 });
+        return false;
+    }
+    for (var g = 1; g <= 4; g++) {
+        if (window._cmpData[g] && window._cmpFile[g] === nomeFile) {
+            if (window.cammesToast) window.cammesToast({ kind: 'info', title: 'Misura già nel confronto', body: esc(label), duration: 3000 });
+            return false;
+        }
+    }
+    var k = _postoLibero();
+    if (!k) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Al massimo 4 misure', body: 'Per caricarne un\'altra togline una con «Rimuovi» nella tabella.', duration: 6000 });
+        return false;
+    }
+    // Misura incompleta: si carica, ma si dice (nel grafico i buchi restano vuoti).
+    if (cam.missingCount > 0 || (cam.meta && cam.meta.stato === 'INCOMPLETO')) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura incompleta',
+            body: esc(label) + ': ' + (cam.missingCount > 0 ? _conta(cam.missingCount, 'grado', 'gradi') + ' senza lettura (nel grafico restano vuoti)' : 'il file è segnato come incompleto') + '. Confronto indicativo; nel collaudo risulta NON VALUTABILE.', duration: 8000 });
+    }
+    var _sosp = avvisoMisuraSospetta(cam.meta);
+    if (_sosp && window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura sospetta', body: esc(label) + ': ' + _sosp.replace('MISURA SOSPETTA: ', '') + ': al banco il programma aveva chiesto di ripeterla. Confronto indicativo.', duration: 8000 });
+    window._cmpData[k] = cam;
+    window._cmpNomi[k] = label;
+    window._cmpFile[k] = nomeFile;
+    _aggiornaTutto();
+    return true;
+}
+
+function rimuoviMisura(k) {
+    if (!window._cmpData[k]) return;
+    window._cmpData[k] = null;
+    window._cmpNomi[k] = null;
+    window._cmpFile[k] = null;
+    _aggiornaTutto();
+}
+
+function _etichetta(testo, spiega, classe) {
+    var s = document.createElement('span');
+    s.className = 'cmp-tag' + (classe ? ' ' + classe : '');
+    s.textContent = testo;
+    if (spiega) s.title = spiega;
+    return s;
+}
+
+// Una curva salvata da Analisi con "Salva profilo" puo' essere gia' convertita
+// alla punteria simulata (prima riga "_pline_conv:tipo:parametro", per esempio
+// "_pline_conv:bicch:33.34"): sovrapposta a una lettura grezza del banco senza
+// saperlo darebbe un confronto sbagliato. Si dice accanto al nome, in parole
+// come in Analisi (bicchiere, rullo, leva a dito) e con la virgola, mai col
+// pezzo grezzo del file. Stringa vuota = lettura grezza.
+function _curvaConvertita(testo) {
+    var prima = (String(testo).split(/\r?\n/)[0] || '').trim();
+    if (prima.indexOf('_pline_conv') !== 0) return '';
+    var parti = prima.substring('_pline_conv'.length).replace(/^[:|]/, '').split(/[:|]/);
+    var tipo = String(parti[0] || '').trim().toLowerCase(), par = String(parti[1] || '').trim();
+    function mm(s) {
+        var t = String(s === undefined ? '' : s).trim(), v = Number(t);
+        return t !== '' && isFinite(v) && v > 0 ? String(v).replace('.', ',') : '';
+    }
+    if (tipo === 'bicch') return mm(par) ? 'bicchiere Ø ' + mm(par) + ' mm' : 'bicchiere';
+    if (tipo === 'roll' || tipo === 'roller') return mm(par) ? 'rullo di raggio ' + mm(par) + ' mm' : 'rullo';
+    if (tipo === 'finger') {
+        var ab = par.split(/x/i);
+        return mm(ab[0]) && mm(ab[1]) ? 'leva a dito ' + mm(ab[0]) + ' / ' + mm(ab[1]) + ' mm' : 'leva a dito';
+    }
+    return 'tipo non indicato';
+}
+
+// La frase che lo dice: la stessa sullo schermo e nel PDF del collaudo.
+function _fraseConvertita(conv) {
+    return 'curva già convertita alla punteria simulata (' + conv + '), non la lettura grezza del banco';
+}
+
+// Tabella: una riga per misura caricata, niente righe finte a zero.
+function _aggiornaTabella() {
+    var corpo = document.getElementById('corpoMisure');
+    if (!corpo) return;
+    var num = window.cammesNum || function (x, d) { return Number(x).toFixed(d).replace('.', ','); };
+    var carichi = _misureCaricate();
+    corpo.innerHTML = '';
+    carichi.forEach(function (k) {
+        var misura = window._cmpData[k];
+        var pk = _picco(misura);
+        var tr = document.createElement('tr');
+        var tdNome = document.createElement('td');
+        tdNome.className = 'cmp-nome';
+        var punto = document.createElement('span');
+        punto.className = 'color-dot';
+        punto.style.background = COLORI_CURVE[k - 1];
+        punto.style.color = COLORI_CURVE[k - 1];
+        var nome = document.createElement('span');
+        nome.id = 'lb' + k;
+        nome.textContent = _nomeMisura(k);            // SEC-03: testo, mai HTML
+        nome.title = String(window._cmpFile[k] || '');
+        tdNome.appendChild(punto);
+        tdNome.appendChild(nome);
+        var manca = _misuraIncompleta(misura);
+        if (manca) tdNome.appendChild(_etichetta('incompleta', manca));
+        else if (avvisoMisuraSospetta(misura.meta)) tdNome.appendChild(_etichetta('sospetta', avvisoMisuraSospetta(misura.meta)));
+        if (misura.convertita) tdNome.appendChild(_etichetta('convertita', _fraseConvertita(misura.convertita).replace(/^c/, 'C'), 'info'));
+        // sotto il nome, l'alzata massima e il suo grado (nel pannello stretto
+        // una terza colonna lasciava al nome pochi caratteri)
+        var alz = document.createElement('div');
+        alz.className = 'cmp-dettaglio';
+        alz.textContent = 'alzata massima ' + (isFinite(pk.valore) ? num(pk.valore, 2) + ' mm a ' + pk.grado + '°' : 'n.d.');
+        tdNome.appendChild(alz);
+        var tdAz = document.createElement('td');
+        tdAz.className = 'cmp-azione';
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn btn-secondary btn-sm';
+        b.textContent = 'Rimuovi';
+        b.title = 'Toglie questa misura dal confronto (il file non viene toccato)';
+        b.addEventListener('click', function () { rimuoviMisura(k); });
+        tdAz.appendChild(b);
+        tr.appendChild(tdNome);
+        tr.appendChild(tdAz);
+        corpo.appendChild(tr);
+    });
+    var tab = document.getElementById('tabellaMisure');
+    if (tab) tab.style.display = carichi.length ? '' : 'none';
+    var vuota = document.getElementById('tabellaVuota');
+    if (vuota) vuota.style.display = carichi.length ? 'none' : '';
+}
+
+function _aggiornaTutto() {
+    _aggiornaTabella();
+    _aggiornaGrafico(false);
+}
+
+// Curve, poi banda e verdetto (evalNominal aggiorna anche il grafico).
+function _aggiornaGrafico(daUtente) {
+    _disegnaCurve(daUtente);
+    evalNominal({ silenziosa: true });
+}
+
+// ---------------------------------------------------------------------
+//  Disegno delle curve e vista Differenza
+// ---------------------------------------------------------------------
+// Valori da disegnare: un grado senza lettura resta vuoto (null), non zero.
+function _valoriDaDisegnare(cam) {
+    var out = [], cov = cam && cam.covered;
+    for (var d = 1; d <= 360; d++) {
+        var v = Number(cam[d]);
+        out.push((cov && !cov[d]) || !isFinite(v) ? null : v);
+    }
+    return out;
+}
+
+// Copia [0..360] con NaN dove il grado non e' stato letto (scartoDalNominale
+// esclude i valori non finiti: un buco non diventa uno zero misurato).
+function _soloLetti(cam) {
+    var out = [0], cov = cam && cam.covered;
+    for (var d = 1; d <= 360; d++) {
+        var v = Number(cam[d]);
+        out.push((cov && !cov[d]) || !isFinite(v) ? NaN : v);
+    }
+    return out;
+}
+
+// Valore di una curva alla posizione x in gradi (anche frazionaria), a giro
+// chiuso, per interpolazione lineare fra i due gradi vicini: la stessa lettura
+// che il collaudo fa sul nominale (lib/cammes-math.js, scartoDalNominale).
+// Un grado senza lettura da' NaN.
+function _letturaA(curva, x) {
+    var i0 = Math.floor(x), t = x - i0;
+    var k0 = ((i0 - 1) % 360 + 360) % 360 + 1, k1 = (k0 % 360) + 1;
+    var cov = curva && curva.covered;
+    var v0 = (cov && !cov[k0]) ? NaN : Number(curva[k0]);
+    if (t < 1e-9) return v0;
+    var v1 = (cov && !cov[k1]) ? NaN : Number(curva[k1]);
+    return (1 - t) * v0 + t * v1;
+}
+
+// Differenza grado per grado fra una misura e il riferimento (la prima misura).
+// allinea=true: prima la misura viene fatta combaciare col riferimento con la
+// stessa regola del collaudo (scartoDalNominale: a frazioni di grado, si legge
+// il riferimento fra due gradi, la misura non si tocca) e lo spostamento torna
+// indietro per essere scritto. allinea=false: differenza grezza, come prima.
+function _differenza(rif, mis, allinea) {
+    var letti = _soloLetti(mis);
+    var s = 0;
+    if (allinea) s = scartoDalNominale(letti, rif).spostamento || 0;
+    var dati = [], max = 0, grado = 0, somma = 0, somma2 = 0, n = 0;
+    for (var d = 1; d <= 360; d++) {
+        var m = letti[d], r = _letturaA(rif, d + s);
+        if (!isFinite(m) || !isFinite(r)) { dati.push(null); continue; }
+        var x = m - r, a = Math.abs(x);
+        dati.push(x);
+        if (a > max) { max = a; grado = d; }
+        somma += a; somma2 += x * x; n++;
+    }
+    return { dati: dati, spostamento: s, max: max, grado: grado, punti: n, somma: somma, somma2: somma2,
+             medio: n ? somma / n : NaN, quadratico: n ? Math.sqrt(somma2 / n) : NaN };
+}
+
+function _testoSpostamento(s, html) {
+    var deg = html ? '&deg;' : '°';
+    if (!s) return 'nessuno spostamento';
+    return 'riallineata di ' + (s > 0 ? '+' : '') + String(s).replace('.', ',') + deg;
+}
+
+function _disegnaCurve(daUtente) {
+    var ch = window.myLine;
+    if (!ch) return;
+    if (_replayBackup) stopReplay();         // un ridisegno in corso si chiude: i dati cambiano
+    var sel = document.getElementById('viewMode');
+    var carichi = _misureCaricate();
+    var inDiff = !!(sel && sel.value === 'diff');
+    if (inDiff && carichi.length < 2) {
+        sel.value = 'overlay';
+        inDiff = false;
+        if ((daUtente || carichi.length === 1) && window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Servono almeno 2 misure',
+            body: daUtente ? 'Per vedere la differenza aggiungi una seconda misura al passo 1 (dall\'archivio o dal disco).'
+                           : 'È rimasta una sola misura: torno alle curve sovrapposte.', duration: 6000 });
+    }
+    var ds = ch.data.datasets;
+    var rifK = carichi.length ? carichi[0] : 0;
+    var rif = rifK ? window._cmpData[rifK] : null;
+    var allinea = !!(document.getElementById('allineaFase') || {}).checked;
+    var confronti = [];
+    for (var k = 1; k <= 4; k++) {
+        var d = ds[k - 1];
+        var cam = window._cmpData[k];
+        d.label = cam ? _nomeMisura(k) : '';
+        d.borderColor = COLORI_CURVE[k - 1];
+        d.backgroundColor = COLORI_CURVE[k - 1];
+        d.borderDash = TRATTI_CURVE[k - 1];
+        if (!cam) { d.data = []; continue; }
+        if (!inDiff) { d.data = _valoriDaDisegnare(cam); continue; }
+        if (k === rifK) { d.data = _valoriDaDisegnare(cam).map(function (v) { return v === null ? null : 0; }); continue; }
+        var r = _differenza(rif, cam, allinea);
+        d.data = r.dati;
+        confronti.push({ k: k, r: r });
+    }
+    ch.options.scales.y.title.text = inDiff ? 'differenza (mm)' : 'alzata (mm)';
+    var af = document.getElementById('allineaFaseBox');
+    if (af) af.style.display = inDiff ? '' : 'none';
+    var vuoto = document.getElementById('graficoVuoto');
+    if (vuoto) vuoto.style.display = carichi.length ? 'none' : '';
+    _scriviDifferenza(inDiff ? rifK : 0, confronti, allinea);
+    // La tela cede ai riquadri della Differenza la loro altezza: con 480 px
+    // fissi l'asse dei gradi finiva sotto il bordo dello schermo a 1366x768
+    // (visto nel browser: fondo del grafico a 795 px con 2 misure, a 882 con 4).
+    var tela = document.getElementById('canvas'), riquadri = document.getElementById('diffStats');
+    if (tela && tela.style) {
+        var alta = _altezzaGrafico(inDiff, inDiff && riquadri ? riquadri.offsetHeight : 0);
+        if (tela.style.maxHeight !== alta) {
+            tela.style.maxHeight = alta;
+            if (typeof ch.resize === 'function') ch.resize();
+        }
+    }
+}
+
+// Altezza massima della tela: '' = quella del foglio di stile (480 px,
+// .chart-card canvas); in Differenza 480 meno i riquadri dei numeri, mai sotto
+// 260 px perche' le curve restino leggibili.
+function _altezzaGrafico(inDiff, altezzaRiquadri) {
+    if (!inDiff) return '';
+    var ALTA = 480, MINIMA = 260;
+    return Math.max(MINIMA, Math.round(ALTA - (Number(altezzaRiquadri) || 0) - 12)) + 'px';
+}
+
+// Riquadri sopra il grafico in vista Differenza: testata su una riga, parole
+// semplici, numeri con la virgola, tutti dello stesso colore. Niente colori a
+// soglie fisse: non erano la tolleranza dell'operatore e sembravano un giudizio
+// (il giudizio e' il collaudo sul nominale). I numeri restano tutti.
+function _scriviDifferenza(rifK, confronti, allinea) {
+    var box = document.getElementById('diffStats');
+    if (!box) return;
+    if (!rifK) { box.innerHTML = ''; box.style.display = 'none'; return; }
+    var num = window.cammesNum || function (x, d) { return Number(x).toFixed(d).replace('.', ','); };
+    var esc = window.cammesEscape || function (s) { return String(s); };
+    var max = 0, gradoMax = 0, kMax = 0, somma = 0, somma2 = 0, n = 0;
+    confronti.forEach(function (c) {
+        if (c.r.max >= max) { max = c.r.max; gradoMax = c.r.grado; kMax = c.k; }
+        somma += c.r.somma; somma2 += c.r.somma2; n += c.r.punti;
+    });
+    var medio = n ? somma / n : NaN, quadratico = n ? Math.sqrt(somma2 / n) : NaN;
+    function riquadro(etichetta, valore, sotto) {
+        return '<div class="diff-stat"><div class="diff-stat-label">' + etichetta + '</div>' +
+               '<div class="diff-stat-value">' + valore + '</div>' +
+               (sotto ? '<div class="diff-sotto">' + sotto + '</div>' : '') + '</div>';
+    }
+    var tutte = confronti.length > 1 ? ' (tutte le curve)' : '';
+    var testa = 'Riferimento: <b>' + esc(_nomeMisura(rifK)) + '</b> &middot; ';
+    if (!allinea) testa += 'differenza grezza, senza riallineare';
+    else if (confronti.length === 1) testa += '<b>' + esc(_nomeMisura(confronti[0].k)) + '</b>: ' + _testoSpostamento(confronti[0].r.spostamento, true);
+    else testa += 'ogni curva riallineata al riferimento';
+    var html = '<div class="diff-testa">' + testa + '</div><div class="diff-tiles">' +
+        riquadro('Scarto massimo' + tutte, num(max, 3) + ' mm', kMax && max > 0 ? 'a ' + gradoMax + '&deg; &middot; ' + esc(_nomeMisura(kMax)) : '') +
+        riquadro('Scarto medio' + tutte, num(medio, 3) + ' mm', '') +
+        riquadro('Scarto quadratico medio' + tutte, num(quadratico, 3) + ' mm', '') +
+        riquadro('Curve confrontate', String(confronti.length), 'con il riferimento') + '</div>';
+    if (confronti.length > 1) {
+        confronti.forEach(function (c) {
+            html += '<div class="diff-riga"><span class="color-dot" style="background:' + COLORI_CURVE[c.k - 1] + ';"></span><b>' + esc(_nomeMisura(c.k)) + '</b>: ' +
+                (allinea ? _testoSpostamento(c.r.spostamento, true) + ' &middot; ' : '') +
+                'scarto massimo ' + num(c.r.max, 3) + ' mm' + (c.r.max > 0 ? ' a ' + c.r.grado + '&deg;' : '') +
+                ' &middot; medio ' + num(c.r.medio, 3) + ' mm &middot; quadratico medio ' + num(c.r.quadratico, 3) + ' mm</div>';
+        });
+    }
+    box.innerHTML = html;
+    box.style.display = '';
+}
+
+function switchViewMode() { _aggiornaGrafico(true); }
+function showOverlayView() { var s = document.getElementById('viewMode'); if (s) s.value = 'overlay'; _aggiornaGrafico(false); }
+function showDiffView() { var s = document.getElementById('viewMode'); if (s) s.value = 'diff'; _aggiornaGrafico(true); }
+
+// ---------------------------------------------------------------------
+//  Collaudo su profilo nominale: banda nominale ± tolleranza e verdetto
+// ---------------------------------------------------------------------
+// La tolleranza, letta come la scrive chi sta al banco ("0,05" con la
+// virgola). Un valore non valido (vuoto, zero, negativo, testo) non diventa
+// un altro numero: il verdetto non si emette e il campo viene segnalato.
+// silenziosa=true (mentre si scrive): solo il bordo rosso, senza messaggio e
+// senza riportare il cursore nel campo.
+function _tolleranzaCollaudo(silenziosa) {
+    var el = document.getElementById('tolMm');
+    var r = validaNumero(el ? el.value : '', { min: 0, minEsclusivo: true });
+    if (el && el.classList) {
+        if (r.ok) { el.classList.remove('input-error'); if (el.removeAttribute) el.removeAttribute('aria-invalid'); }
+        else if (silenziosa) { el.classList.add('input-error'); if (el.setAttribute) el.setAttribute('aria-invalid', 'true'); }
+    }
+    if (!r.ok && el && !silenziosa && window.cammesValidate) {
+        window.cammesValidate.error(el, 'Tolleranza non valida: scrivi un numero maggiore di zero, per esempio 0,05.');
+    }
+    return r;
+}
+
+function _testoTolleranza(tol) {
+    return (tol < 1 ? tol.toFixed(3).replace(/0$/, '') : String(tol)).replace('.', ',');   // 0,05  0,10  0,125
+}
+
+// Il dettaglio di una riga di verdetto, con le stesse parole sullo schermo
+// (html) e nel PDF del collaudo, cosi' carta e schermo non si contraddicono.
+// breve=true (schermo): senza "entro ± 0,10 mm", che il riquadro scrive una
+// volta sola in testa; cosi' la riga sta su una riga del pannello stretto.
+function _dettaglioVerdetto(r, tolTxt, html, breve) {
+    var num = window.cammesNum || function (x, d) { return Number(x).toFixed(d).replace('.', ','); };
+    var esc = html ? (window.cammesEscape || function (s) { return String(s).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); })
+                   : function (s) { return String(s); };
+    var deg = html ? '&deg;' : '°', sep = html ? ' &middot; ' : ' · ', pm = html ? '&plusmn;' : '± ';
+    if (r.stato === 'NON VALUTABILE') return esc(r.motivo);
+    // il grado dello scarto si scrive solo se uno scarto c'e'
+    var sc = 'scarto massimo ' + num(r.scartoMax, 3) + ' mm' + (r.scartoMax > 0 && r.grado >= 1 ? ' a ' + r.grado + deg : '') +
+             (r.spostamento ? sep + _testoSpostamento(r.spostamento, html) : '');
+    if (r.stato === 'TOLLERANZA NON VALIDA') return sc + sep + 'verdetto non emesso';
+    if (breve) return sc;
+    return (r.stato === 'CONFORME' ? 'entro ' : 'fuori da ') + pm + tolTxt + ' mm' + sep + sc;
+}
+
+// Una riga di verdetto: parola e nome sulla stessa riga, lo scarto sotto.
+function _rigaVerdetto(r, tolTxt) {
+    var esc = window.cammesEscape || function (s) { return String(s).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); };
+    var classe = r.stato === 'CONFORME' ? 'ok' : (r.stato === 'NON CONFORME' ? 'ko' : 'nv');
+    var parola = r.stato === 'CONFORME' ? '&#10003; CONFORME' : (r.stato === 'NON CONFORME' ? '&#10007; NON CONFORME' : '&#9888; ' + r.stato);
+    var colore = (typeof COLORI_CURVE !== 'undefined' && COLORI_CURVE[r.k - 1]) || 'transparent';
+    return '<div class="verdetto-riga ' + classe + '"><div class="verdetto-testa">' +
+        '<span class="verdetto-parola">' + parola + '</span>' +
+        '<span class="verdetto-nome"><span class="color-dot" style="background:' + colore + ';"></span>' + esc(r.nome) + '</span></div>' +
+        '<div class="verdetto-dettaglio">' + _dettaglioVerdetto(r, tolTxt, true, true) + '</div></div>';
+}
+
+// Perche' il nominale non si puo' usare, in parole dell'officina. La regola
+// resta una sola, quella della libreria (canProduceOfficialResult): qui si
+// riscrive solo il suo messaggio, che arriva anche nel PDF del cliente.
+function _motivoNominale(motivo) {
+    var m = String(motivo || '');
+    if (/INCOMPLETO/i.test(m)) return 'il file è segnato come incompleto (misura interrotta o con buchi)';
+    if (/convenzione/i.test(m)) return 'gradi numerati sia da 0 sia da 1 nello stesso file';
+    if (/gradi senza misura/.test(m) && isFinite(parseInt(m, 10))) return _conta(parseInt(m, 10), 'grado', 'gradi') + ' senza lettura';
+    if (/anomalie/i.test(m)) return 'righe non valide nel file (gradi ripetuti, gradi con decimali o righe non lette)';
+    return m;
+}
+
+// Banda e verdetto. Si richiama da solo a ogni cambio di misura, di nominale,
+// di vista e di tolleranza: il verdetto sullo schermo e' sempre quello delle
+// misure caricate (prima restava quello vecchio finche' non si premeva
+// Rivaluta). Ritorna l'esito, che la stampa del collaudo riusa tale e quale.
+function evalNominal(opz) {
+    var silenziosa = !!(opz && opz.silenziosa);
+    var esc = window.cammesEscape || function (s) { return String(s).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); };
+    // un "Ridisegna" in corso si chiude prima: la sua copia dei dati ha la
+    // banda di prima, e a ogni fotogramma la rimetterebbe al posto di questa
+    if (_replayBackup) stopReplay();
+    var box = document.getElementById('verdictBox');
+    var riquadro = document.getElementById('collaudoBox'), azioni = document.getElementById('collaudoAzioni');
+    var ch = window.myLine;
+    var ds = ch ? ch.data.datasets : null;
+    if (ds) while (ds.length < 6) ds.push(_bandaVuota());
+    if (!_nominal) {
+        if (ds) { ds[4] = _bandaVuota(); ds[5] = _bandaVuota(); ch.update('none'); }
+        if (box) box.innerHTML = '';
+        if (riquadro) riquadro.style.display = 'none';
+        if (azioni) azioni.style.display = 'none';
+        window._esitoCollaudo = null;
+        return null;
+    }
+    // AUDIT APP-09 + DATA-04: il nominale passa dal gate UNICO
+    // canProduceOfficialResult (incompleto, anomalie, convenzione mista).
+    var _nomGate = canProduceOfficialResult(_nominal);
+    var motivoNom = _nomGate.ok ? '' : _motivoNominale(_nomGate.reason);
+    var tolR = _tolleranzaCollaudo(silenziosa);
+    var tolOk = tolR.ok, tol = tolOk ? tolR.valore : NaN;
+    var tolTxt = tolOk ? _testoTolleranza(tol) : '';
+
+    // LE MISURE SI LEGGONO DAGLI SLOT (window._cmpData), MAI DAL GRAFICO: in
+    // vista Differenza il grafico contiene le differenze dalla prima curva.
+    var inDifferenza = ((document.getElementById('viewMode') || {}).value === 'diff');
+    var misure = [];
+    for (var k = 0; k < 4; k++) misure.push((window._cmpData && window._cmpData[k + 1]) || null);
+    var primaK = 0;
+    for (var k2 = 0; k2 < 4; k2++) if (misure[k2]) { primaK = k2 + 1; break; }
+    var prima = primaK ? misure[primaK - 1] : null;
+
+    // Banda nominale ± tolleranza, allineata alla PRIMA misura con lo stesso
+    // spostamento del suo verdetto (frazioni di grado): per quella misura
+    // "dentro la banda" e CONFORME coincidono. Il bordo basso non si taglia a
+    // zero. In vista Differenza la banda non si disegna (starebbe alla quota
+    // dell'alzata in mezzo a differenze di decimi); il verdetto resta scritto.
+    if (ds) {
+        if (tolOk && !inDifferenza) {
+            var bandShift = prima ? (scartoDalNominale(_soloLetti(prima), _nominal).spostamento || 0) : 0;
+            var plus = [], minus = [];
+            for (var d = 1; d <= 360; d++) {
+                var nv = _letturaA(_nominal, d + bandShift);
+                plus.push(isFinite(nv) ? nv + tol : null);
+                minus.push(isFinite(nv) ? nv - tol : null);
+            }
+            var banda = _bandaVuota();
+            banda.label = 'Nominale ± ' + tolTxt + ' mm' + (prima ? ' (allineato a ' + _nomeMisura(primaK) + ')' : '');
+            banda.data = plus;
+            var bandaSotto = _bandaVuota();
+            bandaSotto.data = minus;
+            bandaSotto.fill = '-1';
+            bandaSotto.backgroundColor = 'rgba(140,140,140,0.14)';
+            ds[4] = banda;
+            ds[5] = bandaSotto;
+        } else {
+            ds[4] = _bandaVuota();
+            ds[5] = _bandaVuota();
+        }
+        ch.update('none');
+    }
+
+    // verdetto per ogni misura caricata, ognuna col PROPRIO allineamento
+    var nomeNom = window._nominaleNome || '(senza nome)';
+    var html = '<div class="collaudo-testa">Collaudo sul nominale <b>' + esc(nomeNom) + '</b> &middot; ' +
+        (tolOk ? 'tolleranza &plusmn;' + tolTxt + ' mm' : '<b>tolleranza non valida</b>: scrivi un numero maggiore di zero, per esempio 0,05') + '</div>';
+    if (!_nomGate.ok) {
+        html += '<div class="collaudo-avviso">&#9888; NON VALUTABILE &mdash; profilo nominale: ' + esc(motivoNom) + '. Carica un nominale completo e pulito (360 gradi) per il collaudo.</div>';
+    }
+    var righe = [];
+    for (var c = 0; c < 4; c++) {
+        if (!misure[c]) continue;
+        var camC = misure[c];
+        var riga = { k: c + 1, nome: _nomeMisura(c + 1), stato: '', motivo: '', scartoMax: NaN, grado: 0, spostamento: 0 };
+        // AUDIT APP-09: misura o nominale incompleti -> NON VALUTABILE, mai CONFORME
+        var manca = _misuraIncompleta(camC);
+        if (!_nomGate.ok || manca) {
+            riga.stato = 'NON VALUTABILE';
+            riga.motivo = !_nomGate.ok ? 'profilo nominale non valutabile' : manca;
+        } else {
+            // Scarto a FORMA ALLINEATA (lib/cammes-math.js: scartoDalNominale):
+            // il collaudo giudica il profilo, non la fase. Lo spostamento si dichiara.
+            var sc = scartoDalNominale(camC, _nominal);
+            riga.scartoMax = sc.scartoMax;
+            riga.grado = sc.gradoScartoMax;
+            riga.spostamento = sc.spostamento;
+            // senza una tolleranza valida non c'e' giudizio, ma il numero misurato resta
+            if (!tolOk) riga.stato = 'TOLLERANZA NON VALIDA';
+            else riga.stato = sc.scartoMax <= tol ? 'CONFORME' : 'NON CONFORME';
+        }
+        righe.push(riga);
+        html += _rigaVerdetto(riga, tolTxt);
+    }
+    if (!righe.length) html += '<div class="collaudo-attesa">Carica almeno una misura (passo 1) per avere il verdetto.</div>';
+    if (box) box.innerHTML = html;
+    if (riquadro) riquadro.style.display = '';
+    if (azioni) azioni.style.display = righe.length ? '' : 'none';    // si stampa quando c'e' un verdetto
+    var esito = { nominale: nomeNom, nominaleOk: _nomGate.ok, motivoNominale: motivoNom, tolOk: tolOk, tol: tol, tolTxt: tolTxt,
+                  rifBanda: primaK, righe: righe };
+    window._esitoCollaudo = esito;
+    return esito;
+}
+
+// Tolleranza: mentre si scrive il verdetto si aggiorna dopo una breve pausa;
+// all'uscita dal campo subito.
+function _programmaCollaudo() {
+    if (_timerCollaudo) clearTimeout(_timerCollaudo);
+    _timerCollaudo = setTimeout(function () { _timerCollaudo = null; evalNominal({ silenziosa: true }); }, 450);
+}
+
+function _collaudoSubito() {
+    if (_timerCollaudo) { clearTimeout(_timerCollaudo); _timerCollaudo = null; }
+    evalNominal({ silenziosa: true });
+}
+
+function loadNominal() {
+    var input = document.getElementById('fileNominal');
+    if (!input || !input.files || !input.files[0]) return;
+    var file = input.files[0];
+    var fr = new FileReader();
+    fr.onload = function () { _caricaNominale(fr.result, file.name); input.value = ''; };
+    fr.onerror = function () {
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'File non letto', body: 'Il file scelto non si è potuto leggere: riprova o sceglilo dall\'archivio.', duration: 6000 });
+    };
+    fr.readAsText(file);
+}
+
+function _caricaNominale(testo, nomeFile) {
+    var esc = window.cammesEscape || function (s) { return String(s); };
+    var cam = parseCamFile(testo);
+    // GUARDIA APP-09: stessa soglia (30 righe valide) del percorso misure. Il
+    // nominale caricato prima, se c'e', resta.
+    if (!cam || cam.validCount < 30) {
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Questo file non è un profilo',
+            body: esc(nomeFile) + ': servono righe «grado,alzata» (una misura salvata da Alzata o un CSV di progetto); trovate ' + (cam ? cam.validCount : 0) + '.', duration: 9000 });
+        return false;
+    }
+    if (cam.missingCount > 0 || (cam.meta && cam.meta.stato === 'INCOMPLETO')) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Nominale incompleto',
+            body: esc(nomeFile) + ': ' + (cam.missingCount > 0 ? _conta(cam.missingCount, 'grado mancante', 'gradi mancanti') : 'il file è segnato come incompleto') +
+                  '. Il collaudo resta NON VALUTABILE finché il nominale non è completo.', duration: 8000 });
+    }
+    // AUDIT MAT-07: righe che il lettore ha scartato: si dice quali e cosa fare
+    if (cam.ok === false && window.cammesToast) {
+        var cosa = [];
+        if (cam.invalidRows) cosa.push(_conta(cam.invalidRows, 'riga non letta', 'righe non lette'));
+        if (cam.duplicateDegrees && cam.duplicateDegrees.length) cosa.push(_conta(cam.duplicateDegrees.length, 'grado ripetuto', 'gradi ripetuti'));
+        if (cam.fractionalDegrees && cam.fractionalDegrees.length) cosa.push(_conta(cam.fractionalDegrees.length, 'grado con decimali', 'gradi con decimali'));
+        if (cam.outOfRangeRows) cosa.push(_conta(cam.outOfRangeRows, 'grado fuori da 0-360', 'gradi fuori da 0-360'));
+        if (cam.conventionMixed) cosa.push('gradi numerati sia da 0 sia da 1');
+        window.cammesToast({ kind: 'warn', title: 'Nominale con righe scartate',
+            body: esc(nomeFile) + ': ' + (cosa.join(', ') || 'righe non valide') + '. Se la prima riga sono i titoli delle colonne (per esempio «gradi;alzata»), toglila e ricarica il file.', duration: 10000 });
+    }
+    cam.convertita = _curvaConvertita(testo);
+    _nominal = cam;
+    window._nominaleNome = _nomeDaFile(nomeFile);
+    window._nominaleFile = nomeFile;
+    _aggiornaNominaleUI();
+    evalNominal();
+    return true;
+}
+
+function rimuoviNominale() {
+    _nominal = null;
+    window._nominaleNome = null;
+    window._nominaleFile = null;
+    _aggiornaNominaleUI();
+    evalNominal();
+}
+
+function _aggiornaNominaleUI() {
+    var box = document.getElementById('nominaleCaricato');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!_nominal) { box.style.display = 'none'; return; }
+    var testo = document.createElement('span');
+    testo.style.flex = '1';
+    testo.style.minWidth = '0';
+    testo.appendChild(document.createTextNode('Nominale caricato: '));
+    var b = document.createElement('b');
+    b.textContent = String(window._nominaleNome || '');      // SEC-03: testo, mai HTML
+    b.title = String(window._nominaleFile || '');
+    testo.appendChild(b);
+    if (_nominal.convertita) testo.appendChild(_etichetta('convertita', _fraseConvertita(_nominal.convertita).replace(/^c/, 'C'), 'info'));
+    var bt = document.createElement('button');
+    bt.type = 'button';
+    bt.className = 'btn btn-secondary btn-sm';
+    bt.textContent = 'Rimuovi';
+    bt.title = 'Toglie il nominale: il collaudo si ferma (il file resta dov\'è)';
+    bt.addEventListener('click', rimuoviNominale);
+    box.appendChild(testo);
+    box.appendChild(bt);
+    box.style.display = '';
+}
+
+// ---------------------------------------------------------------------
+//  Archivio del programma (anche dal secondo PC in rete)
+// ---------------------------------------------------------------------
+function _misureInArchivio(files) {
+    return (files || []).filter(function (f) { return f && typeof f.name === 'string' && /_alz\.scr$/i.test(f.name); });
+}
+
+function _riempiArchivio(files) {
+    var elenco = files ? _misureInArchivio(files) : null;
+    ['archivioMisure', 'archivioNominale', 'archivioPolare'].forEach(function (id) {
+        var sel = document.getElementById(id);
+        if (!sel) return;
+        var invito = sel.getAttribute('data-vuoto') || 'Scegli dall\'archivio…';
+        sel.innerHTML = '';
+        var primo = document.createElement('option');
+        primo.value = '';
+        sel.appendChild(primo);
+        if (!elenco) { primo.textContent = 'Archivio non raggiungibile: usa «dal disco»'; sel.disabled = true; return; }
+        if (!elenco.length) { primo.textContent = 'Archivio vuoto: nessuna misura salvata'; sel.disabled = true; return; }
+        primo.textContent = invito;
+        sel.disabled = false;
+        elenco.forEach(function (f) {
+            var o = document.createElement('option');
+            o.value = f.name;
+            o.textContent = _nomeDaFile(f.name) + (f.mtime ? '  (' + new Date(f.mtime).toLocaleDateString('it-IT') + ')' : '');
+            sel.appendChild(o);
+        });
+    });
+}
+
+function _caricaArchivio() {
+    if (typeof fetch !== 'function') return;
+    fetch('/api/files', { cache: 'no-store' })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (j) { _riempiArchivio((j && j.files) || []); })
+        .catch(function () { _riempiArchivio(null); });
+}
+
+// Un file chiesto al programma: il testo, oppure un errore che sa se il file
+// non c'e' piu' (404) o se il programma non ha risposto.
+function _chiediFile(nome) {
+    return fetch('/api/file/' + encodeURIComponent(nome), { cache: 'no-store' })
+        .then(function (r) {
+            if (!r.ok) { var e = new Error('HTTP ' + r.status); e.stato = r.status; throw e; }
+            return r.text();
+        });
+}
+
+// Perche' un file dell'archivio non e' arrivato, senza parole tecniche
+// (niente "HTTP 404" ne' il messaggio inglese del browser).
+function _motivoMancato(err) {
+    return (err && err.stato === 404)
+        ? 'il file non c\'è più nell\'archivio (eliminato o rinominato?): scegline un altro dalla tendina «Scegli dall\'archivio»'
+        : 'il programma non ha risposto: controlla che CAMMES sia avviato e riprova';
+}
+
+function _daArchivio(sel, dove) {
+    var nome = sel && sel.value;
+    if (!nome) return;
+    sel.value = '';
+    var esc = window.cammesEscape || function (s) { return String(s); };
+    if (dove === 'misura' && !_postoLibero()) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Al massimo 4 misure', body: 'Per caricarne un\'altra togline una con «Rimuovi» nella tabella.', duration: 6000 });
+        return;
+    }
+    _chiediFile(nome).then(function (testo) {
+        if (dove === 'nominale') _caricaNominale(testo, nome);
+        else if (dove === 'polare') _caricaPolare(testo, nome);
+        else _loadAlzFromText(testo, nome);
+    }, function (err) {
+        var titolo = dove === 'nominale' ? 'Nominale non caricato' : (dove === 'polare' ? 'Vista polare non caricata' : 'Misura non caricata');
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: titolo, body: esc(nome) + ': ' + _motivoMancato(err) + '.', duration: 8000 });
+    });
+}
+
+// Dal disco: anche piu' file insieme, letti uno dopo l'altro.
+function loadFile() {
+    var input = document.getElementById('fileinput1');
+    if (!input || !input.files || !input.files.length) return;
+    var scelti = Array.prototype.slice.call(input.files);
+    var posti = 4 - _misureCaricate().length;
+    if (scelti.length > posti) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Al massimo 4 misure',
+            body: 'Hai scelto ' + scelti.length + ' file e c\'è posto per ' + Math.max(0, posti) + (posti > 0 ? ': carico i primi.' : '.') + ' Per gli altri togli una misura con «Rimuovi».', duration: 8000 });
+        scelti = scelti.slice(0, Math.max(0, posti));
+    }
+    function prossimo(i) {
+        if (i >= scelti.length) { input.value = ''; return; }
+        var fr = new FileReader();
+        fr.onload = function () { _loadAlzFromText(fr.result, scelti[i].name); prossimo(i + 1); };
+        fr.onerror = function () {
+            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'File non letto', body: (window.cammesEscape || String)(scelti[i].name) + ': riprova o sceglilo dall\'archivio.', duration: 6000 });
+            prossimo(i + 1);
+        };
+        fr.readAsText(scelti[i]);
+    }
+    prossimo(0);
+}
+
+function svuotaTutto() {
+    var chiedi = window.cammesConferma
+        ? window.cammesConferma('Svuotare il confronto?', 'Tolgo dalla pagina tutte le misure, il nominale e le viste polari. La tolleranza resta. I file in archivio non vengono toccati.', 'Svuota tutto', false)
+        : Promise.resolve(true);
+    chiedi.then(function (si) { if (si) _svuota(); });
+}
+
+function _svuota() {
+    for (var k = 1; k <= 4; k++) {
+        window._cmpData[k] = null; window._cmpNomi[k] = null; window._cmpFile[k] = null;
+        window._polData[k] = null;
+    }
+    _nominal = null;
+    window._nominaleNome = null;
+    window._nominaleFile = null;
+    var sel = document.getElementById('viewMode');
+    if (sel) sel.value = 'overlay';
+    ['fileinput1', 'fileinput2', 'fileNominal'].forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
+    // arrivati da Home con ?files=...: un ricaricamento non deve riportarle indietro
+    if (window.history && history.replaceState && location.search) history.replaceState(null, '', location.pathname);
+    _aggiornaNominaleUI();
+    _aggiornaTutto();
+    _disegnaPolari();
+}
+
+// ---------------------------------------------------------------------
+//  Vista polare
+// ---------------------------------------------------------------------
+function _rgba(hex, a) {
+    var h = String(hex).replace('#', '');
+    return 'rgba(' + parseInt(h.substr(0, 2), 16) + ',' + parseInt(h.substr(2, 2), 16) + ',' + parseInt(h.substr(4, 2), 16) + ',' + a + ')';
+}
+
+// Scala dal centro (min 0): la sagoma e' in proporzione, non un petalo.
+// Tacche e numeri ogni 30 gradi invece di 360 etichette sovrapposte.
+// Proporzioni fisse, quadrate come la sagoma: l'altezza segue la larghezza
+// e non quella del riquadro (che contiene anche nome e nota: con l'altezza
+// "libera" la tela la inseguiva e il riquadro cresceva senza fine).
+function polChartOptions() {
+    var c = grfColors();
+    return {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 1,
         animation: { animateRotate: false, duration: 0 },
-        plugins: { legend: { display: false } },
+        plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: {
+                title: function (v) { return v.length ? v[0].label + '°' : ''; },
+                label: function (v) { return 'raggio ' + _mm(v.parsed.r, 2); }
+            } }
+        },
         scales: {
             r: {
-                ticks:      { color: c.text, backdropColor: 'transparent' },
-                grid:       { color: c.grid },
-                angleLines: { color: c.grid },
+                min: 0,
+                beginAtZero: true,
+                ticks:       { color: c.text, backdropColor: 'transparent', callback: function (v) { return _tickMm(v); } },
+                grid:        { color: c.grid },
+                angleLines:  { color: c.grid, lineWidth: function (ctx) { return (ctx.index + 1) % 30 === 0 ? 1 : 0; } },
+                pointLabels: { color: c.text, font: { size: 10 }, callback: function (l) { return Number(l) % 30 === 0 ? l + '°' : ''; } },
                 startAngle: 0
             }
         }
     };
 }
 
-function makePolar(canvasId, borderColor) {
-    return new Chart(document.getElementById(canvasId), {
-        // audit APP-11: radar (polilinea radiale) invece di polarArea (disco pieno):
-        // cosi' il grafico mostra il contorno reale della camma. pointRadius/tension/fill
-        // rendono la traccia una polilinea continua chiusa.
+function makePolar(canvasId, k) {
+    var el = document.getElementById(canvasId);
+    if (!el || typeof Chart === 'undefined') return null;
+    var colore = COLORI_CURVE[k - 1];
+    // audit APP-11: radar (contorno della camma) invece di polarArea (disco pieno)
+    return new Chart(el, {
         type: 'radar',
-        data: { datasets: [{ label: 'g', data: [], backgroundColor: [], borderColor: borderColor, borderWidth: 1, pointRadius: 0, tension: 0, fill: true }] },
+        data: { labels: [], datasets: [{ label: '', data: [], backgroundColor: _rgba(colore, 0.12), borderColor: colore, borderWidth: 1.5, pointRadius: 0, tension: 0, fill: true }] },
         options: polChartOptions()
     });
 }
 
-var polarAreaChart  = makePolar('birdsChart',  'rgba(255, 0, 0, 0.45)');
-var polarAreaChart2 = makePolar('birdsChart2', 'rgba(0, 0, 250, 0.45)');
-var polarAreaChart3 = makePolar('birdsChart3', 'rgba(0, 200, 0, 0.45)');
-var polarAreaChart4 = makePolar('birdsChart4', 'rgba(200, 200, 200, 0.45)');
+var polarAreaChart  = makePolar('birdsChart', 1);
+var polarAreaChart2 = makePolar('birdsChart2', 2);
+var polarAreaChart3 = makePolar('birdsChart3', 3);
+var polarAreaChart4 = makePolar('birdsChart4', 4);
+function _polari() { return [polarAreaChart, polarAreaChart2, polarAreaChart3, polarAreaChart4]; }
+
+// Il cerchio base si chiede come DIAMETRO, come in Analisi e come si misura
+// col calibro (lo scambio raggio/diametro e' gia' costato un errore). Il campo
+// nasce vuoto: il banco e' universale, nessun valore di partenza.
+function _cerchioBase(segnala) {
+    var elRB = document.getElementById('polRBase');
+    var vRB = validaNumero(elRB ? elRB.value : '', { min: 0, minEsclusivo: true });
+    if (!vRB.ok && segnala && elRB && String(elRB.value).trim() !== '' && window.cammesValidate) {
+        window.cammesValidate.error(elRB, 'Diametro del cerchio base non valido: scrivi un numero maggiore di zero, in mm (per esempio 32 oppure 34,5).');
+    }
+    return vRB.ok ? { ok: true, diametro: vRB.valore, raggio: vRB.valore / 2 } : { ok: false };
+}
+
+function _cambiaCerchioBase() {
+    _cerchioBase(true);
+    _disegnaPolari();
+}
+
+// Vecchi file polari: righe posizionali "cos,sin", raggio gia' assoluto
+// (ramo LEGACY preservato: non e' "grado,alzata", parseCamFile non si applica).
+function _raggiDaPolareVecchio(testo) {
+    var risp = String(testo).split(/\r?\n/);
+    var raggi = [0], letti = 0;
+    for (var i = 1; i <= 360; i++) {
+        var risp2 = (risp[i] || '0,0').split(',');
+        var r = Math.sqrt(risp2[0] * risp2[0] + risp2[1] * risp2[1]);
+        raggi.push(isFinite(r) ? r : 0);
+        if (isFinite(r) && r > 0) letti++;
+    }
+    return letti >= 30 ? raggi : null;
+}
+
+function _caricaPolare(testo, nomeFile) {
+    var esc = window.cammesEscape || function (s) { return String(s); };
+    var k = 0;
+    for (var p = 1; p <= 4; p++) if (!window._polData[p]) { k = p; break; }
+    if (!k) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Al massimo 4 viste polari', body: 'Togline una con «Rimuovi» sopra il suo disegno per aggiungerne un\'altra.', duration: 6000 });
+        return false;
+    }
+    var slot = null;
+    if (/_pol(\.(scr|txt|csv))?$/i.test(String(nomeFile))) {
+        var raggi = _raggiDaPolareVecchio(testo);
+        if (raggi) slot = { nome: String(nomeFile).replace(/\.(scr|txt|csv)$/i, ''), file: nomeFile, tipo: 'pol', raggi: raggi };
+    } else {
+        var cam = parseCamFile(testo);
+        if (cam && cam.validCount >= 30) {          // GUARDIA APP-09: decide il contenuto, non il nome
+            if (cam.missingCount > 0 || (cam.meta && cam.meta.stato === 'INCOMPLETO')) {
+                if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura incompleta', body: esc(nomeFile) + ': ' +
+                (cam.missingCount > 0 ? _conta(cam.missingCount, 'grado', 'gradi') + ' senza lettura (disegnati sul cerchio base)' : 'il file è segnato come incompleto') + ': vista indicativa.', duration: 6000 });
+            }
+            var _sospP = avvisoMisuraSospetta(cam.meta);
+            if (_sospP && window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura sospetta', body: esc(nomeFile) + ': ' + _sospP.replace('MISURA SOSPETTA: ', '') + ': vista indicativa.', duration: 8000 });
+            slot = { nome: _nomeDaFile(nomeFile), file: nomeFile, tipo: 'alz', cam: cam };
+        }
+    }
+    if (!slot) {
+        if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Questo file non è una misura',
+            body: esc(nomeFile) + ': servono righe «grado,alzata». Scegli una misura salvata da Alzata.', duration: 9000 });
+        return false;
+    }
+    window._polData[k] = slot;
+    _disegnaPolari();
+    if (slot.tipo === 'alz' && !_cerchioBase(false).ok && window.cammesToast) {
+        window.cammesToast({ kind: 'info', title: 'Manca il diametro del cerchio base', body: 'Scrivilo nel campo «Ø cerchio base» per vedere la sagoma di ' + esc(slot.nome) + '.', duration: 7000 });
+    }
+    return true;
+}
+
+function loadFile2() {
+    var input = document.getElementById('fileinput2');
+    if (!input || !input.files || !input.files[0]) return;
+    var file = input.files[0];
+    var fr = new FileReader();
+    fr.onload = function () { _caricaPolare(fr.result, file.name); input.value = ''; };
+    fr.readAsText(file);
+}
+
+function rimuoviPolare(k) {
+    window._polData[k] = null;
+    _disegnaPolari();
+}
+
+// raggio = raggio base (meta' del diametro) + alzata, grado per grado
+function _raggiPolari(slot, cb) {
+    if (!slot) return null;
+    if (slot.tipo === 'pol') return slot.raggi;
+    if (!cb || !cb.ok) return null;
+    var raggi = [0];
+    for (var d = 1; d <= 360; d++) {
+        var v = Number(slot.cam[d]);
+        raggi.push(cb.raggio + (isFinite(v) ? v : 0));
+    }
+    return raggi;
+}
+
+function _disegnaPolari() {
+    var charts = _polari();
+    var cb = _cerchioBase(false);
+    for (var k = 1; k <= 4; k++) {
+        var ch = charts[k - 1], slot = window._polData[k];
+        var card = document.getElementById('polCard' + k);
+        if (!slot) {
+            if (card) card.style.display = 'none';
+            if (ch) { ch.data.labels = []; ch.data.datasets[0].data = []; ch.update('none'); }
+            continue;
+        }
+        var eraNascosta = !!(card && card.style.display === 'none');
+        if (card) card.style.display = '';
+        var nomeEl = document.getElementById('polNome' + k);
+        if (nomeEl) { nomeEl.textContent = slot.nome; nomeEl.title = String(slot.file || ''); }
+        var punto = document.getElementById('polPunto' + k);
+        if (punto) punto.style.background = COLORI_CURVE[k - 1];
+        var raggi = _raggiPolari(slot, cb);
+        var msg = document.getElementById('polMsg' + k);
+        if (msg) {
+            msg.textContent = !raggi ? 'Scrivi il diametro del cerchio base (sopra) per vedere la sagoma.'
+                : (slot.tipo === 'pol' ? 'Vecchio file polare: il raggio è già nel file.'
+                : 'Ø cerchio base ' + String(cb.diametro).replace('.', ',') + ' mm + alzata.');
+        }
+        if (ch) {
+            ch.data.labels = [];
+            ch.data.datasets[0].data = [];
+            if (raggi) for (var x = 1; x <= 360; x++) { ch.data.labels.push(x); ch.data.datasets[0].data.push(Math.round(Number(raggi[x]) * 1000) / 1000); }
+            if (eraNascosta) { try { ch.resize(); } catch (e) {} }
+            ch.update('none');
+        }
+    }
+}
 
 document.addEventListener('cammes:theme:change', function () {
-    [polarAreaChart, polarAreaChart2, polarAreaChart3, polarAreaChart4].forEach(function (ch) {
-        var c = grfColors();
+    var c = grfColors();
+    if (window.myLine) {
+        var o = window.myLine.options;
+        o.plugins.legend.labels.color = c.text;
+        ['x', 'y'].forEach(function (a) { o.scales[a].grid.color = c.grid; o.scales[a].title.color = c.text; o.scales[a].ticks.color = c.text; });
+        window.myLine.update('none');
+    }
+    _polari().forEach(function (ch) {
+        if (!ch) return;
         var r = ch.options.scales.r;
         r.ticks.color = c.text;
         r.grid.color = c.grid;
         r.angleLines.color = c.grid;
+        r.pointLabels.color = c.text;
         ch.update('none');
     });
 });
-</script>
 
-<script type="text/javascript">
-// Vista polare: accetta file _alz (raggio = raggio base + alzata) e, per
-// retrocompatibilità, i vecchi _pol (raggio già assoluto come coppie cos,sin).
-var index2 = 0;
-// APP-08: per-slot anche per le viste polari. _polData[1..4] = raggi[1..360].
-window._polData = window._polData || [];
-function loadFile2() {
-    var input = document.getElementById('fileinput2');
-    if (!input || !input.files || !input.files[0]) return;
-    var nomes = input.files[0].name.split('.')[0].split('_');
-    var tfile = nomes[nomes.length - 1];
-    if (tfile !== 'alz' && tfile !== 'pol') {
-        alert('tipologia file non valida: servono file _alz (o _pol legacy)');
-        return;
-    }
-    if (index2 >= 4) {
-        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Massimo 4 viste polari', body: 'Reset per caricarne altre.', duration: 3000 });
-        return;
-    }
-    var file = input.files[0];
-    var fr = new FileReader();
-    fr.onload = function () {
-        // Con la virgola ("17,5") Number() dava NaN e il raggio diventava 16 in
-        // silenzio: la vista usciva disegnata con un raggio che nessuno ha scritto.
-        var elRB = document.getElementById('polRBase');
-        var vRB = validaNumero(elRB ? elRB.value : '', { min: 0, minEsclusivo: true });
-        if (tfile === 'alz' && !vRB.ok) {
-            if (window.cammesValidate) window.cammesValidate.error(elRB, 'Raggio base non valido: scrivi un numero maggiore di zero, per esempio 16 oppure 17,5.');
-            return;
-        }
-        var rBase = vRB.ok ? vRB.valore : 16;   // i vecchi file _pol il raggio ce l'hanno già
-        var perSlot = new Array(361);            // array LOCALE di questa vista
-        for (var z = 1; z <= 360; z++) perSlot[z] = 0;
-
-        if (tfile === 'pol') {
-            // Ramo LEGACY _pol PRESERVATO: righe posizionali "cos,sin", raggio
-            // già assoluto. NON è "grado,alzata" → parseCamFile non si applica.
-            var risp = String(fr.result).split(/\r?\n/);
-            for (var i = 1; i <= 360; i++) {
-                var risp2 = (risp[i] || '0,0').split(',');
-                var r = Math.sqrt(risp2[0] * risp2[0] + risp2[1] * risp2[1]);
-                perSlot[i] = (isFinite(r) ? r : 0).toFixed(2);
-            }
-        } else {
-            // Ramo _alz: parser robusto, raggio = raggio base + alzata[grado].
-            var cam = parseCamFile(fr.result);
-            if (!cam || cam.validCount < 30) {   // GUARDIA APP-09
-                if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'File non riconosciuto', body: 'solo ' + (cam ? cam.validCount : 0) + ' righe valide', duration: 6000 });
-                return;
-            }
-            if (cam.missingCount > 0 || (cam.meta && cam.meta.stato === 'INCOMPLETO')) {
-                if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura incompleta', body: cam.missingCount + ' gradi mancanti (riempiti a 0), vista indicativa', duration: 5000 });
-            }
-            var _sospP = avvisoMisuraSospetta(cam.meta);
-            if (_sospP && window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Misura sospetta', body: _sospP.replace('MISURA SOSPETTA: ', '') + ': vista indicativa.', duration: 8000 });
-            for (var j = 1; j <= 360; j++) {
-                var v = Number(cam[j]);
-                perSlot[j] = (rBase + (isFinite(v) ? v : 0)).toFixed(2);
-            }
-        }
-
-        index2 = index2 + 1;
-        window._polData[index2] = perSlot;
-        update2();
-        if (window.cammesToast) window.cammesToast({ kind: 'success', title: 'Vista polare ' + index2, body: file.name + (tfile === 'alz' ? ' (raggio base ' + rBase + ' mm + alzata)' : ' (file polare legacy)'), duration: 3500 });
-    };
-    fr.readAsText(file);
-}
-</script>
-
-<script>
-// Aggiorna l'N-esimo chart polare con i raggi dello SLOT corrente (_polData,
-// APP-08). Usa direttamente chart.data invece di variabili globali birdsData*
-// che non vengono più create dal refactor v4 (makePolar incapsula i data).
-function update2() {
-    var charts = [polarAreaChart, polarAreaChart2, polarAreaChart3, polarAreaChart4];
-    var idx = index2 - 1;
-    if (idx < 0 || idx >= charts.length) return;
-    var ch = charts[idx];
-    if (!ch) return;
-    var data = window._polData[index2] || [];
-    if (!ch.data.labels) ch.data.labels = [];
-    for (var x = 1; x <= 360; x++) {
-        ch.data.labels.push(x);
-        ch.data.datasets.forEach(function (ds) { ds.data.push(data[x]); });
-    }
-    ch.update('none');
-}
-</script>
-
-<!-- ===== Collaudo su profilo nominale: banda ±tol + verdetto PASS/FAIL ===== -->
-<script>
-var _nominal = null;   // [1..360] profilo nominale (array parseCamFile)
-
-// APP-08/APP-09: il parse manuale _parseProfile è stato rimosso; ora il nominale
-// passa dallo stesso parser robusto parseCamFile (vedi loadNominal). _nomAt legge
-// _nominal[1..360] esattamente come prima.
-function _nomAt(shift, d) { var k = ((d - 1 + shift) % 360 + 360) % 360 + 1; return _nominal[k]; }
-
-// Allinea il nominale alla curva misurata: aggancio al picco + rifinitura ±8° per SSE
-function _alignShift(meas) {
-    var pkM = 0, pkMi = 1, pkN = 0, pkNi = 1;
-    for (var d = 1; d <= 360; d++) {
-        var m = Number(meas[d - 1]); if (isFinite(m) && m > pkM) { pkM = m; pkMi = d; }
-        if (_nominal[d] > pkN) { pkN = _nominal[d]; pkNi = d; }
-    }
-    var base = pkNi - pkMi, best = base, bestE = Infinity;
-    for (var s = base - 8; s <= base + 8; s++) {
-        var e = 0;
-        for (var d2 = 1; d2 <= 360; d2 += 2) {
-            var mv = Number(meas[d2 - 1]); if (!isFinite(mv)) continue;
-            var diff = mv - _nomAt(s, d2); e += diff * diff;
-        }
-        if (e < bestE) { bestE = e; best = s; }
-    }
-    return best;
-}
-
-function loadNominal() {
-    var input = document.getElementById('fileNominal');
-    if (!input || !input.files || !input.files[0]) return;
-    var fr = new FileReader();
-    fr.onload = function () {
-        var cam = parseCamFile(fr.result);
-        // GUARDIA APP-09: stessa soglia validCount<30 del percorso curve.
-        if (!cam || cam.validCount < 30) {
-            _nominal = null;
-            if (window.cammesToast) window.cammesToast({ kind: 'err', title: 'Nominale non riconosciuto', body: 'Servono righe "grado,alzata" (file _alz o CSV): solo ' + (cam ? cam.validCount : 0) + ' valide.', duration: 6000 });
-            return;
-        }
-        if (cam.missingCount > 0 || (cam.meta && cam.meta.stato === 'INCOMPLETO')) {
-            if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Nominale incompleto', body: cam.missingCount + ' gradi mancanti: il collaudo sarà NON VALUTABILE finché il nominale non è completo.', duration: 6000 });
-        }
-        // AUDIT MAT-07: nominale con righe duplicate/frazionarie → non fidarsi
-        if (cam.ok === false && window.cammesToast) {
-            window.cammesToast({ kind: 'warn', title: 'Nominale con anomalie',
-                body: (cam.duplicateDegrees && cam.duplicateDegrees.length ? cam.duplicateDegrees.length + ' gradi duplicati; ' : '') +
-                      (cam.fractionalDegrees && cam.fractionalDegrees.length ? cam.fractionalDegrees.length + ' gradi frazionari scartati; ' : '') +
-                      'controlla il file.', duration: 7000 });
-        }
-        _nominal = cam;
-        evalNominal();
-    };
-    fr.readAsText(input.files[0]);
-}
-
-// La tolleranza, letta come la scrive chi sta al banco. Prima era
-// Number(valore) || 0.10: "0,05" con la virgola — come nel manuale e negli altri
-// campi del programma — non e' un numero per Number(), quindi il verdetto usciva
-// con ±0,10 SENZA DIRLO. Chi chiedeva ±0,05 poteva leggere CONFORME su un pezzo
-// fuori di 0,08 mm. Ora la virgola vale, e un valore non valido (vuoto, zero,
-// negativo, testo) non diventa un altro numero: il campo viene segnalato e il
-// verdetto non si emette.
-function _tolleranzaCollaudo() {
-    var el = document.getElementById('tolMm');
-    var r = validaNumero(el ? el.value : '', { min: 0, minEsclusivo: true });
-    if (!r.ok && el && window.cammesValidate) {
-        window.cammesValidate.error(el, 'Tolleranza non valida: scrivi un numero maggiore di zero, per esempio 0,05.');
-    }
-    return r;
-}
-
-function evalNominal() {
-    var box = document.getElementById('verdictBox');
-    if (!_nominal) { if (box) box.innerHTML = ''; return; }
-    // AUDIT APP-09 + DATA-04 (controrevisione): il verdetto di conformità passa
-    // dal gate UNICO canProduceOfficialResult — copre anche il file legacy
-    // zero-riempito con #stato=INCOMPLETO (missingCount=0 ma NON completo),
-    // le anomalie del parser e la convenzione gradi mista.
-    var _nomGate = canProduceOfficialResult(_nominal);
-    if (!_nomGate.ok) {
-        if (box) box.innerHTML = '<div style="font-size:13px;color:var(--danger,#e74c3c);font-weight:700;">&#9888; NON VALUTABILE — profilo nominale: ' + (window.cammesEscape ? window.cammesEscape(_nomGate.reason) : _nomGate.reason) + '. Carica un nominale completo e pulito (360 gradi) per il collaudo.</div>';
-        // banda comunque disegnata sotto, ma nessun verdetto certificabile
-    }
-    var tolR = _tolleranzaCollaudo();
-    var tolOk = tolR.ok, tol = tolOk ? tolR.valore : NaN;
+// ---------------------------------------------------------------------
+//  Ridisegna: ridipinge le curve da 0 a 360 gradi in 4 secondi
+// ---------------------------------------------------------------------
+function replayAnimation() {
     if (!window.myLine) return;
-    var ds = window.myLine.data.datasets;
-    // labels: se il nominale arriva prima di qualunque curva, crea l'asse
-    if (!window.myLine.data.labels.length) for (var L = 1; L <= 360; L++) window.myLine.data.labels.push(L);
-
-    // LE MISURE SI LEGGONO DAGLI SLOT (window._cmpData), MAI DAL GRAFICO. I dati
-    // del grafico sono cio' che e' DISEGNATO: in vista "Differenza" sono le
-    // differenze dalla prima curva. Leggendoli, premere Rivaluta in quella vista
-    // giudicava le differenze: ogni curva diventava NON CONFORME con scarti di
-    // millimetri, e il verdetto sbagliato restava anche tornando a "Sovrapposto".
-    var inDifferenza = ((document.getElementById('viewMode') || {}).value === 'diff');
-    var misure = [];
-    for (var k = 0; k < 4; k++) misure.push((window._cmpData && window._cmpData[k + 1]) || null);
-    var prima = null;
-    for (var k2 = 0; k2 < 4; k2++) if (misure[k2]) { prima = misure[k2]; break; }
-
-    // banda nominale ± tolleranza, allineata alla PRIMA curva caricata. In vista
-    // Differenza non si disegna: starebbe alla quota dell'alzata in mezzo a
-    // differenze di decimi, e schiaccerebbe la scala. Il verdetto resta scritto.
-    while (ds.length < 6) ds.push({});
-    if (tolOk && !inDifferenza) {
-        var primaDisegno = [];
-        if (prima) for (var dp = 1; dp <= 360; dp++) primaDisegno.push(prima[dp]);
-        var bandShift = prima ? _alignShift(primaDisegno) : 0;
-        var plus = [], minus = [];
-        for (var d = 1; d <= 360; d++) { var nv = _nomAt(bandShift, d); plus.push(nv + tol); minus.push(Math.max(0, nv - tol)); }
-        ds[4] = { label: 'Nominale +' + tol, data: plus,  borderColor: 'rgba(140,140,140,0.7)', borderDash: [5, 4], borderWidth: 1, pointRadius: 0, fill: false, tension: 0 };
-        ds[5] = { label: 'Nominale -' + tol, data: minus, borderColor: 'rgba(140,140,140,0.7)', borderDash: [5, 4], borderWidth: 1, pointRadius: 0, fill: '-1', backgroundColor: 'rgba(140,140,140,0.12)', tension: 0 };
-    } else {
-        ds[4] = {}; ds[5] = {};
+    var tutte = window.myLine.data.datasets;
+    var anyData = tutte.some(function (d) { return d.data && d.data.length > 0; });
+    if (!anyData) {
+        if (window.cammesToast) window.cammesToast({ kind: 'warn', title: 'Nessuna misura da ridisegnare', body: 'Carica almeno una misura al passo 1.', duration: 3000 });
+        return;
     }
-    window.myLine.update('none');
-
-    // verdetto per ogni curva caricata (ognuna col PROPRIO allineamento)
-    var nominalOk = _nomGate.ok;   // DATA-04: gate unico, non solo missingCount
-    var rows = '';
-    for (var c = 0; c < 4; c++) {
-        if (!misure[c]) continue;
-        var name = (document.getElementById('lb' + (c + 1)) || {}).textContent || ('grafico' + (c + 1));
-        // SEC-03: name è il nome file (arbitrario) riletto da lb1..4 — escapato.
-        var safeName = window.cammesEscape ? window.cammesEscape(name) : name.replace(/[&<>]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]; });
-        // AUDIT APP-09: se la MISURA (o il nominale) è incompleta → NON
-        // VALUTABILE, mai CONFORME. La copertura reale è nel cam dello slot.
-        var camC = window._cmpData[c + 1];
-        var curveIncomplete = camC && camC.missingCount > 0;
-        if (!nominalOk || curveIncomplete) {
-            var why = !nominalOk ? 'nominale incompleto'
-                    : (camC.missingCount + ' gradi mancanti nella misura');
-            rows += '<div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;">' +
-                '<span style="font-weight:700;color:var(--warn,orange);">&#9888; NON VALUTABILE</span>' +
-                '<span style="flex:1;">' + safeName + '</span>' +
-                '<span style="color:var(--text-muted);">' + why + '</span></div>';
-            continue;
-        }
-        // Scarto a FORMA ALLINEATA (lib/cammes-math.js: scartoDalNominale). Il
-        // collaudo giudica il profilo, non la fase: l'allineamento e' a frazioni
-        // di grado, perche' a gradi interi una camma identica al nominale ma
-        // partita mezzo grado piu' in la' usciva NON CONFORME (0,12-0,17 mm sui
-        // fianchi). Lo spostamento usato si DICHIARA nella riga.
-        var sc = scartoDalNominale(camC, _nominal);
-        var maxDev = sc.scartoMax, maxDeg = sc.gradoScartoMax;
-        // una riga, un solo modo di scrivere i numeri (la virgola, come nel campo);
-        // il grado dello scarto si scrive solo se uno scarto c'e'
-        var dettaglio = 'scarto max ' + maxDev.toFixed(3).replace('.', ',') + ' mm' + (maxDev > 0 && maxDeg >= 1 ? ' a ' + maxDeg + '&deg;' : '') +
-            (sc.spostamento ? ' &middot; riallineata di ' + (sc.spostamento > 0 ? '+' : '') + String(sc.spostamento).replace('.', ',') + '&deg;' : '');
-        if (!tolOk) {
-            // senza una tolleranza valida non c'e' giudizio, ma il numero misurato resta
-            rows += '<div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;">' +
-                '<span style="font-weight:700;color:var(--warn,orange);">&#9888; TOLLERANZA NON VALIDA</span>' +
-                '<span style="flex:1;">' + safeName + '</span>' +
-                '<span style="color:var(--text-muted);">' + dettaglio + ' &middot; verdetto non emesso</span></div>';
-            continue;
-        }
-        var pass = maxDev <= tol;
-        var tolTxt = (tol < 1 ? tol.toFixed(3).replace(/0$/, '') : String(tol)).replace('.', ',');   // 0,05  0,10  0,125
-        rows += '<div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;">' +
-            '<span style="font-weight:700;color:' + (pass ? 'var(--success, #2ecc71)' : 'var(--danger, #e74c3c)') + ';">' +
-            (pass ? '&#10003; CONFORME' : '&#10007; NON CONFORME') + '</span>' +
-            '<span style="flex:1;">' + safeName + '</span>' +
-            '<span style="color:var(--text-muted);">' + (pass ? 'entro' : 'fuori da') + ' &plusmn;' + tolTxt + ' mm &middot; ' + dettaglio + '</span></div>';
+    // copia dei dati e via dal primo grado
+    _replayBackup = tutte.map(function (d) { return (d.data || []).slice(); });
+    var maxLen = _replayBackup.reduce(function (m, arr) { return Math.max(m, arr.length); }, 0);
+    if (maxLen === 0) { _replayBackup = null; return; }
+    _replayCancelled = false;
+    document.getElementById('replayBtn').style.display = 'none';
+    document.getElementById('replayStopBtn').style.display = '';
+    var DURATION = 4000;
+    var startTs = null;
+    // Watchdog: se requestAnimationFrame e' sospeso (scheda in secondo piano)
+    // il ridisegno si chiude comunque, senza lasciare il pulsante Ferma appeso.
+    // (Ogni fotogramma si disegna con update('none'), cioe' senza animazione:
+    // l'opzione animation del grafico non si tocca, cosi' non resta spenta se
+    // il ridisegno viene fermato a meta'.)
+    if (_replaySafetyTimer) clearTimeout(_replaySafetyTimer);
+    _replaySafetyTimer = setTimeout(function () {
+        if (_replayBackup) _restoreFromBackup();
+    }, DURATION + 2000);
+    function frame(ts) {
+        if (_replayCancelled) { _restoreFromBackup(); return; }
+        if (!startTs) startTs = ts;
+        var progress = Math.min(1, (ts - startTs) / DURATION);
+        var eased = 1 - (1 - progress) * (1 - progress);
+        var idx = Math.max(1, Math.floor(eased * maxLen));
+        window.myLine.data.datasets.forEach(function (d, i) { if (_replayBackup && _replayBackup[i]) d.data = _replayBackup[i].slice(0, idx); });
+        window.myLine.update('none');
+        if (progress < 1) _replayRaf = requestAnimationFrame(frame);
+        else _restoreFromBackup();
     }
-    if (box && rows) box.innerHTML = rows;
-    else if (box && !box.innerHTML) box.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">Carica almeno una curva misurata qui sopra per avere il verdetto.</div>';
+    _replayRaf = requestAnimationFrame(frame);
 }
-window.loadNominal = loadNominal;
-window.evalNominal = evalNominal;
-</script>
 
-<!-- URL loader: ?files=nome1.scr,nome2.scr precarica i file dalla Home.
-     Si attende che il chart Chart.js sia pronto (window.myLine), poi
-     fetch e popola i dataset sequenzialmente imitando loadFile(). -->
-<script>
-function _loadAlzFromText(text, originalName) {
-    // APP-08/APP-09: stesso parser robusto e stesse guardie del picker, via
-    // _commitCmpCurve (slot dedicato, niente array `valori` globale).
-    if (typeof index === 'undefined' || typeof parseCamFile !== 'function') return;
-    var cam = parseCamFile(text);
-    // Etichetta = nome file senza .scr / _alz finale
-    var label = originalName.replace(/\.(scr|txt|csv)$/i, '').replace(/_alz$/i, '');
-    // SEC-03: _commitCmpCurve scrive label via textContent (mai innerHTML) —
-    // label deriva dal nome file (arbitrario: arriva da ?files= o dall'archivio).
-    if (_commitCmpCurve(cam, label)) {
-        if (window.cammesToast) window.cammesToast({
-            kind: 'success', title: 'File caricato', body: label, duration: 2000
-        });
+function _restoreFromBackup() {
+    if (!_replayBackup) return;
+    if (window.myLine) {
+        window.myLine.data.datasets.forEach(function (d, i) { if (_replayBackup[i]) d.data = _replayBackup[i].slice(); });
+        window.myLine.update('none');
     }
+    _replayBackup = null;
+    var b1 = document.getElementById('replayBtn'), b2 = document.getElementById('replayStopBtn');
+    if (b1) b1.style.display = '';
+    if (b2) b2.style.display = 'none';
+    if (_replaySafetyTimer) { clearTimeout(_replaySafetyTimer); _replaySafetyTimer = null; }
+}
+
+function stopReplay() {
+    _replayCancelled = true;
+    if (_replayRaf) { cancelAnimationFrame(_replayRaf); _replayRaf = null; }
+    _restoreFromBackup();
+}
+
+// ---------------------------------------------------------------------
+//  Stampa del collaudo (PDF da consegnare)
+// ---------------------------------------------------------------------
+function _quando(meta) {
+    var t = (meta && meta.data) ? Date.parse(meta.data) : NaN;
+    return isFinite(t) ? 'misura del ' + new Date(t).toLocaleString('it-IT') : '';
+}
+
+function _nomePerFile(s) {
+    var t = String(s || '').replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').substring(0, 60);
+    return t || 'nominale';
+}
+
+// Il grafico come immagine su fondo bianco: scritte e griglia scure per la
+// carta, sempre con le curve sovrapposte e la banda (anche se a schermo c'e'
+// la vista Differenza). Poi tutto torna com'era.
+function _immagineGrafico() {
+    var ch = window.myLine;
+    if (!ch || !ch.canvas || typeof document.createElement !== 'function') return null;
+    if (_replayBackup) stopReplay();         // sulla carta le curve intere, non a meta' disegno
+    var sel = document.getElementById('viewMode');
+    var vista = sel ? sel.value : 'overlay';
+    var o = ch.options, sc = o.scales, leg = o.plugins.legend.labels;
+    var prima = { leg: leg.color,
+                  x: [sc.x.ticks.color, sc.x.grid.color, sc.x.title.color], y: [sc.y.ticks.color, sc.y.grid.color, sc.y.title.color] };
+    var risultato = null;
+    try {
+        if (sel && vista !== 'overlay') { sel.value = 'overlay'; _disegnaCurve(false); evalNominal({ silenziosa: true }); }
+        leg.color = '#222222';
+        ['x', 'y'].forEach(function (a) { sc[a].ticks.color = '#333333'; sc[a].grid.color = '#dddddd'; sc[a].title.color = '#333333'; });
+        ch.update('none');
+        try { ch.draw(); } catch (e) {}
+        var src = ch.canvas, w = src.width || 800, h = src.height || 400;
+        var tmp = document.createElement('canvas');
+        tmp.width = w; tmp.height = h;
+        var t = tmp.getContext('2d');
+        t.fillStyle = '#ffffff';
+        t.fillRect(0, 0, w, h);
+        t.drawImage(src, 0, 0);
+        risultato = { dati: tmp.toDataURL('image/png'), larghezza: w, altezza: h };
+    } catch (e) { risultato = null; }
+    leg.color = prima.leg;
+    sc.x.ticks.color = prima.x[0]; sc.x.grid.color = prima.x[1]; sc.x.title.color = prima.x[2];
+    sc.y.ticks.color = prima.y[0]; sc.y.grid.color = prima.y[1]; sc.y.title.color = prima.y[2];
+    if (sel && vista !== 'overlay') { sel.value = vista; _disegnaCurve(false); evalNominal({ silenziosa: true }); }
+    else ch.update('none');
+    return risultato;
+}
+
+function stampaCollaudo() {
+    var esc = window.cammesEscape || function (s) { return String(s); };
+    function avvisa(tipo, titolo, testo) {
+        if (window.cammesToast) window.cammesToast({ kind: tipo, title: titolo, body: testo, duration: tipo === 'success' ? 5000 : 8000 });
+    }
+    if (!_nominal) {
+        avvisa('warn', 'Manca il profilo nominale', 'Per stampare il collaudo carica il nominale (passo 2) e almeno una misura (passo 1).');
+        return false;
+    }
+    // lo stesso esito che c'e' sullo schermo, ricalcolato adesso
+    var esito = evalNominal({ silenziosa: true });
+    if (!esito || !esito.righe.length) {
+        avvisa('warn', 'Nessuna misura da collaudare', 'Carica almeno una misura (passo 1): il collaudo riporta il verdetto di ogni misura.');
+        return false;
+    }
+    if (!esito.tolOk) {
+        avvisa('warn', 'Tolleranza non valida', 'Scrivi la tolleranza, per esempio 0,05, poi stampa: senza tolleranza non c\'è verdetto.');
+        return false;
+    }
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+        avvisa('err', 'Stampa non disponibile', 'Il modulo che crea i PDF non si è caricato: ricarica la pagina (tasto F5) e riprova.');
+        return false;
+    }
+    var immagine = _immagineGrafico();
+    var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    var pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight();
+    var margin = 14, largo = pageW - 2 * margin, fondo = pageH - 22;
+    var y = 42;
+    function spazio(h) { if (y + h > fondo) { doc.addPage(); y = 20; } }
+
+    // testata: marchio, intestazione dell'officina, titolo e data di stampa
+    doc.setFillColor(22, 28, 40); doc.rect(0, 0, pageW, 32, 'F');
+    doc.setFillColor(0, 212, 255); doc.rect(0, 32, pageW, 1.5, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(255, 255, 255);
+    doc.text('CAMMES', margin, 14);
+    if (window.cammesIntestazionePdf) window.cammesIntestazionePdf(doc, window._officina, pageW - margin, 14, largo - 48, 12);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(0, 212, 255);
+    doc.text('Collaudo su profilo nominale', margin, 22);
+    doc.setFontSize(8); doc.setTextColor(180, 195, 215);
+    doc.text('Stampato il ' + new Date().toLocaleString('it-IT'), margin, 28);
+
+    function voce(etichetta, valore) {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+        var righe = doc.splitTextToSize(String(valore), largo - 36);
+        spazio(5 * righe.length);
+        doc.setFont('helvetica', 'bold'); doc.setTextColor(40, 46, 60);
+        doc.text(etichetta, margin, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(righe, margin + 36, y);
+        y += 5 * righe.length + 1;
+    }
+    var quandoNom = _quando(_nominal.meta);
+    voce('Profilo nominale', String(window._nominaleFile || esito.nominale) + (quandoNom ? ' (' + quandoNom + ')' : '') +
+        (_nominal.convertita ? ' - ' + _fraseConvertita(_nominal.convertita) : ''));
+    voce('Tolleranza', '± ' + esito.tolTxt + ' mm: scarto massimo ammesso fra misura e nominale, grado per grado');
+    voce('Metodo', 'ogni misura viene fatta combaciare col nominale prima del confronto: si giudica la forma del profilo, non la fase. Lo spostamento usato è scritto accanto a ogni misura.');
+    if (!esito.nominaleOk) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+        var nv = doc.splitTextToSize('NON VALUTABILE - profilo nominale: ' + esito.motivoNominale + '. Serve un nominale completo e pulito (360 gradi).', largo);
+        spazio(5 * nv.length);
+        doc.setTextColor(138, 106, 0);
+        doc.text(nv, margin, y);
+        y += 5 * nv.length + 1;
+    }
+    y += 3;
+    spazio(10);
+    doc.setFillColor(0, 212, 255); doc.rect(margin, y - 4, 1.5, 5, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(40, 46, 60);
+    doc.text('Esito per misura', margin + 4, y);
+    y += 7;
+
+    esito.righe.forEach(function (r) {
+        var misura = window._cmpData[r.k];
+        var colore = r.stato === 'CONFORME' ? [10, 122, 61] : (r.stato === 'NON CONFORME' ? [198, 40, 40] : [138, 106, 0]);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+        var dettaglio = doc.splitTextToSize(_dettaglioVerdetto(r, esito.tolTxt, false), largo - 4);
+        var quando = _quando(misura && misura.meta);
+        doc.setFontSize(8.5);
+        var origine = doc.splitTextToSize('file ' + String(window._cmpFile[r.k] || r.nome) + (quando ? ' · ' + quando : '') +
+            (misura && misura.convertita ? ' · ' + _fraseConvertita(misura.convertita) : ''), largo - 4);
+        var avvisi = [];
+        var sospetta = misura ? avvisoMisuraSospetta(misura.meta) : null;
+        if (sospetta) avvisi = avvisi.concat(doc.splitTextToSize(sospetta + ': al banco il programma aveva chiesto di ripeterla.', largo - 4));
+        spazio(8 + 4.5 * (dettaglio.length + origine.length + avvisi.length));
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(colore[0], colore[1], colore[2]);
+        doc.text(r.stato, margin, y);
+        var xNome = margin + doc.getTextWidth(r.stato) + 4;
+        doc.setFontSize(11); doc.setTextColor(40, 46, 60);
+        doc.text(doc.splitTextToSize(String(r.nome), pageW - margin - xNome)[0] || '', xNome, y);
+        y += 5.5;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(60, 68, 85);
+        doc.text(dettaglio, margin + 4, y);
+        y += 4.5 * dettaglio.length;
+        doc.setFontSize(8.5); doc.setTextColor(110, 120, 135);
+        doc.text(origine, margin + 4, y);
+        y += 4.2 * origine.length;
+        if (avvisi.length) {
+            doc.setFont('helvetica', 'bold'); doc.setTextColor(198, 40, 40);
+            doc.text(avvisi, margin + 4, y);
+            y += 4.2 * avvisi.length;
+        }
+        y += 3;
+    });
+
+    if (immagine) {
+        var w = largo, h = w * immagine.altezza / immagine.larghezza;
+        if (h > 100) { h = 100; w = h * immagine.larghezza / immagine.altezza; }
+        spazio(h + 12);
+        doc.addImage(immagine.dati, 'PNG', margin + (largo - w) / 2, y, w, h);
+        y += h + 4;
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor(110, 120, 135);
+        var dida = doc.splitTextToSize('Curve misurate e banda grigia del nominale ± tolleranza' +
+            (esito.rifBanda ? ' (banda allineata alla prima misura: ' + _nomeMisura(esito.rifBanda) + ')' : '') + '.', largo);
+        doc.text(dida, margin, y);
+        y += 4 * dida.length;
+    }
+
+    // piede su ogni pagina, con l'avvertenza
+    var pagine = doc.internal.getNumberOfPages();
+    for (var p = 1; p <= pagine; p++) {
+        doc.setPage(p);
+        var fy = pageH - 8;
+        doc.setDrawColor(200, 208, 220); doc.setLineWidth(0.2);
+        doc.line(margin, fy - 7, pageW - margin, fy - 7);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(110, 120, 135);
+        doc.text('Misura a carattere indicativo: non sostituisce un collaudo metrologico certificato.', margin, fy - 3);
+        doc.text('CAMMES ' + (window.CAMMES_VERSION || '') + ' - Collaudo su profilo nominale', margin, fy + 1);
+        var ps = 'Pagina ' + p + ' di ' + pagine;
+        doc.text(ps, pageW - margin - doc.getTextWidth(ps), fy + 1);
+    }
+    var nomePdf = 'collaudo_' + _nomePerFile(esito.nominale) + '_' + new Date().toISOString().substring(0, 10) + '.pdf';
+    doc.save(nomePdf);
+    avvisa('success', 'Collaudo pronto', 'PDF creato: ' + esc(nomePdf));
+    return true;
+}
+
+// Intestazione dell'officina per il PDF (impostata in Home, salvata sul server)
+if (typeof fetch === 'function') {
+    fetch('/api/settings').then(function (r) { return r.json(); }).then(function (s) {
+        if (s && s.officina && s.officina.nome) window._officina = s.officina.nome;
+    }).catch(function () {});
+}
+
+// ---------------------------------------------------------------------
+//  Misure passate da Home: grafici.html?files=nome1.scr,nome2.scr
+// ---------------------------------------------------------------------
+function _loadAlzFromText(text, originalName) {
+    // APP-08/APP-09: stesso lettore e stesse guardie del disco, via _commitCmpCurve
+    if (typeof parseCamFile !== 'function') return false;
+    var cam = parseCamFile(text);
+    if (cam) cam.convertita = _curvaConvertita(text);
+    // SEC-03: il nome viene scritto come testo (tabella) o escapato (verdetto, avvisi)
+    return _commitCmpCurve(cam, _nomeDaFile(originalName), originalName);
 }
 
 function _loadFromUrlIfNeeded() {
@@ -680,248 +1604,48 @@ function _loadFromUrlIfNeeded() {
                           .filter(Boolean)
                           .slice(0, 4);
     if (names.length === 0) return;
-
     function tryStart(attempts) {
-        // Attende chart pronto E parser caricato (prima gateava su `valori`,
-        // ora rimosso: si gatea su parseCamFile, che _commitCmpCurve richiede).
+        // attende grafico pronto e lettore caricato
         if (!window.myLine || typeof parseCamFile !== 'function') {
             if (attempts <= 0) return;
             return setTimeout(function () { tryStart(attempts - 1); }, 50);
         }
         names.forEach(function (name, idx) {
-            // Stagger leggero per evitare race condition su `index` variabile
+            // un piccolo intervallo fra un file e l'altro: arrivano nell'ordine scelto
             setTimeout(function () {
-                fetch('/api/file/' + encodeURIComponent(name), { cache: 'no-store' })
-                    .then(function (r) {
-                        if (!r.ok) throw new Error('HTTP ' + r.status);
-                        return r.text();
-                    })
-                    .then(function (text) { _loadAlzFromText(text, name); })
-                    .catch(function (err) {
-                        if (window.cammesToast) window.cammesToast({
-                            kind: 'err', title: 'Errore caricamento',
-                            body: name + ': ' + err.message, duration: 4000
-                        });
+                _chiediFile(name).then(function (text) { _loadAlzFromText(text, name); }, function (err) {
+                    if (window.cammesToast) window.cammesToast({
+                        kind: 'err', title: 'Misura non caricata',
+                        body: (window.cammesEscape || String)(name) + ': ' + _motivoMancato(err) + '.', duration: 8000
                     });
+                });
             }, idx * 250);
         });
     }
-    tryStart(40);  // ~2 sec max attesa per chart pronto
-}
-window.addEventListener('DOMContentLoaded', _loadFromUrlIfNeeded);
-</script>
-
-<!-- Replay animazione: ridipinge le 4 linee da 0 a 360 gradi in 4 sec.
-     Salva una copia originale dei dataset, anima troncando progressivamente
-     e a fine animazione ripristina. Cancellabile via stopReplay(). -->
-<script>
-var _replayRaf = null;
-var _replayCancelled = false;
-var _replayBackup = null;
-var _replaySafetyTimer = null;  // Watchdog: forza stop se rAF è sospeso (tab in background)
-
-function replayAnimation() {
-    if (!window.myLine || !lineChartData || !lineChartData.datasets) return;
-    // Verifica che ci sia almeno una linea con dati
-    var anyData = lineChartData.datasets.some(function (d) { return d.data && d.data.length > 0; });
-    if (!anyData) {
-        if (window.cammesToast) window.cammesToast({
-            kind: 'warn', title: 'Nessun grafico caricato',
-            body: 'Carica almeno un file alzata prima di lanciare il replay.',
-            duration: 3000
-        });
-        return;
-    }
-    // Salva backup (deep copy delle data array) e resetta i dataset a vuoto
-    _replayBackup = lineChartData.datasets.map(function (d) { return d.data.slice(); });
-    var maxLen = _replayBackup.reduce(function (m, arr) { return Math.max(m, arr.length); }, 0);
-    if (maxLen === 0) return;
-
-    _replayCancelled = false;
-    document.getElementById('replayBtn').style.display = 'none';
-    document.getElementById('replayStopBtn').style.display = '';
-
-    var DURATION = 4000;   // ms totali per arrivare a 360°
-    var startTs = null;
-
-    // Watchdog: se dopo DURATION + 2s il replay non è ancora terminato
-    // (es. requestAnimationFrame sospeso perché tab in background),
-    // forza la chiusura ordinata. Evita stati zombie del bottone Stop.
-    if (_replaySafetyTimer) clearTimeout(_replaySafetyTimer);
-    _replaySafetyTimer = setTimeout(function () {
-        if (_replayBackup) {  // se ancora attivo
-            _restoreFromBackup();
-            window.myLine.options.animation = origAnim;
-        }
-    }, DURATION + 2000);
-    // Disabilita animazione di Chart.js durante il replay (le abbiamo già)
-    var origAnim = window.myLine.options.animation;
-    window.myLine.options.animation = { duration: 0 };
-
-    function frame(ts) {
-        if (_replayCancelled) {
-            _restoreFromBackup();
-            return;
-        }
-        if (!startTs) startTs = ts;
-        var elapsed = ts - startTs;
-        var progress = Math.min(1, elapsed / DURATION);
-        // Easing out-quad (decelerazione progressiva, più piacevole)
-        var eased = 1 - (1 - progress) * (1 - progress);
-        var idx = Math.floor(eased * maxLen);
-        if (idx < 1) idx = 1;
-        lineChartData.datasets.forEach(function (d, i) {
-            var orig = _replayBackup[i];
-            d.data = orig.slice(0, idx);
-        });
-        window.myLine.update('none');
-        if (progress < 1) {
-            _replayRaf = requestAnimationFrame(frame);
-        } else {
-            // Restore finale + animazione Chart.js
-            _restoreFromBackup();
-            window.myLine.options.animation = origAnim;
-            if (window.cammesToast) window.cammesToast({
-                kind: 'success', title: 'Replay completato', duration: 2000
-            });
-        }
-    }
-    _replayRaf = requestAnimationFrame(frame);
+    tryStart(40);
 }
 
-function _restoreFromBackup() {
-    if (!_replayBackup) return;
-    lineChartData.datasets.forEach(function (d, i) {
-        if (_replayBackup[i]) d.data = _replayBackup[i].slice();
-    });
-    window.myLine.update('none');
-    _replayBackup = null;
-    document.getElementById('replayBtn').style.display = '';
-    document.getElementById('replayStopBtn').style.display = 'none';
-    if (_replaySafetyTimer) { clearTimeout(_replaySafetyTimer); _replaySafetyTimer = null; }
-}
-
-function stopReplay() {
-    _replayCancelled = true;
-    if (_replayRaf) { cancelAnimationFrame(_replayRaf); _replayRaf = null; }
-    _restoreFromBackup();
-    if (window.cammesToast) window.cammesToast({
-        kind: 'info', title: 'Replay interrotto', duration: 1500
-    });
-}
-
+window.loadNominal = loadNominal;
+window.evalNominal = evalNominal;
 window.replayAnimation = replayAnimation;
 window.stopReplay = stopReplay;
-
-// ===== Modalità vista: Sovrapposto vs Differenza =====
-// Sovrapposto: mostra le curve come sono caricate (default).
-// Differenza: con N >= 2 file caricati, baseline = file 1, calcola
-// delta = file_k - file_1 per ogni grado, mostra delta + stats.
-
-var _viewBackup = null;   // backup dei data originali quando entriamo in diff
-
-function switchViewMode() {
-    var mode = document.getElementById('viewMode').value;
-    if (mode === 'diff') showDiffView();
-    else showOverlayView();
-}
-
-function showOverlayView() {
-    // Ripristina i data originali dal backup, se presente
-    if (_viewBackup) {
-        lineChartData.datasets.forEach(function (d, i) {
-            if (_viewBackup[i]) d.data = _viewBackup[i].slice();
-            // Ripristina anche borderColor originale
-            if (_viewBackup[i + '_color']) d.borderColor = _viewBackup[i + '_color'];
-        });
-        _viewBackup = null;
-    }
-    var stats = document.getElementById('diffStats');
-    if (stats) stats.style.display = 'none';
-    if (window.myLine) window.myLine.update('none');
-}
-
-function showDiffView() {
-    // Trova i dataset con dati
-    var loaded = [];
-    lineChartData.datasets.forEach(function (d, i) {
-        // audit APP-10: il diff e' solo tra misure (indici 0-3), NON tocca le
-        // bande nominali ds[4]/ds[5] che vanno escluse dal differenziale.
-        if (i < 4 && d.data && d.data.length > 0) loaded.push({ ds: d, idx: i });
-    });
-    if (loaded.length < 2) {
-        if (window.cammesToast) window.cammesToast({
-            kind: 'warn', title: 'Servono almeno 2 file',
-            body: 'Carica un secondo file (anche dalla pagina Home → Apri in Confronto) per vedere la differenza.',
-            duration: 4000
-        });
-        // Torna a overlay
-        document.getElementById('viewMode').value = 'overlay';
-        return;
-    }
-    // Backup data originali
-    _viewBackup = {};
-    loaded.forEach(function (e) {
-        _viewBackup[e.idx] = e.ds.data.slice();
-        _viewBackup[e.idx + '_color'] = e.ds.borderColor;
-    });
-
-    var baseline = loaded[0].ds.data;
-    // Statistiche aggregate su tutti i delta
-    var allMaxAbs = 0, allSumAbs = 0, allSumSq = 0, allCount = 0;
-
-    // Trasforma ogni dataset dopo il primo in delta
-    for (var k = 1; k < loaded.length; k++) {
-        var ds = loaded[k].ds;
-        var orig = ds.data;
-        var delta = [];
-        for (var i = 0; i < Math.min(orig.length, baseline.length); i++) {
-            var a = Number(orig[i]);
-            var b = Number(baseline[i]);
-            if (!isFinite(a) || !isFinite(b)) { delta.push(null); continue; }
-            var d = a - b;
-            delta.push(d);
-            var ad = Math.abs(d);
-            if (ad > allMaxAbs) allMaxAbs = ad;
-            allSumAbs += ad; allSumSq += d * d; allCount++;
-        }
-        ds.data = delta;
-    }
-    // Baseline rimane visibile ma a 0 (è la sua differenza con sé stessa)
-    loaded[0].ds.data = baseline.map(function () { return 0; });
-
-    if (window.myLine) {
-        // Aggiungi linea zero come riferimento (cambia label baseline)
-        window.myLine.update('none');
-    }
-
-    // Stats
-    var meanAbs = allCount > 0 ? allSumAbs / allCount : 0;
-    var rmse    = allCount > 0 ? Math.sqrt(allSumSq / allCount) : 0;
-    var maxClass  = allMaxAbs > 0.5 ? 'bad'  : (allMaxAbs > 0.1 ? 'warn' : '');
-    var meanClass = meanAbs   > 0.2 ? 'bad'  : (meanAbs   > 0.05 ? 'warn' : '');
-    var rmseClass = rmse      > 0.3 ? 'bad'  : (rmse      > 0.1 ? 'warn' : '');
-    var stats = document.getElementById('diffStats');
-    if (stats) {
-        stats.innerHTML =
-            '<div class="diff-stat"><div class="diff-stat-label">|Delta| max</div>' +
-            '  <div class="diff-stat-value ' + maxClass + '">' + allMaxAbs.toFixed(3) + ' mm</div></div>' +
-            '<div class="diff-stat"><div class="diff-stat-label">|Delta| medio</div>' +
-            '  <div class="diff-stat-value ' + meanClass + '">' + meanAbs.toFixed(3) + ' mm</div></div>' +
-            '<div class="diff-stat"><div class="diff-stat-label">RMSE</div>' +
-            '  <div class="diff-stat-value ' + rmseClass + '">' + rmse.toFixed(3) + ' mm</div></div>' +
-            '<div class="diff-stat"><div class="diff-stat-label">Confronti</div>' +
-            '  <div class="diff-stat-value">' + (loaded.length - 1) + ' vs baseline</div></div>';
-        stats.style.display = '';
-    }
-
-    if (window.cammesToast) window.cammesToast({
-        kind: 'info', title: 'Vista differenza attiva',
-        body: 'Baseline: <b>' + loaded[0].ds.label + '</b>. Le altre curve mostrano lo scarto punto per punto.',
-        duration: 4000
-    });
-}
 window.switchViewMode = switchViewMode;
+window.rimuoviMisura = rimuoviMisura;
+window.rimuoviNominale = rimuoviNominale;
+window.rimuoviPolare = rimuoviPolare;
+window.svuotaTutto = svuotaTutto;
+window.stampaCollaudo = stampaCollaudo;
+
+// stato iniziale: pagina vuota, senza righe finte
+_aggiornaTabella();
+_aggiornaNominaleUI();
+_aggiornaGrafico(false);
+_disegnaPolari();
+_caricaArchivio();
+// tornando su questa scheda (per esempio dopo aver salvato una misura in
+// Alzata) le tendine dell'archivio si aggiornano da sole
+document.addEventListener('visibilitychange', function () { if (!document.hidden) _caricaArchivio(); });
+window.addEventListener('DOMContentLoaded', _loadFromUrlIfNeeded);
 </script>
 
 </body>

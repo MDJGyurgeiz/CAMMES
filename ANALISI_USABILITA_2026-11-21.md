@@ -2,6 +2,61 @@
 
 *Versione esaminata: v3.7.1. Analisi iniziata il 2026-11-15, chiusa il 2026-11-21.*
 
+## Stato nella v3.8.0 (2026-11-22)
+
+L'officina ha deciso: *«perfetto, applica anche i miglioramenti»*. Le proposte
+di questo documento sono state applicate nella **v3.8.0**, tranne dove la
+tabella dice il contrario, con il motivo. Calcoli, firmware (4.1) e protocollo
+seriale non sono stati toccati; nel programma del server è cambiata solo la riga
+che disegnava la tabella della pagina del manuale. Le prove sono automatiche
+(gli script veri delle pagine eseguiti in node su una pagina finta, con le
+risposte del banco simulate) e, alla fine, le quattro pagine sono state guardate
+nel browser a 1366×768, nel tema scuro, col programma vero e un Arduino
+**emulato**: tre difetti visti così sono stati corretti (`CHANGELOG.md`, «Visti
+nel browser»). Sul portatile del banco restano da guardare il tema chiaro, lo
+zoom al 125% e i PDF su carta. Le novità una per una sono nel `CHANGELOG.md`,
+alla voce v3.8.0.
+
+| N. | Proposta | Nella v3.8.0 | Che cosa resta, e perché |
+|---|---|---|---|
+| 1 | Alzata: ciò che serve in una schermata | **Fatta.** Barra dei comandi agganciata sotto la barra in alto: Zero virtuale, START, STOP, scelte, avanzamento, riga Esito, nome e Salva misura. Riquadro dal vivo compatto; il disegno del meccanismo è nella rotazione manuale; il grafico subito sotto. | Guardata nel browser a 1366×768: con la riga Esito su due righe la barra è alta circa 134 px e il grafico resta nella prima schermata. |
+| 2 | Esiti e notifiche | **Fatta.** Riga «Esito» fino al prossimo START, nella barra dei comandi invece che sotto il grafico, così resta in vista anche scorrendo. Notifiche in basso a destra (in Analisi a sinistra), tre a vista, lascia il posto la meno grave, «+N messaggi», durata almeno il tempo di lettura. La campanella è il pulsante «Messaggi», spiegato in Guida, giro guidato e manuale. | Non tutti gli errori restano fino alla chiusura: lo fanno gli avvisi sulla validità della misura (dalla v3.7.1); tutti gli altri riempirebbero la pila. |
+| 3 | Home: l'archivio subito | **Fatta.** Riga di stato in cima (verifica banco, Arduino, programma, archivio) con «+ Nuova misura»; archivio subito sotto; «Sistema e manutenzione» e «Attività» chiusi in fondo. Tolti benvenuto, tessere dei conteggi, «Tag più usati», colonne Tipo e Dim.; le tre tessere delle pagine ridotte a una riga. | La riga Arduino si legge all'apertura della pagina (con riprove e «Ricontrolla») e non si aggiorna da sola: servirebbe un controllo leggero nel server, non aggiunto in questa versione. |
+| 4 | Dall'archivio a Confronto e Analisi | **Fatta.** Casella su ogni riga, «Confronta i selezionati (max 4)», «Analizza (aspirazione + scarico)» con la domanda su quale sia l'aspirazione; «Apri in» nella vista rapida; tendine dell'archivio in Analisi e in Confronto (misure, nominale, vista polare), anche dal secondo PC; dopo il salvataggio la riga Esito di Alzata porta ad Analisi. | Misure INCOMPLETE e alzata massima già nell'elenco: il server dovrebbe leggere i dati in coda ai file. Il programma non indovina dal nome quale misura sia l'aspirazione: banco universale, sceglie l'operatore. |
+| 5 | Analisi: da dove si comincia | **In parte.** Passi numerati con lo stato; Analizza sempre a vista; «Azzera tutto» lontano e con domanda; comando valvola con «— da scegliere —» e la riga «Conti fatti su»; rapporto bilanciere accanto al comando; legenda del bordo tratteggiato; Invio per confermare un valore già giusto; elenco dei valori da confermare prima dei documenti. | **Rinviati:** un solo «Comando valvola» per lato che fa comparire i campi della punteria, e un solo mostra/nascondi al posto di Base/Avanzato più Funzioni: toccano moduli, giro guidato e test, vanno fatti in un giro a sé. Il gioco valvola resta un segnaposto «da confermare», non un campo vuoto: lo ancorano i test sui valori di partenza. L'analisi di un lobo solo cambierebbe il flusso dei conti. |
+| 6 | Una lingua sola | **Fatta**, con residui dichiarati. Glossario applicato a schermo, PDF, CSV, Guida, giro guidato e manuale; virgola decimale in tutto ciò che si legge, con una funzione sola; fasatura a parole. | Restano «Race report» e «Strumenti race» (nomi del modulo e dei documenti), «Regime (RPM)» e «Durata (alzata > 0)» nel confronto A vs B, il «#» nelle note della Scheda camma e «NO SENSORE» sul display: li ancorano test e manuale. |
+| 7 | Aiuto | **Fatta.** In ogni pagina: Messaggi, Giro guidato, Guida, Manuale. Fumetti entro circa 300 caratteri e senza la storia del programma; «?» più grandi, raggiungibili col Tab, aperti anche col clic o col tocco; Guida e giro guidato riscritti nell'ordine del lavoro. | «Altro nel manuale» che apre il capitolo giusto: servono delle ancore nella pagina del manuale, generata dal server. |
+| 8 | Leggibilità a un metro | **In parte.** Nessuna scritta sotto i 13 px nel foglio comune (12 in qualche stile di pagina); grigio più chiaro (almeno 5,47:1 sul fondo scuro); spie con pallino da 14 px e segno ✓ ! ✕ ↻; pulsanti alti almeno 36 px (44 nella barra di Alzata); pulsanti rossi e letture dal vivo leggibili anche nel tema chiaro. | Niente parola di stato accanto a ogni spia: nella barra in alto non c'è posto (a 1366 px quella di Alzata si deve già compattare); i casi che spengono START sono scritti per esteso nella barra dei comandi. Le scritte della ruota di fasatura in Analisi vanno ridisegnate guardandole a schermo. «Rosso solo per gli allarmi» nelle letture dal vivo: decide l'officina. |
+| 9 | Nomi dei comandi | **Fatta.** Ricomincia, Azzera angolo qui (con domanda), Salva misura, Memorizza posizione, Verso di scansione accanto a Modalità. Anche: «Azzera tutto» in Analisi, «Svuota tutto» e «Ridisegna» in Confronto. | — |
+| 10 | Misura non salvata | **Fatta.** Domanda prima di START, Zero virtuale, Ricomincia, Verifica banco e del cambio di pagina; avviso del browser se si chiude o si ricarica. | — |
+| 11 | Confronto | **Fatta.** Nomi delle misure in legenda, colori leggibili, asse in gradi, verdetto in alto che si aggiorna da solo, Differenza con «Allinea la fase», file accettati per il contenuto e non per il nome, «Stampa collaudo». | Fuori dall'elenco, non fatti: il segno sul grafico del punto dello scarto massimo, una vista «scostamento dal nominale», la vista polare con le sagome sovrapposte. |
+| 12 | Finestre della pagina | **Fatta.** Nessuna «localhost dice…»; con un'azione rossa il fuoco parte dal pulsante prudente; il Tab resta nella finestra. | — |
+| 13 | Aggiornare il programma | **Fatta.** Home → Sistema e manutenzione → Programma: i tre passi, la cartella delle misure, che cosa sta in settings.json; la notifica di aggiornamento rimanda lì; il manuale lo dice. | Per un pulsante «Ripristina da backup» servirebbe una funzione nuova nel server: il ripristino è spiegato a parole. |
+| 14 | CSV su un PC italiano | **Fatta.** CSV con punto e virgola, virgola decimale e segno UTF-8, con una riga che lo dice; resta il pulsante «Excel» (.xlsx) su ogni riga dell'archivio. | Una seconda variante col punto per un Excel in inglese: si è tenuto un formato solo, dichiarato. |
+
+**Interventi rapidi:** fatti tutti tranne la parola accanto alle spie (al suo
+posto il segno nel pallino e l'avviso per esteso nella barra dei comandi). Nomi
+del punto 9 e domanda del punto 10; nomi in legenda e asse in gradi in
+Confronto; riga di stato e archivio subito sotto in Home; contrasto dei grigi;
+fumetti oltre i 300 caratteri accorciati; manuale raggiungibile da ogni pagina
+(pulsante «Manuale» in alto); procedura di aggiornamento scritta in Home.
+
+**Interventi strutturali:** fatti l'1 (barra dei comandi e riga Esito), il 2
+(archivio come punto di partenza), il 4 (glossario e numeri) e il 5 (finestre
+della pagina). Il 3 (Analisi a passi) è fatto per i passi e rinviato per il
+«Comando valvola» unico.
+
+**Che cosa NON fare:** rispettato. Nessun numero calcolato è stato tolto: quelli
+spostati sono dichiarati (il peso del file nel fumetto della data in Home, il
+«picco sul banco» in fondo alla Scheda camma). «Da confermare», «non
+valutabile» e le riserve restano. Nessun valore tipico di un modello: il «16»
+già scritto nel campo della vista polare in Confronto è stato tolto, il campo
+nasce vuoto. Niente mappe di cilindri. Firmware, protocollo e calcoli non
+toccati; nel server solo la riga della tabella del manuale. Ruota rifiuta ancora i decimali che il banco non può eseguire, e
+lo Zero virtuale finisce ancora ricaricando la pagina.
+
+**Glossario:** applicato. Dove una parola vecchia resta, è detto al punto 6.
+
 Domanda dell'officina: *«puoi analizzare il software per capire se sia semplice
 da usare e intelligibile? e se può essere migliorato in questo aspetto?»*
 
@@ -25,8 +80,9 @@ banco, a un metro dallo schermo, non è ancora semplice.** I motivi sono quattro
 
 **Si può migliorare molto senza toccare banco, firmware, protocollo o calcoli.**
 È lavoro di disposizione, di nomi e di messaggi che restano a schermo. Le
-proposte sono in fondo, in ordine di convenienza. Nessuna è stata fatta:
-**decide l'officina**.
+proposte sono in fondo, in ordine di convenienza. Alla chiusura dell'analisi
+nessuna era stata fatta: **decideva l'officina**, che le ha approvate il
+2026-11-22 (vedi «Stato nella v3.8.0», in testa).
 
 Strada facendo l'analisi ha trovato anche **difetti veri**: il programma che fa
 o dice una cosa sbagliata. Quelli sono già corretti nella v3.7.1 (vedi sotto).

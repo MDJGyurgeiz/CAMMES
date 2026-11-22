@@ -9,7 +9,7 @@
   // -------- VERSIONE ------------------------------------------------------
   // Unico punto di verità della versione mostrata nella UI (badge in basso a
   // destra su ogni pagina). Allineala a package.json/tag quando rilasci.
-  var CAMMES_VERSION = 'v3.7.1';
+  var CAMMES_VERSION = 'v3.8.0';
   window.CAMMES_VERSION = CAMMES_VERSION;
 
   // -------- THEME (dark/light) -------------------------------------------
@@ -58,18 +58,73 @@
   window.cammesEscape = escapeHtml;
 
   // -------- TOAST NOTIFICATIONS ------------------------------------------
+  // In basso a destra (in Analisi a sinistra): in alto coprivano il pannello
+  // dei parametri di Analisi e la barra dei comandi di Alzata. Al massimo
+  // TOAST_MAX a vista; quelle che non ci stanno restano nel registro
+  // "Messaggi" e la pila lo dice con un pulsante "+N messaggi" che lo apre
+  // (e che se ne va con l'ultima notifica a vista).
+  var TOAST_MAX = 3;
+  // Chi lascia il posto quando sono troppe: prima le conferme, poi le
+  // informazioni; un errore non lascia mai il posto a una conferma.
+  var TOAST_GRAVITA = { success: 0, info: 1, warn: 2, err: 3 };
+  var toastNonMostrati = 0;
+
+  function gravitaDi(kind) {
+    return Object.prototype.hasOwnProperty.call(TOAST_GRAVITA, kind) ? TOAST_GRAVITA[kind] : 1;
+  }
+
+  // Tempo di lettura: 4 s piu' 1 s ogni 15 caratteri di titolo e testo, al
+  // massimo 12 s. Una durata indicata da chi chiama vale come minimo: se il
+  // testo e' lungo resta a vista il tempo per leggerlo. 0 vuol dire "resta
+  // finche' non la chiudi".
+  function durataToast(durata, titolo, testo) {
+    var n = String((titolo || '') + ' ' + (testo || ''))
+      .replace(/<[^>]*>/g, '')
+      .replace(/&[#a-z0-9]+;/gi, 'x')
+      .replace(/\s+/g, ' ').trim().length;
+    var lettura = Math.min(12000, 4000 + Math.round(n / 15) * 1000);
+    if (durata == null) return lettura;
+    var d = Number(durata) || 0;
+    return d > 0 ? Math.max(d, lettura) : 0;
+  }
+
+  // Chi lascia il posto quando a vista sono piu' di "massimo". L'elenco delle
+  // gravita' e' in ordine di arrivo e l'ultima e' la notifica nuova, che si
+  // vede sempre (e' il riscontro di cio' che si e' appena fatto). Esce la
+  // meno grave fra le precedenti, a pari gravita' la piu' vecchia, ma solo
+  // se non e' piu' grave della nuova: una conferma non scalza un avviso o un
+  // errore. In quel caso la nuova si aggiunge per il suo tempo come quarta,
+  // non oltre. Ritorna l'indice da togliere, -1 se non esce nessuna.
+  function toastDaTogliere(gravita, massimo) {
+    var n = gravita.length;
+    if (n <= massimo || n < 2) return -1;
+    var nuova = gravita[n - 1], scelto = 0;
+    for (var i = 1; i < n - 1; i++) if (gravita[i] < gravita[scelto]) scelto = i;
+    if (gravita[scelto] > nuova && n <= massimo + 1) return -1;
+    return scelto;
+  }
+
+  // In Analisi a destra c'e' il pannello dei parametri e, piu' giu', la
+  // tabella dei risultati coi numeri a filo destro: la pila va in basso a
+  // sinistra, sopra i grafici. Una pagina puo' scegliere il lato anche da
+  // se' (--toast-destra, --toast-sinistra, --toast-allinea in style.css).
+  var PILA_A_SINISTRA = { analisi: true };
+
   function ensureToastStack() {
     let stack = document.getElementById('toast-stack');
     if (!stack) {
       stack = document.createElement('div');
       stack.id = 'toast-stack';
-      stack.className = 'toast-stack';
+      stack.className = 'toast-stack' + (PILA_A_SINISTRA[getCurrentPage()] ? ' pila-sinistra' : '');
       // audit APP-13: live region cosi' gli screen reader annunciano i toast.
       // aria-atomic=false: annuncia solo il nuovo toast, non l'intera pila.
       stack.setAttribute('role', 'status');
       stack.setAttribute('aria-live', 'polite');
       stack.setAttribute('aria-atomic', 'false');
       document.body.appendChild(stack);
+      // una barra in basso puo' attaccarsi o staccarsi scorrendo la pagina
+      window.addEventListener('scroll', riposizionaPilaPresto, { passive: true });
+      window.addEventListener('resize', riposizionaPilaPresto);
     }
     return stack;
   }
@@ -81,36 +136,140 @@
     info:    '<svg class="toast-icon info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
   };
 
+  function toastAVista(stack) {
+    var out = [];
+    for (var i = 0; i < stack.children.length; i++) {
+      var c = stack.children[i];
+      if (c.classList && c.classList.contains('toast') && !c.classList.contains('toast-uscita')) out.push(c);
+    }
+    return out;
+  }
+  function staccaToast(el) {
+    if (el.__timer) { clearTimeout(el.__timer); el.__timer = null; }
+    const stack = el.parentNode;
+    if (stack) stack.removeChild(el);
+    // sparite tutte, sparisce anche "+N messaggi": il conto dei non letti
+    // resta sul numerino di Messaggi
+    if (stack && stack.id === 'toast-stack' && toastNonMostrati > 0 && !toastAVista(stack).length) {
+      toastNonMostrati = 0;
+      aggiornaToastAltri(stack);
+    }
+  }
+  function svanisciToast(el) {
+    el.__timer = null;
+    if (!el.classList) { staccaToast(el); return; }
+    el.classList.add('toast-uscita');   // non conta piu' fra quelle a vista
+    const aSinistra = !!(el.parentNode && el.parentNode.classList && el.parentNode.classList.contains('pila-sinistra'));
+    el.style.transition = 'opacity 200ms, transform 200ms';
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(' + (aSinistra ? -20 : 20) + 'px)';
+    setTimeout(function () { staccaToast(el); }, 220);
+  }
+  // Se sotto la pila c'e' una barra appiccicata al fondo dello schermo
+  // (Analizza in Analisi, la barra delle misure spuntate in Home), la pila
+  // sale sopra di essa: le notifiche non coprono i comandi. Si guarda solo
+  // sotto la pila vera, a destra o a sinistra dove la mette la pagina.
+  // Ritorna la distanza dal fondo da lasciare libera (0 = nessuna barra).
+  function spazioBarraInBasso(stack) {
+    if (!stack || !document.elementsFromPoint || typeof getComputedStyle !== 'function') return 0;
+    const pila = stack.getBoundingClientRect();
+    if (!pila || !(pila.right > pila.left)) return 0;   // pila vuota: niente da spostare
+    const altezza = window.innerHeight, y = altezza - 30;
+    let lift = 0;
+    // tre punti lungo la larghezza della pila
+    [pila.left + 12, (pila.left + pila.right) / 2, pila.right - 12].forEach(function (x) {
+      const sotto = document.elementsFromPoint(x, y) || [];
+      for (let i = 0; i < sotto.length && i < 12; i++) {
+        for (let e = sotto[i], d = 0; e && e.nodeType === 1 && d < 8; e = e.parentElement, d++) {
+          if (e.id === 'toast-stack') break;          // la pila non misura se stessa
+          const pos = getComputedStyle(e).position;
+          if (pos !== 'sticky' && pos !== 'fixed') continue;
+          const r = e.getBoundingClientRect();
+          if (r.bottom >= altezza - 40 && r.top > altezza / 2) lift = Math.max(lift, Math.round(altezza - r.top + 10));
+          break;
+        }
+      }
+    });
+    return lift;
+  }
+  function posizionaPila(stack) {
+    let lift = 0;
+    try { lift = spazioBarraInBasso(stack); } catch (e) {}
+    // senza barra resta la posizione del foglio di stile (--toast-bottom)
+    stack.style.bottom = lift > 0 ? lift + 'px' : '';
+  }
+  let _pilaInAttesa = false;
+  function riposizionaPilaPresto() {
+    const stack = document.getElementById('toast-stack');
+    if (!stack || _pilaInAttesa || !toastAVista(stack).length) return;
+    _pilaInAttesa = true;
+    requestAnimationFrame(function () { _pilaInAttesa = false; posizionaPila(stack); });
+  }
+
+  // "+N messaggi": notifiche tolte dalla pila per far posto, ancora da
+  // rileggere. Apre il registro, che le ha tutte.
+  function aggiornaToastAltri(stack) {
+    var b = document.getElementById('toast-altri');
+    if (toastNonMostrati <= 0) {
+      if (b && b.parentNode) b.parentNode.removeChild(b);
+      return;
+    }
+    if (!stack) stack = ensureToastStack();
+    if (!b) {
+      b = document.createElement('button');
+      b.type = 'button';
+      b.id = 'toast-altri';
+      b.className = 'toast-altri';
+      b.addEventListener('click', function () { apriMsgLog(); });
+    }
+    b.textContent = '+' + toastNonMostrati + (toastNonMostrati === 1 ? ' messaggio' : ' messaggi');
+    b.setAttribute('aria-label', 'Apri i messaggi che non stanno sullo schermo: ' + toastNonMostrati);
+    if (stack.firstChild !== b) stack.insertBefore(b, stack.firstChild);
+  }
+
   function showToast(opts) {
     const o = typeof opts === 'string' ? { body: opts } : (opts || {});
     const kind = o.kind || o.type || 'info';
     const title = o.title || '';
     const body = o.body || '';
-    // duration:0 = messaggio persistente (prima lo 0 era falsy e cadeva sui 4 s)
-    const ttl = (o.duration == null) ? 4000 : o.duration;
+    const ttl = durataToast(o.duration, title, body);
 
     const stack = ensureToastStack();
     const el = document.createElement('div');
     el.className = 'toast ' + kind;
+    el.__gravita = gravitaDi(kind);
     el.innerHTML = (TOAST_ICONS[kind] || TOAST_ICONS.info) +
       '<div class="toast-body">' +
       (title ? '<div class="toast-title">' + title + '</div>' : '') +
       '<div>' + body + '</div>' +
-      '</div>' +
-      '<button type="button" class="toast-close" aria-label="Chiudi messaggio">&#10005;</button>';
-    el.querySelector('.toast-close').addEventListener('click', function () { el.remove(); });
+      '</div>';
+    const chiudi = document.createElement('button');
+    chiudi.type = 'button';
+    chiudi.className = 'toast-close';
+    chiudi.setAttribute('aria-label', 'Chiudi messaggio');
+    chiudi.innerHTML = '&times;';
+    chiudi.addEventListener('click', function () { staccaToast(el); });
+    el.appendChild(chiudi);
     stack.appendChild(el);
-    // Una sola analisi puo' generare 7 messaggi: oltre i 4 piu' recenti la pila
-    // usciva dallo schermo. I precedenti restano nel registro (campanella).
-    while (stack.children.length > 4) stack.removeChild(stack.firstChild);
+    // Una sola analisi puo' generare 7 messaggi. Oltre TOAST_MAX lascia il
+    // posto la meno grave fra le precedenti (regole in toastDaTogliere): la
+    // tolta resta nel registro.
+    const aVista = toastAVista(stack);
+    const pannello = document.getElementById('msglog-panel');
+    const registroAperto = !!(pannello && pannello.classList.contains('visible'));
+    let i;
+    while ((i = toastDaTogliere(aVista.map(function (t) { return t.__gravita; }), TOAST_MAX)) >= 0) {
+      staccaToast(aVista[i]);
+      aVista.splice(i, 1);
+      // col registro aperto quelle notifiche si leggono gia' li'
+      if (!registroAperto) toastNonMostrati++;
+    }
+    aggiornaToastAltri(stack);
+    // la pila misurata con la notifica nuova dentro (larghezza e lato veri)
+    posizionaPila(stack);
 
-    if (ttl > 0) {
-      setTimeout(() => {
-        el.style.transition = 'opacity 200ms, transform 200ms';
-        el.style.opacity = '0';
-        el.style.transform = 'translateX(20px)';
-        setTimeout(() => el.remove(), 220);
-      }, ttl);
+    if (ttl > 0 && el.parentNode) {
+      el.__timer = setTimeout(function () { svanisciToast(el); }, ttl);
     }
 
     // P2-06: opts.analisi e' l'id dell'analisi FOTOGRAFATO da chi programma il
@@ -119,6 +278,10 @@
     // finirebbero attribuiti all'analisi successiva.
     recordMessage(kind, title, body, (opts && typeof opts.analisi === 'number') ? opts.analisi : null);
   }
+  // Regole esposte per i controlli automatici (tools/test_usabilita_comune.js).
+  showToast.durata = durataToast;
+  showToast.daTogliere = toastDaTogliere;
+  showToast.massimo = TOAST_MAX;
   window.cammesToast = showToast;
 
   // -------- REGISTRO MESSAGGI --------------------------------------------
@@ -169,15 +332,33 @@
     if (MSG_LOG.length > MSG_MAX) MSG_LOG.shift();
     persistMsgLog();
     const panel = document.getElementById('msglog-panel');
-    if (panel && panel.classList.contains('visible')) { renderMsgLog(); }
+    if (panel && panel.classList.contains('visible')) {
+      // letto mentre arriva: non deve colorare il numerino dopo
+      msgLastRead = msgSeq; persistMsgRead();
+      renderMsgLog();
+    }
     else { msgUnread++; updateMsgBadge(); }
   }
 
+  // Il numerino della campanella prende il colore del messaggio piu' grave
+  // non letto: rosso solo se c'e' un errore, giallo per un avviso, neutro per
+  // conferme e informazioni. Prima era sempre rosso e contava anche
+  // "Scansione avviata": acceso sempre, non segnalava piu' niente.
+  function gravitaNonLetti() {
+    var g = -1;
+    for (var i = MSG_LOG.length - 1; i >= 0; i--) {
+      if ((MSG_LOG[i].id || 0) <= msgLastRead) break;
+      g = Math.max(g, gravitaDi(MSG_LOG[i].kind));
+    }
+    return g;
+  }
   function updateMsgBadge() {
     const b = document.getElementById('msglog-badge');
     if (!b) return;
     b.textContent = msgUnread > 99 ? '99+' : String(msgUnread);
     b.style.display = msgUnread > 0 ? 'flex' : 'none';
+    const g = gravitaNonLetti();
+    b.className = 'msglog-badge' + (g >= 3 ? ' grave-err' : g === 2 ? ' grave-warn' : '');
   }
 
   function renderMsgLog() {
@@ -213,8 +394,11 @@
       '<div class="msglog-head">' +
         '<span class="msglog-h-title">Messaggi della sessione</span>' +
         '<button type="button" id="msglog-clear" class="msglog-btn">Svuota</button>' +
-        '<button type="button" id="msglog-close" class="msglog-btn" aria-label="Chiudi">&#10005;</button>' +
-      '</div><div id="msglog-list" class="msglog-list"></div>';
+        '<button type="button" id="msglog-close" class="msglog-btn" aria-label="Chiudi">&times;</button>' +
+      '</div>' +
+      '<p class="msglog-nota">Tutte le notifiche di questa sessione, anche quelle gi&agrave; sparite dallo schermo. ' +
+        'Le pi&ugrave; recenti in alto. Chiudendo il browser si azzerano.</p>' +
+      '<div id="msglog-list" class="msglog-list"></div>';
     document.body.appendChild(panel);
     panel.querySelector('#msglog-close').addEventListener('click', toggleMsgLog);
     panel.querySelector('#msglog-clear').addEventListener('click', function () {
@@ -232,28 +416,147 @@
       msgLastRead = MSG_LOG.reduce(function (m, v) { return Math.max(m, v.id || 0); }, msgLastRead);
       persistMsgRead();
       msgUnread = 0; updateMsgBadge(); renderMsgLog();
+      // aperto il registro, i messaggi tolti dalla pila sono a portata
+      toastNonMostrati = 0; aggiornaToastAltri();
     }
   }
-  window.cammesMsgLog = { toggle: toggleMsgLog, entries: function () { return MSG_LOG.slice(); } };
-
-  function installMsgLogButton() {
-    if (document.getElementById('msglog-toggle')) return;
-    const ref = document.getElementById('help-toggle');
-    if (!ref || !ref.parentNode) return;
-    const btn = document.createElement('button');
-    btn.id = 'msglog-toggle';
-    btn.type = 'button';
-    btn.className = 'help-toggle msglog-toggle';
-    btn.setAttribute('aria-label', 'Registro messaggi');
-    btn.title = 'Rivedi i messaggi (verdetti, avvisi) di questa sessione';
-    btn.innerHTML =
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">' +
-      '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>' +
-      '<span id="msglog-badge" class="msglog-badge" style="display:none;">0</span>';
-    btn.addEventListener('click', toggleMsgLog);
-    ref.parentNode.insertBefore(btn, ref);
-    updateMsgBadge();
+  function apriMsgLog() {
+    const panel = document.getElementById('msglog-panel');
+    if (!panel || !panel.classList.contains('visible')) toggleMsgLog();
   }
+  window.cammesMsgLog = { toggle: toggleMsgLog, apri: apriMsgLog, entries: function () { return MSG_LOG.slice(); } };
+
+  // -------- BARRA IN ALTO: MESSAGGI, GIRO GUIDATO, GUIDA, MANUALE ----------
+  // Pulsanti con la parola accanto all'icona, su tutte le pagine, aggiunti
+  // qui per non toccare gli HTML. Prima erano tre cerchi a sola icona e il
+  // manuale si apriva solo dalla Home.
+  var ICONE_AIUTO = {
+    messaggi: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
+    giro: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>',
+    manuale: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>'
+  };
+  function contenutoPillola(icona, testo) {
+    return '<span class="aiuto-ico" aria-hidden="true">' + icona + '</span><span class="aiuto-txt">' + testo + '</span>';
+  }
+
+  function installMsgLogButton(gruppo) {
+    let btn = document.getElementById('msglog-toggle');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'msglog-toggle';
+      btn.type = 'button';
+      btn.className = 'help-toggle help-pill msglog-toggle';
+      btn.setAttribute('aria-label', 'Messaggi della sessione');
+      btn.setAttribute('data-tip', '<strong>Messaggi</strong>Tutte le notifiche della sessione, anche quelle gi&agrave; sparite. ' +
+        'Il numero conta quelle non ancora lette: rosso se fra queste c\'&egrave; un errore, giallo se c\'&egrave; un avviso.');
+      btn.innerHTML = contenutoPillola(ICONE_AIUTO.messaggi, 'Messaggi') +
+        '<span id="msglog-badge" class="msglog-badge" style="display:none;">0</span>';
+      btn.addEventListener('click', toggleMsgLog);
+    }
+    if (gruppo) gruppo.appendChild(btn);
+    updateMsgBadge();
+    return btn;
+  }
+
+  function installaBarraAiuti() {
+    const help = document.getElementById('help-toggle');
+    if (!help || !help.parentNode) return null;
+    let gruppo = document.getElementById('headerAiuti');
+    if (!gruppo) {
+      gruppo = document.createElement('div');
+      gruppo.id = 'headerAiuti';
+      gruppo.className = 'header-aiuti';
+      gruppo.setAttribute('role', 'group');
+      gruppo.setAttribute('aria-label', 'Aiuto e messaggi');
+      help.parentNode.insertBefore(gruppo, help);
+    }
+    const messaggi = installMsgLogButton(gruppo);
+    let giro = document.getElementById('tour-toggle');
+    if (!giro && getCurrentPage()) {
+      giro = document.createElement('button');
+      giro.id = 'tour-toggle';
+      giro.type = 'button';
+      giro.className = 'help-toggle help-pill';
+      giro.setAttribute('aria-label', 'Giro guidato della pagina');
+      giro.setAttribute('data-tip', '<strong>Giro guidato</strong>Ti indica uno alla volta i comandi di questa pagina, ' +
+        'nell\'ordine del lavoro. Avanti e Indietro per scorrere, Esc per chiudere.');
+      giro.innerHTML = contenutoPillola(ICONE_AIUTO.giro, 'Giro guidato');
+      giro.addEventListener('click', startTour);
+    }
+    // Il "?" della pagina diventa "Guida": stesse schede, ora col nome.
+    if (!help.classList.contains('help-pill')) {
+      help.classList.add('help-pill');
+      help.innerHTML = '<span class="aiuto-ico aiuto-q" aria-hidden="true">?</span><span class="aiuto-txt">Guida</span>';
+      help.setAttribute('aria-label', 'Guida: come si lavora, in 5 schede');
+      help.removeAttribute('title');
+      help.setAttribute('data-tip', '<strong>Guida</strong>Come si lavora col banco, in 5 schede: ' +
+        'dalla misura al documento per il cliente.');
+    }
+    let manuale = document.getElementById('manuale-link');
+    if (!manuale) {
+      manuale = document.createElement('a');
+      manuale.id = 'manuale-link';
+      manuale.className = 'help-toggle help-pill';
+      manuale.href = '/manuale';
+      manuale.target = '_blank';
+      manuale.rel = 'noopener';
+      manuale.setAttribute('aria-label', 'Manuale operatore (si apre in una nuova scheda)');
+      manuale.setAttribute('data-tip', '<strong>Manuale</strong>Il manuale dell\'operatore in una nuova scheda: misura, collaudo, ' +
+        'analisi e tabella dei problemi frequenti. Si pu&ograve; stampare.');
+      manuale.innerHTML = contenutoPillola(ICONE_AIUTO.manuale, 'Manuale');
+    }
+    // ordine: Messaggi, Giro guidato, Guida, Manuale
+    [messaggi, giro, help, manuale].forEach(function (b) { if (b) gruppo.appendChild(b); });
+    // Solo ora il numerino e' nella pagina: i non letti arrivati da un'altra
+    // pagina (AUDIT v3.4.3 P2-06) si vedono subito, col colore del piu' grave.
+    updateMsgBadge();
+    return gruppo;
+  }
+
+  // Se la barra in alto non ci sta (Alzata con le 4 spie a 1366 px, finestra
+  // stretta, zoom del browser) la si compatta a gradini invece di tagliare a
+  // destra i pulsanti: 1) via la scritta CAMMES (resta il logo), 2) link
+  // delle pagine piu' stretti, 3) via le icone dalle pillole, 4) pillole a
+  // sola icona, 5) via i nomi delle spie (restano pallino, segno e fumetto),
+  // 6) se non basta ancora (tablet, zoom forte) la barra scorre di lato.
+  // Prima si stringe cio' che non si legge, per ultime le parole delle spie.
+  // L'altezza della barra non cambia (Alzata ci appoggia la barra dei comandi).
+  var LIVELLI_BARRA = ['barra-l1', 'barra-l2', 'barra-l3', 'barra-l4', 'barra-l5', 'barra-l6'];
+  function adattaBarraAlta() {
+    const h = document.querySelector('.header');
+    if (!h || !h.classList) return 0;
+    LIVELLI_BARRA.forEach(function (c) { h.classList.remove(c); });
+    let livello = 0;
+    while (livello < LIVELLI_BARRA.length && h.scrollWidth > h.clientWidth + 1) {
+      h.classList.add(LIVELLI_BARRA[livello]);
+      livello++;
+    }
+    return livello;
+  }
+  let _adattaInAttesa = false;
+  function adattaBarraPresto() {
+    if (_adattaInAttesa) return;
+    _adattaInAttesa = true;
+    requestAnimationFrame(function () { _adattaInAttesa = false; adattaBarraAlta(); });
+  }
+  function sorvegliaBarraAlta() {
+    adattaBarraAlta();
+    window.addEventListener('resize', adattaBarraPresto);
+    try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(adattaBarraPresto); } catch (e) {}
+    if (typeof window.ResizeObserver === 'function') {
+      try {
+        const ro = new window.ResizeObserver(adattaBarraPresto);
+        ['.header', '.header .status-leds', '.header .nav-links'].forEach(function (s) {
+          const el = document.querySelector(s);
+          if (el) ro.observe(el);
+        });
+      } catch (e) {}
+    }
+  }
+  window.cammesBarraAlta = { adatta: adattaBarraAlta };
 
   // -------- SCAN PROGRESS BAR --------------------------------------------
   // Formattazione UNICA di una durata stimata. Prima ogni punto la scriveva
@@ -289,7 +592,7 @@
   window.cammesScanProgress = { set: setScanProgress, reset: resetScanProgress };
 
   // -------- INTESTAZIONE OFFICINA NEI PDF --------------------------------
-  // Il nome impostato in Home (Sistema & aggiornamenti) va in testa a TUTTI i
+  // Il nome impostato in Home (Sistema e manutenzione) va in testa a TUTTI i
   // documenti che l'officina consegna: referto di analisi, race report, scheda
   // tecnica della singola misura, scheda camma. Prima lo portava solo la scheda
   // camma: il campo si chiamava "per i referti PDF" e tre referti su quattro
@@ -415,9 +718,9 @@
       const p1 = polarToCart(cx, cy, rTickOuter, ang);
       const p2 = polarToCart(cx, cy, rTickMajorInner, ang);
       ticksSvg += `<line class="gauge-svg-tick-major" x1="${p1.x.toFixed(2)}" y1="${p1.y.toFixed(2)}" x2="${p2.x.toFixed(2)}" y2="${p2.y.toFixed(2)}" />`;
-      // Label
+      // Label (virgola decimale, come tutto cio' che l'operatore legge)
       const labelVal = min + (i / majorTicks) * (max - min);
-      const labelText = (max - min) % majorTicks === 0 ? labelVal.toFixed(0) : labelVal.toFixed(1);
+      const labelText = cammesNum(labelVal, (max - min) % majorTicks === 0 ? 0 : 1);
       const pl = polarToCart(cx, cy, rLabel, ang);
       labelsSvg += `<text class="gauge-svg-label" x="${pl.x.toFixed(2)}" y="${(pl.y + 4).toFixed(2)}" text-anchor="middle">${labelText}</text>`;
       // Minor ticks
@@ -435,7 +738,7 @@
     const valueArcPath = describeArc(cx, cy, r * 0.98, startAng, startAng);  // start empty
 
     container.innerHTML = `
-      <svg class="gauge-svg" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" aria-label="Gauge ${unit}">
+      <svg class="gauge-svg" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" aria-label="Indicatore ${unit}">
         <defs>
           <linearGradient id="${uid}-grad" x1="0%" y1="100%" x2="100%" y2="0%">
             <stop offset="0%"   stop-color="var(--accent)"   />
@@ -459,7 +762,7 @@
         <!-- Etichette tacche maggiori -->
         <g class="gauge-svg-labels">${labelsSvg}</g>
         <!-- Valore centrale -->
-        <text class="gauge-svg-value" x="${cx}" y="${cy + 8}" text-anchor="middle">${(0).toFixed(decimals)}</text>
+        <text class="gauge-svg-value" x="${cx}" y="${cy + 8}" text-anchor="middle">${cammesNum(0, decimals)}</text>
         <text class="gauge-svg-unit"  x="${cx}" y="${cy + 30}" text-anchor="middle">${unit}</text>
       </svg>
     `;
@@ -475,7 +778,7 @@
       const ang = startAng + frac * totalArc;
       const d = describeArc(cx, cy, r * 0.98, startAng, ang);
       arcValueEl.setAttribute('d', d);
-      if (valueEl) valueEl.textContent = isFinite(num) ? num.toFixed(decimals) : '--';
+      if (valueEl) valueEl.textContent = isFinite(num) ? cammesNum(num, decimals) : '--';
     }
 
     return {
@@ -486,10 +789,15 @@
   window.cammesGauge = { create: createGauge };
 
   // -------- RICH TOOLTIPS (data-tip="...") -------------------------------
-  // Inietta un tooltip floating per ogni elemento con attributo data-tip.
-  // Posizionamento: sopra l'elemento, freccia in basso. Si chiude on
-  // mouseleave/blur. Per attivare programmaticamente nuovi elementi
-  // chiamare cammesTooltip.refresh().
+  // Un fumetto per ogni elemento con attributo data-tip, sopra l'elemento
+  // (sotto se in alto non c'e' spazio). Ascolto unico sul documento: vale
+  // anche per gli elementi aggiunti dopo il caricamento. Si apre passando il
+  // mouse o col tasto Tab; sulle icone "?" e sulle spie di stato anche col
+  // clic o col tocco, e allora resta aperto finche' non si clicca altrove o
+  // si preme Esc (sul tablet il passaggio del mouse non esiste).
+  // cammesTooltip.refresh() resta per compatibilita': rende raggiungibili
+  // col Tab le icone "?" e le spie aggiunte dopo.
+  var TIP_FISSABILI = '.help-icon[data-tip], .status-led[data-tip]';
   function ensureTooltipEl() {
     let tt = document.getElementById('cammes-tooltip');
     if (!tt) {
@@ -520,81 +828,153 @@
     tt.style.left = (left + window.scrollX) + 'px';
     tt.setAttribute('data-placement', placement);
   }
-  function bindTooltipEl(el) {
-    if (el.__tipBound) return;
-    el.__tipBound = true;
+  var tipAttivo = null, tipFissato = null, fumettiAttivi = false;
+  // Il fuoco rimesso dal programma (chiusa una finestra, torna sul comando
+  // che l'aveva aperta) non apre il fumetto di quel comando.
+  var tipSilenzio = false;
+  function rimettiFuoco(el) {
+    if (!el || typeof el.focus !== 'function' || el === document.body) return;
+    tipSilenzio = true;
+    try { el.focus(); } catch (e) {}
+    tipSilenzio = false;
+  }
+  function mostraTip(el) {
+    const testo = el.getAttribute('data-tip');
+    if (!testo) return;
     const tt = ensureTooltipEl();
-    el.addEventListener('mouseenter', function () {
-      tt.innerHTML = el.getAttribute('data-tip');
-      tt.classList.add('visible');
-      // Devi aspettare che ttRect sia computato dopo il render
-      requestAnimationFrame(function () { positionTooltip(el, tt); });
+    tt.innerHTML = testo;
+    tt.classList.remove('fissato');
+    tt.classList.add('visible');
+    tipAttivo = el;
+    // la misura del fumetto e' pronta solo dopo il disegno
+    requestAnimationFrame(function () { if (tipAttivo === el) positionTooltip(el, tt); });
+  }
+  function nascondiTip() {
+    const tt = document.getElementById('cammes-tooltip');
+    if (tt) { tt.classList.remove('visible'); tt.classList.remove('fissato'); }
+    tipAttivo = null;
+    tipFissato = null;
+  }
+  function tipDi(t) { return (t && t.closest) ? t.closest('[data-tip]') : null; }
+  function fissabileDi(t) { return (t && t.closest) ? t.closest(TIP_FISSABILI) : null; }
+  function alternaTipFissato(el) {
+    if (tipFissato === el) { nascondiTip(); return; }
+    mostraTip(el);
+    tipFissato = el;
+    // aperto col clic: si puo' cliccare un collegamento dentro ("Altro nel
+    // manuale"); un clic altrove, o sul fumetto stesso, lo chiude
+    ensureTooltipEl().classList.add('fissato');
+  }
+  function installaFumetti() {
+    if (fumettiAttivi) return;
+    fumettiAttivi = true;
+    document.addEventListener('mouseover', function (e) {
+      const el = tipDi(e.target);
+      if (el === tipAttivo) return;
+      if (!el) { if (tipAttivo && !tipFissato) nascondiTip(); return; }
+      tipFissato = null;
+      mostraTip(el);
     });
-    el.addEventListener('mouseleave', function () {
-      tt.classList.remove('visible');
+    document.addEventListener('mouseout', function (e) {
+      const el = tipDi(e.target);
+      if (!el || el !== tipAttivo || el === tipFissato) return;
+      if (e.relatedTarget && el.contains(e.relatedTarget)) return;
+      nascondiTip();
     });
-    el.addEventListener('focus', function () {
-      tt.innerHTML = el.getAttribute('data-tip');
-      tt.classList.add('visible');
-      requestAnimationFrame(function () { positionTooltip(el, tt); });
+    document.addEventListener('focusin', function (e) {
+      if (tipSilenzio) return;
+      const el = tipDi(e.target);
+      if (el && el !== tipAttivo) { tipFissato = null; mostraTip(el); }
     });
-    el.addEventListener('blur', function () {
-      tt.classList.remove('visible');
+    document.addEventListener('focusout', function (e) {
+      const el = tipDi(e.target);
+      if (el && el === tipAttivo && el !== tipFissato) nascondiTip();
+    });
+    document.addEventListener('click', function (e) {
+      const f = fissabileDi(e.target);
+      if (f) { e.preventDefault(); alternaTipFissato(f); return; }
+      // un clic su un comando chiude il suo fumetto: non resta sopra la
+      // finestra che quel comando apre
+      if (tipAttivo) nascondiTip();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { if (tipAttivo) nascondiTip(); return; }
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const f = fissabileDi(e.target);
+      if (f && f === e.target) { e.preventDefault(); alternaTipFissato(f); }
     });
   }
   function refreshTooltips() {
-    const els = document.querySelectorAll('[data-tip]');
-    for (let i = 0; i < els.length; i++) bindTooltipEl(els[i]);
+    installaFumetti();
+    const els = document.querySelectorAll(TIP_FISSABILI);
+    for (let i = 0; i < els.length; i++) {
+      const el = els[i];
+      if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+      if (!el.hasAttribute('role')) el.setAttribute('role', 'button');
+      if (!el.hasAttribute('aria-label') && el.classList.contains('help-icon')) {
+        const tit = /<strong>([\s\S]*?)<\/strong>/i.exec(el.getAttribute('data-tip') || '');
+        el.setAttribute('aria-label', 'Spiegazione' + (tit ? ': ' + tit[1].replace(/<[^>]*>/g, '').replace(/&[#a-z0-9]+;/gi, ' ').trim() : ''));
+      }
+    }
   }
-  window.cammesTooltip = { refresh: refreshTooltips };
+  window.cammesTooltip = { refresh: refreshTooltips, chiudi: nascondiTip };
 
   // -------- ONBOARDING WIZARD -------------------------------------------
   // Modal a step. Mostrato automaticamente al primo accesso (flag in
   // localStorage). Riapribile manualmente da un bottone "?" globale.
   const WIZARD_KEY = 'cammes-onboarded-v1';
+  // Cinque schede nell'ordine del lavoro, con le parole del manuale e i nomi
+  // che l'operatore legge sui pulsanti.
   const WIZARD_STEPS = [
     {
       title: 'Benvenuto in CAMMES',
       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
-      body: 'Sistema completo di misura, confronto e analisi di alberi a camme.<br><br>L\'hardware ' +
-            '(stepper + comparatore + encoder) scansiona automaticamente il profilo a 360&deg;; ' +
-            'il software calcola durata, separazione lobi (LSA), forze inerziali e limite di distacco valvola.<br><br>' +
-            'Questa guida mostra il flusso di lavoro tipico. Premi <kbd>?</kbd> in alto a destra per riaprirla.'
+      body: 'Il banco misura il profilo di un albero a camme, lo confronta con altre misure e ne calcola la fasatura. ' +
+            'Si lavora un cilindro alla volta, in quattro pagine:<br>' +
+            '&bull; <b>Home</b>: archivio delle misure;<br>' +
+            '&bull; <b>Alzata</b>: la misura;<br>' +
+            '&bull; <b>Confronto</b>: curve sovrapposte e collaudo;<br>' +
+            '&bull; <b>Analisi</b>: fasatura e documenti per il cliente.<br><br>' +
+            'In alto a destra trovi sempre <b>Messaggi</b>, <b>Giro guidato</b>, <b>Guida</b> (queste schede) e <b>Manuale</b>. ' +
+            '<b>Messaggi</b> rilegge le notifiche gi&agrave; sparite: numero rosso = un errore non letto, giallo = un avviso.'
     },
     {
-      title: '1. Acquisisci il profilo',
-      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>',
-      body: 'Vai su <b>Alzata</b>.<br><br>' +
-            '&bull; Seleziona la <b>modalit&agrave; di scansione</b> (Veloce per stradale, Race per camme da pista).<br>' +
-            '&bull; Premi <b>START</b>: il motore ruota 360&deg; e registra l\'alzata grado per grado.<br>' +
-            '&bull; A fine scansione, scrivi il <b>nome file</b> e premi <b>Salva</b> (auto-suffisso _alz).<br><br>' +
-            'La <b>vista polare</b> della camma si genera in Confronto da qualsiasi file _alz.'
-    },
-    {
-      title: '2. Zero virtuale (opzionale)',
+      title: '1. Prima di misurare',
       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>',
-      body: 'Il bottone <b>Zero virtuale</b> esegue una scansione, trova il picco di alzata e ' +
-            'ruota il motore di +180&deg; rispetto al picco.<br><br>' +
-            'In questo modo il riferimento angolare &egrave; lo stesso per ogni albero, indipendentemente ' +
-            'da come l\'hai montato fisicamente. Utile per <b>confrontare</b> profili di alberi diversi.'
+      body: '&bull; Monta l\'albero, porta il tastatore sul <b>cerchio base</b> e azzera il comparatore.<br>' +
+            '&bull; Nella pagina <b>Alzata</b> le 4 spie in alto devono essere verdi: ' +
+            '<b>Comparatore</b>, <b>Motore</b>, <b>Encoder</b>, <b>Server</b>.<br>' +
+            '&bull; Una spia gialla o rossa? Passaci sopra, o toccala: dice che cosa controllare.'
     },
     {
-      title: '3. Confronta + analizza',
+      title: '2. Misurare (Alzata)',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>',
+      body: '&bull; <b>Modalit&agrave;</b>: <b>Veloce</b> basta quasi sempre; <b>Race</b> legge un punto ogni mezzo grado, ' +
+            'per fianchi molto ripidi. Accanto, il <b>Verso di scansione</b>: orario o antiorario.<br>' +
+            '&bull; <b>START</b> misura un giro completo; <b>STOP</b> ferma subito il banco.<br>' +
+            '&bull; A fine giro leggi l\'<b>Esito della misura</b>, scrivi il nome (es. <code>albero12_asp</code>) ' +
+            'e premi <b>Salva misura</b>.<br>' +
+            '&bull; <b>Ricomincia</b> svuota la pagina e riparte da capo.'
+    },
+    {
+      title: '3. Zero e posizioni (Alzata)',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>',
+      body: '&bull; <b>Zero virtuale</b> trova il picco e lo porta a 180&deg; dallo zero: ' +
+            'alberi montati in modo diverso restano confrontabili.<br>' +
+            '&bull; <b>Ruota</b> porta l\'albero ai gradi scritti; <b>Azzera angolo qui</b> fa della posizione attuale lo zero; ' +
+            '<b>Memorizza posizione</b> le d&agrave; un nome per tornarci.<br>' +
+            '&bull; <b>Sblocca motore</b> libera l\'albero per girarlo a mano, con angolo e alzata letti dal vivo.'
+    },
+    {
+      title: '4. Confronto, Analisi, documenti',
       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>',
-      body: '<b>Confronto</b>: sovrapponi fino a 4 file scansionati (ripetibilit&agrave;, prima/dopo usura, ' +
-            'camme diverse).<br><br>' +
-            '<b>Analisi</b>: importa la coppia <b>asp.</b> + <b>scar.</b>, inserisci parametri reali del motore ' +
-            '(angolo lobo, gioco valvola, RPM, molla, massa eq.) e premi <b>Analizza</b>. ' +
-            'Ottieni durata, separazione lobi (LSA), velocit&agrave;/accelerazione, forze, limite di distacco valvola, esportabili in CSV/PDF.'
-    },
-    {
-      title: 'Suggerimenti finali',
-      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg>',
-      body: '&bull; Passa il mouse sul <b>?</b> accanto a un parametro per la spiegazione e i <b>valori tipici</b>.<br>' +
-            '&bull; Il <b>tema chiaro/scuro</b> si cambia col bottone sole/luna in header (salvato in localStorage).<br>' +
-            '&bull; I file <code>.scr</code> salvati vanno nella cartella <code>prove/</code> sul server.<br>' +
-            '&bull; Se il sensore d&agrave; <b>NaN</b> per 3 letture consecutive, la scansione si ferma automaticamente.<br><br>' +
-            'Buon lavoro! &#x1F527;'
+      body: '&bull; <b>Confronto</b>: fino a 4 misure sovrapposte; con un profilo nominale e una tolleranza ' +
+            'ogni curva riceve <b>CONFORME / NON CONFORME</b>.<br>' +
+            '&bull; <b>Analisi</b>: scegli la misura di aspirazione e quella di scarico, scrivi <b>angolo lobo</b> e ' +
+            '<b>gioco valvola</b> della scheda del motore e premi <b>Analizza</b>: durata al gioco, separazione dei lobi (LSA), ' +
+            'aperture e chiusure, incrocio.<br>' +
+            '&bull; Da Analisi escono <b>Scheda camma</b> e referto PDF per il cliente; dalla Home, <b>Backup completo</b> salva tutto l\'archivio.<br>' +
+            '&bull; Il resto, con la tabella dei problemi frequenti, &egrave; nel <b>Manuale</b> (in alto a destra).'
     }
   ];
 
@@ -611,6 +991,7 @@
       '  <div class="cammes-wizard-dots"></div>' +
       '  <div class="cammes-wizard-nav">' +
       '    <button class="btn btn-secondary cammes-wizard-prev">Indietro</button>' +
+      '    <button class="btn btn-secondary cammes-wizard-giro" style="display:none;">Giro guidato</button>' +
       '    <button class="btn btn-accent cammes-wizard-next">Avanti</button>' +
       '  </div>' +
       '</div>';
@@ -628,18 +1009,22 @@
     const dotsEl  = back.querySelector('.cammes-wizard-dots');
     const prevBtn = back.querySelector('.cammes-wizard-prev');
     const nextBtn = back.querySelector('.cammes-wizard-next');
+    const giroBtn = back.querySelector('.cammes-wizard-giro');
     const closeBtn = back.querySelector('.cammes-wizard-close');
 
     let idx = 0;
     function render() {
       const s = WIZARD_STEPS[idx];
+      const ultima = idx === WIZARD_STEPS.length - 1;
       iconEl.innerHTML = s.icon;
       titleEl.textContent = s.title;
       bodyEl.innerHTML = s.body;
       dotsEl.innerHTML = WIZARD_STEPS.map((_, i) =>
         '<span class="cammes-wizard-dot' + (i === idx ? ' active' : '') + '"></span>').join('');
       prevBtn.disabled = idx === 0;
-      nextBtn.textContent = (idx === WIZARD_STEPS.length - 1) ? 'Inizia ✓' : 'Avanti';
+      nextBtn.textContent = ultima ? 'Inizia' : 'Avanti';
+      // dall'ultima scheda si passa ai comandi veri di questa pagina
+      if (giroBtn) giroBtn.style.display = (ultima && getCurrentPage()) ? '' : 'none';
     }
     function close() {
       back.classList.remove('visible');
@@ -670,6 +1055,7 @@
       origClose();
     };
     closeBtn.onclick = close;
+    if (giroBtn) giroBtn.onclick = () => { close(); setTimeout(startTour, 260); };
     back.onclick = (e) => { if (e.target === back) close(); };
 
     render();
@@ -702,6 +1088,132 @@
   }
   window.cammesValidate = { error: markInputError };
 
+  // -------- NUMERI COME IN OFFICINA (v3.8.0) ------------------------------
+  // Virgola decimale, nessun separatore delle migliaia: "1.250" verrebbe letto
+  // come milleduecentocinquanta. Prima lo stesso riquadro mescolava "100.0°" e
+  // "12.500 rpm" (punto decimale e punto delle migliaia). Per cio' che
+  // l'operatore LEGGE (schermo, PDF); i file di dati restano col punto.
+  // Non-numero -> 'n.d.' (mai "NaN" davanti all'operatore).
+  function cammesNum(x, decimali) {
+    var n = Number(x);
+    if (x === null || x === undefined || x === '' || !isFinite(n)) return 'n.d.';
+    var s = n.toFixed(decimali == null ? 2 : decimali);
+    if (/^-0(\.0*)?$/.test(s)) s = s.slice(1);          // niente "-0,00"
+    return s.replace('.', ',');
+  }
+  window.cammesNum = cammesNum;
+
+  // -------- FINESTRE DELLA PAGINA (v3.8.0) --------------------------------
+  // Al posto di confirm()/prompt() del browser ("localhost dice..."): titolo,
+  // testo e pulsanti con la parola dell'azione ("Sposta nel cestino", non "OK").
+  // Ritorna una Promise che si risolve con { scelta, testo }:
+  //   scelta = il valore del pulsante premuto (Esc o clic fuori = pulsante
+  //            con annulla:true, oppure null); testo = il campo, se c'e'.
+  // opts: { titolo, testo (HTML gia' sanificato da chi chiama),
+  //         tipo: 'info'|'warn'|'danger',
+  //         campo: { valore, segnaposto, etichetta } (facoltativo),
+  //         pulsanti: [{ testo, valore, stile: 'primary'|'danger'|'secondary', annulla }],
+  //         fuoco: valore del pulsante che parte col fuoco (facoltativo) }
+  // Fuoco di partenza: il campo, se c'e'. Se fra i pulsanti c'e' un'azione
+  // pericolosa (rossa, o finestra 'danger'), quello prudente: il pulsante
+  // annulla, altrimenti il primo non rosso; un Invio distratto (per esempio
+  // subito dopo l'Invio nel campo del nome) non sostituisce e non cancella
+  // niente. Altrimenti il pulsante principale. Il Tab gira dentro la
+  // finestra; chiusa la finestra, il fuoco torna dov'era.
+  function cammesDialog(opts) {
+    var o = opts || {};
+    var pulsanti = (o.pulsanti && o.pulsanti.length) ? o.pulsanti
+      : [{ testo: 'Annulla', valore: false, stile: 'secondary', annulla: true },
+         { testo: 'OK', valore: true, stile: 'primary' }];
+    var primaDellaFinestra = document.activeElement || null;
+    return new Promise(function (risolvi) {
+      var back = document.createElement('div');
+      back.className = 'cammes-dialog-backdrop';
+      var box = document.createElement('div');
+      box.className = 'cammes-dialog ' + (o.tipo || 'info');
+      box.setAttribute('role', 'dialog');
+      box.setAttribute('aria-modal', 'true');
+      box.setAttribute('aria-label', String(o.titolo || 'Conferma').replace(/<[^>]*>/g, ''));
+      var html = '<div class="cammes-dialog-title">' + (o.titolo || '') + '</div>' +
+                 (o.testo ? '<div class="cammes-dialog-body">' + o.testo + '</div>' : '');
+      if (o.campo) {
+        html += '<label class="cammes-dialog-field">' + (o.campo.etichetta ? '<span>' + o.campo.etichetta + '</span>' : '') +
+                '<input type="text" class="input" autocomplete="off"></label>';
+      }
+      html += '<div class="cammes-dialog-actions"></div>';
+      box.innerHTML = html;
+      var input = box.querySelector('input');
+      if (input) {
+        input.value = o.campo.valore != null ? String(o.campo.valore) : '';
+        if (o.campo.segnaposto) input.placeholder = o.campo.segnaposto;
+      }
+      var annulla = null, annullaBtn = null, principale = null, primoNonRosso = null, scelto = null;
+      var pericolosa = o.tipo === 'danger';
+      var azioni = box.querySelector('.cammes-dialog-actions');
+      var bottoni = [];
+      pulsanti.forEach(function (p) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn ' + (p.stile === 'danger' ? 'btn-danger' : p.stile === 'primary' ? 'btn-accent' : 'btn-secondary');
+        b.textContent = p.testo;
+        b.addEventListener('click', function () { chiudi(p.valore); });
+        azioni.appendChild(b);
+        bottoni.push(b);
+        if (p.annulla) { annulla = p; annullaBtn = b; }
+        if (p.stile === 'primary' || p.stile === 'danger') principale = b;
+        if (p.stile === 'danger') pericolosa = true;
+        else if (!primoNonRosso) primoNonRosso = b;
+        if (o.fuoco !== undefined && p.valore === o.fuoco && !scelto) scelto = b;
+      });
+      var primoFuoco = scelto || input ||
+        (pericolosa ? (annullaBtn || primoNonRosso || bottoni[0]) : (principale || bottoni[bottoni.length - 1]));
+      back.appendChild(box);
+      document.body.appendChild(back);
+      var finito = false;
+      function chiudi(valore) {
+        if (finito) return;
+        finito = true;
+        document.removeEventListener('keydown', tasti, true);
+        back.classList.remove('visible');
+        setTimeout(function () { if (back.parentNode) back.parentNode.removeChild(back); }, 180);
+        rimettiFuoco(primaDellaFinestra);
+        risolvi({ scelta: valore, testo: input ? input.value : null });
+      }
+      function tasti(e) {
+        if (e.key === 'Escape') { e.preventDefault(); chiudi(annulla ? annulla.valore : null); }
+        else if (e.key === 'Enter' && input && document.activeElement === input && principale) { e.preventDefault(); principale.click(); }
+        else if (e.key === 'Tab') {
+          // il Tab non esce dalla finestra: un Invio sul campo della pagina
+          // sotto farebbe partire un comando con la domanda ancora aperta
+          var giro = (input ? [input] : []).concat(bottoni);
+          var qui = giro.indexOf(document.activeElement);
+          var dopo = e.shiftKey ? (qui <= 0 ? giro.length - 1 : qui - 1)
+                                : (qui < 0 || qui >= giro.length - 1 ? 0 : qui + 1);
+          e.preventDefault();
+          if (giro[dopo]) giro[dopo].focus();
+        }
+      }
+      document.addEventListener('keydown', tasti, true);
+      back.addEventListener('click', function (e) { if (e.target === back) chiudi(annulla ? annulla.valore : null); });
+      requestAnimationFrame(function () { back.classList.add('visible'); });
+      setTimeout(function () { if (!finito && primoFuoco) primoFuoco.focus(); }, 30);
+    });
+  }
+  window.cammesDialog = cammesDialog;
+  // Scorciatoie: conferma sì/no e domanda con un campo di testo.
+  window.cammesConferma = function (titolo, testo, testoSi, pericoloso) {
+    return cammesDialog({ titolo: titolo, testo: testo, tipo: pericoloso ? 'danger' : 'warn',
+      pulsanti: [{ testo: 'Annulla', valore: false, stile: 'secondary', annulla: true },
+                 { testo: testoSi || 'Conferma', valore: true, stile: pericoloso ? 'danger' : 'primary' }] })
+      .then(function (r) { return r.scelta === true; });
+  };
+  window.cammesChiedi = function (titolo, testo, valore, testoSi) {
+    return cammesDialog({ titolo: titolo, testo: testo, tipo: 'info', campo: { valore: valore },
+      pulsanti: [{ testo: 'Annulla', valore: false, stile: 'secondary', annulla: true },
+                 { testo: testoSi || 'Salva', valore: true, stile: 'primary' }] })
+      .then(function (r) { return r.scelta === true ? r.testo : null; });
+  };
+
   // -------- GUIDED TOUR (coachmark per-pagina) ---------------------------
   // Tour on-demand che evidenzia i controlli reali della pagina corrente, uno
   // alla volta (oltre al wizard di benvenuto, che resta testuale/automatico).
@@ -715,39 +1227,80 @@
     if (/Analisi/i.test(t))   return 'analisi';
     return null;
   }
-  // Step per pagina: { sel: selettore, title, body }. Gli step il cui
-  // selettore non esiste sulla pagina vengono saltati automaticamente.
+  // Passi per pagina, nell'ordine del lavoro: { sel, title, body }. "sel"
+  // puo' essere un elenco di selettori in ordine di preferenza: vale il primo
+  // presente e visibile. Un passo senza elemento visibile viene saltato.
+  // In coda a ogni pagina si aggiunge PASSO_AIUTI (la barra in alto).
   var TOUR_STEPS = {
     home: [
-      { sel: '.home-tiles',     title: 'Le 3 sezioni', body: 'Da qui entri in <b>Alzata</b>, <b>Confronto</b> e <b>Analisi</b>. È il punto di partenza.' },
-      { sel: '#homeStats',      title: 'Stato archivio', body: 'Quante misure hai salvato e qual è l\'ultima. Un colpo d\'occhio sui dati.' },
-      { sel: '#recentsSearch',  title: 'Cerca e filtra', body: 'Trova le misure per nome; sotto puoi filtrare per tipo, data e tag.' },
-      { sel: '#trashBtn',       title: 'Cestino', body: 'I file eliminati non spariscono: restano qui 30 giorni e si ripristinano con un click.' },
-      { sel: '#updatesCard',    title: 'Sistema & aggiornamenti', body: 'Nuove versioni da GitHub, <b>firmware Arduino</b> aggiornabile da qui (~15 s, senza Arduino IDE), intestazione officina per i referti, diagnostica per l\'assistenza e <b>manuale</b>.' },
-      { sel: '#concert-toggle', title: 'Concerto col motore', body: 'Un extra: fai &ldquo;suonare&rdquo; lo stepper con brani famosi. 🎵' }
+      { sel: '#statoBanco', title: 'Stato del banco', body: 'In cima: verifica del banco, Arduino e aggiornamenti. Se qualcosa non va, la riga dice che cosa fare.' },
+      { sel: '#nuovaMisuraBtn', title: 'Nuova misura', body: 'Porta alla pagina <b>Alzata</b> per misurare un albero.' },
+      { sel: ['#recentsWrap', '#recentsSearch'], title: 'Archivio delle misure', body: 'Tutte le misure salvate. Clic sul nome per vederla al volo. Spunta le misure che ti servono per confrontarle o analizzarle.' },
+      { sel: '#barraSelezione', title: 'Misure spuntate', body: 'Da qui mandi le misure spuntate a <b>Confronto</b>, oppure scegli quale va in <b>Analisi</b> come aspirazione e quale come scarico.' },
+      { sel: '#recentsSearch', title: 'Cerca e filtra', body: 'Trova una misura per nome; sotto filtri per tipo, data e tag.' },
+      // il Cestino sta dentro questo riquadro, chiuso finche' non serve: un
+      // passo suo verrebbe sempre saltato
+      { sel: '#updatesCard', title: 'Sistema e manutenzione', body: 'Si apre con un clic: intestazione dell\'officina per i PDF, nuove versioni del programma, firmware dell\'Arduino, <b>Backup completo</b>, <b>Cestino</b> (le misure eliminate restano 30 giorni e si recuperano) e <b>Diagnostica</b> per l\'assistenza.' }
     ],
     alzata: [
-      { sel: '#scanMode',  title: 'Modalità scansione', body: 'Scegli tra <b>Veloce</b> (uso normale, un punto per grado) e <b>Race</b> (un punto ogni mezzo grado, per fianchi molto ripidi). Il tempo stimato lo scrive la tendina stessa, accanto a ogni modalità.' },
-      { sel: '#scanAdvBtn', title: 'Impostazioni avanzate', body: 'Apre gli strumenti di controllo qualità: <b>Ripetizioni</b> (misura la ripetibilità del banco con N scansioni di fila) e <b>Verifica banco</b> (test periodico con un cilindro rettificato). Per l\'uso normale non servono.' },
-      { sel: 'button[onclick^="start"]', title: 'Avvia', body: 'START esegue una scansione completa 360° del profilo di alzata.' },
-      { sel: '#msBtn',     title: 'Zero virtuale', body: 'Porta in automatico il picco di alzata a un riferimento fisso (+180°), così alberi montati diversamente restano confrontabili.' },
-      { sel: '#freeBtn',   title: 'Sblocca motore', body: 'Libera l\'albero per girarlo a mano leggendo encoder e comparatore dal vivo.' },
-      { sel: '#nome',      title: 'Salva', body: 'Dai un nome e salva: il suffisso <code>_alz</code> è aggiunto in automatico.' }
+      { sel: ['.status-leds', '#ledSensor'], title: 'Prima di misurare', body: 'Monta l\'albero, porta il tastatore sul <b>cerchio base</b> e azzera il comparatore. Poi guarda le 4 spie: <b>Comparatore</b>, <b>Motore</b>, <b>Encoder</b> e <b>Server</b> devono essere verdi. Passa sopra una spia, o toccala, per sapere che cosa vuol dire il colore.' },
+      { sel: '#scanMode', title: 'Modalità e verso di scansione', body: '<b>Veloce</b> legge un punto per grado e basta quasi sempre; <b>Race</b> un punto ogni mezzo grado, per fianchi molto ripidi. Il tempo lo scrive la tendina. Accanto, il <b>Verso di scansione</b>: orario o antiorario.' },
+      { sel: ['#barraComandi', 'button[onclick^="start"]'], title: 'START e STOP', body: '<b>START</b> misura un giro completo. <b>STOP</b> ferma subito il banco: la misura resta incompleta e va ripetuta. <b>Ricomincia</b> svuota la pagina e riparte da capo.' },
+      { sel: '#esitoMisura', title: 'Esito della misura', body: 'A fine giro qui resta scritto com\'&egrave; andata e che cosa fare, fino al prossimo START.' },
+      { sel: '#nome', title: 'Nome e Salva misura', body: 'Scrivi il nome (es. <code>albero12_asp</code>) e premi <b>Salva misura</b>: la misura va nell\'archivio, <code>_alz</code> si aggiunge da solo.' },
+      { sel: '#msBtn', title: 'Zero virtuale', body: 'Trova il picco e lo porta a 180&deg; dallo zero, cos&igrave; alberi montati in modo diverso restano confrontabili.' },
+      { sel: ['#cf', '#step'], title: 'Ruota e posizioni', body: '<b>Ruota</b> porta l\'albero ai gradi scritti. <b>Azzera angolo qui</b> fa della posizione attuale lo zero. <b>Memorizza posizione</b> le d&agrave; un nome per tornarci.' },
+      { sel: '#freeBtn', title: 'Sblocca motore', body: 'Libera l\'albero per girarlo a mano: angolo e alzata si leggono dal vivo. Ripremi per bloccarlo prima di misurare.' },
+      { sel: '#scanAdvBtn', title: 'Avanzate', body: '<b>Ripetizioni</b>: misura pi&ugrave; volte di fila e dice se il banco &egrave; stabile. <b>Verifica del banco</b>: prova periodica con un cilindro rettificato. Per l\'uso normale non servono.' }
     ],
     grafici: [
-      { sel: '#fileinput1', title: 'Carica i profili', body: 'Scegli fino a 4 file <code>_alz</code>: le curve si sovrappongono nel grafico.' },
-      { sel: '#fileinput2', title: 'Vista polare', body: 'Genera la vista polare della camma da un file <code>_alz</code> (raggio base + alzata). Accetta anche i vecchi <code>_pol</code>.' },
-      { sel: '#fileNominal', title: 'Collaudo nominale', body: 'Carica il profilo di riferimento (camma nuova o CSV di progetto) e imposta la tolleranza: ogni curva riceve il verdetto <b>CONFORME / NON CONFORME</b> e sul grafico compare la banda ±tol.' },
-      { sel: '#viewMode',   title: 'Sovrapposto / Differenza', body: 'Confronta le curve sovrapposte oppure mostra la differenza (con statistiche max/media/RMSE).' },
-      { sel: '#replayBtn',  title: 'Replay', body: 'Ridisegna le curve da 0° a 360° per un confronto animato.' }
+      { sel: '#fileinput1', title: 'Carica le misure', body: 'Fino a 4 misure: le curve si sovrappongono nel grafico. Puoi anche spuntarle nell\'archivio della Home.' },
+      { sel: '#viewMode', title: 'Sovrapposte o differenza', body: 'Le curve una sull\'altra, oppure la loro differenza con scarto massimo, medio e quadratico medio.' },
+      { sel: '#fileNominal', title: 'Collaudo su profilo nominale', body: 'Carica il profilo di riferimento e scrivi la tolleranza: ogni curva riceve <b>CONFORME / NON CONFORME</b> e sul grafico compare la banda &plusmn; tolleranza.' },
+      { sel: '#verdictBox', title: 'Verdetto', body: 'Il verdetto di ogni curva, con lo scarto massimo e il grado dove capita. Si aggiorna da solo.' },
+      { sel: '#stampaCollaudoBtn', title: 'Stampa del collaudo', body: 'Il collaudo su carta o in PDF, da consegnare al cliente.' },
+      { sel: '#fileinput2', title: 'Vista polare', body: 'Disegna la camma vista di fronte, cerchio base pi&ugrave; alzata: scrivi prima il <b>diametro</b> del cerchio base (&Oslash;, come in Analisi), poi scegli la misura.' },
+      { sel: '#replayBtn', title: 'Ridisegna', body: 'Ridisegna le curve da 0&deg; a 360&deg;, per seguirle passo passo.' }
     ],
     analisi: [
-      { sel: '#btnModules',        title: 'Funzioni aggiuntive', body: 'Di default vedi solo il flusso essenziale. Da qui attivi i moduli extra: <b>molla</b>, <b>dinamica valvole</b>, <b>strumenti race</b>, <b>animazione</b>, <b>confronto A/B</b>. Col modulo Dinamica valvole compare anche <b>Elasticit&agrave; del comando valvola</b> (compliance: perdita di contatto camma&ndash;valvola, modelli a 1/2/3 masse). La scelta viene ricordata.' },
-      { sel: '#modeBaseBtn',       title: 'Base / Avanzato', body: 'In <b>Base</b> vedi i campi minimi; <b>Avanzato</b> aggiunge i parametri fini (anticipo, bilancieri, smoothing, baseline).' },
-      { sel: '#fileIntake',        title: 'Importa la camma', body: 'Carica i file di aspirazione e scarico, poi premi Analizza.' },
-      { sel: 'button[onclick^="analyze"]', title: 'Analizza', body: 'Calcola durata, separazione lobi (LSA), alzata, velocità/accelerazione, forze e limite di distacco valvola.' }
+      { sel: '#passiAnalisi', title: 'I passi', body: 'In cima i passi da seguire nell\'ordine: misura di aspirazione, misura di scarico, valori da confermare, <b>Analizza</b>.' },
+      { sel: ['#sceltaArchivioIntake', '#fileIntake'], title: 'Le due misure', body: 'Scegli la misura di aspirazione dall\'archivio o dal computer, poi quella di scarico.' },
+      { sel: '#intakeAngle', title: 'Angolo lobo', body: 'Centro del lobo in gradi motore, dopo il PMS. Il bordo tratteggiato vuol dire <b>da confermare</b>: scrivi il valore della scheda del motore oppure, se &egrave; gi&agrave; giusto, clicca nel campo e premi Invio.' },
+      { sel: '#intakeClearance', title: 'Gioco valvola', body: 'Il gioco valvola della scheda del motore. Finch&eacute; non lo scrivi, la durata al gioco e la fasatura restano <b>da confermare</b>.' },
+      { sel: '#analyzeBtn', title: 'Analizza', body: 'Calcola la durata al gioco e all\'alzata di riferimento (di solito 1 mm), separazione dei lobi (LSA), aperture e chiusure, alzata al PMS e incrocio, e disegna il grafico a 720&deg;.' },
+      { sel: ['#btnCamCard', '#btnExportPDF'], title: 'Documenti', body: '<b>Scheda camma</b> per il cliente, referto PDF, CSV per Excel. I valori da confermare restano segnati anche sui documenti.' },
+      { sel: '#modeBaseBtn', title: 'Base o Avanzato', body: '<b>Base</b> mostra i campi essenziali; <b>Avanzato</b> aggiunge anticipo, <b>Filtro derivate</b> e <b>Correzione eccentricit&agrave;</b>. Il rapporto del bilanciere compare anche in Base quando il comando valvola lo prevede.' },
+      { sel: '#btnModules', title: 'Funzioni', body: 'Accendi solo ci&ograve; che serve: punteria simulata (bicchiere, rullo, leva a dito), molla e forze, distacco della valvola, strumenti race, animazione, confronto A/B. La scelta viene ricordata.' }
     ]
   };
+  var PASSO_AIUTI = { sel: '#headerAiuti', title: 'Aiuto e messaggi', body: '<b>Messaggi</b> rilegge le notifiche gi&agrave; sparite (numero rosso = un errore non letto, giallo = un avviso). <b>Giro guidato</b> rif&agrave; questo giro. <b>Guida</b> spiega il lavoro in 5 schede. <b>Manuale</b> apre il manuale completo.' };
+
+  // Visibile = disegnato sulla pagina (anche se fisso o appiccicato in alto,
+  // dove offsetParent vale null pur essendo a vista).
+  function visibileInPagina(el) {
+    if (el.getClientRects) return el.getClientRects().length > 0;
+    return el.offsetParent !== null;
+  }
+  function trovaElementoPasso(sel) {
+    const lista = Array.isArray(sel) ? sel : [sel];
+    let nascosto = null;
+    for (let i = 0; i < lista.length; i++) {
+      let el = null;
+      try { el = document.querySelector(lista[i]); } catch (e) {}
+      if (el && visibileInPagina(el)) return { el: el, nascosto: null };
+      if (el && !nascosto) nascosto = lista[i];
+    }
+    return { el: null, nascosto: nascosto };
+  }
+  function passiDelGiro(page) {
+    const defs = ((page && TOUR_STEPS[page]) || []).concat([PASSO_AIUTI]);
+    const steps = [];
+    defs.forEach(function (s) {
+      const r = trovaElementoPasso(s.sel);
+      if (r.el) steps.push({ el: r.el, title: s.title, body: s.body });
+    });
+    return steps;
+  }
 
   var _tour = null;   // { steps, idx, els:{backdrop,hole,pop} }
 
@@ -760,17 +1313,17 @@
       '.cammes-tour-hole{position:fixed;border-radius:8px;border:2px solid var(--accent,#00d4ff);' +
         'box-shadow:0 0 0 9999px rgba(7,9,13,0.72),0 0 14px var(--accent,#00d4ff);' +
         'transition:top .2s,left .2s,width .2s,height .2s;pointer-events:none;z-index:951;}' +
-      '.cammes-tour-pop{position:fixed;z-index:952;max-width:300px;background:var(--bg-elev-2,#1a1a2e);' +
-        'border:1px solid var(--border-strong,#2a2a4a);border-radius:10px;padding:14px 16px;' +
+      '.cammes-tour-pop{position:fixed;z-index:952;max-width:340px;background:var(--bg-elev-2,#1a1a2e);' +
+        'border:1px solid var(--border-strong,#2a2a4a);border-radius:10px;padding:16px 18px;' +
         'box-shadow:0 10px 34px rgba(0,0,0,.55);color:var(--text-primary,#e8e8f0);' +
-        'font-family:var(--font-sans,system-ui,sans-serif);font-size:13px;line-height:1.5;}' +
-      '.cammes-tour-pop h4{margin:0 0 6px;font-family:var(--font-display,inherit);font-size:15px;' +
-        'color:var(--accent,#00d4ff);}' +
+        'font-family:var(--font-sans,system-ui,sans-serif);font-size:15px;line-height:1.5;}' +
+      '.cammes-tour-pop h4{margin:0 0 6px;font-family:var(--font-display,inherit);font-size:18px;' +
+        'color:var(--accent-text,#00d4ff);}' +
       '.cammes-tour-pop code{font-family:var(--font-mono,monospace);background:var(--bg-input,#12121f);' +
         'color:var(--accent-2,#7df);padding:1px 5px;border-radius:3px;}' +
-      '.cammes-tour-nav{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:8px;}' +
-      '.cammes-tour-nav .step{font-size:11px;color:var(--text-muted,#8888aa);}' +
-      '.cammes-tour-nav button{font-family:inherit;font-size:12px;padding:5px 12px;border-radius:6px;' +
+      '.cammes-tour-nav{display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:8px;}' +
+      '.cammes-tour-nav .step{font-size:13px;color:var(--text-muted,#8888aa);}' +
+      '.cammes-tour-nav button{font-family:inherit;font-size:14px;min-height:36px;padding:6px 14px;border-radius:6px;' +
         'border:1px solid var(--border-card,#2a2a4a);background:var(--bg-input,#12121f);' +
         'color:var(--text-primary,#e8e8f0);cursor:pointer;}' +
       '.cammes-tour-nav button.primary{background:var(--accent,#00d4ff);color:#06121a;border-color:transparent;font-weight:bold;}';
@@ -820,7 +1373,9 @@
   function _tourRender() {
     var step = _tour.steps[_tour.idx];
     var el = step.el;
-    if (el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    // la barra in alto e' sempre a vista: scorrere la porterebbe a meta' pagina
+    var inBarraAlta = !!(el.closest && el.closest('.header'));
+    if (el.scrollIntoView && !inBarraAlta) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
     var last = _tour.idx === _tour.steps.length - 1;
     _tour.els.pop.innerHTML =
       '<h4></h4><div class="b"></div>' +
@@ -832,7 +1387,7 @@
     var prevBtn = _tour.els.pop.querySelector('.prev');
     var nextBtn = _tour.els.pop.querySelector('.next');
     prevBtn.style.visibility = _tour.idx === 0 ? 'hidden' : 'visible';
-    nextBtn.textContent = last ? 'Fine ✓' : 'Avanti';
+    nextBtn.textContent = last ? 'Fine' : 'Avanti';
     prevBtn.onclick = function () { _tourGo(-1); };
     nextBtn.onclick = function () { last ? _tourCleanup(true) : _tourGo(1); };
     // Posiziona subito (sincrono, non dipende da rAF) e di nuovo dopo che lo
@@ -852,23 +1407,12 @@
 
   function startTour() {
     if (_tour) return;
-    var page = getCurrentPage();
-    var defs = (page && TOUR_STEPS[page]) || [];
-    // risolvi i selettori, salta quelli assenti
-    var steps = [];
-    defs.forEach(function (s) {
-      var el = null;
-      try { el = document.querySelector(s.sel); } catch (e) {}
-      if (el && el.offsetParent !== null) {
-        steps.push({ el: el, title: s.title, body: s.body });
-      } else if (el) {
-        // Elemento presente ma nascosto (modulo/pannello chiuso): lo step va
-        // riscritto su un target sempre visibile — avvisa in sviluppo.
-        console.warn('Tour: step "' + s.title + '" saltato, elemento nascosto: ' + s.sel);
-      }
-    });
+    nascondiTip();
+    // risolvi i selettori, salta i passi senza elemento a vista (un pannello
+    // chiuso, una barra che compare solo dopo una scelta)
+    var steps = passiDelGiro(getCurrentPage());
     if (!steps.length) {
-      showToast({ kind: 'info', title: 'Tour non disponibile', body: 'Nessun elemento da mostrare su questa pagina.', duration: 3000 });
+      showToast({ kind: 'info', title: 'Giro guidato non disponibile', body: 'Su questa pagina non ci sono comandi da mostrare.', duration: 4000 });
       return;
     }
     _ensureTourStyle();
@@ -885,7 +1429,7 @@
     document.addEventListener('keydown', _tourKey);
     _tourRender();
   }
-  window.cammesTour = { start: startTour };
+  window.cammesTour = { start: startTour, passi: passiDelGiro };
 
   // -------- ANIMAZIONE MECCANISMO CAM (2D schematico) --------------------
   // Vista laterale: camma che ruota + follower che segue il profilo + stelo/
@@ -1009,13 +1553,13 @@
     var labDeg = (typeof o.camLabelDeg === 'number') ? o.camLabelDeg : ang;
     var labMm = (typeof o.liftLabelMm === 'number') ? o.liftLabelMm : fLift;
     ctx.fillStyle = muted; ctx.font = '11px monospace'; ctx.textAlign = 'left';
-    ctx.fillText('cam ' + Math.round(labDeg) + '°', 8, 14);
-    ctx.fillText('alzata ' + labMm.toFixed(2) + ' mm', 8, 28);
+    ctx.fillText('camma ' + Math.round(labDeg) + '°', 8, 14);
+    ctx.fillText('alzata ' + cammesNum(labMm, 2) + ' mm', 8, 28);
     // La riga valvola solo quando DIFFERISCE dall'alzata (bilanciere/follower
     // attivi, come in Analisi): nella vista live di Alzata (puntalino 1:1)
     // erano sempre identiche — un numero doppio senza informazione.
     if (Math.abs(valveLiftMm - fLift) > 0.005) {
-        ctx.fillText('valvola ' + valveLiftMm.toFixed(2) + ' mm', 8, 42);
+        ctx.fillText('valvola ' + cammesNum(valveLiftMm, 2) + ' mm', 8, 42);
     }
   }
 
@@ -1051,23 +1595,11 @@
     const btn = document.getElementById('theme-toggle');
     if (btn) btn.addEventListener('click', toggleTheme);
     const helpBtn = document.getElementById('help-toggle');
-    if (helpBtn) {
-      helpBtn.addEventListener('click', showWizard);
-      // Inietta il bottone Tour accanto al "?" (solo sulle pagine note),
-      // così non serve modificare i 5 HTML.
-      if (getCurrentPage() && !document.getElementById('tour-toggle')) {
-        var tb = document.createElement('button');
-        tb.id = 'tour-toggle';
-        tb.type = 'button';
-        tb.className = helpBtn.className;
-        tb.title = 'Tour guidato della pagina';
-        tb.setAttribute('aria-label', 'Tour guidato');
-        tb.textContent = '🗺';
-        tb.addEventListener('click', startTour);
-        helpBtn.parentNode.insertBefore(tb, helpBtn);
-      }
-    }
-    installMsgLogButton();
+    if (helpBtn) helpBtn.addEventListener('click', showWizard);
+    // Messaggi, Giro guidato, Guida e Manuale nella barra in alto, aggiunti
+    // da qui cosi' non serve modificare gli HTML; poi la barra si adatta
+    // alla larghezza invece di tagliare i pulsanti a destra.
+    if (installaBarraAiuti()) sorvegliaBarraAlta();
     // Esc chiude il registro messaggi se aperto
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
@@ -1081,9 +1613,13 @@
       var vb = document.createElement('div');
       vb.id = 'cammes-version-badge';
       vb.textContent = 'CAMMES ' + CAMMES_VERSION;
-      vb.title = 'Versione software — citala quando chiedi assistenza';
-      vb.style.cssText = 'position:fixed;right:8px;bottom:6px;z-index:40;font-size:10px;' +
-        'color:var(--text-muted,#8888aa);opacity:.65;pointer-events:none;user-select:none;';
+      vb.title = 'Versione del programma: citala quando chiedi assistenza';
+      // 13 px senza trasparenza: il manuale la indica come riferimento per
+      // l'assistenza, quindi deve leggersi. z-index 4: una barra di comandi
+      // appiccicata al fondo (z-index 5 in Home e Analisi) le passa sopra,
+      // cosi' la scritta non finisce sopra un pulsante.
+      vb.style.cssText = 'position:fixed;right:8px;bottom:6px;z-index:4;font-size:13px;' +
+        'color:var(--text-muted,#8f9bb0);pointer-events:none;user-select:none;';
       document.body.appendChild(vb);
     }
     checkForUpdates();
@@ -1099,20 +1635,21 @@
     fetch('/api/update-check').then(function (r) { return r.json(); }).then(function (d) {
       if (!d || !d.updateAvailable) return;
       try { sessionStorage.setItem('cammes-upd-notified', '1'); } catch (e) {}
-      // AUDIT SEC-10: mostra lo SHA-256 atteso così l'utente può verificare
-      // il file scaricato (Windows: `certutil -hashfile cammes.exe SHA256`)
-      // prima di eseguirlo — l'app non scarica né esegue nulla in automatico.
-      var shaLine = d.downloadSha256
-        ? '<br><span style="font-size:11px;color:var(--text-muted);">SHA-256 atteso: <code>' + window.cammesEscape(d.downloadSha256) + '</code> — verifica con <code>certutil -hashfile ' + window.cammesEscape(d.downloadName || 'cammes.exe') + ' SHA256</code></span>'
-        : '';
+      // In chiaro che cosa fare col file. AUDIT SEC-10: l'app non scarica ne'
+      // esegue nulla da sola, e l'impronta SHA-256 attesa (per controllare il
+      // file con certutil prima di avviarlo) la mostra la Home, in Sistema e
+      // manutenzione: qui, davanti all'operatore, niente sigle e comandi.
+      var nomeFile = window.cammesEscape(d.downloadName || 'cammes.exe');
       if (window.cammesToast) window.cammesToast({
         kind: 'info',
-        title: 'Aggiornamento disponibile: v' + d.latest,
-        body: 'Stai usando la ' + CAMMES_VERSION + '. <a href="' + (d.downloadUrl || d.url) +
-              '" target="_blank" rel="noopener" style="color:var(--accent);">' +
-              (d.downloadUrl ? 'Scarica ' + (d.downloadName || 'cammes.exe') : 'Apri la pagina release') + '</a>. ' +
-              'Dalla Home puoi anche aggiornare il firmware Arduino.' + shaLine,
-        duration: 14000
+        title: 'Aggiornamento disponibile: v' + window.cammesEscape(d.latest),
+        body: 'Stai usando la ' + CAMMES_VERSION + '. <a href="' + window.cammesEscape(d.downloadUrl || d.url || '') +
+              '" target="_blank" rel="noopener" style="color:var(--accent-text);">' +
+              (d.downloadUrl ? 'Scarica ' + nomeFile : 'Apri la pagina della versione') + '</a>. ' +
+              'Per aggiornare chiudi la finestra di ' + nomeFile + ', metti il file nuovo al posto del vecchio, ' +
+              'nella stessa cartella (l&igrave; ci sono le misure e le impostazioni), e riavvialo. ' +
+              'L\'impronta del file per l\'assistenza e il firmware dell\'Arduino sono in Home, <b>Sistema e manutenzione</b>.',
+        duration: 20000
       });
     }).catch(function () {});
   }

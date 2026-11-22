@@ -73,7 +73,9 @@ function nuovaPagina() {
         location: { reload: function () { p.ricaricata++; } },
         SCAN_MODES: { fast: { label: 'Veloce' }, race: { label: 'Race' } },
         onScanModeChange: function () { p.cambiModo++; },
-        rlb: function () { p.rlb++; ctx.rsign = -ctx.rsign; }
+        rlb: function () { p.rlb++; ctx.rsign = -ctx.rsign; },
+        // la riga "Esito" della barra dei comandi (v3.8.0): l'esito resta li'
+        _scriviEsito: function (livello, html) { p.esito = { livello: livello, html: String(html) }; return true; }
     };
     ctx.rsign = 1;
     vm.createContext(ctx);
@@ -93,12 +95,17 @@ if (!mancanti.length) {
     console.log('--- fine giro: verde solo se non ci sono avvisi ---');
     var p = nuovaPagina();
     var buono = p.val('riassuntoFineGiro({ mancanti: 0, giroNonChiuso: 0, slittamento: false, instabili: 0, picco: 9.61, gradoPicco: 160 })');
-    check('giro senza avvisi: "Scansione completata", verde', buono.kind === 'success' && buono.title === 'Scansione completata', JSON.stringify(buono));
+    // (v3.8.0, glossario: "misura", non "scansione")
+    check('giro senza avvisi: "Misura completata", verde', buono.kind === 'success' && buono.title === 'Misura completata', JSON.stringify(buono));
     var sosp = p.val('riassuntoFineGiro({ mancanti: 0, giroNonChiuso: 0.045, slittamento: false, instabili: 3, picco: 9.61, gradoPicco: 160 })');
     check('giro non chiuso: NON verde, e lo dice nel titolo', sosp.kind !== 'success' && /CON AVVISI/.test(sosp.title), JSON.stringify(sosp.title));
     check('...elenca la chiusura in mm, con la virgola', /giro non chiuso \(0,045 mm\)/.test(sosp.body), sosp.body);
     check('...e i punti non stabilizzati', /3 punti non stabilizzati/.test(sosp.body));
-    check('...e resta finche non la si chiude (durata 0)', sosp.duration === 0, String(sosp.duration));
+    // v3.8.0: l'esito resta scritto nella riga "Esito" della barra dei comandi
+    // fino al prossimo START; la notifica non resta piu' a coprire la pagina
+    // (prova della riga: tools/test_usabilita_alzata.js)
+    check('...la notifica dura a lungo ma non copre la pagina per sempre, e rimanda alla riga Esito',
+        sosp.duration >= 9000 && sosp.duration <= 15000 && /riga Esito/.test(sosp.body), String(sosp.duration));
     var buchi = p.val('riassuntoFineGiro({ mancanti: 12, giroNonChiuso: 0, slittamento: true, instabili: 0, picco: 9.61, gradoPicco: 160 })');
     check('gradi mancanti e slittamento compaiono anche loro', /12 gradi senza lettura/.test(buchi.body) && /slittamento/.test(buchi.body), buchi.body);
 
@@ -132,8 +139,11 @@ if (!mancanti.length) {
     check('...e il senso antiorario, con la casella spuntata', q.ctx.rsign === -1 && q.casella.checked === true && q.rlb === 1,
         'rsign=' + q.ctx.rsign + ' casella=' + q.casella.checked);
     var t = q.toasts[0] || {};
-    check('l esito e scritto e resta finche non lo si chiude', t.title === 'Zero virtuale fatto' && t.duration === 0, JSON.stringify(t.title));
+    check('l esito e scritto: notifica e riga "Esito", che resta fino al prossimo START',
+        t.title === 'Zero virtuale fatto' && !!q.esito && q.esito.livello === 'ok' && /Zero virtuale fatto/.test(q.esito.html),
+        JSON.stringify(t.title) + ' / ' + JSON.stringify(q.esito));
     check('...e dice con quali scelte si riparte', /Race/.test(t.body || '') && /3 giri/.test(t.body || '') && /antiorario/.test(t.body || ''), t.body);
+    check('...anche nella riga Esito', !!q.esito && /3 giri/.test(q.esito.html) && /antiorario/.test(q.esito.html));
     check('letto una volta sola: la prossima apertura riparte dai valori iniziali',
         q.val('_ripristinaDopoZeroVirtuale()') === null && Object.keys(q.memoria).length === 0);
 
@@ -166,8 +176,8 @@ check('nessuna conferma in 8 s: esito "non-confermato"', /_mv_fallback = setTime
 check('encoder mancante: esito "senza-encoder"', /_ricaricaDopoZeroVirtuale\('senza-encoder'\)/.test(VIVO));
 check('gia in posizione: esito "gia", con lo scarto', /_ricaricaDopoZeroVirtuale\('gia', \{ scarto:/.test(VIVO));
 check('il ripristino parte al caricamento della pagina', /addEventListener\('load', _ripristinaDopoZeroVirtuale\)/.test(VIVO));
-var nVerde = (VIVO.match(/title: 'Scansione completata'/g) || []).length;
-check('il verde "Scansione completata" esce solo da riassuntoFineGiro', nVerde === 1 && /function riassuntoFineGiro[\s\S]{0,900}title: 'Scansione completata'/.test(VIVO), nVerde + ' punti');
+var nVerde = (VIVO.match(/title: '(Scansione|Misura) completata'/g) || []).length;
+check('il verde "Misura completata" esce solo da riassuntoFineGiro', nVerde === 1 && /function riassuntoFineGiro[\s\S]{0,900}title: 'Misura completata'/.test(VIVO), nVerde + ' punti');
 var corpoSav = estrai('sav') || '';
 check('il salvataggio fa la domanda della misura sospetta e scrive i metadati',
     /domandaMisuraSospetta\(/.test(corpoSav) && /metadatiAvvisi\(/.test(corpoSav));

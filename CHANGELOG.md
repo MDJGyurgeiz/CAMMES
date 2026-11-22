@@ -9,6 +9,293 @@ Sistema di misura profili alberi a camme per motori.
 
 ---
 
+## v3.8.0 — 2026-11-22: più semplice al banco (firmware 4.1 INVARIATO)
+
+L'analisi di usabilità fatta sulla v3.7.1 (`ANALISI_USABILITA_2026-11-21.md`)
+aveva concluso che CAMMES è onesto e comprensibile per chi lo usa spesso,
+seduto, col mouse in mano, ma **non ancora semplice** per il meccanico che lo
+apre poche volte a settimana, in piedi accanto al banco, a un metro da un
+portatile 1366×768. Quattro motivi: ciò che serve mentre si misura non stava in
+una schermata; gli esiti passavano da notifiche che sparivano in pochi secondi
+e coprivano i dati; il programma non parlava una lingua sola; l'aiuto viveva in
+fumetti lunghi e piccoli. Le proposte aspettavano la decisione dell'officina,
+che è arrivata: *«perfetto, applica anche i miglioramenti»*.
+
+Questa versione le applica. È lavoro di disposizione, di nomi, di messaggi e di
+aiuto: **i calcoli non cambiano** (stessa libreria matematica, stessi numeri), e
+firmware e protocollo seriale non sono stati toccati; nel programma del server è
+cambiata una sola riga, che disegnava male la tabella della pagina del manuale.
+Chi ha il firmware 4.1 non riflasha; le misure già in archivio si aprono come
+prima.
+
+**Come è stato fatto.** Cinque lavori in parallelo — Home, Alzata, Confronto,
+Analisi e le parti comuni a tutte le pagine — ciascuno con un test nuovo
+(`tools/test_usabilita_home.js`, `…_alzata.js`, `…_confronto.js`,
+`…_analisi.js`, `…_comune.js`) che esegue gli script veri della pagina in node,
+su una pagina finta, con Chart.js e jsPDF veri dove servono, e che fallisce
+sulla pagina di prima o sugli errori introdotti apposta per provarlo. Ogni
+lavoro è stato riletto da un secondo esame, che ha trovato difetti veri prima
+che uscissero: la vista polare del Confronto che cresceva senza fine, STOP
+ignorato nella pausa fra due giri delle Ripetizioni, il nome di una misura
+nell'indirizzo di Analisi letto come codice, il numerino di Messaggi sparito
+all'apertura delle pagine. Corretti, ognuno con il suo controllo. Un sesto
+test, `tools/test_usabilita_documenti.js`, tiene il manuale allineato alle
+pagine: ogni comando che nomina deve esistere con quel nome, ogni messaggio
+che cita deve esistere nel codice, e i nomi ritirati non devono tornare.
+Infine le quattro pagine sono state aperte nel browser a 1366×768, col
+programma vero e un Arduino emulato: misura, Zero virtuale, salvataggio,
+selezione dall'archivio verso Analisi e Confronto, analisi, collaudo, stampe e
+giro guidato. Nessun errore nella console; tre difetti visibili solo così sono
+stati corretti, ognuno col suo controllo (vedi «Visti nel browser»).
+Suite: 69, tutte verdi; lint pulito.
+
+### ⚠ Cosa cambia per chi usa il banco
+
+| Cosa | Prima | Adesso |
+|---|---|---|
+| **Alzata, comandi** | START 1,35 schermate più in basso; mentre si guardava il grafico STOP non si vedeva | una **barra dei comandi** sempre in vista sotto la barra in alto: Zero virtuale, START, STOP, avanzamento, riga Esito, nome e **Salva misura** |
+| **Alzata, esito della misura** | solo nelle notifiche (quella verde spariva in pochi secondi) | la riga **Esito** (verde, gialla, rossa) resta fino al prossimo START, dice il nome salvato e porta in Analisi |
+| **Alzata, nomi** | RESET, Reset zero, SALVA, Salva pos; il senso di rotazione in fondo alla pagina | **Ricomincia**, **Azzera angolo qui**, **Salva misura**, **Memorizza posizione**; **Verso di scansione** accanto a Modalità |
+| **Misura non salvata** | RESET o il cambio di pagina la buttavano senza chiedere | il programma chiede prima: START, Zero virtuale, Ricomincia, Verifica banco, cambio di pagina, chiusura |
+| **Home** | l'archivio due schermate sotto, dopo benvenuto, conteggi, tessere e manutenzione | in cima la **riga di stato** (verifica banco, Arduino, programma, archivio) con **+ Nuova misura**; l'archivio subito sotto; **Sistema e manutenzione** chiuso in fondo |
+| **Dall'archivio ad Analisi e Confronto** | file scelti uno per uno dalla finestra di Windows; dal secondo PC la cartella non c'era | una casella su ogni riga: **Confronta i selezionati**, **Analizza (aspirazione + scarico)**; in Analisi e in Confronto la tendina dell'archivio, anche dal secondo PC |
+| **Analisi** | un'istruzione in corpo 11; Analizza fuori dalla prima schermata; Reset attaccato ad Analizza, senza domanda | quattro **passi** numerati con lo stato; **Analizza** sempre a vista; **Azzera tutto** lontano e con domanda; Invio conferma un valore già giusto |
+| **Confronto** | «grafico1…4» in legenda, nessun asse dei gradi, verdetto in fondo da rivalutare a mano, collaudo non stampabile | il nome di ogni misura, asse in gradi camma, verdetto **in alto** che si aggiorna da solo, **Stampa collaudo** (PDF con l'intestazione dell'officina) |
+| **Confronto, vista polare** | «Raggio base» con 16 già scritto | **Ø cerchio base**: il diametro, come in Analisi, vuoto finché non lo scrivi |
+| **Confronto, misura salvata INCOMPLETA** | riceveva un verdetto | **NON VALUTABILE**; nessun numero cambia |
+| **Numeri** | punto e virgola mescolati, anche nello stesso riquadro | virgola decimale in tutto ciò che si legge (schermo, notifiche, PDF); i file .scr e i comandi al banco restano col punto |
+| **CSV di Analisi** | in una colonna sola sull'Excel italiano | punto e virgola e virgola decimale: si apre col doppio clic |
+| **Notifiche** | in alto, la pila teneva le ultime 4, campanella senza nome | in basso a destra (in Analisi a sinistra), tre a vista, le più gravi restano; pulsante **Messaggi** col numero rosso per un errore non letto |
+| **Aiuto** | manuale solo dalla Home, giro guidato dietro un'icona, fumetti fino a 784 caratteri | **Messaggi**, **Giro guidato**, **Guida** e **Manuale** in alto in ogni pagina; fumetti entro circa 300 caratteri; il «?» si apre anche col clic o col tocco |
+| **Domande del programma** | finestre del browser «localhost dice…» | finestre della pagina; con un'azione rossa si parte dal pulsante prudente |
+| **Aggiornare il programma** | nessuno diceva dove mettere il file nuovo | Home → Sistema e manutenzione: tre passi, la cartella delle misure, il Backup completo |
+| **Scheda PDF della singola misura** | «deg», punto decimale, «Profilo alzata cartesiano» | «°», virgola, «Alzata massima», «Posizione del picco sul banco (non è la fasatura)» |
+| **Nomi dei file di Analisi** | `cammes_scheda_camma_<data>.pdf`, `cammes_report_…`, `cammes_analisi_….csv` | con la misura e l'ora: `scheda_camma_<misura>_<aaaammgg_hhmm>.pdf`, `referto_…`, `race_report_…`, `analisi_….csv` |
+
+### Le novità, pagina per pagina
+
+**Home**
+- **Riga di stato** in cima: verifica banco (e dove rifarla, se serve), Arduino
+  (collegato, firmware aggiornato o da aggiornare, «Ricontrolla», Diagnostica
+  quando c'è un problema), programma (versione, aggiornamenti), archivio (numero
+  di misure, l'ultima cliccabile). Accanto, **+ Nuova misura**. Le tre tessere
+  delle pagine sono diventate una riga.
+- **Archivio** subito sotto: sempre in ordine di data (i preferiti hanno la
+  stella ma non salgono), «Mostra altre 50», ricerca su nome e tag, clic su un
+  tag = filtro, × sull'etichetta per togliere un tag (chiede prima). Comandi a
+  parole: Apri, Scarica, Excel, Elimina (staccato, rosso). Tolti benvenuto,
+  tessere dei conteggi, «Tag più usati» e le colonne Tipo e Dim. (peso e data
+  completa nel fumetto di «Quando»).
+- **Selezione**: casella su ogni riga e barra con «Confronta i selezionati
+  (max 4)», «Analizza (aspirazione + scarico)» — con la domanda «Quale delle due
+  è l'aspirazione?»: il programma non la indovina dal nome, il banco è
+  universale — e «Togli la selezione». I vecchi file polari non si selezionano.
+- **Vista rapida**: «Apri in» Analisi come aspirazione, come scarico, o
+  Confronto; Scheda PDF e Chiudi restano in vista in fondo.
+- **Scheda PDF** della singola misura: «°», virgola decimale, «Alzata massima»,
+  «Punti misurati», «Posizione del picco sul banco (non è la fasatura)»;
+  testata e piede «Scheda tecnica della singola misura».
+- In fondo, chiusi finché non servono (e ricordati): **Sistema e manutenzione**
+  — Programma con la procedura di aggiornamento in tre passi e la cartella delle
+  misure; Firmware dell'Arduino; Intestazione dei PDF; Archivio e backup
+  (Backup completo (ZIP), Cestino col numero e «Ripristina tutte», Esporta e
+  Ripristina etichette, Svuota archivio staccato); Assistenza (Diagnostica,
+  Manuale); Extra (Concerto col motore) — e **Attività degli ultimi 14 giorni**.
+- **Firmware**: «⚡ Aggiorna firmware Arduino: v4.0 → v4.1» in evidenza quando la
+  scheda è indietro, «↻ Riscrivi il firmware» quando è già aggiornata; errori
+  in italiano piano, col dettaglio tecnico in piccolo; dopo la scrittura la riga
+  Arduino si rilegge da sola.
+- Dopo un'eliminazione la notifica dice «recuperabile per 30 giorni» e porta al
+  cestino. Date in parole («3 ore fa»), pesi con la virgola.
+
+**Alzata**
+- **Barra dei comandi** agganciata sotto la barra in alto: Zero virtuale
+  (facoltativo, prima di START), START, STOP, le scelte con cui parte la misura
+  («Veloce · 1 giro · verso orario»: un clic porta a cambiarle), avanzamento col
+  tempo che manca, riga Esito, nome e Salva misura. Quando START non può
+  partire (programma, Arduino, sola lettura, banco in arresto, motore
+  sbloccato, comparatore senza letture) la barra lo dice per esteso.
+- Riquadro dal vivo compatto: «Alzata (mm)», «Angolo (gradi camma)», «Picco
+  della misura»; il disegno del meccanismo è nel riquadro della rotazione
+  manuale, il grafico si vede subito.
+- **Riga Esito**: esito della misura e delle ripetizioni (giri, σ, CV,
+  verdetto), dello Zero virtuale (anche dopo il ricaricamento della pagina),
+  della verifica banco, delle interruzioni (STOP, comparatore muto, Arduino
+  riavviato, con i giri completati) e di uno START rifiutato; dopo il
+  salvataggio il nome e i collegamenti ad Analisi. Notifica e riga usano le
+  stesse parole.
+- Nomi nuovi (vedi la tabella); **Azzera angolo qui** chiede se ci sono
+  posizioni memorizzate e dice «Angolo azzerato» solo quando il banco lo
+  conferma; il **Verso di scansione** è scritto a parole, in un colore solo, e
+  si raggiunge da tastiera; «giri» al posto di «run».
+- Invio nel nome = Salva misura (non durante la misura); Invio nei gradi =
+  Ruota. STOP a banco fermo non butta la misura sul grafico; STOP nella pausa
+  fra due giri delle Ripetizioni ferma la serie e dice quanti giri erano
+  completi.
+- Spie col segno nel pallino (✓ ! ✕ ↻) oltre al colore; numeri con la virgola
+  su display, notifiche e grafico; a motore sbloccato l'angolo dell'encoder con
+  due decimali («12,25° enc.»).
+- Fumetti entro 300 caratteri: quello delle Ripetizioni ne aveva 784.
+
+**Confronto**
+- Legenda, tabella e verdetto col nome della misura; colori leggibili sul fondo
+  scuro, sul chiaro e sulla carta (arancio, blu, viola, petrolio; la terza
+  curva tratteggiata, la quarta a puntini); ogni misura tiene il suo colore.
+- Asse dei gradi camma con una tacca ogni 30° e asse dell'alzata in mm, con la
+  virgola.
+- **Verdetto del collaudo** in alto, in un riquadro suo, che si ricalcola da solo
+  anche mentre si scrive la tolleranza («Rivaluta» non serve più): CONFORME o
+  NON CONFORME, nome, scarto massimo, grado, riallineamento.
+- **Stampa collaudo**: PDF A4 con intestazione dell'officina, nominale,
+  tolleranza, metodo, verdetti, grafico su fondo bianco e l'avvertenza di misura
+  indicativa.
+- La banda del nominale è allineata alla prima misura con lo stesso spostamento
+  del suo verdetto e non è più tagliata a zero (cambia solo il disegno).
+- Vista Differenza: casella **Allinea la fase**; scarto massimo, medio e
+  quadratico medio, col grado e il nome; i gradi senza lettura sono esclusi,
+  non letti come zero.
+- Tendine **Scegli dall'archivio** per misure, nominale e vista polare; più file
+  insieme dal disco; un file si accetta per il contenuto, non per il nome.
+- «Rimuovi» su ogni misura, «Svuota tutto» con domanda e senza ricaricare la
+  pagina; etichette «incompleta», «sospetta» e «convertita» (curva già
+  convertita alla punteria, detta a parole).
+- Vista polare: Ø del cerchio base, scala da zero, raggi ogni 30°, nome e
+  Rimuovi sopra ogni riquadro. «Replay» si chiama «Ridisegna».
+
+**Analisi**
+- **Quattro passi** in testa al pannello (carica l'aspirazione, carica lo
+  scarico, controlla i valori da confermare, Analizza) con lo stato di ciascuno;
+  un clic porta al comando. Legenda del bordo tratteggiato.
+- Tendine **Dall'archivio** per aspirazione e scarico; il file scelto si carica
+  subito (via i pulsanti Importa); «Ricarica» per le misure dell'archivio;
+  `analisi.html?asp=…&sca=…` dalla Home e da Alzata. Avviso se aspirazione e
+  scarico sono la stessa misura. I nomi che arrivano dall'indirizzo sono
+  controllati e scritti come testo.
+- **Analizza** sempre a vista in fondo al pannello; **Azzera tutto** lontano e
+  con domanda; dopo una modifica i risultati restano, attenuati, con una riga
+  che lo dice.
+- **Comando valvola**: prima voce «— da scegliere —» («non dichiarato» sui
+  documenti), riga «Conti fatti su: …», avviso se il comando prevede una leva e
+  il rapporto è 1,00, Rapporto bilanciere sotto il comando (anche in Base,
+  quando serve).
+- **Invio** in un campo col bordo tratteggiato conferma il valore già scritto, e
+  l'analisi va rifatta. Prima di CSV, referto, scheda camma e race report una
+  finestra elenca i valori ancora da confermare: «Li controllo adesso» o
+  «Esporta lo stesso».
+- Fasatura a parole («10,6° prima del PMS»), «durata al gioco» e «a 1,00 mm di
+  alzata», alzata massima di valvola e camma in testa alla tabella; parole del
+  glossario: separazione dei lobi, incrocio, distacco, punteria simulata, leva a
+  dito, «Prova a vari regimi», «Vista 3D», «Correzione eccentricità», «Filtro
+  derivate», «1/2/3 masse».
+- Grafici sui 720° con 0 = PMS di incrocio e linee tratteggiate PMI-PMS-PMI.
+- Scheda camma e referto in italiano, senza «deg» e senza sigle; la copertina
+  del referto parte dalle misure; molla e masse mai scritte sono segnate
+  «(esempio)».
+- **CSV per l'Excel italiano** (punto e virgola, virgola decimale, segno UTF-8)
+  con la riga «# Formato» che lo dice; nei nomi dei file la misura e l'ora.
+- «Salva in archivio» chiede se sostituire o salvare con un nome nuovo; se
+  l'archivio non risponde, chiede prima di scrivere.
+- Confronto A vs B: **Usa le misure del pannello** per il set A.
+- 79 fumetti riscritti (in media 185 caratteri, al massimo 300); i «?» si
+  raggiungono col Tab.
+
+**In tutte le pagine**
+- In alto a destra **Messaggi**, **Giro guidato**, **Guida** e **Manuale** (il
+  manuale si apre da ogni pagina, in una scheda nuova). Se la barra non ci sta,
+  si compatta a gradini invece di tagliare i pulsanti.
+- **Notifiche** in basso a destra (in Analisi in basso a sinistra, sopra i
+  grafici), al massimo tre a vista: lascia il posto la meno grave, «+N
+  messaggi» apre Messaggi; ognuna resta almeno il tempo di leggerla (4 s più 1 s
+  ogni 15 caratteri, fino a 12 s). Il numerino di Messaggi è rosso con un errore
+  non letto, giallo con un avviso.
+- **Finestre della pagina** al posto di quelle del browser: con un'azione rossa
+  il fuoco parte dal pulsante prudente, il Tab resta dentro la finestra, e
+  chiusa la finestra il fuoco torna dov'era.
+- **Fumetti** che si aprono anche col clic o col tocco e restano finché non si
+  clicca altrove; si raggiungono col Tab.
+- **Leggibilità**: nessuna scritta sotto i 13 px nel foglio comune, grigio più
+  chiaro (contrasto almeno 5,47:1 sul fondo scuro), pulsanti alti almeno 36 px,
+  pulsanti rossi e letture dal vivo leggibili anche nel tema chiaro, contorno
+  del fuoco visibile.
+- **Guida** in cinque schede e **giro guidato** riscritti nell'ordine del lavoro,
+  con i nomi nuovi.
+- **Avviso di aggiornamento** in italiano piano; l'impronta SHA-256 per
+  controllare il file scaricato è in Home → Sistema e manutenzione.
+- Il **manuale operatore** è riscritto sulla nuova interfaccia.
+
+### Difetti che c'erano già, corretti strada facendo
+
+- Home: la riga del firmware non riprovava mai a leggere la versione della
+  scheda (riceveva l'evento di apertura della pagina al posto del numero di
+  tentativo).
+- Home: il ripristino di tag e preferiti da file (prima «Import», ora
+  «Ripristina etichette») li rimetteva solo in quel browser; ora arrivano anche
+  al programma e agli altri PC.
+- Alzata: una verifica banco che non partiva (comparatore muto) restava armata
+  per lo START successivo.
+- Analisi: un file respinto (meno di 30 righe valide) cambiava lo stesso il nome
+  della misura in uso, e CSV, referto e scheda camma portavano il nome
+  sbagliato.
+- Confronto: dopo «Ferma» del ridisegno, l'animazione del grafico restava
+  spenta.
+- Manuale (pagina `/manuale`): la tabella dei problemi perdeva la riga
+  d'intestazione e mostrava una riga «--- | ---». In `cammes_server.js` la
+  regola che riconosce la riga di trattini scambiava le lettere per trattini;
+  corretta, e `test_usabilita_documenti.js` la prova sul manuale vero.
+
+### Visti nel browser prima del rilascio
+
+- Analisi: a 1366 px «Salva in archivio» e «Scheda camma» tagliavano la scritta
+  (il pannello è largo 318 px); ora i pulsanti dei documenti vanno a capo invece
+  di tagliare.
+- Confronto, vista Differenza: l'asse dei gradi finiva sotto il bordo dello
+  schermo (fondo del grafico a 795 px con 2 misure, a 882 con 4); ora il grafico
+  cede l'altezza dei riquadri dei numeri, mai sotto 260 px, e nelle curve
+  sovrapposte torna alto come prima.
+- Analisi: la domanda «Valori ancora da confermare» chiudeva l'elenco con due
+  punti («gioco valvola scar..»).
+
+### Che cosa resta fuori, e perché
+
+Il dettaglio, proposta per proposta, è in testa ad
+`ANALISI_USABILITA_2026-11-21.md` («Stato nella v3.8.0»). In breve:
+- **Analisi**: un solo «Comando valvola» per lato che fa comparire i campi della
+  punteria, e un solo mostra/nascondi al posto di Base/Avanzato più Funzioni,
+  sono rinviati: toccano moduli, giro guidato e test, e vanno fatti in un giro
+  a sé. L'analisi di un lobo solo cambierebbe il flusso dei conti.
+- **Home**: misure INCOMPLETE e alzata massima già nell'elenco, «Ripristina da
+  backup» e la riga Arduino che si aggiorna da sola chiedono funzioni nuove nel
+  server (in questa versione è cambiata solo la riga del manuale).
+- **Spie**: niente parola di stato accanto al pallino, perché nella barra in alto
+  non c'è posto; il segno nel pallino e l'avviso nella barra dei comandi la
+  sostituiscono.
+- **Confronto**: il segno sul grafico del punto dello scarto massimo, una vista
+  «scostamento dal nominale», la vista polare con le sagome sovrapposte.
+- Restano alcune parole vecchie dove le ancorano test o manuale: «Race report»,
+  «Regime (RPM)», «Durata (alzata > 0)» nel confronto A vs B, «NO SENSORE» sul
+  display.
+
+### Cosa NON è verificato, e lo si dice
+
+- Le pagine sono state guardate nel browser a 1366×768, nel tema scuro, col
+  programma vero e un Arduino **emulato**; il banco vero non è stato toccato.
+  Sul portatile del banco restano da guardare: il tema chiaro, lo zoom al 125%,
+  la barra in alto di Alzata con tutte le spie, i PDF stampati su carta.
+- In Analisi, subito dopo Analizza, le notifiche in basso a sinistra coprono per
+  qualche secondo una parte del grafico a 720° (si chiudono con ×): è il posto
+  scelto per non coprire il pannello Parametri e la barra di Analizza; va
+  valutato al banco se dà fastidio.
+- Al banco vero: dopo «Aggiorna firmware Arduino» la riga Arduino della Home
+  deve passare ad «aggiornato» in 5-15 s; l'avviso del comparatore senza
+  letture, nella barra di Alzata, non deve lampeggiare nel lavoro normale.
+- Il CSV va aperto almeno una volta col doppio clic in un Excel italiano.
+- I segni ✓ ! ✕ ↻ delle spie li disegna il carattere di sistema: su Windows ci
+  sono, su tablet e APK vanno guardati.
+- Restano da fare le prove al banco indicate nell'audit del 2026-08-09
+  (artefatto calibrato, chiusura del giro sotto carico, isteresi).
+
+---
+
 ## v3.7.1 — 2026-11-21: ogni funzione provata, una per una (firmware 4.1 INVARIATO)
 
 Richiesta dell'officina: *verificare il progetto in ogni sua funzionalità,

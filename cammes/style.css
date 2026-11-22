@@ -130,7 +130,9 @@
 
   --text-primary:   #e9edf5;
   --text-secondary: #a4afc1;
-  --text-muted:     #6b7588;
+  /* era #6b7588: 3,3-4,3:1 sui fondi scuri, sotto la soglia di 4,5:1 per il
+     testo piccolo. Ora almeno 5,4:1 su tutti i fondi del tema scuro. */
+  --text-muted:     #8f9bb0;
   --text-disabled:  #4a5365;
 
   /* Alias usati da analisi.html ma mai definiti: senza questi, ogni
@@ -147,6 +149,7 @@
   --success-text:  var(--success);
   --warning-text:  var(--warning);
   --danger-text:   var(--danger);
+  --info-text:     var(--info);
 
   --grid:        #232a36;
   --grid-zero:   #ffd740;
@@ -193,6 +196,7 @@
   --success-text:  #0a7a3d;
   --warning-text:  #8a6a00;
   --danger-text:   #c62828;
+  --info-text:     #1864ab;   /* 6:1 sul bianco: il celeste pieno faceva 2,5:1 */
 
   /* Elevation più sottili in light */
   --e-1: 0 1px 2px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(15, 23, 42, 0.04) inset;
@@ -372,10 +376,11 @@ body {
 .header .nav-links a {
   color: var(--text-secondary);
   text-decoration: none;
-  padding: var(--sp-2) var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-sm);
   font-family: var(--font-display);
-  font-size: 12px;
+  font-size: 13px;
+  white-space: nowrap;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1.5px;
@@ -424,26 +429,36 @@ body {
   border-radius: var(--r-full);
 }
 
+/* Nomi delle spie a 13 px in minuscolo (erano 10 px maiuscoli nel grigio
+   debole): sono la prima cosa che il manuale dice di guardare. */
 .status-led {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
-  font-family: var(--font-display);
-  font-size: 10px;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 13px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1.2px;
-  color: var(--text-muted);
+  letter-spacing: 0;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  border-radius: var(--r-sm);
 }
 
+/* Pallino da 14 px (era 8): da un metro si distingue. Centra il contenuto,
+   cosi' la pagina puo' metterci dentro un segno oltre al colore (Alzata lo
+   fa con ::after: spunta, punto esclamativo, croce). */
 .led {
-  width: 8px;
-  height: 8px;
+  position: relative;
+  width: 14px;
+  height: 14px;
   border-radius: var(--r-full);
   background: var(--text-disabled);
   box-shadow: none;
   transition: background var(--t-base), box-shadow var(--t-base);
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .led.ok   { background: var(--success); box-shadow: 0 0 6px var(--success-glow), 0 0 0 2px rgba(0, 230, 118, 0.15); animation: led-pulse 2.4s var(--ease) infinite; color: var(--success); }
@@ -538,9 +553,9 @@ body {
 .card-title {
   position: relative;
   font-family: var(--font-display);
-  font-size: 12px;
+  font-size: 13px;
   text-transform: uppercase;
-  letter-spacing: 2.5px;
+  letter-spacing: 2px;
   color: var(--text-secondary);
   font-weight: 600;
   margin-bottom: var(--sp-4);
@@ -575,11 +590,14 @@ body {
 }
 .gauge-card form { width: 100%; }
 
+/* Letture dal vivo nei colori "-text": nel tema scuro sono gli stessi rosso
+   e verde di sempre, nel chiaro scuriti fino a 5:1 (il verde pieno dei gradi
+   su fondo chiaro faceva 1,5:1, il rosso del picco 3,2:1). */
 .gauge-value {
   font-family: var(--font-mono);
   font-size: 42px;
   font-weight: 700;
-  color: var(--danger);
+  color: var(--danger-text);
   background: var(--bg-input);
   padding: var(--sp-3) var(--sp-5);
   border-radius: var(--r-sm);
@@ -595,7 +613,7 @@ body {
   font-family: var(--font-mono);
   font-size: 32px;
   font-weight: 600;
-  color: var(--success);
+  color: var(--success-text);
   background: var(--bg-input);
   padding: var(--sp-3) var(--sp-4);
   border-radius: var(--r-sm);
@@ -605,6 +623,10 @@ body {
   text-shadow: 0 0 10px var(--success-glow);
   letter-spacing: 1px;
 }
+/* nel tema chiaro l'alone colorato attorno alle cifre scure le sfoca */
+:root[data-theme="light"] .gauge-value,
+:root[data-theme="light"] .gauge-degrees,
+:root[data-theme="light"] .max-display { text-shadow: none; }
 
 /* ---------- CHART CARD --------------------------------------------------- */
 
@@ -666,6 +688,9 @@ body {
   justify-content: center;
   gap: var(--sp-2);
   padding: 10px 20px;
+  /* almeno 36 px: comandi presi col mouse del portatile, a volte con le mani
+     sporche (i piccoli -, +, Avanzate... erano alti 28 px) */
+  min-height: 36px;
   border: 1px solid transparent;
   border-radius: var(--r-sm);
   font-family: var(--font-display);
@@ -720,8 +745,10 @@ body {
   transform: translateY(-1px);
 }
 
+/* Rosso piu' scuro sotto la scritta bianca: era 3,6:1 (STOP), ora da 5:1 a
+   6,6:1. Il rosso pieno resta per spie, bordi e avvisi. */
 .btn-danger {
-  background: linear-gradient(180deg, #ff5050 0%, var(--danger) 100%);
+  background: linear-gradient(180deg, #d32f2f 0%, #b71c1c 100%);
   color: #fff;
   box-shadow: 0 2px 12px var(--danger-glow), inset 0 -2px 0 rgba(0, 0, 0, 0.25);
 }
@@ -751,7 +778,7 @@ body {
   box-shadow: 0 2px 12px var(--accent-glow);
 }
 
-.btn-sm   { padding: 6px 12px; font-size: 12px; min-width: 36px; }
+.btn-sm   { padding: 6px 12px; font-size: 13px; min-width: 36px; }
 .btn-icon {
   padding: 8px;
   font-size: 16px;
@@ -819,7 +846,7 @@ form[name="mas"] {
 .max-display {
   font-family: var(--font-mono);
   font-size: 16px;
-  color: var(--danger);
+  color: var(--danger-text);
   background: var(--bg-input);
   padding: 8px var(--sp-4);
   border-radius: var(--r-sm);
@@ -848,7 +875,23 @@ form[name="mas"] {
   width: 48px;
   height: 26px;
 }
-.switch input { display: none; }
+/* La casella era display:none, quindi l'interruttore (es. senso di
+   rotazione) non si raggiungeva col tasto Tab: ora c'e', invisibile, e il
+   contorno di fuoco va sul cursore. */
+.switch input {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+}
+.switch input:focus-visible + .slider {
+  outline: 3px solid var(--accent-text);
+  outline-offset: 2px;
+}
 .slider {
   position: absolute;
   cursor: pointer;
@@ -878,7 +921,7 @@ input:checked + .slider:before { transform: translateX(22px); }
 
 .toggle-label {
   font-family: var(--font-display);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 1.2px;
@@ -928,9 +971,9 @@ input:checked + .slider:before { transform: translateX(22px); }
   color: var(--text-muted);
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 11px;
+  font-size: 13px;
   text-transform: uppercase;
-  letter-spacing: 1.5px;
+  letter-spacing: 1px;
   border-bottom: 1px solid var(--border-strong);
   background: var(--bg-input);
 }
@@ -955,7 +998,7 @@ input:checked + .slider:before { transform: translateX(22px); }
 
 .file-input {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 13px;
   padding: 8px var(--sp-3);
   background: var(--bg-input);
   color: var(--text-secondary);
@@ -976,7 +1019,7 @@ input:checked + .slider:before { transform: translateX(22px); }
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -1003,9 +1046,9 @@ input:checked + .slider:before { transform: translateX(22px); }
 }
 .stat-badge .stat-label {
   font-family: var(--font-display);
-  font-size: 10px;
+  font-size: 13px;
   text-transform: uppercase;
-  letter-spacing: 1.5px;
+  letter-spacing: 1px;
   color: var(--text-muted);
 }
 .stat-badge .stat-value {
@@ -1052,7 +1095,7 @@ input:checked + .slider:before { transform: translateX(22px); }
 }
 .scan-progress .scan-progress-label {
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 1.2px;
   color: var(--text-muted);
@@ -1066,30 +1109,52 @@ input:checked + .slider:before { transform: translateX(22px); }
 
 /* ---------- TOAST NOTIFICATIONS ------------------------------------------ */
 
+/* In basso a destra (erano in alto, sopra il pannello dei parametri di
+   Analisi e sotto la barra dei comandi di Alzata), al massimo 3 a vista
+   (cammes-ui.js), sopra il numero di versione. Una pagina puo' scegliere il
+   lato (--toast-destra, --toast-sinistra, --toast-allinea) e alzare la pila
+   sopra una sua barra fissa in basso (--toast-bottom). */
 .toast-stack {
   position: fixed;
-  top: 80px;
-  right: var(--sp-5);
+  right: var(--toast-destra, var(--sp-5));
+  left: var(--toast-sinistra, auto);
+  bottom: var(--toast-bottom, 28px);
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
+  align-items: var(--toast-allinea, flex-end);
+  justify-content: flex-end;
+  gap: var(--sp-2);
   z-index: var(--z-toast);
   pointer-events: none;
-  max-height: calc(100vh - 96px);
+  max-height: calc(100vh - 110px);
+  max-width: calc(100vw - 2 * var(--sp-5));
+}
+/* In Analisi la colonna destra e' il pannello dei parametri e, piu' giu',
+   la tabella dei risultati coi numeri a filo destro: la pila sta in basso a
+   sinistra, sopra i grafici (classe messa da cammes-ui.js). */
+.toast-stack.pila-sinistra {
+  right: var(--toast-destra, auto);
+  left: var(--toast-sinistra, var(--sp-5));
+  align-items: var(--toast-allinea, flex-start);
+}
+.toast-stack.pila-sinistra .toast { animation-name: slide-in-left; }
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 .toast {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4);
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-md);
   box-shadow: var(--e-3);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  min-width: 260px;
-  max-width: 420px;
+  min-width: 240px;
+  max-width: 360px;
   /* I messaggi coprono la colonna dei parametri: se intercettassero i click
      (pointer-events:auto, com'era) l'utente clicca su un campo, il click
      finisce sul banner, il campo non prende il fuoco e le frecce scorrono la
@@ -1101,16 +1166,38 @@ input:checked + .slider:before { transform: translateX(22px); }
   pointer-events: auto;
   flex-shrink: 0;
   align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: -4px -2px 0 0;
   background: transparent;
   border: 0;
-  color: var(--text-muted);
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: 22px;
   line-height: 1;
-  padding: 2px 4px;
+  padding: 0;
   cursor: pointer;
   border-radius: var(--r-sm);
 }
-.toast-close:hover { color: var(--text-primary); }
+.toast-close:hover { color: var(--text-primary); background: var(--bg-elev-3); }
+/* "+N messaggi": quelle tolte dalla pila per far posto; apre il registro */
+.toast-altri {
+  pointer-events: auto;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-elev-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-full);
+  padding: 6px 14px;
+  min-height: 32px;
+  cursor: pointer;
+  box-shadow: var(--e-2);
+}
+.toast-altri:hover { border-color: var(--accent); color: var(--accent-text); }
 /* Il corpo del banner resta trasparente ai click (vedi sopra), ma i suoi
    elementi interattivi no: il toast di aggiornamento contiene il link
    "Scarica cammes.exe" e senza questa riga sarebbe inerte. */
@@ -1121,9 +1208,10 @@ input:checked + .slider:before { transform: translateX(22px); }
 .toast.err     { border-left: 3px solid var(--danger); }
 .toast.info    { border-left: 3px solid var(--info); }
 .toast-icon {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
+  margin-top: 1px;
 }
 .toast-icon.success { color: var(--success); }
 .toast-icon.warn    { color: var(--warning); }
@@ -1131,17 +1219,28 @@ input:checked + .slider:before { transform: translateX(22px); }
 .toast-icon.info    { color: var(--info); }
 .toast-body {
   flex: 1;
-  font-size: 13px;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.45;
   color: var(--text-primary);
+  overflow-wrap: anywhere;
 }
+/* Il titolo porta la notizia ("Misura INCOMPLETA", "Scansione FERMATA"):
+   era la parte piu' piccola, 11 px maiuscolo grigio. Ora 15 px in
+   grassetto, nel colore della gravita' (contrasto >= 5:1 in entrambi i temi). */
 .toast-body .toast-title {
-  font-family: var(--font-display);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 1.2px;
-  color: var(--text-muted);
-  margin-bottom: 2px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0;
+  color: var(--text-primary);
+  margin-bottom: 3px;
 }
+.toast.success .toast-title { color: var(--success-text); }
+.toast.warn    .toast-title { color: var(--warning-text); }
+.toast.err     .toast-title { color: var(--danger-text); }
+.toast.info    .toast-title { color: var(--info-text); }
 
 /* ---------- SKELETON LOADER ---------------------------------------------- */
 
@@ -1168,7 +1267,7 @@ input:checked + .slider:before { transform: translateX(22px); }
   background: var(--glass-bg);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
@@ -1221,9 +1320,10 @@ input:checked + .slider:before { transform: translateX(22px); }
   animation: spin 0.8s linear infinite;
 }
 
-/* Focus ring globale per accessibilità */
+/* Focus ring globale per accessibilità: 3 px nel colore d'accento leggibile
+   del tema (il celeste pieno sul bianco faceva 1,8:1 e non si vedeva). */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 3px solid var(--accent-text);
   outline-offset: 2px;
 }
 
@@ -1268,7 +1368,7 @@ input:checked + .slider:before { transform: translateX(22px); }
 .gauge-svg-label {
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 11px;
+  font-size: 13px;
   fill: var(--text-secondary);
   letter-spacing: 0.5px;
 }
@@ -1296,29 +1396,39 @@ input:checked + .slider:before { transform: translateX(22px); }
   background: var(--bg-elev-3);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 12.5px;
-  line-height: 1.45;
-  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 12px 14px;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-md);
   box-shadow: var(--e-3);
-  max-width: 320px;
+  max-width: min(380px, calc(100vw - 16px));
   pointer-events: none;
   opacity: 0;
+  /* nascosto anche per il tasto Tab (un collegamento dentro non resta
+     raggiungibile quando il fumetto e' chiuso), dopo la dissolvenza */
+  visibility: hidden;
   transform: translateY(4px);
-  transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+  transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease),
+              visibility 0s linear var(--t-fast);
   white-space: normal;
 }
 .cammes-tooltip.visible {
   opacity: 1;
+  visibility: visible;
   transform: translateY(0);
+  transition-delay: 0s;
 }
+/* Aperto col clic o col tocco: resta, e un collegamento dentro (per esempio
+   "Altro nel manuale") si puo' cliccare. */
+.cammes-tooltip.fissato { pointer-events: auto; }
+.cammes-tooltip a { color: var(--accent-text); text-decoration: underline; }
 .cammes-tooltip strong {
   display: block;
-  color: var(--accent);
+  color: var(--accent-text);
   font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 13px;
+  font-weight: 700;
+  font-size: 15px;
   margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -1344,24 +1454,36 @@ input:checked + .slider:before { transform: translateX(22px); }
 }
 
 /* ---------- HELP ICON (?) ------------------------------------------------ */
+/* "?" da 22 px (era 16) con un bersaglio invisibile di 30 px attorno: si
+   apre passando il mouse, col Tab, e col clic o il tocco (allora resta
+   aperto finche' non si clicca altrove: vedi cammes-ui.js). */
 .help-icon {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: var(--bg-elev-3);
   border: 1px solid var(--border-strong);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 11px;
+  font-size: 14px;
+  line-height: 1;
   cursor: help;
   margin-left: 6px;
   transition: all var(--t-fast) var(--ease);
   user-select: none;
   vertical-align: middle;
+  flex-shrink: 0;
+}
+.help-icon::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
 }
 .help-icon:hover, .help-icon:focus-visible {
   background: var(--accent);
@@ -1369,6 +1491,8 @@ input:checked + .slider:before { transform: translateX(22px); }
   border-color: var(--accent);
   transform: scale(1.1);
 }
+/* Le spie di stato si aprono anche col tocco e col Tab (legenda dei colori) */
+.status-led[data-tip] { cursor: help; }
 
 /* ---------- INPUT ERROR STATE ------------------------------------------- */
 .input-error,
@@ -1404,7 +1528,7 @@ input.input-error {
 .scan-progress-label {
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 11px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 1.5px;
   color: var(--text-muted);
@@ -1447,7 +1571,7 @@ input.input-error {
 }
 .scan-progress-eta {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   min-width: 70px;
   text-align: right;
@@ -1492,7 +1616,7 @@ input.input-error {
   .led.ok.pulse,
   .led.warn.pulse,
   .live-tuning-badge::before { animation: none !important; }
-  .toast { transition: none !important; }
+  .toast { transition: none !important; animation: none !important; }
   .btn::after,
   .btn:hover { transition: none !important; }
 }
@@ -1512,8 +1636,8 @@ input.input-error {
   text-align: center;
 }
 .diff-stat-label {
-  font-family: var(--font-display); font-size: 10px;
-  text-transform: uppercase; letter-spacing: 1.5px;
+  font-family: var(--font-display); font-size: 13px;
+  text-transform: uppercase; letter-spacing: 1px;
   color: var(--text-muted); margin-bottom: 4px;
 }
 .diff-stat-value {
@@ -1530,8 +1654,8 @@ input.input-error {
 }
 .saved-pos-chip {
   display: inline-flex; align-items: center; gap: 4px;
-  font-family: var(--font-mono); font-size: 11px;
-  padding: 2px 8px; border-radius: var(--r-full);
+  font-family: var(--font-mono); font-size: 13px;
+  padding: 3px 10px; border-radius: var(--r-full);
   background: var(--bg-input);
   color: var(--accent);
   border: 1px solid var(--border);
@@ -1542,7 +1666,7 @@ input.input-error {
   background: var(--accent); color: #06121b; border-color: var(--accent);
 }
 .saved-pos-chip-delete {
-  font-size: 12px; opacity: 0.5; margin-left: 2px;
+  font-size: 14px; opacity: 0.6; margin-left: 2px;
   transition: opacity var(--t-fast) var(--ease);
 }
 .saved-pos-chip:hover .saved-pos-chip-delete { opacity: 1; color: var(--danger); }
@@ -1562,12 +1686,12 @@ input.input-error {
   margin-bottom: var(--sp-2);
 }
 .live-trace-title {
-  font-family: var(--font-display); font-weight: 600; font-size: 12px;
-  text-transform: uppercase; letter-spacing: 1.5px;
+  font-family: var(--font-display); font-weight: 600; font-size: 13px;
+  text-transform: uppercase; letter-spacing: 1.2px;
   color: var(--text-muted);
 }
 .live-trace-count {
-  font-family: var(--font-mono); font-size: 11px; color: var(--accent-2);
+  font-family: var(--font-mono); font-size: 13px; color: var(--accent-2);
 }
 .live-trace-canvas-wrap {
   height: 220px;
@@ -1576,9 +1700,9 @@ input.input-error {
 /* ---------- MOTOR FREE BADGE + BTN-WARN VARIANT ------------------------- */
 .motor-free-badge {
   display: inline-flex; align-items: center; gap: 6px;
-  font-family: var(--font-display); font-size: 11px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 1.5px;
-  color: var(--warning); padding: 4px 12px;
+  font-family: var(--font-display); font-size: 13px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1.2px;
+  color: var(--warning-text); padding: 4px 12px;
   border: 1px solid var(--warning);
   border-radius: var(--r-full);
   background: color-mix(in oklab, var(--warning) 15%, transparent);
@@ -1628,6 +1752,10 @@ input.input-error {
   box-shadow: var(--e-4);
   transform: scale(0.95) translateY(10px);
   transition: transform var(--t-base) var(--ease-bouncy);
+  /* su uno schermo basso (768 px, zoom) la scheda scorre invece di uscire
+     dallo schermo con i pulsanti Avanti e Inizia */
+  max-height: calc(100vh - 2 * var(--sp-4));
+  overflow-y: auto;
 }
 .cammes-wizard-backdrop.visible .cammes-wizard {
   transform: scale(1) translateY(0);
@@ -1675,7 +1803,7 @@ input.input-error {
 }
 .cammes-wizard-body {
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
   color: var(--text-secondary);
   min-height: 120px;
@@ -1684,7 +1812,7 @@ input.input-error {
 .cammes-wizard-body kbd {
   display: inline-block;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   background: var(--bg-elev-3);
   color: var(--accent);
   padding: 2px 6px;
@@ -1694,7 +1822,7 @@ input.input-error {
 }
 .cammes-wizard-body code {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   background: var(--bg-input);
   color: var(--accent-2);
   padding: 1px 5px;
@@ -1722,9 +1850,12 @@ input.input-error {
 .cammes-wizard-nav {
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--sp-3);
 }
-.cammes-wizard-nav .btn { min-width: 110px; }
+.cammes-wizard-nav .btn { min-width: 110px; min-height: 40px; }
+/* sull'ultima scheda: "Giro guidato" dei comandi veri di questa pagina */
+.cammes-wizard-nav .cammes-wizard-giro { margin-left: auto; }
 .cammes-wizard-nav .btn:disabled { opacity: 0.3; pointer-events: none; }
 
 /* Help toggle bottone in header */
@@ -1753,28 +1884,112 @@ input.input-error {
   box-shadow: 0 0 12px var(--accent-glow);
 }
 
+/* ---------- BARRA IN ALTO: MESSAGGI, GIRO GUIDATO, GUIDA, MANUALE -------- */
+/* Gruppo aggiunto da cammes-ui.js (installaBarraAiuti). Pillole alte quanto
+   i vecchi cerchi (34 px): l'altezza della barra in alto non cambia. */
+.header-aiuti {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+.help-toggle.help-pill {
+  width: auto;
+  height: 34px;
+  padding: 0 10px;
+  gap: 6px;
+  border-radius: var(--r-full);
+  margin-right: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  color: var(--text-primary);
+}
+/* Al passaggio del mouse il fondo diventa celeste pieno (.help-toggle:hover):
+   la scritta e le icone vanno scure, come sul vecchio cerchio. Con il chiaro
+   del tema scuro sul celeste il contrasto era 1,5:1 e la parola spariva. */
+.help-toggle.help-pill:hover { transform: none; color: #06121b; }
+.help-pill .aiuto-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.help-pill .aiuto-ico svg { width: 16px; height: 16px; }
+.help-pill .aiuto-q {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1;
+}
+/* Gradini di compattazione, scelti da adattaBarraAlta() solo se la barra
+   non ci sta (cumulativi): 1) via la scritta CAMMES, resta il logo;
+   2) link delle pagine piu' stretti; 3) via le icone delle pillole;
+   4) pillole a sola icona; 5) via i nomi delle spie, restano pallino, segno
+   e fumetto; 6) se non basta ancora (tablet, zoom forte) la barra scorre di
+   lato invece di tagliare a destra tema, Guida e Manuale. */
+.header.barra-l1 h1 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.header.barra-l2 .nav-links a { padding: var(--sp-2) 6px; letter-spacing: 0; }
+.header.barra-l3 .help-pill .aiuto-ico { display: none; }
+.header.barra-l4 .help-pill .aiuto-ico { display: inline-flex; }
+.header.barra-l4 .help-pill .aiuto-txt { display: none; }
+.header.barra-l4 .help-toggle.help-pill { width: 34px; padding: 0; justify-content: center; }
+.header.barra-l5 .status-led {
+  font-size: 0;
+  gap: 0;
+}
+.header.barra-l5 .status-leds { gap: 10px; }
+.header.barra-l6 {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.header.barra-l6::-webkit-scrollbar { display: none; }
+
 /* ---------- REGISTRO MESSAGGI -------------------------------------------- */
 /* I toast durano pochi secondi: qui restano consultabili per tutta la
    sessione (verdetti LSA/RPM critico/valve float, avvisi di misura). */
 .msglog-toggle { position: relative; }
+/* Il numerino conta i messaggi non letti e prende il colore del piu' grave:
+   rosso solo con un errore, giallo con un avviso, neutro per il resto. */
 .msglog-badge {
   position: absolute;
-  top: -3px;
-  right: -3px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 3px;
-  border-radius: 8px;
-  background: var(--danger);
-  color: #fff;
-  font-family: var(--font-mono);
-  font-size: 9px;
+  top: -7px;
+  right: -7px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
   font-weight: 700;
   align-items: center;
   justify-content: center;
   line-height: 1;
   pointer-events: none;
 }
+.msglog-badge.grave-warn { background: var(--warning); border-color: var(--warning); color: #06121b; }
+.msglog-badge.grave-err  { background: #d32f2f; border-color: #d32f2f; color: #fff; }
 .msglog-panel {
   position: fixed;
   top: 74px;
@@ -1802,25 +2017,36 @@ input.input-error {
 .msglog-h-title {
   flex: 1;
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 14px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 1.2px;
-  color: var(--text-secondary);
+  letter-spacing: 1px;
+  color: var(--text-primary);
 }
 .msglog-btn {
   background: transparent;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
   color: var(--text-secondary);
-  font-size: 11px;
-  padding: 3px 8px;
+  font-size: 13px;
+  min-height: 32px;
+  min-width: 32px;
+  padding: 4px 10px;
   cursor: pointer;
 }
 .msglog-btn:hover { color: var(--text-primary); border-color: var(--accent); }
+.msglog-nota {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-4);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
 .msglog-list { overflow-y: auto; padding: var(--sp-2); }
 .msglog-empty {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
   font-style: italic;
   text-align: center;
   padding: var(--sp-4);
@@ -1832,23 +2058,23 @@ input.input-error {
   border-radius: var(--r-sm);
   padding: var(--sp-2) var(--sp-3);
   margin-bottom: var(--sp-2);
-  font-size: 12.5px;
+  font-size: 14px;
   color: var(--text-primary);
 }
 .msglog-item.success { border-left-color: var(--success); }
 .msglog-item.warn    { border-left-color: var(--warning); }
 .msglog-item.err     { border-left-color: var(--danger); }
-.msglog-meta { display: flex; gap: var(--sp-2); align-items: baseline; margin-bottom: 2px; }
+.msglog-meta { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: baseline; margin-bottom: 2px; }
 .msglog-ora {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 /* AUDIT P2-06: da quale pagina e da quale analisi viene il messaggio. Senza,
    un verdetto letto due analisi dopo sembrava riferito a quella corrente. */
 .msglog-tag {
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 13px;
   color: var(--text-muted);
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -1857,13 +2083,54 @@ input.input-error {
   white-space: nowrap;
 }
 .msglog-title {
-  font-family: var(--font-display);
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
 }
-.msglog-body { color: var(--text-secondary); line-height: 1.45; }
+.msglog-item.success .msglog-title { color: var(--success-text); }
+.msglog-item.warn    .msglog-title { color: var(--warning-text); }
+.msglog-item.err     .msglog-title { color: var(--danger-text); }
+.msglog-body { color: var(--text-secondary); line-height: 1.45; overflow-wrap: anywhere; }
+
+/* ---------- FINESTRE DELLA PAGINA (cammesDialog, v3.8.0) ----------------- */
+/* Al posto di confirm()/prompt() del browser. Stesse misure della finestra di
+   eliminazione della Home, nomi propri per non scontrarsi con le sue classi. */
+.cammes-dialog-backdrop {
+  position: fixed; inset: 0; z-index: var(--z-modal);
+  background: rgba(7, 9, 13, 0.78);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--sp-4);
+  opacity: 0; transition: opacity var(--t-base) var(--ease);
+}
+.cammes-dialog-backdrop.visible { opacity: 1; }
+.cammes-dialog {
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-strong);
+  border-top: 4px solid var(--accent);
+  border-radius: var(--r-xl);
+  padding: var(--sp-6);
+  max-width: 480px; width: 100%;
+  box-shadow: var(--e-4);
+  transform: scale(0.96); transition: transform var(--t-base) var(--ease);
+}
+.cammes-dialog.warn   { border-top-color: var(--warning); }
+.cammes-dialog.danger { border-top-color: var(--danger); }
+.cammes-dialog-backdrop.visible .cammes-dialog { transform: scale(1); }
+.cammes-dialog-title {
+  font-family: var(--font-display); font-weight: 700; font-size: 19px;
+  color: var(--text-primary); margin-bottom: var(--sp-3);
+}
+.cammes-dialog-body {
+  font-size: 15px; line-height: 1.55; color: var(--text-secondary);
+  margin-bottom: var(--sp-4); word-break: break-word;
+}
+.cammes-dialog-body code { font-family: var(--font-mono); color: var(--accent); }
+.cammes-dialog-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--sp-4); font-size: 14px; color: var(--text-secondary); }
+.cammes-dialog-field input { width: 100%; font-size: 15px; }
+.cammes-dialog-actions { display: flex; gap: var(--sp-3); justify-content: flex-end; flex-wrap: wrap; }
+.cammes-dialog-actions .btn { min-height: 40px; font-size: 15px; }
 
 /* ---------- PRINT -------------------------------------------------------- */
 @media print {
@@ -1871,5 +2138,10 @@ input.input-error {
   .header, .controls-row, .btn, .scan-progress-wrap,
   .cammes-wizard-backdrop, .help-toggle, .theme-toggle,
   .msglog-panel, .msglog-toggle { display: none; }
+  /* niente notifiche, fumetti, finestre o giro guidato sul foglio stampato
+     (per esempio la stampa del collaudo di Confronto) */
+  .toast-stack, .cammes-tooltip, .cammes-dialog-backdrop,
+  .cammes-tour-backdrop, .cammes-tour-hole, .cammes-tour-pop,
+  #cammes-version-badge { display: none !important; }
   .card { box-shadow: none; border: 1px solid #ddd; }
 }

@@ -566,7 +566,7 @@ function mdToHtml(md) {
             if (!inList) { out.push('<ul>'); inList = true; }
             out.push('<li>' + inline(esc(t.substring(2))) + '</li>');
         } else if (t.charAt(0) === '|') {
-            if (/^\|[\s:-|]+\|$/.test(t)) return;   // riga separatore
+            if (/^\|[\s:|-]+\|$/.test(t)) return;   // riga separatore (trattino in fondo: [\s:-|] era l'intervallo ':'..'|', lettere comprese)
             if (!inTable) { out.push('<table border="1" cellpadding="6" style="border-collapse:collapse;">'); inTable = true; }
             var cells = t.split('|').slice(1, -1).map(function (c) { return '<td>' + inline(esc(c.trim())) + '</td>'; });
             out.push('<tr>' + cells.join('') + '</tr>');

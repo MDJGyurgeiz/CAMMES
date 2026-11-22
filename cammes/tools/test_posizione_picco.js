@@ -107,7 +107,8 @@ check('la riga che ricopia l angolo lobo e etichettata come DICHIARATA',
     !/lines\.push\('Pos\. max alzata asp\. \[deg\],'/.test(vivo),
     'la vecchia etichetta faceva credere che fosse una misura');
 check('e il CSV dice ancora l angolo lobo (dichiarato)',
-    /dichiarat/i.test(vivo.slice(vivo.indexOf('Max alzata asp.'), vivo.indexOf('Max alzata asp.') + 1200)),
+    // (la riga del CSV si chiama "Alzata massima valvola" dal 2026-11-22)
+    /dichiarat/i.test(vivo.slice(vivo.indexOf('Alzata massima valvola asp.'), vivo.indexOf('Alzata massima valvola asp.') + 1200)),
     'la dichiarazione resta, ma detta per quello che e');
 
 // ---------- 4. la scheda camma e il PDF ----------

@@ -241,6 +241,9 @@ wedged, serve un replug USB — poi harness `bench_fw34_test.js`).
 `path.relative` (no dir sorelle); SEC-08 logging asincrono a coda; SEC-07
 backup con MANIFEST+SHA-256 e settings.json; SEC-10 SHA-256 atteso mostrato
 nella notifica di aggiornamento (l'app non auto-scarica/esegue). Test esteso.
+Stato dalla v3.8.0: l'impronta non e' piu' nella notifica ma in Home →
+Sistema e manutenzione (riga `#updSha`, col comando `certutil`); la notifica
+rimanda li'. Controllano `test_usabilita_home.js` e `test_usabilita_comune.js`.
 
 **Lotto 19-20 — DYN-02/06/07 + APP-10..17/20.** DYN-02 warm-up 3 giri nei
 solver (via `_num(p.warmupCycles,3)`); DYN-06/07 dichiarati esplorativi +

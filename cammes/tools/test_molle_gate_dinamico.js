@@ -94,14 +94,16 @@ check('la guardia chiede anche che molla e massa siano confermate',
 console.log('');
 console.log('--- righe valve float su CSV e PDF ---');
 // La riga del CSV, non il titolo del toast che contiene le stesse parole.
-var iCsvVf = vivo.indexOf("'Valve float dinamico asp. [mm],'");
+// (dal 2026-11-22 la riga si chiama "Distacco dinamico": glossario unico,
+//  "valve float" non si scrive piu' davanti all'operatore)
+var iCsvVf = vivo.indexOf("'Distacco dinamico asp. [mm],'");
 check('trovo la riga valve float del CSV', iCsvVf > 0);
 var gVf = iCsvVf > 0 ? vivo.substring(Math.max(0, iCsvVf - 800), iCsvVf + 800) : '';
 check('la riga CSV passa dallo stesso cancello delle celle',
     /valutabileIn|valutabileEx|latoValutabile|_mollaOk/.test(gVf),
     'oggi basta che il solver sia convergente');
 // e il PDF, che e' il documento che esce dall'officina
-var iPdfVf = vivo.indexOf("rows.push(['Valve float dinamico'");
+var iPdfVf = vivo.indexOf("rows.push(['Distacco dinamico");
 check('trovo la riga valve float del PDF', iPdfVf > 0);
 var gPdf = iPdfVf > 0 ? vivo.substring(iPdfVf, iPdfVf + 500) : '';
 check('anche il PDF passa dallo stesso cancello',
@@ -111,15 +113,19 @@ check('anche il PDF passa dallo stesso cancello',
 // ---------- 4. il dump per grado ----------
 console.log('');
 console.log('--- il dump per grado del CSV ---');
-var gDump = blocco('# === Dump per grado albero motore', 2600);
+var gDump = blocco('# === Grado per grado (albero motore', 2600);
 check('trovo il dump per grado', gDump.length > 0);
 check('le colonne F_spring / F_inertia sono condizionate al lato valutabile',
     /valutabileIn|valutabileEx|latoValutabile/.test(gDump),
     'esportare 720 righe di forze mentre il riepilogo si astiene e la stessa incoerenza');
+// (dal 2026-11-22 le intestazioni sono in italiano: "grado motore", "forza
+//  molla asp. [N]"... Il controllo di prima cercava ancora "crank_deg" e
+//  "F_spring_in_N": non trovandoli passava sempre, senza verificare niente.)
 check('e l intestazione non promette colonne che non ci sono',
-    !/intest = 'crank_deg[^']*F_spring_in_N[^']*F_inertia_ex_N'/.test(gDump) ||
-    /valutabileIn|latoValutabile/.test(gDump),
-    'intestazione fissa con colonne condizionate');
+    /var intest = 'grado motore,/.test(gDump) && !/intest = 'grado motore[^']*forza (molla|inerzia)/.test(gDump) &&
+    /if \(_forzeIn\) intest \+= ',forza molla asp\./.test(gDump) && /if \(_forzeEx\) intest \+= ',forza molla scar\./.test(gDump) &&
+    /_forzeIn = !!R\.valutabileIn/.test(gDump),
+    'intestazione fissa senza forze; le colonne di forza si aggiungono solo per il lato valutabile');
 
 // ---------- 5. la regola generale ----------
 console.log('');

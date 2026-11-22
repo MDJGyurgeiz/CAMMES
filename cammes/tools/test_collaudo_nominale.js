@@ -131,6 +131,10 @@ function estrai(nome) {
 }
 var fnTol = estrai('_tolleranzaCollaudo'), fnEval = estrai('evalNominal');
 check('la pagina ha _tolleranzaCollaudo() ed evalNominal()', !!fnTol && !!fnEval);
+var AUSILIARIE = ['_bandaVuota', '_letturaA', '_soloLetti', '_testoTolleranza', '_testoSpostamento',
+                  '_dettaglioVerdetto', '_rigaVerdetto', '_misuraIncompleta', '_nomeMisura', '_conta', '_motivoNominale'];
+var mancanti = AUSILIARIE.filter(function (n) { return !estrai(n); });
+check('...e le funzioni che scrivono banda e verdetto', mancanti.length === 0, mancanti.join(', '));
 if (fnTol && fnEval && typeof M.scartoDalNominale === 'function') {
     var nominale = M.parseCamFile(fs.readFileSync(path.join(__dirname, 'fixtures', 'rif2_asp_alz.scr'), 'utf8'));
     function pagina(valoreTolleranza, opz) {
@@ -151,11 +155,15 @@ if (fnTol && fnEval && typeof M.scartoDalNominale === 'function') {
             window: { myLine: { data: { datasets: ds, labels: etichette }, update: function () {} }, _cmpData: [undefined, mis1, mis2 || undefined],
                       cammesEscape: function (s) { return String(s); }, cammesValidate: { error: function (e, msg) { segnalati.push(msg); } } },
             validaNumero: M.validaNumero, canProduceOfficialResult: M.canProduceOfficialResult, scartoDalNominale: M.scartoDalNominale,
-            _nominal: nominale
+            _nominal: nominale,
+            _replayBackup: null          // nessun "Ridisegna" in corso (evalNominal lo chiuderebbe prima)
         };
         ctx.window.window = ctx.window;
         vm.createContext(ctx);
-        var ausiliarie = ['_nomAt', '_alignShift'].map(estrai).filter(Boolean);
+        // v3.8.0: la riga del verdetto e la banda sono scritte da funzioni di
+        // supporto della pagina (le stesse che usa la stampa del collaudo):
+        // girano qui insieme a evalNominal, tali e quali.
+        var ausiliarie = AUSILIARIE.map(estrai).filter(Boolean);
         ausiliarie.forEach(function (f) { vm.runInContext(f, ctx); });
         vm.runInContext(fnTol, ctx); vm.runInContext(fnEval, ctx);
         vm.runInContext('evalNominal();', ctx);
@@ -183,7 +191,7 @@ if (fnTol && fnEval && typeof M.scartoDalNominale === 'function') {
     // tolleranza non valida: nessun giudizio, ma lo scarto resta scritto
     var pv = pagina('abc');
     check('tolleranza non valida: nessun CONFORME / NON CONFORME', !/CONFORME/.test(pv.testo), pv.testo.slice(0, 160));
-    check('...ma lo scarto massimo resta scritto (un numero utile non si nasconde)', /scarto max/i.test(pv.testo) && /mm/.test(pv.testo), pv.testo.slice(0, 160));
+    check('...ma lo scarto massimo resta scritto (un numero utile non si nasconde)', /scarto (max|massimo)/i.test(pv.testo) && /mm/.test(pv.testo), pv.testo.slice(0, 160));
     check('...e il campo viene segnalato', pv.segnalati.length === 1 && /tolleranza/i.test(pv.segnalati[0] || ''), JSON.stringify(pv.segnalati));
 
     // 3) vista Differenza: il verdetto NON cambia

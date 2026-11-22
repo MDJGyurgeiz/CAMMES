@@ -217,11 +217,11 @@ check('l analisi fotografa lo stato di conferma (i documenti dichiarano quello d
 var card = estrai(ANALISI, 'exportCamCard') || '';
 check('scheda camma: asterisco sulle righe che discendono da valori non confermati',
     /row\('gioco valvola' \+ nG/.test(card) && /row\('apre' \+ nGF/.test(card) && /row\('chiude' \+ nGF/.test(card) &&
-    /row\('alzata al PMS' \+ nGF/.test(card) && /row\('LSA' \+ nF/.test(card) && /row\('angolo lobo \(dichiarato\)' \+ nF/.test(card));
+    /row\('alzata al PMS' \+ nGF/.test(card) && /row\('separazione dei lobi \(LSA\)' \+ nF/.test(card) && /row\('angolo lobo \(dichiarato\)' \+ nF/.test(card));
 check('...e una nota che spiega l asterisco', /# \* valori DICHIARATI e non confermati/.test(card));
 var pdf = estrai(ANALISI, 'exportPDF') || '';
 check('referto: le stesse righe segnate, LSA e centri detti "dichiarati"',
-    /'Durata al gioco' \+ pG/.test(pdf) && /'LSA \(dichiarata\)' \+ pF/.test(pdf) && /'Apertura' \+ pGF/.test(pdf) && /\* discende da valori DICHIARATI/.test(pdf));
+    /'Durata al gioco' \+ pG/.test(pdf) && /'Separazione dei lobi \(dichiarata\)' \+ pF/.test(pdf) && /'Apertura' \+ pGF/.test(pdf) && /\* discende da valori DICHIARATI/.test(pdf));
 check('referto: in copertina LSA e durata dicono da dove vengono', /Dagli angoli lobo dichiarati/.test(pdf) && /'Al gioco di '/.test(pdf));
 check('referto: il banner descrive il conto (calcolo statico) invece di promettere sicurezza',
     /Margine sul distacco valvola \(calcolo statico/.test(pdf) && !/'OK · Margine ampio'/.test(vivo(pdf)));
